@@ -8,8 +8,8 @@ import (
 )
 
 // State est où en est une demande. Seule « awaiting_confirmation » attend
-// quelqu'un ; les trois autres sont des fins. La contrainte CHECK de la
-// migration 025 est la liste fermée.
+// quelqu'un ; les quatre autres sont des fins. La contrainte CHECK de la
+// migration 043 est la liste fermée.
 type State string
 
 const (
@@ -17,6 +17,8 @@ const (
 	StateConfirmed State = "confirmed"
 	StateRejected  State = "rejected"
 	StateExpired   State = "expired"
+	// Le jeton qui a déposé la demande ne la permet plus à l'instant de la confirmer.
+	StateLapsed State = "lapsed"
 )
 
 const (
@@ -64,5 +66,6 @@ var (
 	// Le verbe a quitté le registre depuis le dépôt de la demande : elle est
 	// refusée, rien n'est rejoué.
 	ErrVerbRemoved = refusal.Conflict("verb_request.verb_removed", "the verb of the request is no longer offered: the request is refused")
+	ErrLapsed      = refusal.Conflict("verb_request.lapsed", "the token that filed the request no longer allows it: the request is closed")
 	ErrDecided     = refusal.Conflict("verb_request.already_decided", "the request was already confirmed or rejected")
 )
