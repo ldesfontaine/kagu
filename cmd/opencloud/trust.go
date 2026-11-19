@@ -19,7 +19,7 @@ import (
 // les ancres de confiance locales de l'agent (internal/anchor). Seule voie qui
 // les change après l'installation ; réservée à root. Le message d'un
 // changement est écrit au journal du système (journald, via /dev/log).
-func runAgentTrust(args []string, out io.Writer, openTerminal terminalOpener) error {
+func runAgentTrust(args []string, out io.Writer, openTerminal terminalOpener, euid int) error {
 	flags := flag.NewFlagSet("agent trust", flag.ContinueOnError)
 	stateDir := flags.String("state", defaultAgentStateDir, "répertoire d'état de l'agent")
 	yes := flags.Bool("yes", false, "confirme sans poser la question (obligatoire sans terminal)")
@@ -46,12 +46,16 @@ func runAgentTrust(args []string, out io.Writer, openTerminal terminalOpener) er
 		text = catalogs.For(identity.Language)
 	}
 	if verb != agent.TrustList {
+		// Un compte sans privilège est refusé sans qu'on lui pose la question.
+		if err := agent.RequireTrustRoot(euid); err != nil {
+			return explainTrustError(err, kindName, text)
+		}
 		if err := confirmTrustChange(out, openTerminal, *yes, text, verb, kindName, value); err != nil {
 			return err
 		}
 	}
 	result, err := agent.Trust(agent.TrustOptions{
-		StateDir: root, StatePath: *stateDir, EUID: os.Geteuid(), Audit: auditToSystemJournal,
+		StateDir: root, StatePath: *stateDir, EUID: euid, Audit: auditToSystemJournal,
 	}, verb, kindName, value)
 	if err != nil {
 		return explainTrustError(err, kindName, text)

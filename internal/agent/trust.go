@@ -54,10 +54,19 @@ type TrustResult struct {
 	AuditError error
 }
 
+// RequireTrustRoot refuse tout compte qui n'est pas root : la commande le
+// vérifie avant de poser sa question, Trust avant d'écrire.
+func RequireTrustRoot(euid int) error {
+	if euid != 0 {
+		return ErrTrustNotRoot
+	}
+	return nil
+}
+
 // Trust joue un verbe. kindName et value sont ignorés par list.
 func Trust(opts TrustOptions, verb, kindName, value string) (TrustResult, error) {
-	if opts.EUID != 0 {
-		return TrustResult{}, ErrTrustNotRoot
+	if err := RequireTrustRoot(opts.EUID); err != nil {
+		return TrustResult{}, err
 	}
 	owner, err := stateOwner(opts.StateDir)
 	if err != nil {

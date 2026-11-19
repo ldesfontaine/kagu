@@ -39,7 +39,7 @@ func enrolledStateDir(t *testing.T) string {
 func TestRunAgentTrust_AUsageErrorIsARefusalThatListsTheTypes(t *testing.T) {
 	for _, arguments := range [][]string{{}, {"frobnicate"}, {"add"}, {"add", "backup.guest"}, {"list", "extra"}, {"remove", "a", "b", "c"}} {
 		var out bytes.Buffer
-		err := runAgentTrust(append([]string{"-state", enrolledStateDir(t)}, arguments...), &out, noTerminal)
+		err := runAgentTrust(append([]string{"-state", enrolledStateDir(t)}, arguments...), &out, noTerminal, 0)
 		var refused *refusal
 		if !errors.As(err, &refused) || !strings.Contains(refused.message, "backup.recipient, backup.guest, restic.target-cert") {
 			t.Errorf("%v: %v", arguments, err)
@@ -55,7 +55,7 @@ func TestRunAgentTrust_RefusesAnAccountThatIsNotRoot(t *testing.T) {
 	}
 	dir := enrolledStateDir(t)
 	var out bytes.Buffer
-	err := runAgentTrust([]string{"-state", dir, "-yes", "add", anchor.BackupGuest, "101"}, &out, noTerminal)
+	err := runAgentTrust([]string{"-state", dir, "-yes", "add", anchor.BackupGuest, "101"}, &out, noTerminal, os.Geteuid())
 	var refused *refusal
 	if !errors.As(err, &refused) || !strings.Contains(refused.message, "root") {
 		t.Fatalf("err %v", err)
@@ -152,7 +152,7 @@ func TestR_A3_15(t *testing.T) {
 	for _, verb := range []string{"add", "remove"} {
 		var out bytes.Buffer
 		dir := enrolledStateDir(t)
-		err := runAgentTrust([]string{"-state", dir, verb, anchor.ResticTargetCert, fingerprint}, &out, noTerminal)
+		err := runAgentTrust([]string{"-state", dir, verb, anchor.ResticTargetCert, fingerprint}, &out, noTerminal, 0)
 		var refused *refusal
 		if !errors.As(err, &refused) || !strings.Contains(refused.message, "-yes") {
 			t.Errorf("%s without terminal: %v", verb, err)
@@ -167,7 +167,7 @@ func TestR_A3_15(t *testing.T) {
 	for _, answer := range []string{"N\n", "\n", "non\n", ""} {
 		var out bytes.Buffer
 		dir := enrolledStateDir(t)
-		err := runAgentTrust([]string{"-state", dir, "add", anchor.BackupGuest, "101"}, &out, fakeTerminal(answer))
+		err := runAgentTrust([]string{"-state", dir, "add", anchor.BackupGuest, "101"}, &out, fakeTerminal(answer), 0)
 		var refused *refusal
 		if !errors.As(err, &refused) || len(storedAnchors(t, dir)) != 0 {
 			t.Errorf("answer %q: %v", answer, err)
@@ -178,19 +178,41 @@ func TestR_A3_15(t *testing.T) {
 	}
 }
 
-// Un « o » passe la question : la commande atteint agent.Trust, qui refuse un
-// compte sans privilège (le test ne peut pas écrire en root).
+// Un « o » passe la question : l'ancre est posée. Le test joue root par
+// l'argument euid ; le dossier d'état est celui du compte qui le lance.
 func TestR_DROIT_8(t *testing.T) {
+	var out bytes.Buffer
+	dir := enrolledStateDir(t)
+	if err := runAgentTrust([]string{"-state", dir, "add", anchor.BackupGuest, "101"}, &out, fakeTerminal("o\n"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if got := storedAnchors(t, dir)[anchor.BackupGuest]; len(got) != 1 || got[0] != "101" {
+		t.Fatalf("stored %v", got)
+	}
+	if err := runAgentTrust([]string{"-state", enrolledStateDir(t), "add", "nope", "x"}, &out, noTerminal, 0); err == nil || !strings.Contains(err.Error(), "inconnu") {
+		t.Fatalf("unknown type: %v", err)
+	}
+}
+
+// Un compte sans privilège est refusé avant la question : le terminal n'est
+// même pas ouvert.
+func TestR_DROIT_8_NonRootIsRefusedBeforeTheQuestion(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("le test joue un compte sans privilège")
 	}
+	opened := false
+	spy := func() (io.ReadCloser, error) {
+		opened = true
+		return io.NopCloser(strings.NewReader("o\n")), nil
+	}
 	var out bytes.Buffer
-	err := runAgentTrust([]string{"-state", enrolledStateDir(t), "add", anchor.BackupGuest, "101"}, &out, fakeTerminal("o\n"))
+	dir := enrolledStateDir(t)
+	err := runAgentTrust([]string{"-state", dir, "add", anchor.BackupGuest, "101"}, &out, spy, os.Geteuid())
 	var refused *refusal
 	if !errors.As(err, &refused) || !strings.Contains(refused.message, "root") {
 		t.Fatalf("err %v", err)
 	}
-	if err := runAgentTrust([]string{"-state", enrolledStateDir(t), "add", "nope", "x"}, &out, noTerminal); err == nil || !strings.Contains(err.Error(), "inconnu") {
-		t.Fatalf("unknown type: %v", err)
+	if opened || strings.Contains(out.String(), "[o/N]") || len(storedAnchors(t, dir)) != 0 {
+		t.Fatalf("asked a non-root account: opened=%v out=%q", opened, out.String())
 	}
 }
