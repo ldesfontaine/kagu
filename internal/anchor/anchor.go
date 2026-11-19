@@ -12,11 +12,13 @@
 package anchor
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"io"
 	"regexp"
 	"slices"
 	"strings"
@@ -308,8 +310,8 @@ func judgeKind(state State, kind Kind, order string, params json.RawMessage) *Fi
 
 // valueOf lit dans les paramètres la valeur que le type compare à ses ancres.
 func valueOf(kind Kind, order string, params json.RawMessage) (string, bool) {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(params, &fields); err != nil {
+	fields, ok := readFields(params)
+	if !ok {
 		return "", false
 	}
 	for _, bound := range kind.Bound {
@@ -326,6 +328,45 @@ func valueOf(kind Kind, order string, params json.RawMessage) (string, bool) {
 		return bound.Derive(raw)
 	}
 	return "", false
+}
+
+// readFields lit les clés du premier niveau des paramètres. Une clé répétée ou
+// égale à une autre à la casse près n'a pas de lecture sûre : l'ancre lit par
+// clé exacte, l'exécuteur relit par json.Unmarshal, qui ignore la casse. Elle
+// ne se lit pas, pour tous les genres et toutes les ancres (B-H1).
+func readFields(params json.RawMessage) (map[string]json.RawMessage, bool) {
+	decoder := json.NewDecoder(bytes.NewReader(params))
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return nil, false
+	}
+	fields := map[string]json.RawMessage{}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, false
+		}
+		name, isString := token.(string)
+		if !isString {
+			return nil, false
+		}
+		for seen := range fields {
+			if strings.EqualFold(seen, name) {
+				return nil, false
+			}
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, false
+		}
+		fields[name] = value
+	}
+	if token, err := decoder.Token(); err != nil || token != json.Delim('}') {
+		return nil, false
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return nil, false
+	}
+	return fields, true
 }
 
 // JudgeReported juge pour le serveur : il ne refuse que ce que l'agent a dit

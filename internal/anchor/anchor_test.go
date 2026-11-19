@@ -269,3 +269,69 @@ func TestRefused_CarriesTheKeyAndTheCommand(t *testing.T) {
 		t.Fatalf("a recipient that is not valid has no command: %q", refused.Command())
 	}
 }
+
+// B-H1 : l'ancre lit par clé exacte, l'exécuteur relit sans égard à la casse.
+// Une clé répétée ou d'une autre casse n'a pas de lecture sûre : refusée, pour
+// chaque ancre, sans exception par genre (R-A1-3).
+func TestR_A1_3_AKeyRepeatedOrOfAnotherCaseIsNeverRead(t *testing.T) {
+	trusted, other := testRecipient(t), testRecipient(t)
+	certificatePEM, fingerprint := testCertificate(t)
+	foreignPEM, _ := testCertificate(t)
+	state := FromFile(map[string][]string{
+		BackupRecipient: {trusted}, BackupGuest: {"101"}, ResticTargetCert: {fingerprint},
+	})
+	produce := func(extra string) json.RawMessage {
+		return json.RawMessage(`{"producer":"proxmox-vzdump","target":"101","recipient":"` + trusted + `"` + extra + `}`)
+	}
+	provision := func(extra string) json.RawMessage {
+		certificate, _ := json.Marshal(certificatePEM)
+		return json.RawMessage(`{"target":"t","certificate":` + string(certificate) + extra + `}`)
+	}
+	foreign, _ := json.Marshal(foreignPEM)
+	cases := []struct {
+		name   string
+		order  string
+		params json.RawMessage
+		kind   string
+	}{
+		{"guest: Target after target", "backup.produce", produce(`,"Target":"999"`), BackupGuest},
+		{"guest: TARGET after target", "backup.produce", produce(`,"TARGET":"999"`), BackupGuest},
+		{"guest: target repeated, same value", "backup.produce", produce(`,"target":"101"`), BackupGuest},
+		{"guest: target repeated, other value", "backup.produce", produce(`,"target":"999"`), BackupGuest},
+		{"guest: Target before target", "backup.produce", json.RawMessage(`{"Target":"999","target":"101","recipient":"` + trusted + `"}`), BackupGuest},
+		{"guest: escaped key", "backup.produce", produce(`,"\u0054arget":"999"`), BackupGuest},
+		{"recipient: Recipient after recipient", "backup.produce", produce(`,"Recipient":"` + other + `"`), BackupRecipient},
+		{"recipient: recipient repeated, same value", "backup.produce", produce(`,"recipient":"` + trusted + `"`), BackupRecipient},
+		{"certificate: Certificate after certificate", "restic.provision", provision(`,"Certificate":` + string(foreign)), ResticTargetCert},
+		{"certificate: certificate repeated, same value", "restic.provision", provision(`,"certificate":` + string(foreign)), ResticTargetCert},
+		{"an unrelated key repeated", "backup.produce", produce(`,"prefix":"a","Prefix":"b"`), BackupGuest},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			finding := Judge(state, c.order, c.params)
+			if finding == nil || finding.Why != WhyOutside || finding.Value != "" {
+				t.Fatalf("finding %+v, expected %s refused with no value", finding, WhyOutside)
+			}
+		})
+	}
+	// Les mêmes ordres, sans la clé en trop, passent : le refus vient de la clé.
+	for order, params := range map[string]json.RawMessage{"backup.produce": produce(""), "restic.provision": provision("")} {
+		if finding := Judge(state, order, params); finding != nil {
+			t.Errorf("%s: the clean order is refused: %+v", order, finding)
+		}
+	}
+}
+
+// Une ancre borne la valeur décodée de chaque genre qui mène à son geste
+// (R-A1-7) : chaque (genre, champ) du registre refuse la clé d'une autre casse.
+func TestR_A1_7_EveryBoundFieldRefusesAnotherCaseOfItsKey(t *testing.T) {
+	for _, kind := range Kinds() {
+		for _, bound := range kind.Bound {
+			upper := strings.ToUpper(bound.Field)
+			params := json.RawMessage(`{"` + bound.Field + `":"x","` + upper + `":"y"}`)
+			if value, ok := valueOf(kind, bound.Order, params); ok || value != "" {
+				t.Errorf("%s/%s: read %q from %s", bound.Order, bound.Field, value, params)
+			}
+		}
+	}
+}
