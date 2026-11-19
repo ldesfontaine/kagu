@@ -41,6 +41,11 @@ type Store interface {
 	// SaveAuthStateIf n'écrit que si l'état stocké vaut encore expected, et
 	// dit s'il a écrit.
 	SaveAuthStateIf(ctx context.Context, expected, next State, at time.Time) (bool, error)
+	GetSetupCode(ctx context.Context) (SetupCode, error)
+	// SaveSetupCodeIfNone remplace le code, seulement en mode none, et dit
+	// s'il a écrit.
+	SaveSetupCodeIfNone(ctx context.Context, code SetupCode, at time.Time) (bool, error)
+	RecordSetupCodeFailure(ctx context.Context) error
 }
 
 // remembered est l'empreinte des derniers identifiants vérifiés, liée à
@@ -64,6 +69,8 @@ type Service struct {
 
 	mu   sync.Mutex
 	last remembered
+	// Tire et vérifie le code de première configuration, un à la fois.
+	setupMu sync.Mutex
 	// Une vérification lente à la fois : les requêtes parallèles d'un
 	// navigateur qui vient de saisir ses identifiants attendent la
 	// première, puis passent par la mémoire. Borne aussi le processeur.
@@ -100,20 +107,24 @@ func (s *Service) State(ctx context.Context) (State, error) {
 	return s.store.GetAuthState(ctx)
 }
 
-// Les quatre changements d'état prennent l'état sous lequel la requête a été
+// Les changements d'état prennent l'état sous lequel la requête a été
 // autorisée (expected) : une requête dont le corps a traîné ne s'applique pas
 // à un état qu'elle n'a pas vu. La comparaison et l'écriture se font d'un seul
 // tenant dans la base ; la lecture qui précède évite seulement un hachage
 // inutile.
 
 // EnableBasic choisit identifiant et mot de passe, et passe en mode basic.
-func (s *Service) EnableBasic(ctx context.Context, expected State, username, password string) (State, error) {
+// Sans le code de première configuration, rien ne se crée (setupCode).
+func (s *Service) EnableBasic(ctx context.Context, expected State, setupCode, username, password string) (State, error) {
 	current, err := s.store.GetAuthState(ctx)
 	if err != nil {
 		return State{}, err
 	}
 	if current.Mode != ModeNone {
 		return State{}, ErrAlreadyEnabled
+	}
+	if err := s.requireSetupCode(ctx, setupCode); err != nil {
+		return State{}, err
 	}
 	if err := ValidateUsername(username); err != nil {
 		return State{}, err
@@ -134,13 +145,16 @@ func (s *Service) EnableBasic(ctx context.Context, expected State, username, pas
 // EnableForward passe en mode forward : l'identité vient de l'en-tête
 // que pose le mandataire. Le serveur vérifie d'abord que la requête qui
 // active le porte déjà, sans quoi l'opérateur s'enfermerait dehors.
-func (s *Service) EnableForward(ctx context.Context, expected State, header string) (State, error) {
+func (s *Service) EnableForward(ctx context.Context, expected State, setupCode, header string) (State, error) {
 	current, err := s.store.GetAuthState(ctx)
 	if err != nil {
 		return State{}, err
 	}
 	if current.Mode != ModeNone {
 		return State{}, ErrAlreadyEnabled
+	}
+	if err := s.requireSetupCode(ctx, setupCode); err != nil {
+		return State{}, err
 	}
 	if err := ValidateHeader(header); err != nil {
 		return State{}, err
@@ -183,7 +197,9 @@ func (s *Service) ChangePassword(ctx context.Context, expected State, password s
 	return next, nil
 }
 
-// Disable rouvre l'interface et efface identifiant, empreinte et en-tête.
+// Disable rouvre l'interface et efface identifiant, empreinte et en-tête. La
+// première configuration qui suit exige un nouveau code (IssueSetupCode) :
+// rouvrir l'interface ne l'offre pas à qui atteint le port.
 func (s *Service) Disable(ctx context.Context, expected State) error {
 	current, err := s.store.GetAuthState(ctx)
 	if err != nil {

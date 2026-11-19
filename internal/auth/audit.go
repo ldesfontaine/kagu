@@ -1,6 +1,10 @@
 package auth
 
-import "github.com/ldesfontaine/opencloud/internal/audit"
+import (
+	"time"
+
+	"github.com/ldesfontaine/opencloud/internal/audit"
+)
 
 // L'objet du journal : l'accès à l'interface, qui n'a qu'une instance.
 const auditObjectID = "interface"
@@ -16,5 +20,13 @@ func authEvent(action audit.Action, state State) audit.Event {
 	return audit.Event{
 		Action: action, ObjectID: auditObjectID, ObjectName: auditObjectID,
 		Details: audit.Details{"mode": string(state.Mode), "username": state.Username, "header": state.Header},
+	}
+}
+
+// setupCodeEvent dit l'échéance du code tiré ; jamais le code ni son empreinte.
+func setupCodeEvent(expiresAt time.Time) audit.Event {
+	return audit.Event{
+		Action: audit.AuthSetupCodeIssue, ObjectID: auditObjectID, ObjectName: auditObjectID,
+		Details: audit.Details{"expires_at": expiresAt.UTC().Format(time.RFC3339)},
 	}
 }

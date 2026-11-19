@@ -8,15 +8,19 @@ import (
 	"github.com/ldesfontaine/opencloud/internal/audit"
 )
 
-// controlPrefix est tout ce que la socket de commande sert : les routes du
-// fichier de l'annuaire.
+// controlPrefix : les routes du fichier de l'annuaire, que la socket sert
+// comme le port.
 const controlPrefix = "/api/manifest/"
+
+// setupCodePath est la seule route que la socket est seule à servir : hors de
+// routes(), donc jamais sur le port.
+const setupCodePath = "POST /control/admin/setup-code"
 
 // ControlHandler est ce que serve sert sur state_dir/control.sock. Qui
 // atteint la socket peut déjà lire la base (0600 dans un dossier 0700), comme
 // pour « auth » : pas de garde d'opérateur ni de garde même-origine, aucun
-// navigateur n'y passe. Rien d'autre que le fichier de l'annuaire n'y est
-// servi.
+// navigateur n'y passe. Rien d'autre que le fichier de l'annuaire et le code
+// de première configuration n'y est servi.
 func (s *Server) ControlHandler() http.Handler {
 	return s.controlHandler
 }
@@ -33,6 +37,7 @@ func (s *Server) controlMux() *http.ServeMux {
 		}
 		mux.HandleFunc(route.method+" "+route.pattern, markControlSocket(route.handler))
 	}
+	mux.HandleFunc(setupCodePath, markControlSocket(s.issueSetupCode))
 	mux.HandleFunc("/", s.apiUnknown)
 	return mux
 }

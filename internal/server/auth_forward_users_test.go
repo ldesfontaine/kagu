@@ -13,6 +13,7 @@ import (
 
 	"github.com/ldesfontaine/opencloud/internal/audit"
 	"github.com/ldesfontaine/opencloud/internal/auth"
+	"github.com/ldesfontaine/opencloud/internal/auth/authtest"
 	"github.com/ldesfontaine/opencloud/internal/lang"
 )
 
@@ -451,7 +452,7 @@ func TestForwardUsers_EnablingFromAnUnlistedIdentityIsRefused(t *testing.T) {
 	}
 
 	// Depuis un admis, l'activation passe et la réponse rend la liste.
-	allowed := callForwardedJSON(server.Server, http.MethodPost, enable, `{"mode":"forward"}`, trustedPeer, auth.DefaultForwardHeader, "lucas")
+	allowed := callForwardedJSON(server.Server, http.MethodPost, enable, `{"mode":"forward","setup_code":"`+authtest.SetupCode(t, server.operator)+`"}`, trustedPeer, auth.DefaultForwardHeader, "lucas")
 	if allowed.Code != http.StatusOK {
 		t.Fatalf("listed identity: %d %s", allowed.Code, allowed.Body.String())
 	}
@@ -465,7 +466,7 @@ func TestForwardUsers_EnablingFromAnUnlistedIdentityIsRefused(t *testing.T) {
 func TestForwardUsers_NoListNeverBlocksTheActivation(t *testing.T) {
 	server := newFirstSetupServer(t)
 	server.trustedProxies = parsePrefixes(t, "192.0.2.0/24")
-	got := callForwardedJSON(server.Server, http.MethodPost, "/api/auth/actions/enable", `{"mode":"forward"}`, trustedPeer, auth.DefaultForwardHeader, "autre")
+	got := callForwardedJSON(server.Server, http.MethodPost, "/api/auth/actions/enable", `{"mode":"forward","setup_code":"`+authtest.SetupCode(t, server.operator)+`"}`, trustedPeer, auth.DefaultForwardHeader, "autre")
 	if got.Code != http.StatusOK {
 		t.Fatalf("%d %s", got.Code, got.Body.String())
 	}

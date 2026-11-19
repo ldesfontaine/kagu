@@ -171,6 +171,8 @@ const (
 	AuthEnable         Action = "auth.enable"
 	AuthDisable        Action = "auth.disable"
 	AuthChangePassword Action = "auth.change_password" // #nosec G101 -- un nom, pas un secret.
+	// Le code de première configuration tiré : l'échéance, jamais sa valeur.
+	AuthSetupCodeIssue Action = "auth.setup_code_issue" // #nosec G101 -- un nom, pas un secret.
 
 	APITokenCreate Action = "api_token.create" // #nosec G101 -- un nom, pas un secret.
 	APITokenRevoke Action = "api_token.revoke" // #nosec G101 -- un nom, pas un secret.
@@ -261,7 +263,7 @@ func Actions() []Action {
 		MuteCreate, MuteDelete,
 		AlertAcknowledge,
 		SettingsUpdate,
-		AuthEnable, AuthDisable, AuthChangePassword,
+		AuthEnable, AuthDisable, AuthChangePassword, AuthSetupCodeIssue,
 		APITokenCreate, APITokenUpdate, APITokenRevoke, APITokenDeny,
 		SecretsForget, SecretsRotate, SecretsRotateServerKey, SecretsFinishServerKey,
 		ActionOrder, ActionRefused, ActionRolledBack,

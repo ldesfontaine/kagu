@@ -198,9 +198,9 @@ plus de `SupplementaryGroups=docker`.
 
 Au démarrage, le journal dit `listening` avec l'adresse, le répertoire
 d'état et la version. Tant qu'aucun compte n'existe, une ligne le rappelle
-(`interface awaiting first setup`) : `INFO` si `listen` est sur la boucle
-locale, `WARN` sinon, car le premier qui atteint l'adresse crée le compte.
-Créez-le tout de suite : [Authentification](#authentification). Tant que la
+(`WARN`, « première configuration en attente ») : la page n'accepte rien
+sans le code que `sudo opencloud admin setup-code` tire. Créez le compte tout
+de suite : [Authentification](#authentification). Tant que la
 machine openCloud n'a jamais eu d'agent, une autre ligne dit qu'un jeton
 d'enrôlement l'attend (`enrollment token waiting for the agent of this
 machine`, le texte dans la langue de l'interface, **jamais le jeton**).
@@ -497,9 +497,22 @@ d'API lit l'API sans identifiants (voir [Brancher un agent IA](#brancher-un-agen
 ci-dessous), ou [un SSO qui authentifie](#derrière-un-sso-qui-authentifie)
 (Authelia). Le compte créé, le navigateur est connecté et l'interface s'ouvre.
 
-**Le premier qui ouvre l'adresse crée le compte.** Créez-le avant de publier
-le routeur Traefik, par un tunnel SSH vers l'adresse de `listen` :
+**La première configuration exige un code.** Tirez-le sur la machine
+openCloud, sous le compte du service ou en root (la commande parle au serveur
+par la socket de `state_dir`, qui doit tourner) :
 
+```sh
+sudo opencloud admin setup-code -config /etc/opencloud/config.toml
+# Code de première configuration : 12345678
+```
+
+Huit chiffres, **trente minutes**, **un seul usage**, **cinq essais faux** au
+total : au cinquième, le code est brûlé, le bon compris ; un nouveau code
+remplace l'ancien. Il tient après un redémarrage de `serve`, jusqu'à son
+échéance. Saisissez-le sur la page de première configuration, avec le compte.
+Même après `opencloud auth disable`, le compte ne se recrée qu'avec un code
+neuf. Créez le compte avant de publier le routeur Traefik, par un tunnel SSH
+vers l'adresse de `listen` :
 ```sh
 ssh -L 8080:127.0.0.1:8080 root@vps.example.org
 # puis, sur votre poste : http://127.0.0.1:8080
@@ -509,7 +522,7 @@ ssh -L 8080:127.0.0.1:8080 root@vps.example.org
 
 ```sh
 curl -X POST -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"une phrase de 12 caractères ou plus"}' \
+  -d '{"setup_code":"12345678","username":"admin","password":"une phrase de 12 caractères ou plus"}' \
   http://127.0.0.1:8080/api/auth/actions/enable
 ```
 

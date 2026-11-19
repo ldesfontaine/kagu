@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ldesfontaine/opencloud/internal/auth/authtest"
 	"github.com/ldesfontaine/opencloud/internal/server/servertest"
 	"github.com/ldesfontaine/opencloud/internal/store/storetest"
 )
@@ -62,7 +63,7 @@ func TestFirstSetup_EnableOpensTheRoutesToTheNewAccount(t *testing.T) {
 		t.Fatalf("read before the setup: %d %+v", read.Code, state)
 	}
 
-	enabled := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{Username: testUsername, Password: testPassword})
+	enabled := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", enabled.Code, enabled.Body.String())
 	}

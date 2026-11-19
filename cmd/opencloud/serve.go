@@ -235,9 +235,8 @@ func runServe(args []string) error {
 }
 
 // logInterfaceAccess dit au journal comment l'interface est gardée. Sans
-// compte, elle attend sa première configuration : sur la boucle locale, c'est
-// une information ; au-delà, un avertissement, car le premier qui atteint
-// l'adresse crée le compte.
+// compte, elle attend sa première configuration : la page n'accepte rien sans
+// le code que la commande tire, et le journal dit laquelle lancer.
 func logInterfaceAccess(ctx context.Context, logger *slog.Logger, operator *auth.Service, listen string) {
 	state, err := operator.State(ctx)
 	if err != nil {
@@ -248,12 +247,7 @@ func logInterfaceAccess(ctx context.Context, logger *slog.Logger, operator *auth
 		logger.Info("interface authentication", "mode", string(state.Mode), "username", state.Username, "header", state.Header)
 		return
 	}
-	if isLoopbackListen(listen) {
-		logger.Info("interface awaiting first setup: open it in a browser and create the operator account", "listen", listen)
-		return
-	}
-	logger.Warn("interface awaiting first setup and listening beyond loopback: whoever reaches this address first creates the operator account; open it and create it now",
-		"listen", listen)
+	logger.Warn("première configuration en attente : `sudo "+brand.Command+" admin setup-code`", "listen", listen)
 }
 
 // warnIfForwardUnproven prévient quand le mode forward est actif sans que rien
@@ -272,20 +266,6 @@ func warnIfForwardUnproven(ctx context.Context, logger *slog.Logger, operator *a
 	}
 	logger.Warn("forward authentication has no proof of the proxy: a loopback trusted proxy covers every process of this machine, any of them can send the identity header and be the operator; set forward_secret_file and have the proxy send the secret",
 		"header", state.Header, "secret_header", brand.ProxySecretHeader)
-}
-
-// isLoopbackListen : « 127.0.0.1:8080 », « [::1]:8080 », « localhost:8080 ».
-// Une adresse vide (« :8080 ») écoute partout.
-func isLoopbackListen(listen string) bool {
-	host, _, err := net.SplitHostPort(listen)
-	if err != nil {
-		return false
-	}
-	if host == "localhost" {
-		return true
-	}
-	address, err := netip.ParseAddr(host)
-	return err == nil && address.IsLoopback()
 }
 
 func runLoop(loops *sync.WaitGroup, loop func()) {

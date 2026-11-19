@@ -5,7 +5,7 @@ import { offerLocalEnrollment, type TokenResponse } from "../api/machines";
 import { Button } from "../components/Button";
 import { Card, CardBody, CardHeader, Note } from "../components/Card";
 import { Failure } from "../components/Failure";
-import { Field } from "../components/Field";
+import { Field, Input } from "../components/Field";
 import { InstallSteps } from "../components/InstallSteps";
 import { Brand } from "../components/Layout";
 import { PublicUrlNote } from "../components/PublicUrlNote";
@@ -50,6 +50,7 @@ function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: (
   const action = useAction();
   const [mode, setMode] = useState<(typeof setupModes)[number]>("basic");
   const [agentLine, setAgentLine] = useState<TokenResponse | null>(null);
+  const [setupCode, setSetupCode] = useState("");
 
   const showAgentLineOrOpen = (line: TokenResponse | null) => {
     if (line === null) {
@@ -61,7 +62,7 @@ function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: (
   const createAccount = (username: string, password: string) => {
     action.run(
       async () => {
-        await enableAuth({ username, password });
+        await enableAuth({ setup_code: setupCode, username, password });
         await signIn(username, password);
         return agentLineOrNull();
       },
@@ -71,7 +72,7 @@ function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: (
   const trustProxy = (header: string) => {
     action.run(
       async () => {
-        await enableAuth({ mode: "forward", header });
+        await enableAuth({ setup_code: setupCode, mode: "forward", header });
         return agentLineOrNull();
       },
       { onDone: showAgentLineOrOpen },
@@ -91,6 +92,18 @@ function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: (
           <CardBody>
             <p>{t("auth.setup_intro")}</p>
             <p className="secondary">{t("auth.setup_rescue")}</p>
+            <Field label={t("auth.setup_code_label")} htmlFor="auth-setup-code" help={t("auth.setup_code_help")}>
+              <Input
+                id="auth-setup-code"
+                type="text"
+                mono
+                value={setupCode}
+                onChange={(event) => setSetupCode(event.target.value)}
+                inputMode="numeric"
+                maxLength={8}
+                autoComplete="one-time-code"
+              />
+            </Field>
             <Field label={t("auth.mode_label")} htmlFor="auth-mode">
               <EnumSelect id="auth-mode" value={mode} values={setupModes} labelKey="auth.mode_" onChange={setMode} />
             </Field>

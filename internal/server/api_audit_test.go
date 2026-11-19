@@ -15,6 +15,7 @@ import (
 
 	"github.com/ldesfontaine/opencloud/internal/alert"
 	"github.com/ldesfontaine/opencloud/internal/audit"
+	"github.com/ldesfontaine/opencloud/internal/auth/authtest"
 	"github.com/ldesfontaine/opencloud/internal/directory"
 	"github.com/ldesfontaine/opencloud/internal/goldentest"
 	"github.com/ldesfontaine/opencloud/internal/machine"
@@ -249,8 +250,9 @@ func TestAudit_GestureWithoutActorIsJournaledAsUnknown(t *testing.T) {
 // nom, le compte créé se lit dans les détails.
 func TestAudit_UnverifiedBasicHeaderNamesNobody(t *testing.T) {
 	server := newFirstSetupServer(t)
+	setupCode := authtest.SetupCode(t, server.operator)
 	mark := server.latestAuditID(t)
-	body := `{"mode":"basic","username":"lucas","password":"une phrase assez longue"}`
+	body := `{"mode":"basic","setup_code":"` + setupCode + `","username":"lucas","password":"une phrase assez longue"}`
 	request := httptest.NewRequest(http.MethodPost, "/api/auth/actions/enable", strings.NewReader(body))
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")

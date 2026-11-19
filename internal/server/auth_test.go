@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/opencloud/internal/auth"
+	"github.com/ldesfontaine/opencloud/internal/auth/authtest"
 	"github.com/ldesfontaine/opencloud/internal/goldentest"
 	"github.com/ldesfontaine/opencloud/internal/server/servertest"
 	"github.com/ldesfontaine/opencloud/internal/store/storetest"
@@ -24,7 +25,7 @@ const (
 // enableBasic passe le serveur en mode basic, par le composant.
 func (ts *testServer) enableBasic(t *testing.T) {
 	t.Helper()
-	if _, err := ts.operator.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, testUsername, testPassword); err != nil {
+	if _, err := ts.operator.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, ts.operator), testUsername, testPassword); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -280,16 +281,16 @@ func TestAuthAPI_EnableChangeDisable(t *testing.T) {
 		t.Fatalf("initial state %+v", state)
 	}
 
-	short := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{Username: testUsername, Password: "short"})
+	short := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: "short"})
 	if short.Code != http.StatusUnprocessableEntity || errorCode(t, short) != "auth.password_too_short" {
 		t.Fatalf("short password: %d %s", short.Code, short.Body.String())
 	}
-	badName := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{Username: "a:b", Password: testPassword})
+	badName := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: "a:b", Password: testPassword})
 	if badName.Code != http.StatusUnprocessableEntity || errorCode(t, badName) != "auth.username_invalid" {
 		t.Fatalf("bad username: %d %s", badName.Code, badName.Body.String())
 	}
 
-	enabled := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{Username: testUsername, Password: testPassword})
+	enabled := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", enabled.Code, enabled.Body.String())
 	}
@@ -347,7 +348,7 @@ func TestAuthAPI_EnableRevokesEveryAPITokenAndPasswordChangeDoesNot(t *testing.T
 	second := server.issueAPIToken(t, "script")
 	server.rescue(t)
 
-	enabled := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{Username: testUsername, Password: testPassword})
+	enabled := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", enabled.Code, enabled.Body.String())
 	}
@@ -407,7 +408,7 @@ func TestAuthBasic_DisableFromAnotherProcessTakesEffectWithoutRestart(t *testing
 		t.Fatal(err)
 	}
 	requireSetupRequired(t, callAs(server.Server, http.MethodGet, "/api/counts", "", ""))
-	if _, err := rescue.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, testUsername, "a brand new passphrase"); err != nil {
+	if _, err := rescue.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, rescue), testUsername, "a brand new passphrase"); err != nil {
 		t.Fatal(err)
 	}
 	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, testPassword); got.Code != http.StatusUnauthorized {
@@ -457,7 +458,7 @@ const (
 func (ts *testServer) enableForward(t *testing.T) {
 	t.Helper()
 	ts.trustedProxies = parsePrefixes(t, "192.0.2.0/24")
-	if _, err := ts.operator.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, auth.DefaultForwardHeader); err != nil {
+	if _, err := ts.operator.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, ts.operator), auth.DefaultForwardHeader); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -646,7 +647,8 @@ func TestAuthAPI_EnableForwardRequiresTheIdentityFromATrustedProxy(t *testing.T)
 		t.Fatalf("a refused activation changed the mode: %+v", state)
 	}
 
-	enabled := callForwardedJSON(server.Server, http.MethodPost, enable, `{"mode":"forward"}`, trustedPeer, remoteUser, testUsername)
+	forwardWithCode := `{"mode":"forward","setup_code":"` + authtest.SetupCode(t, server.operator) + `"}`
+	enabled := callForwardedJSON(server.Server, http.MethodPost, enable, forwardWithCode, trustedPeer, remoteUser, testUsername)
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", enabled.Code, enabled.Body.String())
 	}
@@ -692,7 +694,7 @@ func TestAuthAPI_EnableForwardWithAnotherHeaderRevokesAPITokens(t *testing.T) {
 	server.issueAPIToken(t, "lecteur")
 	server.rescue(t)
 	const header = "X-Forwarded-User"
-	enabled := callForwardedJSON(server.Server, http.MethodPost, "/api/auth/actions/enable", `{"mode":"forward","header":"`+header+`"}`, trustedPeer, header, testUsername)
+	enabled := callForwardedJSON(server.Server, http.MethodPost, "/api/auth/actions/enable", `{"mode":"forward","setup_code":"`+authtest.SetupCode(t, server.operator)+`","header":"`+header+`"}`, trustedPeer, header, testUsername)
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", enabled.Code, enabled.Body.String())
 	}

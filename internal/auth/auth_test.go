@@ -17,6 +17,7 @@ import (
 // memoryStore tient l'état comme la base, sans elle.
 type memoryStore struct {
 	state State
+	code  SetupCode
 }
 
 func (m *memoryStore) GetAuthState(context.Context) (State, error) {
@@ -32,7 +33,25 @@ func (m *memoryStore) SaveAuthStateIf(ctx context.Context, expected, next State,
 		return false, nil
 	}
 	m.state = next
+	m.code = SetupCode{}
 	return true, nil
+}
+
+func (m *memoryStore) GetSetupCode(context.Context) (SetupCode, error) {
+	return m.code, nil
+}
+
+func (m *memoryStore) SaveSetupCodeIfNone(_ context.Context, code SetupCode, _ time.Time) (bool, error) {
+	if m.state.Mode != "" && m.state.Mode != ModeNone {
+		return false, nil
+	}
+	m.code = code
+	return true, nil
+}
+
+func (m *memoryStore) RecordSetupCodeFailure(context.Context) error {
+	m.code.Failures++
+	return nil
 }
 
 // none est l'état d'une installation neuve, celui sous lequel s'active l'accès.
@@ -49,6 +68,20 @@ func newTestService(t *testing.T) (*Service, *memoryStore) {
 	return service, store
 }
 
+// issueCode rend le code de première configuration ; hors du mode none il
+// n'y en a pas, et le vide est refusé comme un code absent.
+func issueCode(t *testing.T, service *Service) string {
+	t.Helper()
+	issued, err := service.IssueSetupCode(context.Background())
+	if errors.Is(err, ErrAlreadyEnabled) {
+		return ""
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return issued.Code
+}
+
 // verifies rend le verdict d'une vérification qui ne doit pas échouer
 // autrement que par un mauvais identifiant.
 func verifies(t *testing.T, service *Service, state State, username, password string) bool {
@@ -62,7 +95,7 @@ func verifies(t *testing.T, service *Service, state State, username, password st
 
 func TestEnableBasic_StoresASlowHashNeverThePassword(t *testing.T) {
 	service, store := newTestService(t)
-	if _, err := service.EnableBasic(context.Background(), none, "lucas", "correct horse battery"); err != nil {
+	if _, err := service.EnableBasic(context.Background(), none, issueCode(t, service), "lucas", "correct horse battery"); err != nil {
 		t.Fatal(err)
 	}
 	if store.state.Mode != ModeBasic || !strings.HasPrefix(store.state.PasswordHash, "$2") {
@@ -95,7 +128,7 @@ func TestValidate_RefusesShortPasswordsAndSeparatorInUsername(t *testing.T) {
 func TestVerify_RemembersUntilThePasswordChanges(t *testing.T) {
 	service, store := newTestService(t)
 	ctx := context.Background()
-	state, err := service.EnableBasic(ctx, none, "lucas", "correct horse battery")
+	state, err := service.EnableBasic(ctx, none, issueCode(t, service), "lucas", "correct horse battery")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +165,7 @@ func TestVerify_RemembersUntilThePasswordChanges(t *testing.T) {
 func TestEnableForward_StoresTheHeaderAndNoCredentials(t *testing.T) {
 	service, store := newTestService(t)
 	ctx := context.Background()
-	state, err := service.EnableForward(ctx, none, DefaultForwardHeader)
+	state, err := service.EnableForward(ctx, none, issueCode(t, service), DefaultForwardHeader)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,10 +175,10 @@ func TestEnableForward_StoresTheHeaderAndNoCredentials(t *testing.T) {
 	if store.state.Mode != ModeForward || store.state.Header != "Remote-User" || store.state.Username != "" || store.state.PasswordHash != "" {
 		t.Fatalf("stored %+v", store.state)
 	}
-	if _, err := service.EnableForward(ctx, state, "X-Forwarded-User"); !errors.Is(err, ErrAlreadyEnabled) {
+	if _, err := service.EnableForward(ctx, state, issueCode(t, service), "X-Forwarded-User"); !errors.Is(err, ErrAlreadyEnabled) {
 		t.Fatalf("enable twice: %v", err)
 	}
-	if _, err := service.EnableBasic(ctx, state, "lucas", "correct horse battery"); !errors.Is(err, ErrAlreadyEnabled) {
+	if _, err := service.EnableBasic(ctx, state, issueCode(t, service), "lucas", "correct horse battery"); !errors.Is(err, ErrAlreadyEnabled) {
 		t.Fatalf("basic over forward: %v", err)
 	}
 	if _, err := service.ChangePassword(ctx, state, "another long passphrase"); !errors.Is(err, ErrNoPassword) {
@@ -165,7 +198,7 @@ func TestEnableForward_StoresTheHeaderAndNoCredentials(t *testing.T) {
 func TestEnableForward_RefusesAnInvalidHeaderName(t *testing.T) {
 	service, store := newTestService(t)
 	for _, header := range []string{"", "Remote User", "Remote-User:", "Remote_User", "Rémote-User", strings.Repeat("a", 65)} {
-		if _, err := service.EnableForward(context.Background(), none, header); !errors.Is(err, ErrHeaderInvalid) {
+		if _, err := service.EnableForward(context.Background(), none, issueCode(t, service), header); !errors.Is(err, ErrHeaderInvalid) {
 			t.Errorf("%q: %v, want ErrHeaderInvalid", header, err)
 		}
 	}
@@ -223,7 +256,7 @@ func verifyInBackground(ctx context.Context, service *Service, state State, user
 
 func newBasicState(t *testing.T, service *Service) State {
 	t.Helper()
-	state, err := service.EnableBasic(context.Background(), none, "lucas", "correct horse battery")
+	state, err := service.EnableBasic(context.Background(), none, issueCode(t, service), "lucas", "correct horse battery")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +400,7 @@ func TestVerify_RightOperatorBehindAShortQueue_Passes(t *testing.T) {
 func TestChangePasswordAndDisable_RefuseAnAuthorizingStateThatChanged(t *testing.T) {
 	service, store := newTestService(t)
 	ctx := context.Background()
-	authorizing, err := service.EnableBasic(ctx, none, "lucas", "correct horse battery")
+	authorizing, err := service.EnableBasic(ctx, none, issueCode(t, service), "lucas", "correct horse battery")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,10 +432,10 @@ func TestEnable_RefusesAnAuthorizingStateThatIsNotTheStoredOne(t *testing.T) {
 	service, store := newTestService(t)
 	ctx := context.Background()
 	stale := State{Mode: ModeBasic, Username: "lucas", PasswordHash: "ancienne", EnabledAt: time.Unix(1, 0)}
-	if _, err := service.EnableBasic(ctx, stale, "lucas", "correct horse battery"); !errors.Is(err, ErrStateChanged) {
+	if _, err := service.EnableBasic(ctx, stale, issueCode(t, service), "lucas", "correct horse battery"); !errors.Is(err, ErrStateChanged) {
 		t.Fatalf("basic: %v, want ErrStateChanged", err)
 	}
-	if _, err := service.EnableForward(ctx, stale, DefaultForwardHeader); !errors.Is(err, ErrStateChanged) {
+	if _, err := service.EnableForward(ctx, stale, issueCode(t, service), DefaultForwardHeader); !errors.Is(err, ErrStateChanged) {
 		t.Fatalf("forward: %v, want ErrStateChanged", err)
 	}
 	if store.state.Mode != "" {

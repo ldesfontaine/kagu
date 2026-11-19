@@ -24,7 +24,8 @@ import (
 // de journaux. En mode forward, les mêmes routes exigent l'en-tête
 // d'identité posé par un mandataire de trusted_proxies. En mode none,
 // l'installation attend sa première configuration : seules les routes qui
-// servent à créer le compte passent.
+// servent à créer le compte passent, et la création exige le code que
+// `admin setup-code` tire par la socket locale.
 // Un jeton d'API (Authorization: Bearer) remplace l'un et l'autre, sur une
 // liste fermée de lectures (apiTokenRoutes) : voir admitAPIToken.
 // Restent ouverts ceux qui ont leur propre preuve ou n'en ont pas
@@ -47,8 +48,9 @@ type AuthService interface {
 	State(ctx context.Context) (auth.State, error)
 	Remembered(state auth.State, username, password string) bool
 	Verify(ctx context.Context, state auth.State, username, password string) (bool, error)
-	EnableBasic(ctx context.Context, expected auth.State, username, password string) (auth.State, error)
-	EnableForward(ctx context.Context, expected auth.State, header string) (auth.State, error)
+	EnableBasic(ctx context.Context, expected auth.State, setupCode, username, password string) (auth.State, error)
+	EnableForward(ctx context.Context, expected auth.State, setupCode, header string) (auth.State, error)
+	IssueSetupCode(ctx context.Context) (auth.IssuedSetupCode, error)
 	ChangePassword(ctx context.Context, expected auth.State, password string) (auth.State, error)
 	Disable(ctx context.Context, expected auth.State) error
 }

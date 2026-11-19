@@ -81,7 +81,7 @@ Trait double : chiffré. Trait simple : en clair, mais sans quitter la machine.
 
 | Flux | D'où à où | Chiffrement | Qui prouve quoi |
 | --- | --- | --- | --- |
-| Interface | navigateur → Traefik | TLS de Traefik | L'opérateur, par HTTP Basic, avec le compte créé à la première configuration (mode `basic`) : identifiant et mot de passe, renvoyés par le navigateur à chaque requête, `/api/events` et les flux de journaux compris. En mode `forward`, le SSO qui authentifie (Authelia derrière Traefik) : openCloud ne croit l'en-tête d'identité (`Remote-User` par défaut), présent une seule fois, que d'un pair de `trusted_proxies` qui porte aussi le secret partagé quand il est configuré (`forward_secret_file`, en-tête `X-OpenCloud-Proxy-Secret`), et répond `401` à tout le reste ; c'est au mandataire (Traefik) d'écraser l'en-tête envoyé par le client. Une identité ainsi prouvée mais absente d'une liste `forward_users` non vide reçoit `403 auth.forward_forbidden`. Un jeton d'API (`Authorization: Bearer`) remplace l'un et l'autre mode, sur sa liste fermée de lectures, plus les verbes qu'il porte en écriture (« Comment un agent IA lit openCloud »). Mode `none` (installation neuve, ou après `opencloud auth disable`) : aucun compte, le serveur ne sert que la première configuration et répond `401 auth.setup_required` au reste ; le premier qui atteint le port crée le compte (« Comment l'opérateur entre dans l'interface »). Le front charge la page, puis parle à `/api/…` en JSON |
+| Interface | navigateur → Traefik | TLS de Traefik | L'opérateur, par HTTP Basic, avec le compte créé à la première configuration (mode `basic`) : identifiant et mot de passe, renvoyés par le navigateur à chaque requête, `/api/events` et les flux de journaux compris. En mode `forward`, le SSO qui authentifie (Authelia derrière Traefik) : openCloud ne croit l'en-tête d'identité (`Remote-User` par défaut), présent une seule fois, que d'un pair de `trusted_proxies` qui porte aussi le secret partagé quand il est configuré (`forward_secret_file`, en-tête `X-OpenCloud-Proxy-Secret`), et répond `401` à tout le reste ; c'est au mandataire (Traefik) d'écraser l'en-tête envoyé par le client. Une identité ainsi prouvée mais absente d'une liste `forward_users` non vide reçoit `403 auth.forward_forbidden`. Un jeton d'API (`Authorization: Bearer`) remplace l'un et l'autre mode, sur sa liste fermée de lectures, plus les verbes qu'il porte en écriture (« Comment un agent IA lit openCloud »). Mode `none` (installation neuve, ou après `opencloud auth disable`) : aucun compte, le serveur ne sert que la première configuration et répond `401 auth.setup_required` au reste ; la création du compte exige le code de première configuration (« Comment l'opérateur entre dans l'interface »). Le front charge la page, puis parle à `/api/…` en JSON |
 | Interface | Traefik → openCloud | En clair, sur `127.0.0.1` de la même machine | Toute écriture de l'API exige `Content-Type: application/json`, même sans corps, et un `Sec-Fetch-Site` présent doit valoir `same-origin` ou `none`. Toute requête sous `/api/…` exige un `Host` reconnu (hôte de `public_url`, `localhost`, IP littérale, hôte de `listen`), contre le DNS rebinding : sinon `403 bad_host`. Pas de cookie, mais le navigateur joint aussi les identifiants Basic à une requête partie d'une page tierce : c'est cette garde qui l'arrête |
 | Direct | navigateur → `/api/events`, une connexion par onglet | TLS de Traefik | L'opérateur, par HTTP Basic ou par le SSO, comme l'interface ; refusé en mode `none` (`401 auth.setup_required`). Le flux ne dit que « les machines ont changé », « les tâches ont changé », jamais lesquelles. Plafond de 64 onglets, comptés par le serveur et non par les abonnés du bus (la page de statut y est abonnée aussi), `503` au-delà |
 | Agent | machine → Traefik | TLS de Traefik, ou empreinte épinglée par `-pin` si pas de domaine | Ed25519 : l'agent signe un aléa qu'il tire, l'identifiant de sa machine et l'heure (protocole 2), openCloud vérifie avec la clé enrôlée. Le signal porte les mesures de la machine et ce que son Docker a montré, dans un débit borné par machine ; les journaux d'un conteneur remontent par `POST /agent/logs/…`, jeton de session |
@@ -4536,12 +4536,26 @@ requête : `none` (par défaut), `basic` et `forward`.
   identifiants par une requête `XMLHttpRequest` qui les porte (le navigateur
   les retient comme s'il les avait demandés, `fetch` ne sait pas le faire),
   puis relit `/api/auth` : l'interface s'ouvre sans fenêtre de connexion. Un
-  navigateur qui ne les retiendrait pas les demande dans sa fenêtre. **Le
-  premier qui atteint le port crée le compte** : `serve` le dit au démarrage,
-  une ligne `INFO` « awaiting first setup » quand `listen` est sur la boucle
-  locale, un `WARN` sinon. La contrepartie : une installation exposée avant
-  sa première configuration se fait prendre son compte, et rien ne se fait
-  sans compte, pas même lire.
+  navigateur qui ne les retiendrait pas les demande dans sa fenêtre. **La
+  création du compte exige le code de première configuration** (R-A2-5) :
+  8 chiffres, 30 minutes, un seul usage, 5 essais faux au total puis il est
+  brûlé (le bon compris). `opencloud admin setup-code` le tire, par la
+  socket de commande (`POST /control/admin/setup-code`, servie par la socket
+  seule, jamais par le port) ; la base ne garde que son empreinte SHA-256
+  (`setup_code_hash`, `setup_code_expires`, `setup_code_failures` dans
+  `auth_settings`, migration `042`) et tout changement d'état de l'accès
+  l'efface. Le champ `setup_code` de `POST /api/auth/actions/enable` le porte,
+  en `basic` comme en `forward` ; refus `422 auth.setup_code_required` (absent),
+  `422 auth.setup_code_wrong` (faux, compté), `409 auth.setup_code_unusable`
+  (aucun tiré, échu ou brûlé). Il tient après un redémarrage, jusqu'à son
+  échéance. Le tirage est au journal d'audit (`auth.setup_code_issue`, acteur `cli`, échéance, jamais la valeur). `serve` écrit en `WARN` « première configuration en attente »
+  au démarrage en `none`. La contrepartie : la machine openCloud doit être
+  atteinte (accès au compte du service ou root) pour créer le compte, et cinq
+  essais faux de n'importe qui brûlent le code (il se remplace). L'empreinte
+  d'un code de huit chiffres se retrouve par force brute pour qui lit la
+  base, qui peut de toute façon y écrire ; la socket n'a que son mode `0600`
+  (la garde par uid 0 viendra avec la commande `admin` complète). Rien ne se
+  fait sans compte, pas même lire.
 - **`basic`** : HTTP Basic, realm `openCloud`, UTF-8. Créé à la première
   configuration : identifiant (64 caractères,
   sans `:`), mot de passe de 12 caractères au moins et 72 octets au plus
@@ -4748,8 +4762,9 @@ auth.forward_user_not_listed`) si l'identité qui active n'est pas dans une
 liste `forward_users` non vide. Mot de passe perdu ou SSO en
 panne : `opencloud auth disable -config …` sous le compte du service, que
 `serve` suit à la requête suivante sans redémarrer. **C'est voulu : la
-commande ramène à la première configuration**, et le premier qui atteint
-le port recrée le compte ; les jetons d'API tirés sous l'ancien compte restent
+commande ramène à la première configuration**, qui exige un code neuf
+(`opencloud admin setup-code`) : rouvrir ne l'offre pas à qui atteint le
+port ; les jetons d'API tirés sous l'ancien compte restent
 jusqu'à cette activation, qui les révoque. La commande écrit dans la base
 directement (pas par la socket de commande) : qui peut la lancer lit déjà
 `state_dir`. `opencloud auth status` dit le mode et l'identifiant, ou
@@ -6722,7 +6737,7 @@ refusés avant d'envoyer quoi que ce soit.
 
 | Manque | Conséquence aujourd'hui | Quand |
 | --- | --- | --- |
-| Première configuration au premier venu | Tant que le compte n'est pas créé, le premier qui atteint le port le crée : l'installation doit écouter sur la boucle locale (ou derrière un pare-feu) jusque-là. En `basic` : ni comptes multiples, ni déconnexion (le navigateur garde les identifiants jusqu'à sa fermeture), ni second facteur ; le mode `forward` les délègue au SSO devant openCloud | Comptes (`accounts`) et page de connexion : le modèle cible (`24-modele-cible.md`) |
+| Première configuration sous code | Tant que le compte n'est pas créé, il faut le code que `opencloud admin setup-code` tire sur la machine (8 chiffres, 30 minutes, un usage, 5 essais faux) : un port atteint par un tiers ne suffit plus, mais cinq essais faux brûlent le code. En `basic` : ni comptes multiples, ni déconnexion (le navigateur garde les identifiants jusqu'à sa fermeture), ni second facteur ; le mode `forward` les délègue au SSO devant openCloud | Comptes (`accounts`) et page de connexion : le modèle cible (`24-modele-cible.md`) |
 | Le groupe `docker` équivaut à root | Le compte dédié de l'agent (`opencloud-agent`, décision 2 du 22 octobre 2026) est dans le groupe `docker` quand la machine a Docker, et la socket de Docker lance un conteneur privilégié qui monte `/` : sur une machine avec Docker, le compte dédié protège des erreurs et d'une compromission maladroite (pas de réécriture directe de `/etc`, `/usr`, des comptes), pas d'un attaquant décidé. Sans Docker, c'est un compte sans privilège. Root reste possible (drop-in `root.conf`), au prix de la machine entière | Un observateur non privilégié et un exécuteur root étroit : seulement si l'usage le demande (décision 2) |
 | Docker muet sur une machine en ligne | La machine signale, mais Docker ne répond plus (ou l'agent dit « Docker absent ») : ses conteneurs gardent leur dernier état, pas encore « Inconnu » | Après #136 point 1 (issue de suite : 12 min, ou tout de suite si l'agent dit « Docker absent ») |
 | Des ordres qui n'existent pas encore | La liste des ordres est `agentwire.OrderKinds` (« Les acteurs »). Aucun ne retire un déploiement (supprimer le service de l'annuaire laisse conteneurs, dossier et `data/` sur la machine), et aucun ne sauvegarde le `data/` ni le `.env` d'un service (« Comment une sauvegarde se fait ») | À décider |
