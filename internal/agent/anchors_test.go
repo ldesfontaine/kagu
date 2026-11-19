@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -24,6 +25,7 @@ import (
 	"github.com/ldesfontaine/opencloud/internal/agentwire"
 	"github.com/ldesfontaine/opencloud/internal/anchor"
 	"github.com/ldesfontaine/opencloud/internal/machine"
+	"github.com/ldesfontaine/opencloud/internal/testkit"
 )
 
 // Les ancres de confiance locales : un ordre dont un paramètre sort de ce que
@@ -495,4 +497,72 @@ func TestAnchors_PinningTheServerKeyKeepsThem(t *testing.T) {
 
 func ownerIDOf(info os.FileInfo) uint32 {
 	return info.Sys().(*syscall.Stat_t).Uid
+}
+
+// withExtraKey ajoute une clé à la fin des paramètres d'un ordre : l'attaque
+// B-H1, la clé ancrée d'abord, sa variante de casse ou sa répétition ensuite.
+func withExtraKey(t *testing.T, params any, key string, value any) json.RawMessage {
+	t.Helper()
+	encoded := testkit.MustJSON(t, params)
+	extra := testkit.MustJSON(t, value)
+	return json.RawMessage(string(encoded[:len(encoded)-1]) + "," + strconv.Quote(key) + ":" + string(extra) + "}")
+}
+
+// B-H1 : backup.produce avec target et recipient ancrés, puis la même clé
+// d'une autre casse (ou répétée) hors ancre : refusé, vzdump non lancé.
+func TestR_A1_3_TheProducerIsNeverCalledOnAKeyOfAnotherCaseOrRepeated(t *testing.T) {
+	b := newProduceRig(t)
+	b.countingProducer([]byte("x"))
+	params := produceParams(b.identity)
+	cases := []struct {
+		name  string
+		key   string
+		value string
+	}{
+		{"Target outside the anchors", "Target", "9999"},
+		{"TARGET outside the anchors", "TARGET", "9999"},
+		{"target repeated, other value", "target", "9999"},
+		{"target repeated, same value", "target", "5012"},
+		{"Recipient outside the anchors", "Recipient", testIdentity(t).Recipient().String()},
+		{"recipient repeated, same value", "recipient", params.Recipient},
+	}
+	for seq, c := range cases {
+		order := longOrder(int64(seq+1), agentwire.KindBackupProduce, withExtraKey(t, params, c.key, c.value))
+		b.runner.receive(b.signed(t, order))
+		report := b.results.take()
+		if report == nil || len(report.Results) != 1 {
+			t.Fatalf("%s: one answer expected: %+v", c.name, report)
+		}
+		if got := report.Results[0]; got.State != agentwire.ActionRefused || !strings.HasPrefix(got.Reason, "anchor_outside:") {
+			t.Errorf("%s: %+v", c.name, got)
+		}
+	}
+	if len(b.produced) != 0 {
+		t.Fatalf("the producer ran for %v", b.produced)
+	}
+	if _, puts := b.server.received(); len(puts) != 0 {
+		t.Fatalf("something was sent: %+v", puts)
+	}
+	expectResult(t, b.run(t, 100, params), agentwire.ActionSucceeded, "")
+}
+
+// Même attaque sur restic.provision/certificate : aucun lien n'est écrit.
+func TestR_A1_7_TheResticLinkIsNeverWrittenOnAnotherCaseOfTheCertificateKey(t *testing.T) {
+	b := newResticBench(t, "restic.produce")
+	b.withoutTrust = true
+	trusted, foreign := mustCertificate(t), mustCertificate(t)
+	b.trust(t, map[string][]string{anchor.ResticTargetCert: {fingerprintOfPEM(trusted)}})
+	params := agentwire.ResticProvisionParams{Target: resticTargetID, Host: "pi.lan", Port: 8000, User: resticUser, Certificate: trusted}
+	for _, c := range []struct{ name, key, value string }{
+		{"Certificate outside the anchors", "Certificate", foreign},
+		{"CERTIFICATE outside the anchors", "CERTIFICATE", foreign},
+		{"certificate repeated, same value", "certificate", trusted},
+	} {
+		expectResult(t, b.runWithSecret(t, agentwire.KindResticProvision, withExtraKey(t, params, c.key, c.value), seededLink()),
+			agentwire.ActionRefused, "anchor_outside:restic.target-cert")
+		if b.runner.restic.source.isProvisioned(resticTargetID) {
+			t.Fatalf("%s: the source linked itself", c.name)
+		}
+	}
+	expectResult(t, b.runWithSecret(t, agentwire.KindResticProvision, params, seededLink()), agentwire.ActionSucceeded, "")
 }
