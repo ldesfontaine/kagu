@@ -46,7 +46,7 @@ documentation is in French.
 
 ## Quick start
 
-Needs Go 1.26.10+, Node.js 20.19+, `make` and `git`. Linux only.
+Needs Go 1.26.11+, Node.js 20.19+, `make` and `git`. Linux only.
 
 ```sh
 git clone https://github.com/ldesfontaine/opencloud.git

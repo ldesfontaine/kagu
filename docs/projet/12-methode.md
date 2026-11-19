@@ -94,7 +94,7 @@ du front avec une faille haute ou critique arrête la CI (il faut le réseau).
 Chromium si besoin (`playwright install chromium`, réseau) et joue le parcours
 navigateur de `web/e2e`.
 Dans `go.mod`, `go 1.26` dit ce qu'il faut pour lire le module ; la ligne
-`toolchain go1.26.10` fixe le correctif que la CI et les builds utilisent.
+`toolchain go1.26.11` fixe le correctif que la CI et les builds utilisent.
 
 `.github/workflows/release.yml` publie une version : les binaires Linux
 amd64 et arm64 (`make release`), leurs sommes, la signature minisign des
