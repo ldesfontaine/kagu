@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +39,7 @@ func enrolledStateDir(t *testing.T) string {
 func TestRunAgentTrust_AUsageErrorIsARefusalThatListsTheTypes(t *testing.T) {
 	for _, arguments := range [][]string{{}, {"frobnicate"}, {"add"}, {"add", "backup.guest"}, {"list", "extra"}, {"remove", "a", "b", "c"}} {
 		var out bytes.Buffer
-		err := runAgentTrust(append([]string{"-state", enrolledStateDir(t)}, arguments...), &out)
+		err := runAgentTrust(append([]string{"-state", enrolledStateDir(t)}, arguments...), &out, noTerminal)
 		var refused *refusal
 		if !errors.As(err, &refused) || !strings.Contains(refused.message, "backup.recipient, backup.guest, restic.target-cert") {
 			t.Errorf("%v: %v", arguments, err)
@@ -54,7 +55,7 @@ func TestRunAgentTrust_RefusesAnAccountThatIsNotRoot(t *testing.T) {
 	}
 	dir := enrolledStateDir(t)
 	var out bytes.Buffer
-	err := runAgentTrust([]string{"-state", dir, "add", anchor.BackupGuest, "101"}, &out)
+	err := runAgentTrust([]string{"-state", dir, "-yes", "add", anchor.BackupGuest, "101"}, &out, noTerminal)
 	var refused *refusal
 	if !errors.As(err, &refused) || !strings.Contains(refused.message, "root") {
 		t.Fatalf("err %v", err)
@@ -120,5 +121,76 @@ func TestParseAnchorFlags_JudgesEveryTypeOfTheRegistry(t *testing.T) {
 	values[anchor.BackupGuest] = &wrong
 	if _, bad := parseAnchorFlags(values); bad == nil || bad.Name != anchor.BackupGuest {
 		t.Fatalf("a malformed value must name its type: %v", bad)
+	}
+}
+
+func noTerminal() (io.ReadCloser, error) { return nil, errors.New("no tty") }
+
+func fakeTerminal(answer string) terminalOpener {
+	return func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(answer)), nil }
+}
+
+func storedAnchors(t *testing.T, dir string) map[string][]string {
+	t.Helper()
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	identity, err := agent.LoadIdentity(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return identity.Anchors
+}
+
+// R-A3-15, R-DROIT-8 : sans terminal ni -yes la commande refuse et n'écrit
+// rien ; avec un terminal qui répond « N », Entrée ou autre chose, non plus.
+// Le changement est dit avant la question.
+func TestR_A3_15(t *testing.T) {
+	fingerprint := strings.Repeat("ab", 32)
+	for _, verb := range []string{"add", "remove"} {
+		var out bytes.Buffer
+		dir := enrolledStateDir(t)
+		err := runAgentTrust([]string{"-state", dir, verb, anchor.ResticTargetCert, fingerprint}, &out, noTerminal)
+		var refused *refusal
+		if !errors.As(err, &refused) || !strings.Contains(refused.message, "-yes") {
+			t.Errorf("%s without terminal: %v", verb, err)
+		}
+		if len(storedAnchors(t, dir)) != 0 {
+			t.Errorf("%s without terminal wrote", verb)
+		}
+		if !strings.Contains(out.String(), fingerprint) || !strings.Contains(out.String(), fingerprint[:16]) {
+			t.Errorf("%s: the change is not told before refusing:\n%s", verb, out.String())
+		}
+	}
+	for _, answer := range []string{"N\n", "\n", "non\n", ""} {
+		var out bytes.Buffer
+		dir := enrolledStateDir(t)
+		err := runAgentTrust([]string{"-state", dir, "add", anchor.BackupGuest, "101"}, &out, fakeTerminal(answer))
+		var refused *refusal
+		if !errors.As(err, &refused) || len(storedAnchors(t, dir)) != 0 {
+			t.Errorf("answer %q: %v", answer, err)
+		}
+		if !strings.Contains(out.String(), "101") || !strings.Contains(out.String(), "[o/N]") {
+			t.Errorf("answer %q: change and question missing:\n%s", answer, out.String())
+		}
+	}
+}
+
+// Un « o » passe la question : la commande atteint agent.Trust, qui refuse un
+// compte sans privilège (le test ne peut pas écrire en root).
+func TestR_DROIT_8(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("le test joue un compte sans privilège")
+	}
+	var out bytes.Buffer
+	err := runAgentTrust([]string{"-state", enrolledStateDir(t), "add", anchor.BackupGuest, "101"}, &out, fakeTerminal("o\n"))
+	var refused *refusal
+	if !errors.As(err, &refused) || !strings.Contains(refused.message, "root") {
+		t.Fatalf("err %v", err)
+	}
+	if err := runAgentTrust([]string{"-state", enrolledStateDir(t), "add", "nope", "x"}, &out, noTerminal); err == nil || !strings.Contains(err.Error(), "inconnu") {
+		t.Fatalf("unknown type: %v", err)
 	}
 }

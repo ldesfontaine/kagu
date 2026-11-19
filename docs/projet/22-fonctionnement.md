@@ -578,7 +578,10 @@ et qu'**aucun ordre ne peut écrire**.
   l'agent avant l'enrôlement (code 2, `agent.anchor_invalid`), le jeton n'est
   pas consommé ; un agent déjà enrôlé les ignore. Ensuite, une seule voie :
   `opencloud agent trust list | add <type> <valeur> | remove <type> <valeur>`,
-  **en root** (un autre compte : refus, rien n'est écrit). Elle juge l'état
+  **en root** (un autre compte : refus, rien n'est écrit). `add` et `remove`
+  **disent ce qu'ils changent** (type, valeur, empreinte courte d'un certificat)
+  puis demandent `[o/N]` sur `/dev/tty` ; sans terminal, `-yes` est exigé, sinon
+  refus sans rien écrire (R-A3-15). Elle juge l'état
   comme l'agent (`CheckStateDir`, avec le compte de l'agent pour propriétaire
   admis : dossier, chaîne de dossiers, fichier d'identité, modes), prend le
   verrou `identity.json.lock` que l'agent prend aussi, réécrit `identity.json`
