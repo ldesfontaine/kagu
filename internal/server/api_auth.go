@@ -36,12 +36,14 @@ type authEnableResponse struct {
 }
 
 // Mode vide vaut basic : le corps d'avant, {username,password}, reste bon.
-// Header ne sert qu'en forward, Remote-User s'il est vide.
+// Header ne sert qu'en forward, Remote-User s'il est vide. SetupCode est le
+// code de première configuration, exigé dans les deux modes.
 type authEnableRequest struct {
-	Mode     string `json:"mode"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Header   string `json:"header"`
+	Mode      string `json:"mode"`
+	SetupCode string `json:"setup_code"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	Header    string `json:"header"`
 }
 
 type authPasswordRequest struct {
@@ -135,10 +137,10 @@ func (s *Server) enableMode(w http.ResponseWriter, r *http.Request, request auth
 	switch auth.Mode(request.Mode) {
 	case "", auth.ModeBasic:
 		authorizing, _ := authorizingStateFrom(r.Context())
-		state, err := s.auth.EnableBasic(r.Context(), authorizing, request.Username, request.Password)
+		state, err := s.auth.EnableBasic(r.Context(), authorizing, request.SetupCode, request.Username, request.Password)
 		return state, "", !s.failed(w, r, err, nil)
 	case auth.ModeForward:
-		return s.enableForward(w, r, request.Header)
+		return s.enableForward(w, r, request.SetupCode, request.Header)
 	default:
 		s.apiRefuse(w, http.StatusUnprocessableEntity, "auth.mode_invalid")
 		return auth.State{}, "", false
@@ -148,7 +150,7 @@ func (s *Server) enableMode(w http.ResponseWriter, r *http.Request, request auth
 // enableForward refuse d'activer depuis une requête qui ne porte pas déjà
 // l'identité d'un mandataire de confiance : sitôt le mode posé, tout le
 // reste répond 401, et l'opérateur se serait fermé la porte.
-func (s *Server) enableForward(w http.ResponseWriter, r *http.Request, header string) (auth.State, string, bool) {
+func (s *Server) enableForward(w http.ResponseWriter, r *http.Request, setupCode, header string) (auth.State, string, bool) {
 	if header == "" {
 		header = auth.DefaultForwardHeader
 	}
@@ -175,7 +177,7 @@ func (s *Server) enableForward(w http.ResponseWriter, r *http.Request, header st
 		return auth.State{}, "", false
 	}
 	authorizing, _ := authorizingStateFrom(r.Context())
-	state, err := s.auth.EnableForward(r.Context(), authorizing, header)
+	state, err := s.auth.EnableForward(r.Context(), authorizing, setupCode, header)
 	if s.failed(w, r, err, nil) {
 		return auth.State{}, "", false
 	}
@@ -207,4 +209,20 @@ func (s *Server) disableAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeAPI(w, http.StatusOK, authToJSON(auth.State{Mode: auth.ModeNone}, ""))
+}
+
+type setupCodeResponse struct {
+	Code      string    `json:"code"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// issueSetupCode tire le code de première configuration. Il ne se sert que
+// par la socket locale (controlMux) : la page ne peut pas le demander, sans
+// quoi le code ne prouverait rien.
+func (s *Server) issueSetupCode(w http.ResponseWriter, r *http.Request) {
+	issued, err := s.auth.IssueSetupCode(r.Context())
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	s.writeAPI(w, http.StatusCreated, setupCodeResponse{Code: issued.Code, ExpiresAt: issued.ExpiresAt})
 }

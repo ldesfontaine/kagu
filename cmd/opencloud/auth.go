@@ -26,7 +26,8 @@ const authUsage = `Usage : {command} auth <status|disable> [-config chemin]
             identités forward_users admet
   disable   coupe l'authentification de l'interface (mot de passe oublié) :
             elle revient à sa première configuration ; serve la suit à la
-            requête suivante, sans redémarrer
+            requête suivante, sans redémarrer. Le compte se recrée avec un
+            code neuf : {command} admin setup-code
 `
 
 // opencloud auth : la porte de secours quand le mot de passe est perdu. Elle
@@ -97,7 +98,7 @@ func disableAuth(ctx context.Context, access *auth.Service, out io.Writer) error
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(out, "Authentification de l'interface désactivée : l'interface revient à sa première configuration. Ouvrez-la et créez le compte : le premier qui atteint le port le crée.")
+	_, err = fmt.Fprintln(out, "Authentification de l'interface désactivée : l'interface revient à sa première configuration, qui exige un code. Tirez-le : sudo "+brand.Command+" admin setup-code")
 	return err
 }
 

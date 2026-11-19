@@ -13,6 +13,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/ldesfontaine/opencloud/internal/auth"
+	"github.com/ldesfontaine/opencloud/internal/auth/authtest"
+	"github.com/ldesfontaine/opencloud/internal/brand"
 	"github.com/ldesfontaine/opencloud/internal/store"
 )
 
@@ -47,7 +49,7 @@ func enableIn(t *testing.T, stateDir string) {
 		t.Fatal(err)
 	}
 	service.SetHashCost(bcrypt.MinCost)
-	if _, err := service.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, "lucas", "correct horse battery"); err != nil {
+	if _, err := service.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, service), "lucas", "correct horse battery"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -106,7 +108,7 @@ func TestAuthCommand_StatusShowsTheForwardHeaderAndDisableReopens(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, "X-Forwarded-User"); err != nil {
+	if _, err := service.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, service), "X-Forwarded-User"); err != nil {
 		t.Fatal(err)
 	}
 	db.Close()
@@ -146,24 +148,7 @@ func TestAuthCommand_RefusesAnUnknownSubcommand(t *testing.T) {
 	}
 }
 
-func TestIsLoopbackListen_TellsLocalFromEverywhere(t *testing.T) {
-	cases := map[string]bool{
-		"127.0.0.1:8080": true,
-		"[::1]:8080":     true,
-		"localhost:8080": true,
-		":8080":          false,
-		"0.0.0.0:8080":   false,
-		"192.0.2.4:8080": false,
-		"not an address": false,
-	}
-	for listen, want := range cases {
-		if got := isLoopbackListen(listen); got != want {
-			t.Errorf("%q: %v, want %v", listen, got, want)
-		}
-	}
-}
-
-func TestLogInterfaceAccess_WarnsOnlyWhenAwaitingSetupBeyondLoopback(t *testing.T) {
+func TestLogInterfaceAccess_WarnsAndNamesTheSetupCodeCommandWhileAwaitingSetup(t *testing.T) {
 	_, stateDir := writeConfig(t)
 	root, err := openStateDir(stateDir)
 	if err != nil {
@@ -182,18 +167,16 @@ func TestLogInterfaceAccess_WarnsOnlyWhenAwaitingSetupBeyondLoopback(t *testing.
 		t.Fatal(err)
 	}
 
-	logInterfaceAccess(context.Background(), logger, service, "127.0.0.1:8080")
-	if !strings.Contains(logs.String(), "level=INFO") || !strings.Contains(logs.String(), "awaiting first setup") {
-		t.Fatalf("loopback: %q", logs.String())
-	}
-	logs.Reset()
-	logInterfaceAccess(context.Background(), logger, service, ":8080")
-	if !strings.Contains(logs.String(), "level=WARN") || !strings.Contains(logs.String(), "first creates the operator account") {
-		t.Fatalf("everywhere: %q", logs.String())
+	for _, listen := range []string{"127.0.0.1:8080", ":8080"} {
+		logs.Reset()
+		logInterfaceAccess(context.Background(), logger, service, listen)
+		if !strings.Contains(logs.String(), "level=WARN") || !strings.Contains(logs.String(), "sudo "+brand.Command+" admin setup-code") {
+			t.Fatalf("%s: %q", listen, logs.String())
+		}
 	}
 
 	service.SetHashCost(bcrypt.MinCost)
-	if _, err := service.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, "lucas", "correct horse battery"); err != nil {
+	if _, err := service.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, service), "lucas", "correct horse battery"); err != nil {
 		t.Fatal(err)
 	}
 	logs.Reset()
@@ -232,7 +215,7 @@ func TestWarnIfForwardUnproven_SpeaksOnlyForForwardWithLoopbackAndNoSecret(t *te
 	if speaks(loopback, false) {
 		t.Fatal("no forward mode yet: nothing to warn about")
 	}
-	if _, err := service.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, auth.DefaultForwardHeader); err != nil {
+	if _, err := service.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, service), auth.DefaultForwardHeader); err != nil {
 		t.Fatal(err)
 	}
 	if !speaks(loopback, false) {
@@ -266,7 +249,7 @@ func enableForwardIn(t *testing.T, stateDir string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, auth.DefaultForwardHeader); err != nil {
+	if _, err := service.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, service), auth.DefaultForwardHeader); err != nil {
 		t.Fatal(err)
 	}
 }

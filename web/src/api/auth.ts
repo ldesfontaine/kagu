@@ -26,8 +26,11 @@ export interface AuthState {
   allowed_users: string[] | null;
 }
 
-// Un compte et son mot de passe, ou l'en-tête d'un mandataire.
-type AuthEnableRequest = { username: string; password: string } | { mode: "forward"; header: string };
+// Un compte et son mot de passe, ou l'en-tête d'un mandataire ; dans les deux
+// cas, le code de première configuration que la machine openCloud affiche.
+type AuthEnableRequest =
+  | { setup_code: string; username: string; password: string }
+  | { setup_code: string; mode: "forward"; header: string };
 
 const authPath = "/api/auth";
 

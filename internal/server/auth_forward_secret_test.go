@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/ldesfontaine/opencloud/internal/auth"
+	"github.com/ldesfontaine/opencloud/internal/auth/authtest"
 	"github.com/ldesfontaine/opencloud/internal/brand"
 	"github.com/ldesfontaine/opencloud/internal/server/servertest"
 )
@@ -29,7 +30,7 @@ func (ts *testServer) enableForwardOnLoopback(t *testing.T, secret string) {
 	t.Helper()
 	ts.trustedProxies = parsePrefixes(t, "127.0.0.1/32", "::1/128")
 	ts.forwardSecret = secret
-	if _, err := ts.operator.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, auth.DefaultForwardHeader); err != nil {
+	if _, err := ts.operator.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, ts.operator), auth.DefaultForwardHeader); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -197,8 +198,9 @@ func TestAuthAPI_EnableForwardOnALoopbackProxyWorksWithTheSecret(t *testing.T) {
 	server.forwardSecret = proxySecret
 	const enable = "/api/auth/actions/enable"
 
+	body := `{"mode":"forward","setup_code":"` + authtest.SetupCode(t, server.operator) + `"}`
 	post := func(secret string) *httptest.ResponseRecorder {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, enable, strings.NewReader(`{"mode":"forward"}`))
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, enable, strings.NewReader(body))
 		request.RemoteAddr = net.JoinHostPort(loopbackPeer, "4000")
 		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		request.Header.Set("Content-Type", "application/json")

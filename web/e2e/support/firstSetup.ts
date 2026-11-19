@@ -28,8 +28,10 @@ export async function mockFirstSetup(page: Page, address: { local: boolean; sugg
   );
 }
 
-// Crée le compte du formulaire de première configuration.
+// Crée le compte du formulaire de première configuration, avec un code
+// inventé : la route est simulée.
 export async function createFirstAccount(page: Page): Promise<void> {
+  await page.locator("#auth-setup-code").fill("12345678");
   await page.locator("#auth-username").fill("admin");
   await page.locator("#auth-password").fill("une-phrase-de-passe-de-test");
   await page.locator("#auth-confirm").fill("une-phrase-de-passe-de-test");

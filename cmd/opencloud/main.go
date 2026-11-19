@@ -20,6 +20,8 @@ Commandes :
             précédente si une mise à jour n'est pas confirmée (option -state)
   auth      status | disable : état de l'authentification de l'interface,
             ou la couper en cas de mot de passe oublié (option -config)
+  admin     setup-code : tire le code de première configuration, par le serveur
+            qui tourne (option -config)
   export    écrit l'annuaire dans un fichier YAML, par le serveur qui tourne
             (options -config -o -propose)
   apply     applique un fichier YAML à l'annuaire, après avoir montré le plan et
@@ -59,6 +61,8 @@ func main() {
 		err = runGuard(os.Args[2:])
 	case "auth":
 		err = runAuth(os.Args[2:])
+	case "admin":
+		err = runAdmin(os.Args[2:])
 	case "export":
 		err = runExport(os.Args[2:])
 	case "apply":

@@ -16,8 +16,8 @@ l'interface web embarqués.
 > **Maturité.** Version `v0.0.1`, pré-version. Les binaires Linux amd64 et
 > arm64 sont dans la [release v0.0.1](https://github.com/ldesfontaine/opencloud/releases/tag/v0.0.1),
 > ou se compilent. Une installation neuve n'a **pas de compte** : elle ne sert
-> que l'écran de première configuration, et le premier qui l'ouvre crée le
-> compte. Créez-le avant d'exposer le port hors de la machine.
+> que l'écran de première configuration, qui exige un code tiré sur la
+> machine : `sudo opencloud admin setup-code`.
 
 ![Vue d'ensemble d'openCloud, avec des machines d'exemple](docs/images/vue-ensemble.png)
 

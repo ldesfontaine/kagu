@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/opencloud/internal/auth"
+	"github.com/ldesfontaine/opencloud/internal/auth/authtest"
 	"github.com/ldesfontaine/opencloud/internal/wait/waittest"
 )
 
@@ -100,7 +101,7 @@ func (h *heldWrite) release() int {
 // configuration : l'activation révoque aussi les jetons d'API.
 func enableBasicByAPI(t *testing.T, server *testServer) {
 	t.Helper()
-	recorder := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{Username: testUsername, Password: testPassword})
+	recorder := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", recorder.Code, recorder.Body.String())
 	}
@@ -323,7 +324,7 @@ func TestAuthTransition_PasswordDisableAndEnableAreRefusedUnderAChangedState(t *
 		server := newFirstSetupServer(t)
 		// Autorisée sous « none », arrivée sous forward : un autre état que le sien.
 		recorder := staleWrite(t, server, server.enableAuth, http.MethodPost, "/api/auth/actions/enable", `{"username":"lucas","password":"correct horse battery"}`, "", func() {
-			if _, err := server.operator.EnableForward(ctx, auth.State{Mode: auth.ModeNone}, auth.DefaultForwardHeader); err != nil {
+			if _, err := server.operator.EnableForward(ctx, auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, server.operator), auth.DefaultForwardHeader); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -342,12 +343,13 @@ func TestAuthTransition_OnlyOneOfTwoConcurrentActivationsWins(t *testing.T) {
 	server := newFirstSetupServer(t)
 	ctx := context.Background()
 	none := auth.State{Mode: auth.ModeNone}
+	setupCode := authtest.SetupCode(t, server.operator)
 	start := make(chan struct{})
 	results := make(chan error, 2)
 	for _, username := range []string{"first", "second"} {
 		go func() {
 			<-start
-			_, err := server.operator.EnableBasic(ctx, none, username, testPassword)
+			_, err := server.operator.EnableBasic(ctx, none, setupCode, username, testPassword)
 			results <- err
 		}()
 	}
@@ -398,9 +400,10 @@ func TestAuthTransition_TheActivationWaitsForAnAuthorityBeingGranted(t *testing.
 	// vient après, et l'activation qui suit doit l'attendre.
 	server.rescue(t)
 
+	setupCode := authtest.SetupCode(t, server.operator)
 	enabled := make(chan int)
 	go func() {
-		enabled <- callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{Username: testUsername, Password: testPassword}).Code
+		enabled <- callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: setupCode, Username: testUsername, Password: testPassword}).Code
 	}()
 	// L'activation est en attente du verrou dès qu'un lecteur de plus ne
 	// peut plus le prendre.
