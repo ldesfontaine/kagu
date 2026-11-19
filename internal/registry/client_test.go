@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -287,4 +288,119 @@ func TestLoadDockerConfig_ReadsInlineAuths(t *testing.T) {
 	if err != nil || len(missing) != 0 {
 		t.Fatalf("missing file: %+v %v", missing, err)
 	}
+}
+
+// recordingTransport répond à la place du réseau et note chaque requête :
+// ce qui n'y figure pas n'a pas été tenté.
+type recordingTransport struct {
+	handler  func(*http.Request) *http.Response
+	requests []*http.Request
+}
+
+func (r *recordingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	r.requests = append(r.requests, request)
+	return r.handler(request), nil
+}
+
+func stubResponse(status int, header http.Header, body string) *http.Response {
+	if header == nil {
+		header = http.Header{}
+	}
+	return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(strings.NewReader(body))}
+}
+
+func TestR_D1_10(t *testing.T) {
+	t.Run("Link vers un autre hôte n'est pas suivi", func(t *testing.T) {
+		for _, link := range []string{
+			`<@127.0.0.1:1/x>; rel="next"`,
+			`<//127.0.0.1:1/x>; rel="next"`,
+			`<http://127.0.0.1:1/v2/x>; rel="next"`,
+			`</v2/a/tags/list@127.0.0.1:1/x>; rel="next"`,
+			`</other/path>; rel="next"`,
+			`</v2//127.0.0.1:1/x>; rel="next"`,
+		} {
+			transport := &recordingTransport{handler: func(*http.Request) *http.Response {
+				return stubResponse(200, http.Header{"Link": {link}}, `{"tags":["1"]}`)
+			}}
+			client := New(nil)
+			client.http.Transport = transport
+			ref, _ := Parse("127.0.0.1:5000/library/alpine:1")
+			tags, err := client.Tags(context.Background(), ref)
+			if err != nil || len(tags) != 1 {
+				t.Fatalf("%s: tags = %v, %v", link, tags, err)
+			}
+			for _, request := range transport.requests {
+				if request.URL.Host != "127.0.0.1:5000" || request.URL.User != nil {
+					t.Fatalf("%s: request left the registry: %s", link, request.URL)
+				}
+			}
+			if len(transport.requests) != 1 {
+				t.Fatalf("%s: %d requests, want 1", link, len(transport.requests))
+			}
+		}
+	})
+
+	t.Run("Link /v2/ du même hôte reste suivi", func(t *testing.T) {
+		if got := nextPage(`</v2/a/tags/list?last=x&n=1000>; rel="next"`); got != "/v2/a/tags/list?last=x&n=1000" {
+			t.Fatalf("nextPage = %q", got)
+		}
+	})
+
+	t.Run("realm http pour un registre distant : unauthorized sans requête", func(t *testing.T) {
+		transport := &recordingTransport{handler: func(*http.Request) *http.Response {
+			return stubResponse(401, http.Header{"Www-Authenticate": {`Bearer realm="http://127.0.0.1:1/token",service="x"`}}, "")
+		}}
+		client := New(Static{"registry.example.test": {Username: "lucas", Password: "secret"}})
+		client.http.Transport = transport
+		ref, _ := Parse("registry.example.test/library/alpine:1")
+		if _, err := client.Tags(context.Background(), ref); !errors.Is(err, ErrUnauthorized) {
+			t.Fatalf("err = %v, want ErrUnauthorized", err)
+		}
+		for _, request := range transport.requests {
+			if request.URL.Host != "registry.example.test" {
+				t.Fatalf("request to %s", request.URL)
+			}
+		}
+	})
+
+	t.Run("le trousseau ne part que vers le registre ou auth.docker.io", func(t *testing.T) {
+		cases := []struct {
+			realm      string
+			wantBasic  bool
+			registry   string
+			wantTokens bool
+		}{
+			{"https://evil.example.test/token", false, "registry.example.test", true},
+			{"https://registry.example.test/token", true, "registry.example.test", true},
+			{"https://auth.docker.io/token", true, "registry-1.docker.io", true},
+			{"https://auth.docker.io.evil.test/token", false, "registry-1.docker.io", true},
+		}
+		for _, tc := range cases {
+			transport := &recordingTransport{handler: func(request *http.Request) *http.Response {
+				if request.URL.Path == "/token" {
+					return stubResponse(200, nil, `{"token":"t"}`)
+				}
+				if request.Header.Get("Authorization") == "" {
+					return stubResponse(401, http.Header{"Www-Authenticate": {fmt.Sprintf(`Bearer realm="%s"`, tc.realm)}}, "")
+				}
+				return stubResponse(200, nil, `{"tags":[]}`)
+			}}
+			client := New(Static{tc.registry: {Username: "lucas", Password: "secret"}})
+			client.http.Transport = transport
+			ref, _ := Parse(tc.registry + "/library/alpine:1")
+			if _, err := client.Tags(context.Background(), ref); err != nil {
+				t.Fatalf("%s: %v", tc.realm, err)
+			}
+			for _, request := range transport.requests {
+				_, _, hasBasic := request.BasicAuth()
+				isRealm := request.URL.Path == "/token"
+				if isRealm && hasBasic != tc.wantBasic {
+					t.Fatalf("%s: basic sent = %v, want %v", tc.realm, hasBasic, tc.wantBasic)
+				}
+				if !isRealm && hasBasic {
+					t.Fatalf("%s: basic sent to the registry itself", tc.realm)
+				}
+			}
+		}
+	})
 }
