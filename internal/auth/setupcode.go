@@ -67,6 +67,7 @@ func (s *Service) IssueSetupCode(ctx context.Context) (IssuedSetupCode, error) {
 		return IssuedSetupCode{}, ErrAlreadyEnabled
 	}
 	s.logger.Warn("first setup code issued", "expires_at", issued.ExpiresAt.UTC().Format(time.RFC3339))
+	s.auditor.Record(ctx, setupCodeEvent(issued.ExpiresAt))
 	return issued, nil
 }
 

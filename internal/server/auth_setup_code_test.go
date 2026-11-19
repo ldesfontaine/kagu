@@ -2,6 +2,9 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -9,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ldesfontaine/opencloud/internal/audit"
 	"github.com/ldesfontaine/opencloud/internal/auth"
 )
 
@@ -271,4 +275,59 @@ func otherCode(code string) string {
 		return "00000001"
 	}
 	return "00000000"
+}
+
+// Le tirage du code est au journal d'audit (qui, quand), jamais sa valeur : ni
+// dans l'entrée, ni dans ce que l'API du journal rend, ni dans le journal
+// applicatif, en clair, en base64 ou en hexadécimal.
+func TestR_A2_5_AuditNeverHoldsSetupCode(t *testing.T) {
+	ts := newFirstSetupServer(t)
+	issued := issueOnSocket(t, ts)
+
+	events, err := ts.db.ListAuditEvents(context.Background(), audit.Query{Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entry *audit.Event
+	for index := range events {
+		if events[index].Action == audit.AuthSetupCodeIssue {
+			entry = &events[index]
+		}
+	}
+	if entry == nil {
+		t.Fatalf("no audit entry for the issued code: %+v", events)
+	}
+	if entry.Actor.Kind != audit.ActorCLI || entry.At.IsZero() {
+		t.Fatalf("the entry does not say who and when: %+v", entry)
+	}
+	rawEntry, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := ts.db.GetSetupCode(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	forms := []string{
+		issued.Code,
+		base64.StdEncoding.EncodeToString([]byte(issued.Code)),
+		base64.RawStdEncoding.EncodeToString([]byte(issued.Code)),
+		base64.URLEncoding.EncodeToString([]byte(issued.Code)),
+		base64.RawURLEncoding.EncodeToString([]byte(issued.Code)),
+		hex.EncodeToString([]byte(issued.Code)),
+		strings.ToUpper(hex.EncodeToString([]byte(issued.Code))),
+		stored.Hash,
+	}
+	outputs := map[string]string{
+		"audit entry":     string(rawEntry),
+		"GET /api/audit":  callAPI(ts.Server, http.MethodGet, "/api/audit?limit=200", nil).Body.String(),
+		"application log": ts.logs.String(),
+	}
+	for where, text := range outputs {
+		for _, form := range forms {
+			if strings.Contains(text, form) {
+				t.Errorf("%s holds the setup code (as %q)", where, form)
+			}
+		}
+	}
 }

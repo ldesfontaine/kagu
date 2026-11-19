@@ -250,8 +250,9 @@ func TestAudit_GestureWithoutActorIsJournaledAsUnknown(t *testing.T) {
 // nom, le compte créé se lit dans les détails.
 func TestAudit_UnverifiedBasicHeaderNamesNobody(t *testing.T) {
 	server := newFirstSetupServer(t)
+	setupCode := authtest.SetupCode(t, server.operator)
 	mark := server.latestAuditID(t)
-	body := `{"mode":"basic","setup_code":"` + authtest.SetupCode(t, server.operator) + `","username":"lucas","password":"une phrase assez longue"}`
+	body := `{"mode":"basic","setup_code":"` + setupCode + `","username":"lucas","password":"une phrase assez longue"}`
 	request := httptest.NewRequest(http.MethodPost, "/api/auth/actions/enable", strings.NewReader(body))
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")

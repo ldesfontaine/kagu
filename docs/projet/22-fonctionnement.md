@@ -4548,7 +4548,7 @@ requête : `none` (par défaut), `basic` et `forward`.
   en `basic` comme en `forward` ; refus `422 auth.setup_code_required` (absent),
   `422 auth.setup_code_wrong` (faux, compté), `409 auth.setup_code_unusable`
   (aucun tiré, échu ou brûlé). Il tient après un redémarrage, jusqu'à son
-  échéance. `serve` écrit en `WARN` « première configuration en attente »
+  échéance. Le tirage est au journal d'audit (`auth.setup_code_issue`, acteur `cli`, échéance, jamais la valeur). `serve` écrit en `WARN` « première configuration en attente »
   au démarrage en `none`. La contrepartie : la machine openCloud doit être
   atteinte (accès au compte du service ou root) pour créer le compte, et cinq
   essais faux de n'importe qui brûlent le code (il se remplace). L'empreinte
