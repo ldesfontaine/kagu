@@ -303,8 +303,7 @@ func (r *applyRun) confirm(plan planView) error {
 	}
 	fmt.Fprint(r.out, confirmQuestion)
 	answer, _ := r.in.ReadString('\n')
-	switch strings.ToLower(strings.TrimSpace(answer)) {
-	case "o", "oui", "y", "yes":
+	if isYes(answer) {
 		return nil
 	}
 	return &refusal{message: "plan non confirmé : rien n'a été écrit"}

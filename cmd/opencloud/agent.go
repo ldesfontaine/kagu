@@ -46,7 +46,7 @@ func (r *refusal) Error() string {
 // connectent.
 func runAgent(args []string) error {
 	if len(args) > 0 && args[0] == "trust" {
-		return runAgentTrust(args[1:], os.Stdout)
+		return runAgentTrust(args[1:], os.Stdout, openControllingTerminal, os.Geteuid())
 	}
 	flags := flag.NewFlagSet("agent", flag.ContinueOnError)
 	server := flags.String("server", "", "adresse d'"+brand.ProductName+", premier lancement seulement")

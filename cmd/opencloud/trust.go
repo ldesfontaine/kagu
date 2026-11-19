@@ -19,9 +19,10 @@ import (
 // les ancres de confiance locales de l'agent (internal/anchor). Seule voie qui
 // les change après l'installation ; réservée à root. Le message d'un
 // changement est écrit au journal du système (journald, via /dev/log).
-func runAgentTrust(args []string, out io.Writer) error {
+func runAgentTrust(args []string, out io.Writer, openTerminal terminalOpener, euid int) error {
 	flags := flag.NewFlagSet("agent trust", flag.ContinueOnError)
 	stateDir := flags.String("state", defaultAgentStateDir, "répertoire d'état de l'agent")
+	yes := flags.Bool("yes", false, "confirme sans poser la question (obligatoire sans terminal)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -44,14 +45,47 @@ func runAgentTrust(args []string, out io.Writer) error {
 	if identity, loadErr := agent.LoadIdentity(root); loadErr == nil && identity.Language != "" {
 		text = catalogs.For(identity.Language)
 	}
+	if verb != agent.TrustList {
+		// Un compte sans privilège est refusé sans qu'on lui pose la question.
+		if err := agent.RequireTrustRoot(euid); err != nil {
+			return explainTrustError(err, kindName, text)
+		}
+		if err := confirmTrustChange(out, openTerminal, *yes, text, verb, kindName, value); err != nil {
+			return err
+		}
+	}
 	result, err := agent.Trust(agent.TrustOptions{
-		StateDir: root, StatePath: *stateDir, EUID: os.Geteuid(), Audit: auditToSystemJournal,
+		StateDir: root, StatePath: *stateDir, EUID: euid, Audit: auditToSystemJournal,
 	}, verb, kindName, value)
 	if err != nil {
 		return explainTrustError(err, kindName, text)
 	}
 	printTrust(out, text, verb, kindName, value, result)
 	return nil
+}
+
+// confirmTrustChange dit ce qu'« add » ou « remove » va changer, puis demande
+// l'accord avant que quoi que ce soit s'écrive.
+func confirmTrustChange(out io.Writer, openTerminal terminalOpener, yes bool, text lang.Catalog, verb, kindName, value string) error {
+	kind, known := anchor.Lookup(kindName)
+	if !known {
+		return explainTrustError(agent.ErrTrustUnknownKind, kindName, text)
+	}
+	key := "agent.trust_change_add"
+	if verb == agent.TrustRemove {
+		key = "agent.trust_change_remove"
+	}
+	fmt.Fprintln(out, text.Format(key, kindName, value))
+	if kind.Name == anchor.ResticTargetCert && kind.Valid(value) {
+		fmt.Fprintln(out, text.Format("agent.trust_change_fingerprint", shortFingerprint(value)))
+	}
+	return confirmChange(out, openTerminal, yes, text)
+}
+
+// shortFingerprint garde les seize premiers caractères d'une empreinte
+// hexadécimale : de quoi la comparer à l'œil, pas de quoi la reconnaître seule.
+func shortFingerprint(fingerprint string) string {
+	return fingerprint[:16]
 }
 
 // splitTrustArguments lit « list », ou « add|remove <type> <valeur> ».

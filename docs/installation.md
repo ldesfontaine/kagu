@@ -1186,7 +1186,8 @@ l'ordre suivant, sans redémarrage.
 ```
 
 `add <type> <valeur>` et `remove <type> <valeur>` complètent `list` ; le type est
-l'un des noms du tableau. Quand openCloud refuse d'envoyer un ordre (ou que
+l'un des noms du tableau. Ils disent ce qu'ils changent et demandent `[o/N]` sur
+le terminal ; sans terminal, ajoutez `-yes`. Quand openCloud refuse d'envoyer un ordre (ou que
 l'agent le refuse), l'écran donne la commande `add` exacte, valeur comprise :
 copiez-la. Trois états se lisent sur la fiche de la machine, onglet Agent :
 **posées**, **aucune posée**, **illisibles** (le fichier porte une valeur qui ne se
