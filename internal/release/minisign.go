@@ -101,6 +101,16 @@ func (key PublicKey) String() string {
 	return base64.StdEncoding.EncodeToString(raw)
 }
 
+// Equal : même identifiant, mêmes octets.
+func (key PublicKey) Equal(other PublicKey) bool {
+	return key.id == other.id && bytes.Equal(key.key, other.key)
+}
+
+// isSet : la clé a été lue ou tirée, ce n'est pas la valeur zéro.
+func (key PublicKey) isSet() bool {
+	return len(key.key) == ed25519.PublicKeySize
+}
+
 // ParsePrivateKey lit ce que PrivateKey.Encode écrit. Le message d'erreur ne
 // reprend jamais le texte : il peut finir dans un journal.
 func ParsePrivateKey(text string) (PrivateKey, error) {
@@ -156,45 +166,47 @@ func Sign(message []byte, key PrivateKey, trustedComment string) ([]byte, error)
 	return []byte(file.String()), nil
 }
 
-// Verify vérifie que signatureFile est la signature de message par key et
-// rend le commentaire de confiance, signé avec lui. Seul l'algorithme
-// pré-haché est accepté.
-func Verify(message, signatureFile []byte, key PublicKey) (trustedComment string, err error) {
-	if len(key.key) != ed25519.PublicKeySize {
-		return "", fmt.Errorf("%w: public key", ErrMalformed)
+// Verify vérifie que signatureFile est la signature de message par l'une des
+// clés, choisie par l'identifiant que porte la signature. Il rend le
+// commentaire de confiance, signé avec lui, et si la signataire est la clé de
+// secours. Seul l'algorithme pré-haché est accepté.
+func Verify(message, signatureFile []byte, keys Keys) (trustedComment string, byBackup bool, err error) {
+	if !keys.Current.isSet() {
+		return "", false, fmt.Errorf("%w: public key", ErrMalformed)
 	}
 	lines, err := signatureLines(signatureFile)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	header, err := decodeLine(lines[1], signatureBytes, "signature")
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	globalSignature, err := decodeLine(lines[3], ed25519.SignatureSize, "global signature")
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	switch string(header[:2]) {
 	case signatureAlgorithm:
 	case publicAlgorithm:
-		return "", ErrLegacyAlgorithm
+		return "", false, ErrLegacyAlgorithm
 	default:
-		return "", fmt.Errorf("%w: signature algorithm", ErrMalformed)
+		return "", false, fmt.Errorf("%w: signature algorithm", ErrMalformed)
 	}
-	if !bytes.Equal(header[2:2+keyIDSize], key.id[:]) {
-		return "", ErrWrongKey
+	key, byBackup, err := keys.signer(header[2 : 2+keyIDSize])
+	if err != nil {
+		return "", false, err
 	}
 	signature := header[2+keyIDSize:]
 	digest := blake2b.Sum512(message)
 	if !ed25519.Verify(key.key, digest[:], signature) {
-		return "", fmt.Errorf("%w: message", ErrBadSignature)
+		return "", false, fmt.Errorf("%w: message", ErrBadSignature)
 	}
 	comment := strings.TrimPrefix(lines[2], trustedPrefix)
 	if !ed25519.Verify(key.key, globalMessage(signature, comment), globalSignature) {
-		return "", fmt.Errorf("%w: trusted comment", ErrBadSignature)
+		return "", false, fmt.Errorf("%w: trusted comment", ErrBadSignature)
 	}
-	return comment, nil
+	return comment, byBackup, nil
 }
 
 // signatureLines coupe un .minisig en ses quatre lignes et contrôle les

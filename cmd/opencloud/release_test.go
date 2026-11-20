@@ -64,7 +64,9 @@ func (fixture releaseFixture) privateKey(t *testing.T) string {
 	return string(text)
 }
 
-func (fixture releaseFixture) trusted() (release.PublicKey, error) { return fixture.publicKey, nil }
+func (fixture releaseFixture) trusted() (release.Keys, error) {
+	return release.Keys{Current: fixture.publicKey}, nil
+}
 
 func (fixture releaseFixture) sign(t *testing.T) {
 	t.Helper()
@@ -148,8 +150,8 @@ func TestReleaseVerify_RefusesChangedSumsAndAnotherKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = releaseCommand([]string{"verify", fixture.binary}, &bytes.Buffer{}, nil, func() (release.PublicKey, error) { return other, nil })
-	mustRefuse(t, err, "pas été faite par la clé de version")
+	err = releaseCommand([]string{"verify", fixture.binary}, &bytes.Buffer{}, nil, func() (release.Keys, error) { return release.Keys{Current: other}, nil })
+	mustRefuse(t, err, "aucune des clés de version de ce binaire")
 
 	sums, err := os.ReadFile(fixture.sums)
 	if err != nil {
@@ -186,13 +188,13 @@ func TestReleaseVerify_RefusesAFileNotInTheVersionAndMissingSums(t *testing.T) {
 func TestReleaseVerify_WithoutEmbeddedKey_Refuses(t *testing.T) {
 	fixture := newReleaseFixture(t)
 	fixture.sign(t)
-	noKey := func() (release.PublicKey, error) { return release.PublicKey{}, release.ErrNoTrustedKey }
+	noKey := func() (release.Keys, error) { return release.Keys{}, release.ErrNoTrustedKey }
 	err := releaseCommand([]string{"verify", fixture.binary}, &bytes.Buffer{}, nil, noKey)
 	mustRefuse(t, err, "n'embarque pas de clé de version")
 }
 
 func TestRunRelease_EmbeddedKeyIsEmptyInThisBuild(t *testing.T) {
-	if release.TrustedPublicKey != "" {
+	if release.CurrentPublicKey != "" {
 		t.Skip("une clé de version est embarquée")
 	}
 	fixture := newReleaseFixture(t)
@@ -266,7 +268,7 @@ func TestReleaseKeygen_RefusesAnExistingFileAndWrites0600(t *testing.T) {
 func TestReleaseCommand_RefusesAMissingOrUnknownSubcommand(t *testing.T) {
 	mustRefuse(t, releaseCommand(nil, &bytes.Buffer{}, nil, nil), "sous-commande manquante")
 	mustRefuse(t, releaseCommand([]string{"publish"}, &bytes.Buffer{}, nil, nil), "sous-commande inconnue")
-	mustRefuse(t, releaseCommand([]string{"verify"}, &bytes.Buffer{}, nil, func() (release.PublicKey, error) { return release.PublicKey{}, nil }), "verify attend un fichier")
+	mustRefuse(t, releaseCommand([]string{"verify"}, &bytes.Buffer{}, nil, func() (release.Keys, error) { return release.Keys{}, nil }), "verify attend un fichier")
 }
 
 // importFixture signe une version avec une clé de test et rend le dossier que
@@ -283,7 +285,7 @@ func importFixture(t *testing.T, version string) (dir string, key release.Public
 func TestReleaseImport_ThenServeOffersTheUpdate(t *testing.T) {
 	dir, key, _ := importFixture(t, "v0.0.2")
 	configPath, stateDir := writeConfig(t)
-	trusted := func() (release.PublicKey, error) { return key, nil }
+	trusted := func() (release.Keys, error) { return release.Keys{Current: key}, nil }
 	var out bytes.Buffer
 	if err := releaseCommand([]string{"import", "-config", configPath, dir}, &out, nil, trusted); err != nil {
 		t.Fatal(err)
@@ -297,7 +299,7 @@ func TestReleaseImport_ThenServeOffersTheUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	artifact, err := release.NewLibrary(root, key).Artifact(release.Version{Patch: 2}, "arm64")
+	artifact, err := release.NewLibrary(root, release.Keys{Current: key}).Artifact(release.Version{Patch: 2}, "arm64")
 	if err != nil || artifact.Name != "opencloud-linux-arm64" {
 		t.Fatalf("artifact %+v %v", artifact, err)
 	}
@@ -307,10 +309,24 @@ func TestReleaseImport_ThenServeOffersTheUpdate(t *testing.T) {
 	}
 }
 
+// Une version signée par la clé de secours s'importe comme une autre.
+func TestReleaseImport_AcceptsAVersionSignedByTheBackupKey(t *testing.T) {
+	dir, backup, _ := importFixture(t, "v0.0.2")
+	current, _, err := release.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath, _ := writeConfig(t)
+	trusted := func() (release.Keys, error) { return release.Keys{Current: current, Backup: backup}, nil }
+	if err := releaseCommand([]string{"import", "-config", configPath, dir}, &bytes.Buffer{}, nil, trusted); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestReleaseImport_RefusesWhatItCannotVerify(t *testing.T) {
 	dir, key, private := importFixture(t, "v0.0.2")
 	configPath, _ := writeConfig(t)
-	trusted := func() (release.PublicKey, error) { return key, nil }
+	trusted := func() (release.Keys, error) { return release.Keys{Current: key}, nil }
 	run := func(arguments ...string) error {
 		return releaseCommand(append([]string{"import", "-config", configPath}, arguments...), &bytes.Buffer{}, nil, trusted)
 	}
@@ -320,7 +336,7 @@ func TestReleaseImport_RefusesWhatItCannotVerify(t *testing.T) {
 	mustRefuse(t, run(t.TempDir()), "introuvable")
 
 	other, _, _ := importFixture(t, "v0.0.2")
-	mustRefuse(t, run(other), "n'a pas été faite par la clé de version de ce binaire")
+	mustRefuse(t, run(other), "aucune des clés de version de ce binaire")
 
 	// Un binaire modifié après la signature.
 	if err := os.WriteFile(filepath.Join(dir, "opencloud-linux-amd64"), []byte("changed"), 0o600); err != nil {
@@ -336,6 +352,6 @@ func TestReleaseImport_RefusesWhatItCannotVerify(t *testing.T) {
 	conflicting := releasetest.Write(t, private, "v0.0.2", map[string][]byte{"opencloud-linux-amd64": []byte("another")})
 	mustRefuse(t, run(conflicting), "ne se réécrit jamais")
 
-	noKey := func() (release.PublicKey, error) { return release.PublicKey{}, release.ErrNoTrustedKey }
+	noKey := func() (release.Keys, error) { return release.Keys{}, release.ErrNoTrustedKey }
 	mustRefuse(t, releaseCommand([]string{"import", "-config", configPath, dir}, &bytes.Buffer{}, nil, noKey), "n'embarque pas de clé de version")
 }

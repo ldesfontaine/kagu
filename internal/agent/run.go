@@ -72,9 +72,9 @@ type Options struct {
 	// Rights sont les droits que la commande d'installation donne
 	// (-rights) ; l'identité les garde ensuite. Vides : observe seul.
 	Rights []machine.Capability
-	// ReleaseKey est la clé de version que ce binaire embarque ; HasReleaseKey
-	// est faux quand il n'en a pas (agent.update est alors refusé).
-	ReleaseKey    release.PublicKey
+	// ReleaseKeys sont les clés de version que ce binaire embarque ;
+	// HasReleaseKey est faux quand il n'en a pas (agent.update est alors refusé).
+	ReleaseKeys   release.Keys
 	HasReleaseKey bool
 	// executable rend le chemin du binaire qui tourne, pour savoir s'il vient
 	// de <état>/bin/ ; nil vaut os.Executable. Non exporté : seuls les tests
@@ -201,7 +201,7 @@ func Run(ctx context.Context, opts Options) error {
 	// fois, et vivent avec l'agent comme les sondes : une coupure du flux ne
 	// les interrompt pas, seul leur téléchargement échoue.
 	orders.fetch.use(client)
-	orders.updater.key, orders.updater.hasKey = opts.ReleaseKey, opts.HasReleaseKey
+	orders.updater.keys, orders.updater.hasKey = opts.ReleaseKeys, opts.HasReleaseKey
 	orders.updater.guarded = opts.GuardVersion > 0
 	// Ce que le lanceur a fait en notre absence se dit au journal et au
 	// serveur ; la mise à jour en attente se confirme à l'ouverture du flux.

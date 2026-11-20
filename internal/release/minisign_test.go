@@ -40,7 +40,7 @@ func mustPublicKey(t *testing.T, text string) PublicKey {
 }
 
 func TestVerify_AcceptsASignatureMadeByMinisign(t *testing.T) {
-	comment, err := Verify([]byte(vectorSums), []byte(vectorSignature()), mustPublicKey(t, vectorPublicKey))
+	comment, _, err := Verify([]byte(vectorSums), []byte(vectorSignature()), Keys{Current: mustPublicKey(t, vectorPublicKey)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestVerify_AcceptsASignatureMadeByMinisign(t *testing.T) {
 
 func TestVerify_RefusesAChangedMessage(t *testing.T) {
 	changed := strings.Replace(vectorSums, "3f1c", "3f1d", 1)
-	_, err := Verify([]byte(changed), []byte(vectorSignature()), mustPublicKey(t, vectorPublicKey))
+	_, _, err := Verify([]byte(changed), []byte(vectorSignature()), Keys{Current: mustPublicKey(t, vectorPublicKey)})
 	if !errors.Is(err, ErrBadSignature) {
 		t.Fatalf("changed message: %v", err)
 	}
@@ -59,14 +59,14 @@ func TestVerify_RefusesAChangedMessage(t *testing.T) {
 
 func TestVerify_RefusesAChangedTrustedComment(t *testing.T) {
 	changed := strings.Replace(vectorSignature(), "version:v0.0.2", "version:v0.0.3", 1)
-	_, err := Verify([]byte(vectorSums), []byte(changed), mustPublicKey(t, vectorPublicKey))
+	_, _, err := Verify([]byte(vectorSums), []byte(changed), Keys{Current: mustPublicKey(t, vectorPublicKey)})
 	if !errors.Is(err, ErrBadSignature) {
 		t.Fatalf("changed comment: %v", err)
 	}
 }
 
 func TestVerify_RefusesAnotherKey(t *testing.T) {
-	_, err := Verify([]byte(vectorSums), []byte(vectorSignature()), mustPublicKey(t, vectorOtherPublicKey))
+	_, _, err := Verify([]byte(vectorSums), []byte(vectorSignature()), Keys{Current: mustPublicKey(t, vectorOtherPublicKey)})
 	if !errors.Is(err, ErrWrongKey) {
 		t.Fatalf("another key: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestVerify_RefusesTheLegacyAlgorithm(t *testing.T) {
 	}
 	copy(raw, "Ed")
 	legacy := strings.Replace(vectorSignature(), vectorSignatureLine, base64.StdEncoding.EncodeToString(raw), 1)
-	_, err = Verify([]byte(vectorSums), []byte(legacy), mustPublicKey(t, vectorPublicKey))
+	_, _, err = Verify([]byte(vectorSums), []byte(legacy), Keys{Current: mustPublicKey(t, vectorPublicKey)})
 	if !errors.Is(err, ErrLegacyAlgorithm) {
 		t.Fatalf("legacy algorithm: %v", err)
 	}
@@ -102,14 +102,14 @@ func TestVerify_RefusesMalformedFiles(t *testing.T) {
 	}
 	key := mustPublicKey(t, vectorPublicKey)
 	for name, file := range cases {
-		if _, err := Verify([]byte(vectorSums), []byte(file), key); !errors.Is(err, ErrMalformed) {
+		if _, _, err := Verify([]byte(vectorSums), []byte(file), Keys{Current: key}); !errors.Is(err, ErrMalformed) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
 }
 
 func TestVerify_RefusesAnEmptyKey(t *testing.T) {
-	if _, err := Verify([]byte(vectorSums), []byte(vectorSignature()), PublicKey{}); !errors.Is(err, ErrMalformed) {
+	if _, _, err := Verify([]byte(vectorSums), []byte(vectorSignature()), Keys{Current: PublicKey{}}); !errors.Is(err, ErrMalformed) {
 		t.Fatalf("empty key: %v", err)
 	}
 }
@@ -126,7 +126,7 @@ func TestSign_ThenVerify_RoundTrip(t *testing.T) {
 	if !strings.HasPrefix(string(file), "untrusted comment: signature from ") || strings.Count(string(file), "\n") != 4 || !strings.HasSuffix(string(file), "\n") {
 		t.Fatalf("signature file: %q", file)
 	}
-	comment, err := Verify([]byte(vectorSums), file, publicKey)
+	comment, _, err := Verify([]byte(vectorSums), file, Keys{Current: publicKey})
 	if err != nil || comment != vectorComment {
 		t.Fatalf("verify: %q %v", comment, err)
 	}
@@ -134,7 +134,7 @@ func TestSign_ThenVerify_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Verify([]byte(vectorSums), file, otherPublic); !errors.Is(err, ErrWrongKey) {
+	if _, _, err := Verify([]byte(vectorSums), file, Keys{Current: otherPublic}); !errors.Is(err, ErrWrongKey) {
 		t.Fatalf("another generated key: %v", err)
 	}
 	if _, err := Sign([]byte(vectorSums), otherPrivate, "two\nlines"); !errors.Is(err, ErrMalformed) {
@@ -161,7 +161,7 @@ func TestPrivateKey_EncodeParsesBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Verify([]byte("message"), file, publicKey); err != nil {
+	if _, _, err := Verify([]byte("message"), file, Keys{Current: publicKey}); err != nil {
 		t.Fatalf("signature of the parsed key: %v", err)
 	}
 	for _, text := range []string{"", "not base64 !", base64.StdEncoding.EncodeToString(make([]byte, 39))} {
@@ -203,7 +203,7 @@ func TestVerify_RefusesAKeyWithTheSameIDButOtherBytes(t *testing.T) {
 	}
 	raw[len(raw)-1] ^= 1
 	forged := mustPublicKey(t, base64.StdEncoding.EncodeToString(raw))
-	if _, err := Verify([]byte(vectorSums), []byte(vectorSignature()), forged); !errors.Is(err, ErrBadSignature) {
+	if _, _, err := Verify([]byte(vectorSums), []byte(vectorSignature()), Keys{Current: forged}); !errors.Is(err, ErrBadSignature) {
 		t.Fatalf("same id, other key: %v", err)
 	}
 }
