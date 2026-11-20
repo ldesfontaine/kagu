@@ -21,13 +21,16 @@ func TestR_G2_8(t *testing.T) {
 	t.Run("the install guide shows no host network for mcp-maison", func(t *testing.T) {
 		guide := readDoc(t, "../../docs/installation.md")
 		start := strings.Index(guide, "## Brancher un agent IA")
+		if start < 0 {
+			t.Fatal("docs/installation.md has no « ## Brancher un agent IA » section")
+		}
 		end := strings.Index(guide[start:], "\n## ")
 		section := guide[start:]
 		if end > 0 {
 			section = guide[start : start+end]
 		}
-		if start < 0 || strings.Contains(section, "network_mode") {
-			t.Errorf("section « Brancher un agent IA » found=%v mentions network_mode", start >= 0)
+		if strings.Contains(section, "network_mode") {
+			t.Error("section « Brancher un agent IA » mentions network_mode")
 		}
 	})
 	t.Run("the token page says where the token lives", func(t *testing.T) {
@@ -44,6 +47,30 @@ func TestR_G2_8(t *testing.T) {
 			}
 		}
 	})
+}
+
+// R-GESTE-9, la part de ce chantier : un jeton sert un seul client, et la
+// page le dit. La portée sur tous les environnements sauf le socle et le
+// niveau 1 relèvent d'étapes à venir.
+func TestR_GESTE_9(t *testing.T) {
+	catalogs, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wants := map[Code]string{"fr": "un seul client", "en": "single client"}
+	for _, code := range Codes() {
+		want, ok := wants[code]
+		if !ok {
+			t.Fatalf("no expectation for language %s", code)
+		}
+		if text := catalogs[code].Get("api_token.home"); !strings.Contains(text, want) {
+			t.Errorf("%s: api_token.home lacks %q", code, want)
+		}
+	}
+	guide := readDoc(t, "../../docs/installation.md")
+	if !strings.Contains(guide, "Le jeton ne sert qu'à **mcp-maison**") {
+		t.Error("installation.md does not say the token serves mcp-maison alone")
+	}
 }
 
 func readDoc(t *testing.T, path string) string {

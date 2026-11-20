@@ -800,8 +800,10 @@ révoquez l'ancien.
 
 mcp-maison est dans un conteneur : il joint openCloud par l'IP du pont
 `docker0` (`host-gateway`), pas par `127.0.0.1`. **`listen` doit donc viser
-cette IP** (`172.17.0.1:8080` par défaut) et la ligne `OPENCLOUD_URL` s'écrit
-avec elle, quelle que soit celle que la page affiche. Le prix : openCloud
+cette IP** (`172.17.0.1:8080` par défaut). La page tire `OPENCLOUD_URL` de
+`listen` : si elle affiche encore `127.0.0.1`, `listen` n'a pas été changé.
+Changez-le (`config.toml`, puis `systemctl restart opencloud`) et recréez le
+jeton ; ne corrigez pas la ligne à la main. Le prix : openCloud
 n'écoute plus sur la boucle locale seule, mais sur le pont, que joignent les
 conteneurs de la machine ; le jeton les en protège, pas le réseau.
 
