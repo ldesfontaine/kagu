@@ -12,14 +12,20 @@ services:
     image: ghcr.io/ldesfontaine/mcp-maison:v0.1.0@sha256:31ceed07c7ada4c7c02cfec5cf95e73b7d6111e83f440ef0ee615b69f25c3660
     container_name: mcp-maison
     restart: unless-stopped
-    # Le réseau de l'hôte : mcp-maison écoute à côté d'openCloud, sur l'hôte
-    # de `listen` (MCP_HOST), et le joint en direct, jamais par Traefik ni
-    # par le SSO, qui arrêterait le Bearer.
-    network_mode: host
+    # Réseau bridge, jamais `network_mode: host` : un conteneur exposé à
+    # Internet ne partage pas la pile réseau de l'hôte. Le port n'est publié
+    # que sur MCP_HOST (le Traefik de la machine le joint là) ; openCloud se
+    # joint par host-gateway, l'IP du pont docker0, qui est celle de `listen`
+    # (OPENCLOUD_URL en IP : openCloud refuse le nom host.docker.internal).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${MCP_HOST:?MCP_HOST manque dans .env (Paramètres, Jetons d'API)}:3000:3000"
     env_file: .env
     environment:
       NODE_ENV: production
-      HOST: ${MCP_HOST:?MCP_HOST manque dans .env (Paramètres, Jetons d'API)}
+      # Dans le conteneur : seul `ports` décide qui le joint.
+      HOST: 0.0.0.0
       PORT: 3000
       DATABASE_PATH: /app/data/mcp-maison.db
       AUDIT_LOG_PATH: /app/data/audit.jsonl
@@ -29,11 +35,5 @@ services:
     # journal, les droits.
     volumes:
       - ./data/mcp:/app/data
-    # Celui de l'image vise 127.0.0.1, faux quand MCP_HOST est une autre
-    # adresse (mcp-maison#4).
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://${MCP_HOST}:3000/health"]
-      interval: 30s
-      timeout: 3s
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]

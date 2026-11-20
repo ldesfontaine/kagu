@@ -155,6 +155,9 @@ export function APITokensBlock({ state, reload }: { state: APITokensState; reloa
             create();
           }}
         >
+          <SettingBlock>
+            <p className="secondary">{t("api_token.home")}</p>
+          </SettingBlock>
           <SettingRow label={t("api_token.name_label")} description={t("api_token.name_help")} htmlFor="api-token-name" width="medium">
             <Input id="api-token-name" type="text" value={values.name} onChange={(event) => change("name", event.target.value)} maxLength={80} autoComplete="off" required />
           </SettingRow>
