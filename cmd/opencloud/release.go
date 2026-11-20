@@ -41,17 +41,17 @@ const releaseUsage = `Usage : {command} release <sous-commande>
                       existe) et affiche la clé publique
 `
 
-// #nosec G101 -- le nom d'un secret du dépôt, pas sa valeur.
-const keygenAdvice = "Posez la clé privée dans le secret RELEASE_SIGNING_KEY du dépôt, gardez-en une copie dans votre coffre, puis collez la clé publique dans internal/release/key.go."
+// #nosec G101 -- le nom d'un secret, pas sa valeur.
+const keygenAdvice = "Posez la clé privée dans le secret RELEASE_SIGNING_KEY de l'environnement release (jamais un secret du dépôt), gardez-en une copie dans votre coffre, puis collez la clé publique dans CurrentPublicKey (internal/release/key.go)."
 
 // opencloud release : vérifier une version téléchargée, ou en signer une.
-// La clé de confiance est celle que le binaire embarque ; les tests en
-// injectent une.
+// Les clés de confiance sont celles que le binaire embarque ; les tests en
+// injectent.
 func runRelease(args []string) error {
-	return releaseCommand(args, os.Stdout, os.Getenv, release.TrustedKey)
+	return releaseCommand(args, os.Stdout, os.Getenv, release.TrustedPublicKeys)
 }
 
-func releaseCommand(args []string, out io.Writer, getenv func(string) string, trusted func() (release.PublicKey, error)) error {
+func releaseCommand(args []string, out io.Writer, getenv func(string) string, trusted func() (release.Keys, error)) error {
 	if len(args) < 1 {
 		fmt.Fprint(os.Stderr, strings.ReplaceAll(releaseUsage, "{command}", brand.Command))
 		return &refusal{message: "sous-commande manquante"}
@@ -83,11 +83,11 @@ func releaseCommand(args []string, out io.Writer, getenv func(string) string, tr
 	return generateReleaseKey(flags.Args(), *keyFile, out)
 }
 
-func verifyRelease(args []string, sumsPath, signaturePath string, out io.Writer, trusted func() (release.PublicKey, error)) error {
+func verifyRelease(args []string, sumsPath, signaturePath string, out io.Writer, trusted func() (release.Keys, error)) error {
 	if len(args) != 1 {
 		return &refusal{message: "verify attend un fichier"}
 	}
-	key, err := embeddedKey(trusted)
+	keys, err := embeddedKeys(trusted)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func verifyRelease(args []string, sumsPath, signaturePath string, out io.Writer,
 	if signaturePath == "" {
 		signaturePath = filepath.Join(filepath.Dir(file), brand.ReleaseSignatureFile)
 	}
-	signed, err := release.VerifyFile(file, sumsPath, signaturePath, key)
+	signed, err := release.VerifyFile(file, sumsPath, signaturePath, keys)
 	if err != nil {
 		return refuseVerification(err, file)
 	}
@@ -107,27 +107,27 @@ func verifyRelease(args []string, sumsPath, signaturePath string, out io.Writer,
 	return err
 }
 
-// embeddedKey rend la clé de version du binaire, ou le refus qui dit qu'il
+// embeddedKeys rend les clés de version du binaire, ou le refus qui dit qu'il
 // n'en a pas.
-func embeddedKey(trusted func() (release.PublicKey, error)) (release.PublicKey, error) {
-	key, err := trusted()
+func embeddedKeys(trusted func() (release.Keys, error)) (release.Keys, error) {
+	keys, err := trusted()
 	if errors.Is(err, release.ErrNoTrustedKey) {
-		return release.PublicKey{}, &refusal{message: "ce binaire n'embarque pas de clé de version : il ne peut rien vérifier"}
+		return release.Keys{}, &refusal{message: "ce binaire n'embarque pas de clé de version : il ne peut rien vérifier"}
 	}
 	if err != nil {
-		return release.PublicKey{}, fmt.Errorf("embedded release key: %w", err)
+		return release.Keys{}, fmt.Errorf("embedded release keys: %w", err)
 	}
-	return key, nil
+	return keys, nil
 }
 
 // importRelease copie une version vérifiée dans la bibliothèque du serveur :
 // c'est de là que les agents la téléchargent, sans accès à Internet. Elle
 // n'ouvre pas la base, donc n'écrit pas au journal d'audit.
-func importRelease(args []string, configPath string, out io.Writer, trusted func() (release.PublicKey, error)) error {
+func importRelease(args []string, configPath string, out io.Writer, trusted func() (release.Keys, error)) error {
 	if len(args) != 1 {
 		return &refusal{message: "import attend le dossier de la version"}
 	}
-	key, err := embeddedKey(trusted)
+	keys, err := embeddedKeys(trusted)
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,7 @@ func importRelease(args []string, configPath string, out io.Writer, trusted func
 		return err
 	}
 	defer stateDir.Close()
-	signed, err := release.NewLibrary(stateDir, key).Import(args[0])
+	signed, err := release.NewLibrary(stateDir, keys).Import(args[0])
 	if err != nil {
 		return refuseImport(err, args[0])
 	}
@@ -158,7 +158,7 @@ func refuseImport(err error, dir string) error {
 		return &refusal{message: fmt.Sprintf("fichier introuvable (%v) : %s doit contenir %s, %s et chaque binaire que les sommes listent",
 			err, dir, brand.ReleaseSumsFile, brand.ReleaseSignatureFile)}
 	case errors.Is(err, release.ErrWrongKey):
-		return &refusal{message: "la signature n'a pas été faite par la clé de version de ce binaire : n'importez pas cette version"}
+		return &refusal{message: "la signature n'a été faite par aucune des clés de version de ce binaire : n'importez pas cette version"}
 	case errors.Is(err, release.ErrBadSignature):
 		return &refusal{message: fmt.Sprintf("la signature de %s est fausse : le fichier a été modifié ou ne vient pas du projet, n'importez pas cette version", brand.ReleaseSumsFile)}
 	case errors.Is(err, release.ErrDigestMismatch):
@@ -181,7 +181,7 @@ func refuseVerification(err error, file string) error {
 		return &refusal{message: fmt.Sprintf("fichier introuvable (%v) : %s, %s et %s doivent être côte à côte, ou donnez -sums et -sig",
 			err, filepath.Base(file), brand.ReleaseSumsFile, brand.ReleaseSignatureFile)}
 	case errors.Is(err, release.ErrWrongKey):
-		return &refusal{message: "la signature n'a pas été faite par la clé de version de ce binaire : n'utilisez pas ce fichier"}
+		return &refusal{message: "la signature n'a été faite par aucune des clés de version de ce binaire : n'utilisez pas ce fichier"}
 	case errors.Is(err, release.ErrBadSignature):
 		return &refusal{message: fmt.Sprintf("la signature de %s est fausse : %s a été modifié ou ne vient pas du projet, n'utilisez pas ce fichier",
 			brand.ReleaseSumsFile, brand.ReleaseSumsFile)}

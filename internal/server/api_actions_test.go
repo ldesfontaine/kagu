@@ -247,7 +247,7 @@ func (ts *testServer) publishRelease(t *testing.T, serverVersion string) func(ve
 	if err != nil {
 		t.Fatal(err)
 	}
-	library := release.NewLibrary(ts.state, public)
+	library := release.NewLibrary(ts.state, release.Keys{Current: public})
 	ts.actions.SetReleases(library, serverVersion)
 	return func(version string) {
 		t.Helper()

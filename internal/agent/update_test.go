@@ -67,7 +67,7 @@ func newUpdateBench(t *testing.T, ownVersion string) *updateBench {
 		t.Fatal(err)
 	}
 	b.updater = newSelfUpdater(root, ownVersion, slog.New(slog.DiscardHandler))
-	b.updater.key, b.updater.hasKey = public, true
+	b.updater.keys, b.updater.hasKey = release.Keys{Current: public}, true
 	b.updater.executable = func() (string, error) { return filepath.Join(state, "bin", "opencloud-v0.0.1"), nil }
 	b.updater.selfCheck = func(_ context.Context, binary, version string) error {
 		b.checked = append(b.checked, binary+" "+version)
@@ -286,6 +286,93 @@ func TestAgentUpdate_RefusesWithoutAnEmbeddedKey(t *testing.T) {
 	}
 	if len(published.server.requests) != 0 {
 		t.Fatalf("downloaded without a key: %v", published.server.requests)
+	}
+	b.untouched(t)
+}
+
+// withBackupKey donne à l'agent une clé de secours tirée ici, et rend sa
+// clé privée.
+func (b *updateBench) withBackupKey(t *testing.T) release.PrivateKey {
+	t.Helper()
+	backup, backupPrivate, err := release.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.updater.keys.Backup = backup
+	return backupPrivate
+}
+
+func (b *updateBench) retiredKeys(t *testing.T) string {
+	t.Helper()
+	text, err := b.stateDir.ReadFile(brand.AgentRetiredKeysFile)
+	if errors.Is(err, os.ErrNotExist) {
+		return ""
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(text))
+}
+
+// R-B2-10 : une version signée par la clé de secours est installée, et
+// l'ancienne courante est retirée ; une version signée ensuite par elle est
+// refusée signature_invalid, la secours seule passe.
+func TestR_B2_10(t *testing.T) {
+	b := newUpdateBench(t, "v0.0.1")
+	backupPrivate := b.withBackupKey(t)
+
+	if err := b.update(t, b.publish(t, "v0.0.2", "v0.0.2", b.private)); err != nil {
+		t.Fatalf("signed by the current key: %v", err)
+	}
+	if retired := b.retiredKeys(t); retired != "" {
+		t.Fatalf("retired %q after a version of the current key", retired)
+	}
+	if err := b.update(t, b.publish(t, "v0.0.3", "v0.0.3", backupPrivate)); err != nil {
+		t.Fatalf("signed by the backup key: %v", err)
+	}
+	if retired := b.retiredKeys(t); retired != b.public.String() {
+		t.Fatalf("retired %q, want the former current key", retired)
+	}
+
+	if reason := reasonOf(t, b.update(t, b.publish(t, "v0.0.4", "v0.0.4", b.private))); reason != agentwire.ReasonSignatureInvalid {
+		t.Fatalf("signed by the retired key: reason %s", reason)
+	}
+	if target := b.current(t); target != "opencloud-v0.0.3" {
+		t.Fatalf("current points to %s", target)
+	}
+	if err := b.update(t, b.publish(t, "v0.0.4", "v0.0.4", backupPrivate)); err != nil {
+		t.Fatalf("signed by the new current key: %v", err)
+	}
+}
+
+// Une version de secours qui ne s'installe pas (épreuve ratée) ne retire rien.
+func TestAgentUpdate_NotesTheBackupKeyOnlyOnceInstalled(t *testing.T) {
+	b := newUpdateBench(t, "v0.0.1")
+	backupPrivate := b.withBackupKey(t)
+	b.checkErr = errors.New("does not start")
+	if reason := reasonOf(t, b.update(t, b.publish(t, "v0.0.2", "v0.0.2", backupPrivate))); reason != agentwire.ReasonSelfCheckFailed {
+		t.Fatalf("reason %s", reason)
+	}
+	if retired := b.retiredKeys(t); retired != "" {
+		t.Fatalf("retired %q before an install", retired)
+	}
+}
+
+// Toutes les clés de ce binaire retirées : rien n'est cru, rien n'est
+// téléchargé.
+func TestAgentUpdate_RefusesWhenEveryKeyIsRetired(t *testing.T) {
+	b := newUpdateBench(t, "v0.0.1")
+	backupPrivate := b.withBackupKey(t)
+	retired := b.public.String() + "\n" + b.updater.keys.Backup.String() + "\n"
+	if err := b.stateDir.WriteFile(brand.AgentRetiredKeysFile, []byte(retired), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	published := b.publish(t, "v0.0.2", "v0.0.2", backupPrivate)
+	if reason := reasonOf(t, b.update(t, published)); reason != agentwire.ReasonReleaseKeyMissing {
+		t.Fatalf("reason %s", reason)
+	}
+	if len(published.server.requests) != 0 {
+		t.Fatalf("downloaded with every key retired: %v", published.server.requests)
 	}
 	b.untouched(t)
 }
@@ -536,7 +623,7 @@ func TestRun_UpdatesItselfAndTheServerSeesItComeBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.actions.SetOutbox(outbox)
-	library := release.NewLibrary(serverState, public)
+	library := release.NewLibrary(serverState, release.Keys{Current: public})
 	b.actions.SetReleases(library, "v0.0.2")
 	script := "#!/bin/sh\necho 'opencloud v0.0.2 (test)'\n"
 	if _, err := library.Import(releasetest.Write(t, private, "v0.0.2", map[string][]byte{release.BinaryName(runtime.GOARCH): []byte(script)})); err != nil {
@@ -559,7 +646,7 @@ func TestRun_UpdatesItselfAndTheServerSeesItComeBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	options.Rights = []machine.Capability{{Name: machine.CapabilityAgentUpdate}}
-	options.ReleaseKey, options.HasReleaseKey = public, true
+	options.ReleaseKeys, options.HasReleaseKey = release.Keys{Current: public}, true
 	// Sous le lanceur stable : sans lui, l'agent ne rapporte pas de retour
 	// arrière et refuse de basculer son lien.
 	options.GuardVersion = 1

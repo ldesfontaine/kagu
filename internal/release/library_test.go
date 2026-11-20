@@ -68,7 +68,7 @@ func writeFile(t *testing.T, name string, content []byte) {
 func TestImport_CopiesAVerifiedRelease(t *testing.T) {
 	fixture := newImportFixture(t, Version{0, 0, 2})
 	state := testkit.EmptyRoot(t)
-	library := NewLibrary(state, fixture.publicKey)
+	library := NewLibrary(state, Keys{Current: fixture.publicKey})
 	signed, err := library.Import(fixture.dir)
 	if err != nil {
 		t.Fatal(err)
@@ -101,16 +101,16 @@ func TestImport_RefusesABadSignatureAndLeavesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	cases := map[string]func(t *testing.T) *Library{
-		"another key": func(t *testing.T) *Library { return NewLibrary(testkit.EmptyRoot(t), otherKey) },
+		"another key": func(t *testing.T) *Library { return NewLibrary(testkit.EmptyRoot(t), Keys{Current: otherKey}) },
 		"a binary changed after the signature": func(t *testing.T) *Library {
 			writeFile(t, filepath.Join(fixture.dir, BinaryName("amd64")), []byte("not the signed one"))
-			return NewLibrary(testkit.EmptyRoot(t), fixture.publicKey)
+			return NewLibrary(testkit.EmptyRoot(t), Keys{Current: fixture.publicKey})
 		},
 		"a listed binary missing": func(t *testing.T) *Library {
 			if err := os.Remove(filepath.Join(fixture.dir, BinaryName("arm64"))); err != nil {
 				t.Fatal(err)
 			}
-			return NewLibrary(testkit.EmptyRoot(t), fixture.publicKey)
+			return NewLibrary(testkit.EmptyRoot(t), Keys{Current: fixture.publicKey})
 		},
 	}
 	for name, build := range cases {
@@ -126,7 +126,7 @@ func TestImport_RefusesABadSignatureAndLeavesNothing(t *testing.T) {
 
 func TestImport_TwiceIsHarmless_ButADifferentFileIsRefused(t *testing.T) {
 	fixture := newImportFixture(t, Version{0, 0, 2})
-	library := NewLibrary(testkit.EmptyRoot(t), fixture.publicKey)
+	library := NewLibrary(testkit.EmptyRoot(t), Keys{Current: fixture.publicKey})
 	if _, err := library.Import(fixture.dir); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestImport_TwiceIsHarmless_ButADifferentFileIsRefused(t *testing.T) {
 
 func TestImport_ACutImportIsCompletedByTheNext(t *testing.T) {
 	fixture := newImportFixture(t, Version{0, 0, 2})
-	library := NewLibrary(testkit.EmptyRoot(t), fixture.publicKey)
+	library := NewLibrary(testkit.EmptyRoot(t), Keys{Current: fixture.publicKey})
 	if _, err := library.Import(fixture.dir); err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestImport_ACutImportIsCompletedByTheNext(t *testing.T) {
 
 func TestArtifact_ReverifiesAfterImport(t *testing.T) {
 	fixture := newImportFixture(t, Version{0, 0, 2})
-	library := NewLibrary(testkit.EmptyRoot(t), fixture.publicKey)
+	library := NewLibrary(testkit.EmptyRoot(t), Keys{Current: fixture.publicKey})
 	if _, err := library.Import(fixture.dir); err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestArtifact_ReverifiesAfterImport(t *testing.T) {
 
 func TestArtifact_NotImportedOrNotPublishedForThisArch(t *testing.T) {
 	fixture := newImportFixture(t, Version{0, 0, 2})
-	library := NewLibrary(testkit.EmptyRoot(t), fixture.publicKey)
+	library := NewLibrary(testkit.EmptyRoot(t), Keys{Current: fixture.publicKey})
 	if _, err := library.Artifact(Version{0, 0, 2}, "amd64"); !errors.Is(err, ErrNoRelease) {
 		t.Fatalf("nothing imported: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestArtifact_NotImportedOrNotPublishedForThisArch(t *testing.T) {
 
 func TestArtifact_RefusesAFolderThatHoldsAnotherVersion(t *testing.T) {
 	fixture := newImportFixture(t, Version{0, 0, 3})
-	library := NewLibrary(testkit.EmptyRoot(t), fixture.publicKey)
+	library := NewLibrary(testkit.EmptyRoot(t), Keys{Current: fixture.publicKey})
 	if _, err := library.Import(fixture.dir); err != nil {
 		t.Fatal(err)
 	}

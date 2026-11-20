@@ -73,7 +73,7 @@ func newUpdateBench(t *testing.T, options updateOptions) *updateBench {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b.library = release.NewLibrary(state, b.key)
+	b.library = release.NewLibrary(state, release.Keys{Current: b.key})
 	outbox, err := action.NewOutbox(state)
 	if err != nil {
 		t.Fatal(err)

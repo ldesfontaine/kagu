@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -39,6 +40,7 @@ const (
 	maxUpdateBinaryBytes = 256 << 20
 	incomingPrefix       = ".incoming-"
 	binaryMode           = 0o755
+	retiredKeysMode      = 0o600
 	incomingDirMode      = 0o700
 	binDirMode           = 0o755
 )
@@ -54,8 +56,9 @@ type selfUpdater struct {
 	stateDir *os.Root
 	// La version du binaire qui tourne.
 	version string
-	// La clé de version que ce binaire embarque ; sans elle, rien ne se vérifie.
-	key    release.PublicKey
+	// Les clés de version que ce binaire embarque ; sans elles, rien ne se
+	// vérifie.
+	keys   release.Keys
 	hasKey bool
 	logger *slog.Logger
 	// guarded : l'agent tourne sous le lanceur stable (rollback.Guard), le seul
@@ -160,15 +163,20 @@ func readAgentUpdate(body agentwire.OrderBody) (agentwire.AgentUpdateParams, boo
 // update installe la version que l'ordre décrit, et ne rend nil que lorsque le
 // lien current pointe sur elle. Dans l'ordre : le colis est téléchargé dans
 // bin/.incoming-<version>/ (taille et somme signées par l'ordre) ; la
-// signature des sommes est vérifiée avec la clé que CE binaire embarque, pas
-// celle du serveur ; la version signée est celle demandée, et pas plus ancienne
+// signature des sommes est vérifiée avec les clés que CE binaire embarque, pas
+// celles du serveur ; la version signée est celle demandée, et pas plus ancienne
 // que la sienne ; la somme du binaire est dans les sommes signées ; le binaire
-// est installé et éprouvé ; le marqueur d'attente de confirmation et le lien
-// previous sont écrits ; le lien bascule d'un coup. Avant la bascule, tout
+// est installé et éprouvé ; signé par la clé de secours, il fait retirer la
+// courante ; le marqueur d'attente de confirmation et le lien previous sont
+// écrits ; le lien bascule d'un coup. Avant la bascule, tout
 // échec laisse l'ancien lien et efface ce qui a été posé.
 func (u *selfUpdater) update(ctx context.Context, source parcelSource, params agentwire.AgentUpdateParams, runID string) error {
 	if !u.hasKey {
 		return failWith(agentwire.ReasonReleaseKeyMissing, errors.New("no release key embedded"))
+	}
+	keys, err := u.trustedKeys()
+	if err != nil {
+		return failWith(agentwire.ReasonReleaseKeyMissing, err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, updateTimeout)
 	defer cancel()
@@ -193,7 +201,7 @@ func (u *selfUpdater) update(ctx context.Context, source parcelSource, params ag
 			return err
 		}
 	}
-	signed, err := u.verifyDownload(incoming, params)
+	signed, err := u.verifyDownload(incoming, params, keys)
 	if err != nil {
 		return err
 	}
@@ -213,11 +221,67 @@ func (u *selfUpdater) update(ctx context.Context, source parcelSource, params ag
 	if err := u.install(ctx, bin, incomingName, target, params); err != nil {
 		return err
 	}
+	if signed.ByBackup {
+		if err := u.retireKey(keys.Current); err != nil {
+			_ = bin.Remove(target)
+			return failWith(agentwire.ReasonPathUnwritable, err)
+		}
+	}
 	marker := u.newMarker(rollback.KindUpdate, runID, signed.Version.String(), previousVersion)
 	if err := u.switchWithMarker(bin, marker, target); err != nil {
 		return err
 	}
 	u.prune(bin, target, previous)
+	return nil
+}
+
+// trustedKeys rend les clés que l'agent croit : celles de ce binaire, moins
+// celles qu'il a retirées (release-keys-retired, dans son état). La note
+// survit au retour arrière : un binaire d'avant ne recroit pas une clé
+// retirée. Illisible, rien n'est cru.
+func (u *selfUpdater) trustedKeys() (release.Keys, error) {
+	retired, err := u.retiredKeys()
+	if err != nil {
+		return release.Keys{}, err
+	}
+	return u.keys.Without(retired)
+}
+
+func (u *selfUpdater) retiredKeys() ([]release.PublicKey, error) {
+	text, err := u.stateDir.ReadFile(brand.AgentRetiredKeysFile)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read retired release keys: %w", err)
+	}
+	var retired []release.PublicKey
+	for _, line := range strings.Fields(string(text)) {
+		key, err := release.ParsePublicKey(line)
+		if err != nil {
+			return nil, fmt.Errorf("retired release key: %w", err)
+		}
+		retired = append(retired, key)
+	}
+	return retired, nil
+}
+
+// retireKey ajoute key aux clés que l'agent ne croit plus.
+func (u *selfUpdater) retireKey(key release.PublicKey) error {
+	retired, err := u.retiredKeys()
+	if err != nil {
+		return err
+	}
+	if slices.ContainsFunc(retired, key.Equal) {
+		return nil
+	}
+	var text strings.Builder
+	for _, kept := range append(retired, key) {
+		text.WriteString(kept.String() + "\n")
+	}
+	if err := fsx.WriteAtomic(u.stateDir, brand.AgentRetiredKeysFile, []byte(text.String()), retiredKeysMode); err != nil {
+		return fmt.Errorf("retire release key: %w", err)
+	}
 	return nil
 }
 
@@ -309,8 +373,8 @@ func openIncoming(bin *os.Root, name string) (*os.Root, error) {
 	return incoming, nil
 }
 
-// verifyDownload juge ce qui est arrivé, avec la clé embarquée par ce binaire.
-func (u *selfUpdater) verifyDownload(incoming *os.Root, params agentwire.AgentUpdateParams) (release.Release, error) {
+// verifyDownload juge ce qui est arrivé, avec les clés que l'agent croit.
+func (u *selfUpdater) verifyDownload(incoming *os.Root, params agentwire.AgentUpdateParams, keys release.Keys) (release.Release, error) {
 	sums, err := incoming.ReadFile(brand.ReleaseSumsFile)
 	if err != nil {
 		return release.Release{}, failWith(agentwire.ReasonPathUnwritable, err)
@@ -319,7 +383,7 @@ func (u *selfUpdater) verifyDownload(incoming *os.Root, params agentwire.AgentUp
 	if err != nil {
 		return release.Release{}, failWith(agentwire.ReasonPathUnwritable, err)
 	}
-	signed, err := release.VerifySums(sums, signature, u.key)
+	signed, err := release.VerifySums(sums, signature, keys)
 	if err != nil {
 		return release.Release{}, failWith(agentwire.ReasonSignatureInvalid, err)
 	}

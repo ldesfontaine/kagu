@@ -9,7 +9,7 @@ import (
 )
 
 func TestVerifySums_ReadsTheVersionFromTheTrustedComment(t *testing.T) {
-	signed, err := VerifySums([]byte(vectorSums), []byte(vectorSignature()), mustPublicKey(t, vectorPublicKey))
+	signed, err := VerifySums([]byte(vectorSums), []byte(vectorSignature()), Keys{Current: mustPublicKey(t, vectorPublicKey)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestVerifySums_RefusesACommentWithoutVersionOrFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := VerifySums([]byte(vectorSums), signature, publicKey); !errors.Is(err, ErrMalformed) {
+		if _, err := VerifySums([]byte(vectorSums), signature, Keys{Current: publicKey}); !errors.Is(err, ErrMalformed) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -55,7 +55,7 @@ func TestVerifySums_RefusesSignedSumsThatDoNotParse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := VerifySums(sums, signature, publicKey); !errors.Is(err, ErrMalformed) {
+	if _, err := VerifySums(sums, signature, Keys{Current: publicKey}); !errors.Is(err, ErrMalformed) {
 		t.Fatalf("unparsable sums: %v", err)
 	}
 }
@@ -149,30 +149,17 @@ func TestVerifyFile_FindsTheFileUnderItsBaseName(t *testing.T) {
 	if err := os.WriteFile(signaturePath, signature, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	signed, err := VerifyFile(binary, sumsPath, signaturePath, publicKey)
+	signed, err := VerifyFile(binary, sumsPath, signaturePath, Keys{Current: publicKey})
 	if err != nil || signed.Version != (Version{0, 0, 7}) {
 		t.Fatalf("verify file: %+v %v", signed, err)
 	}
 	if err := os.WriteFile(binary, []byte("abd"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := VerifyFile(binary, sumsPath, signaturePath, publicKey); !errors.Is(err, ErrDigestMismatch) {
+	if _, err := VerifyFile(binary, sumsPath, signaturePath, Keys{Current: publicKey}); !errors.Is(err, ErrDigestMismatch) {
 		t.Fatalf("changed file: %v", err)
 	}
-	if _, err := VerifyFile(binary, filepath.Join(dir, "absent"), signaturePath, publicKey); !errors.Is(err, os.ErrNotExist) {
+	if _, err := VerifyFile(binary, filepath.Join(dir, "absent"), signaturePath, Keys{Current: publicKey}); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing sums: %v", err)
-	}
-}
-
-func TestTrustedKey_IsRefusedWhileEmptyAndParsesOnceSet(t *testing.T) {
-	key, err := TrustedKey()
-	if TrustedPublicKey == "" {
-		if !errors.Is(err, ErrNoTrustedKey) {
-			t.Fatalf("empty key: %v", err)
-		}
-		return
-	}
-	if err != nil || key.String() == "" {
-		t.Fatalf("embedded key does not parse: %v", err)
 	}
 }

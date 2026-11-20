@@ -135,7 +135,7 @@ func runAgent(args []string) error {
 	logger.Info("agent starting", "version", version.String(), "state_dir", *stateDir)
 	// Sans clé de version embarquée, l'agent refuse agent.update : il ne
 	// saurait rien vérifier.
-	releaseKey, keyErr := release.TrustedKey()
+	releaseKeys, keyErr := release.TrustedPublicKeys()
 	err = agent.Run(ctx, agent.Options{
 		StateDir:     root,
 		UnsafeState:  unsafeState,
@@ -155,7 +155,7 @@ func runAgent(args []string) error {
 		ResticBinary:     *resticBinary,
 		RestServerBinary: *restServerBinary,
 
-		ReleaseKey:    releaseKey,
+		ReleaseKeys:   releaseKeys,
 		HasReleaseKey: keyErr == nil,
 		GuardVersion:  agent.GuardVersionFromEnv(),
 	})

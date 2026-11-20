@@ -46,23 +46,38 @@ Une version est un **tag `vX.Y.Z` poussé sur un commit de `main`**. Elle
 porte les binaires, `SHA256SUMS`, sa signature `SHA256SUMS.minisig` et une
 attestation de provenance GitHub, et **ne se réécrit jamais**.
 
-**1. Une fois : la paire de clés.**
+**1. Une fois : les deux paires de clés.**
 
 | Étape | Geste |
 | --- | --- |
-| Tirer la paire | `opencloud release keygen -o release.key` sur son poste ; la commande écrit la clé privée (`0600`) et affiche la clé publique |
+| Tirer la paire courante | `opencloud release keygen -o release.key` sur son poste ; la commande écrit la clé privée (`0600`) et affiche la clé publique |
+| Tirer la paire de secours | **hors ligne**, sur le poste de Lucas : `minisign -G -p opencloud-secours.pub -s opencloud-secours.key` (mot de passe demandé). `opencloud-secours.key` et son mot de passe vont dans le coffre de Lucas, **jamais dans GitHub** ni dans le dépôt : elle ne sert que si GitHub ou la clé courante est pris |
 | Créer l'environnement | Settings › Environments › New : nom `release` ; *Required reviewers* = Lucas, **sans** cocher *Prevent self-review* (c'est Lucas qui pousse le tag et qui approuve) ; *Deployment branches and tags* = *Selected branches and tags*, une seule règle de type *Tag*, motif `v*`. Le job `sign` s'y exécute après `build` et attend l'approbation. La règle réserve l'environnement, donc la clé, aux tags de version : un job lancé d'une branche qui le nommerait est refusé ; une règle qui n'admet pas le tag fait échouer `sign`. Sans l'environnement, GitHub en crée un vide au premier usage, sans relecteur : le job échoue faute de secret et rien ne se publie, **si** le secret du dépôt n'existe pas (sinon il le lit) |
 | Poser la clé privée | secret **d'environnement** `RELEASE_SIGNING_KEY` (dans `release`, pas un secret du dépôt) = contenu de `release.key` ; une copie de `release.key` dans le coffre. Supprimer le secret du dépôt s'il existe : un secret du dépôt du même nom sert quand l'environnement n'a pas le sien, et seul le job `sign`, derrière le relecteur, doit pouvoir lire la clé |
-| Poser la clé publique | collée dans `internal/release/key.go` (`TrustedPublicKey`), par une pull request. Tant qu'elle est vide, le binaire refuse de vérifier et le job échoue : rien ne se publie sans clé |
+| Poser les clés publiques | dans `internal/release/key.go`, par une pull request : `CurrentPublicKey` = la clé publique de `release.key`, `BackupPublicKey` = la seconde ligne de `opencloud-secours.pub`. Sans courante, le binaire refuse de vérifier ; sans secours, `make release` ne compile pas (tag `release`, `key_release.go`) : rien ne se publie sans les deux |
 | Régler le dépôt | ruleset de tags `v*` : création réservée aux administrateurs, ni mise à jour ni suppression ; Settings › General › « Releases immuables ». Ce sont des réglages du dépôt : le code ne peut pas les poser |
 
-Perdre la clé privée, ou la changer, c'est ne plus reconnaître les versions
-signées par l'ancienne : un binaire déjà installé garde la clé publique qu'il
-embarque.
+**État** : la paire courante est tirée et posée depuis le 23/10/2026 ; la
+paire de secours, tirée hors ligne par Lucas le 20/11/2026, est posée dans
+`BackupPublicKey`, sa clé privée est dans le coffre de Lucas.
 
-**2. À chaque version.** `dev` rejoint `main` par pull request, puis, sur le
-commit de `main` choisi : `git tag -s vX.Y.Z <commit>` et
-`git push origin vX.Y.Z`. Le workflow `release` fait le reste.
+Un binaire déjà installé garde les clés publiques qu'il embarque : perdre la
+clé privée courante, ou la croire prise, c'est sortir la clé de secours
+(point 4).
+
+**2. À chaque version.**
+
+| Étape | Geste |
+| --- | --- |
+| Pousser le tag | `dev` rejoint `main` par pull request, puis, sur le commit de `main` choisi : `git tag -s vX.Y.Z <commit>` et `git push origin vX.Y.Z` |
+| Laisser construire | `build` (npm, tests, deux builds, paquet du front) puis `rebuild` (sans npm, octet par octet) ; `sign` passe ensuite en attente (*Waiting*) |
+| Approuver | GitHub › Actions › l'exécution `release` du tag › *Review deployments* › cocher `release` › *Approve and deploy*. Seulement si `build` et `rebuild` sont verts et que le tag est le sien |
+| Laisser publier | `sign` signe `SHA256SUMS` ; `publish` vérifie, atteste et publie |
+
+Tout changement de `.github/**` est fusionné par Lucas : ces fichiers sont
+protégés sur `main` et `dev`, règle appliquée aux administrateurs. Avant
+chaque approbation d'une version, Raph lui montre le diff de `release.yml`
+depuis la version précédente.
 
 **3. Ce qui fait échouer le job** (aucune version n'est alors publiée) :
 
@@ -71,11 +86,31 @@ commit de `main` choisi : `git tag -s vX.Y.Z <commit>` et
 | Le tag n'est pas sur un commit de `main` | une version vient de l'état jugé stable |
 | La version existe déjà | une version ne se réécrit pas ; on en publie une autre |
 | Le second build donne d'autres sommes que le premier | le binaire n'est pas reproductible |
+| `rebuild` obtient d'autres octets que `build` | ce que `build` a compilé ne sort pas du seul tag et du paquet du front : une source ou un outil a changé pendant que npm tournait |
+| Le paquet du front reçu par `rebuild` n'a pas l'empreinte notée, ou sort de `dist/` | le transfert n'est pas fidèle, ou l'archive n'est pas un dossier de fichiers |
+| `BackupPublicKey` est vide | `make release` ne compile pas : une version sans clé de secours ne se retire plus |
 | Les fichiers reçus par `sign` ne sont pas ceux que `build` a listés | une somme qui ne correspond pas, un fichier manquant ou en trop dans `dist-release` : le transfert n'est pas fidèle |
 | L'environnement `release` n'a pas le secret, ou la clé est mal formée | rien à signer avec |
 | Le relecteur de l'environnement refuse, ou la règle ne laisse pas passer le tag | `sign` n'a pas lieu, rien ne se publie |
 | L'approbation arrive plus d'un jour après `build` | l'artefact `dist-release` a expiré : relancer tout le workflow (*Re-run all jobs*), pas seulement `sign` |
-| La clé publique embarquée est vide, ou n'est pas celle de la clé privée | `release verify` refuse les deux binaires |
+| La clé publique courante est vide, ou n'est pas celle de la clé privée | `release verify` refuse les deux binaires |
+
+**4. Sortir la clé de secours.** Quand la clé privée courante est perdue, ou
+que GitHub (environnement, secret, workflow) est peut-être pris. Une version
+signée par la clé de secours retire la courante : chaque agent qui l'installe
+note l'ancienne courante comme retirée et refuse ensuite ce qu'elle signe
+(`signature_invalid`), même après un retour arrière.
+
+| Étape | Geste |
+| --- | --- |
+| Couper la clé prise | GitHub › Settings › Environments › `release` › *Environment secrets* : supprimer `RELEASE_SIGNING_KEY` |
+| Tirer deux paires neuves | hors ligne : `opencloud release keygen -o release-2.key` (la future courante) et `minisign -G -p opencloud-secours-2.pub -s opencloud-secours-2.key` (la future secours, au coffre) |
+| Les embarquer | pull request : `CurrentPublicKey` = clé publique de `release-2.key`, `BackupPublicKey` = seconde ligne de `opencloud-secours-2.pub` ; jusqu'à `main` |
+| Construire sur son poste | `git checkout vX.Y.Z` (tag poussé ; dans GitHub, `sign` attend : *Reject*), puis `make release VERSION=vX.Y.Z` |
+| Signer hors ligne | `minisign -S -s opencloud-secours.key -m dist-release/SHA256SUMS -x dist-release/SHA256SUMS.minisig -t "$(printf 'timestamp:%s\tfile:SHA256SUMS\tversion:vX.Y.Z' "$(date +%s)")"` |
+| Vérifier | avec un binaire **déjà installé** (il embarque l'ancienne secours) : `opencloud release verify dist-release/opencloud-linux-amd64`, idem `arm64` |
+| Distribuer | `release import dist-release` sur la machine openCloud, puis mettre à jour les agents ; publier les quatre fichiers sur la page de la version à la main |
+| Reprendre | `RELEASE_SIGNING_KEY` = contenu de `release-2.key` dans l'environnement `release`. La secours qui a servi est usée : les versions suivantes ne l'embarquent plus |
 
 ## La CI
 

@@ -23,17 +23,19 @@ var (
 // Un fichier de sommes ou de signature tient en quelques centaines d'octets.
 const maxSmallFileSize = 1 << 20
 
-// Release est une version dont les sommes sont signées par la clé de confiance.
+// Release est une version dont les sommes sont signées par une clé de confiance.
 type Release struct {
 	Version Version
 	Sums    map[string]string
+	// ByBackup : la clé de secours l'a signée ; elle devient la courante.
+	ByBackup bool
 }
 
 // VerifySums vérifie la signature des sommes, puis lit la version dans le
 // commentaire de confiance : c'est la seule partie du fichier de signature
 // que la signature couvre en plus des sommes, et la seule source de la version.
-func VerifySums(sums, signature []byte, key PublicKey) (Release, error) {
-	comment, err := Verify(sums, signature, key)
+func VerifySums(sums, signature []byte, keys Keys) (Release, error) {
+	comment, byBackup, err := Verify(sums, signature, keys)
 	if err != nil {
 		return Release{}, err
 	}
@@ -52,7 +54,7 @@ func VerifySums(sums, signature []byte, key PublicKey) (Release, error) {
 	if err != nil {
 		return Release{}, err
 	}
-	return Release{Version: version, Sums: parsed}, nil
+	return Release{Version: version, Sums: parsed, ByBackup: byBackup}, nil
 }
 
 // parseTrustedComment lit les paires « clé:valeur » séparées par des tabulations.
@@ -88,10 +90,10 @@ func (release Release) Check(name string, content io.Reader) error {
 	return nil
 }
 
-// VerifyFile vérifie que path appartient à la version signée par key : les
+// VerifyFile vérifie que path appartient à la version signée par keys : les
 // sommes et leur signature se lisent aux chemins donnés, le fichier est
 // cherché sous son nom de base.
-func VerifyFile(path, sumsPath, signaturePath string, key PublicKey) (Release, error) {
+func VerifyFile(path, sumsPath, signaturePath string, keys Keys) (Release, error) {
 	sums, err := readSmallFile(sumsPath)
 	if err != nil {
 		return Release{}, err
@@ -100,7 +102,7 @@ func VerifyFile(path, sumsPath, signaturePath string, key PublicKey) (Release, e
 	if err != nil {
 		return Release{}, err
 	}
-	signed, err := VerifySums(sums, signature, key)
+	signed, err := VerifySums(sums, signature, keys)
 	if err != nil {
 		return Release{}, err
 	}

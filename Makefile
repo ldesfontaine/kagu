@@ -15,18 +15,26 @@ FRONT_DIR   := web
 
 export CGO_ENABLED = 0
 
-.PHONY: build release run test ci fmt vet staticcheck vulncheck gosec front front-check e2e clean
+.PHONY: build release release-binaries run test ci fmt vet staticcheck vulncheck gosec front front-check e2e clean
 
 # Le front compilé est embarqué par go:embed : il précède tout build ou test Go.
 build: front
 	go build -trimpath -ldflags '$(LDFLAGS)' -o bin/opencloud ./cmd/opencloud
 
-# Les binaires publiés : amd64 et arm64, statiques, avec leurs sommes.
+# Les binaires publiés : amd64 et arm64, statiques, avec leurs sommes. Le tag
+# release refuse de compiler sans clé de secours (internal/release/key_release.go).
 release: front
-	rm -rf dist-release && mkdir -p dist-release
-	GOARCH=amd64 go build -trimpath -ldflags '$(LDFLAGS)' -o dist-release/opencloud-linux-amd64 ./cmd/opencloud
-	GOARCH=arm64 go build -trimpath -ldflags '$(LDFLAGS)' -o dist-release/opencloud-linux-arm64 ./cmd/opencloud
-	cd dist-release && sha256sum opencloud-linux-* > SHA256SUMS
+	$(MAKE) release-binaries
+
+# Sans npm, sur le web/dist déjà là : le job rebuild de la CI recompile ainsi,
+# depuis le paquet du front que le job de construction publie. -buildvcs=false :
+# le commit passe par ldflags, les octets ne dépendent pas de l'état du clone.
+RELEASE_DIR ?= dist-release
+release-binaries:
+	rm -rf $(RELEASE_DIR) && mkdir -p $(RELEASE_DIR)
+	GOARCH=amd64 go build -tags release -buildvcs=false -trimpath -ldflags '$(LDFLAGS)' -o $(RELEASE_DIR)/opencloud-linux-amd64 ./cmd/opencloud
+	GOARCH=arm64 go build -tags release -buildvcs=false -trimpath -ldflags '$(LDFLAGS)' -o $(RELEASE_DIR)/opencloud-linux-arm64 ./cmd/opencloud
+	cd $(RELEASE_DIR) && sha256sum opencloud-linux-* > SHA256SUMS
 
 # npm ci ne rejoue que si le verrou a changé ; le premier verrou se produit
 # avec npx npm@10 install si le npm de la machine (9.x) plante.

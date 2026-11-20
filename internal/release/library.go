@@ -36,16 +36,16 @@ const (
 
 // Library est l'ensemble des versions importées, sous <état>/releases/<version>/ :
 // SHA256SUMS, sa signature et les binaires. Le serveur n'y télécharge rien ;
-// c'est l'opérateur qui y dépose, par Import. La clé de confiance est celle du
-// binaire (TrustedKey) : les tests en injectent une.
+// c'est l'opérateur qui y dépose, par Import. Les clés de confiance sont celles
+// du binaire (TrustedPublicKeys) : les tests en injectent.
 type Library struct {
 	root *os.Root
-	key  PublicKey
+	keys Keys
 }
 
 // NewLibrary lit et écrit sous stateDir, la racine de l'état du serveur.
-func NewLibrary(stateDir *os.Root, key PublicKey) *Library {
-	return &Library{root: stateDir, key: key}
+func NewLibrary(stateDir *os.Root, keys Keys) *Library {
+	return &Library{root: stateDir, keys: keys}
 }
 
 // BinaryName est le nom, dans une version, du binaire d'une architecture.
@@ -59,7 +59,7 @@ func versionDir(version Version) string {
 
 // Import copie sous l'état la version que contient dir (SHA256SUMS, sa
 // signature et chaque binaire listé), après avoir tout vérifié : la signature
-// avec la clé de confiance, puis la somme de chaque binaire. Rien n'est écrit
+// avec les clés de confiance, puis la somme de chaque binaire. Rien n'est écrit
 // d'une version qui ne passe pas. Importer deux fois la même version ne change
 // rien ; la même version avec d'autres sommes est refusée.
 func (library *Library) Import(dir string) (Release, error) {
@@ -76,7 +76,7 @@ func (library *Library) Import(dir string) (Release, error) {
 	if err != nil {
 		return Release{}, err
 	}
-	signed, err := VerifySums(sums, signature, library.key)
+	signed, err := VerifySums(sums, signature, library.keys)
 	if err != nil {
 		return Release{}, err
 	}
@@ -206,7 +206,7 @@ func (library *Library) Artifact(version Version, arch string) (Artifact, error)
 	if err != nil {
 		return Artifact{}, err
 	}
-	signed, err := VerifySums(sums, signature, library.key)
+	signed, err := VerifySums(sums, signature, library.keys)
 	if err != nil {
 		return Artifact{}, err
 	}

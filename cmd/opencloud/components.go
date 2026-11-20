@@ -160,10 +160,10 @@ func buildComponents(cfg config.Config, stateDir *os.Root, db *store.DB, logger 
 	actions.SetAuditor(journal)
 	actions.SetAlerter(alerts)
 	// Les mises à jour des agents : la bibliothèque des versions importées, lue
-	// avec la clé de version embarquée. Sans clé (binaire de développement),
+	// avec les clés de version embarquées. Sans clé (binaire de développement),
 	// rien ne se vérifie et la fiche ne propose rien.
-	if releaseKey, keyErr := release.TrustedKey(); keyErr == nil {
-		actions.SetReleases(release.NewLibrary(stateDir, releaseKey), version.Number())
+	if releaseKeys, keyErr := release.TrustedPublicKeys(); keyErr == nil {
+		actions.SetReleases(release.NewLibrary(stateDir, releaseKeys), version.Number())
 	} else {
 		logger.Info("no release key embedded: agent updates are off")
 	}
