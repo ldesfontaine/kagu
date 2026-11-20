@@ -63,6 +63,9 @@ func openHandle(stateDir *os.Root) (*sql.DB, error) {
 			"journal_mode(WAL)",
 			"busy_timeout(" + strconv.Itoa(busyTimeoutMs) + ")",
 			"foreign_keys(ON)",
+			// Une ligne effacée est écrasée, pas laissée lisible dans une
+			// page libre. Coût : chaque suppression écrit ses pages.
+			"secure_delete(ON)",
 		},
 		// Une transaction prend le verrou d'écriture dès son début : deux
 		// écrivains ne se découvrent jamais au COMMIT.
@@ -73,6 +76,22 @@ func openHandle(stateDir *os.Root) (*sql.DB, error) {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 	return handle, nil
+}
+
+// Compact réécrit la base sans page libre, puis vide le journal -wal dans le
+// fichier : une valeur effacée avant ne survit dans aucun des deux.
+func (db *DB) Compact(ctx context.Context) error {
+	if _, err := db.sql.ExecContext(ctx, `VACUUM`); err != nil {
+		return fmt.Errorf("vacuum database: %w", err)
+	}
+	var busy, logFrames, checkpointed int
+	if err := db.sql.QueryRowContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`).Scan(&busy, &logFrames, &checkpointed); err != nil {
+		return fmt.Errorf("checkpoint database: %w", err)
+	}
+	if busy != 0 {
+		return errors.New("checkpoint database: a reader keeps the log busy")
+	}
+	return nil
 }
 
 func (db *DB) Close() error {

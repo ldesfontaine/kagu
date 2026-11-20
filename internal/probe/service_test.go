@@ -212,7 +212,7 @@ func TestRemoveTargetPasswords_KeepsTheUserPausesAndSignalsOnce(t *testing.T) {
 	}, testNow)
 
 	for range 2 {
-		if err := fixture.service.RemoveTargetPasswords(ctx); err != nil {
+		if _, err := fixture.service.RemoveTargetPasswords(ctx); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -247,7 +247,7 @@ func TestRemoveTargetPasswords_KeepsTheProbeAndItsHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := fixture.service.RemoveTargetPasswords(ctx); err != nil {
+	if _, err := fixture.service.RemoveTargetPasswords(ctx); err != nil {
 		t.Fatal(err)
 	}
 

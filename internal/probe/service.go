@@ -422,33 +422,37 @@ func (s *Service) setStatus(ctx context.Context, id string, status Status, wasPa
 // encore en clair, acceptées avant que la création refuse les identifiants
 // (R-D5-19). Le nom d'utilisateur reste. La sonde est mise en pause d'abord,
 // jamais effacée : son historique reste, l'alerte dit de la régler à nouveau.
-// Rejouée à chaque démarrage, elle ne touche plus une cible déjà nettoyée.
-func (s *Service) RemoveTargetPasswords(ctx context.Context) error {
+// Rejouée à chaque démarrage, elle ne touche plus une cible déjà nettoyée ;
+// elle rend le nombre de mots de passe retirés, que le démarrage lit pour ne
+// compacter la base qu'une fois.
+func (s *Service) RemoveTargetPasswords(ctx context.Context) (int, error) {
 	probes, err := s.store.ListProbes(ctx, "")
 	if err != nil {
-		return fmt.Errorf("list probes: %w", err)
+		return 0, fmt.Errorf("list probes: %w", err)
 	}
+	removed := 0
 	for _, found := range probes {
 		if found.Kind == KindTCP || TargetPassword(found.Target) == "" {
 			continue
 		}
 		if !found.IsPaused() {
 			if err := s.Pause(ctx, found.ID); err != nil {
-				return fmt.Errorf("pause probe %s: %w", found.ID, err)
+				return removed, fmt.Errorf("pause probe %s: %w", found.ID, err)
 			}
 			found.Status = StatusPaused
 		}
 		found.Target = StripTargetPassword(found.Target)
 		if err := s.store.UpdateProbe(ctx, Revision{Probe: found}); err != nil {
-			return fmt.Errorf("remove password of probe %s: %w", found.ID, err)
+			return removed, fmt.Errorf("remove password of probe %s: %w", found.ID, err)
 		}
+		removed++
 		s.logger.Warn("probe paused, the password of its target was removed: set the target again to resume it",
 			"probe_id", found.ID, "name", found.Name, "machine_id", found.MachineID, "target", found.Target)
 		if s.alerter != nil {
 			s.alerter.ProbeCredentialsRemoved(ctx, found)
 		}
 	}
-	return nil
+	return removed, nil
 }
 
 // PauseTargetsWithCredentials met en pause chaque sonde dont la cible porte
