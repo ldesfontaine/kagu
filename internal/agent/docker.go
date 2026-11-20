@@ -42,9 +42,13 @@ const (
 	composeFileName = "compose.yml"
 	envFileName     = ".env"
 	dataDirName     = "data"
-	// Les dossiers du service sont lisibles de tous ; le compose aussi ; l'.env
-	// n'est lisible que du compte de l'agent.
-	serviceDirMode  = 0o755
+	// Le dossier d'un service n'est traversé que par le compte de l'agent
+	// (R-D1-14) : une image root dans son conteneur peut poser un setuid dans
+	// data/, qu'un autre compte de la machine ne doit pas pouvoir atteindre.
+	// La racine et les dossiers de données restent lisibles de tous ; le
+	// compose aussi ; l'.env n'est lisible que du compte de l'agent.
+	serviceDirMode  = 0o700
+	openDirMode     = 0o755
 	composeFileMode = 0o644
 	envFileMode     = 0o600
 
@@ -236,6 +240,13 @@ func (t dockerTools) deployService(ctx context.Context, job dockerJob) ([]agentw
 		}
 		defer base.Close()
 	}
+	if job.update {
+		// Un dossier posé en 0755 par une version d'avant se referme ; lui seul,
+		// jamais son contenu : l'application règle les droits de ses fichiers.
+		if err := base.Chmod(job.params.Project, serviceDirMode); err != nil {
+			return summary, failWith(agentwire.ReasonPathUnwritable, err)
+		}
+	}
 	if job.update && job.params.Rollback != nil {
 		return t.safeUpdate(ctx, base, job, summary)
 	}
@@ -288,7 +299,7 @@ func hasWitness(base *os.Root) bool {
 // createRoot crée la racine, en 0755 : les dossiers dessous sont lisibles de
 // tous, c'est l'.env qui est privé.
 func createRoot(root string) (*os.Root, error) {
-	if err := os.MkdirAll(root, serviceDirMode); err != nil { // #nosec G301 G304 G703 -- la racine est celle du fichier de l'agent (-root-dir, jugée par ValidCapabilityPath), jamais celle d'un ordre ; 0755 voulu : les dossiers des services sont lisibles.
+	if err := os.MkdirAll(root, openDirMode); err != nil { // #nosec G301 G304 G703 -- la racine est celle du fichier de l'agent (-root-dir, jugée par ValidCapabilityPath), jamais celle d'un ordre ; 0755 voulu : les dossiers des services sont lisibles.
 		return nil, failWith(agentwire.ReasonPathUnwritable, err)
 	}
 	base, err := os.OpenRoot(root)
@@ -511,10 +522,10 @@ func ensureDir(dir *os.Root, name string) error {
 	case !errors.Is(err, fs.ErrNotExist):
 		return failWith(agentwire.ReasonPathUnwritable, err)
 	}
-	if err := dir.Mkdir(name, serviceDirMode); err != nil {
+	if err := dir.Mkdir(name, openDirMode); err != nil {
 		return failWith(agentwire.ReasonPathUnwritable, err)
 	}
-	if err := dir.Chmod(name, serviceDirMode); err != nil {
+	if err := dir.Chmod(name, openDirMode); err != nil {
 		return failWith(agentwire.ReasonPathUnwritable, err)
 	}
 	return nil

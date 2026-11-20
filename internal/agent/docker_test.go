@@ -151,7 +151,7 @@ func TestDeployService_WritesComposeAndEnvThenRunsUp(t *testing.T) {
 	if info, err := os.Lstat(b.path(brand.WorkspaceMarker)); err != nil || !info.Mode().IsRegular() {
 		t.Errorf("the witness file is missing: %v", err)
 	}
-	if got := mode(t, b.path("nextcloud")); got != 0o755 {
+	if got := mode(t, b.path("nextcloud")); got != 0o700 {
 		t.Errorf("service folder mode %v", got)
 	}
 	if content, err := os.ReadFile(b.path("nextcloud", "compose.yml")); err != nil || string(content) != testCompose || mode(t, b.path("nextcloud", "compose.yml")) != 0o644 {
@@ -801,5 +801,59 @@ func TestR_SEC_6(t *testing.T) {
 		if strings.Contains(line.Line, "s3cret-long") || strings.Contains(line.Line, "czNjcmV0LWxvbmc=") {
 			t.Errorf("secret left in output: %q", line.Line)
 		}
+	}
+}
+
+// R-D1-14 : le dossier d'un service est en 0700, et lui seul ; les fichiers
+// que l'application a posés dans data/ gardent leurs droits.
+func TestR_D1_14(t *testing.T) {
+	for _, update := range []bool{false, true} {
+		name := "deploy"
+		if update {
+			name = "update"
+		}
+		t.Run(name, func(t *testing.T) {
+			b := newDockerBench(t)
+			if err := os.MkdirAll(b.path("nextcloud", "data"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(b.path(brand.WorkspaceMarker), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			setuid := b.path("nextcloud", "data", "tool")
+			if err := os.WriteFile(setuid, nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(setuid, 0o644|fs.ModeSetuid); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(b.path("nextcloud", "data"), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if !update {
+				// Un déploiement refuse un dossier existant : il part d'un neuf.
+				if err := os.RemoveAll(b.path("nextcloud")); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.Chmod(b.path("nextcloud"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := b.tools.deployService(context.Background(), b.job(update)); err != nil {
+				t.Fatal(err)
+			}
+			if got := mode(t, b.path("nextcloud")); got != 0o700 {
+				t.Errorf("service folder mode %v", got)
+			}
+			if update {
+				if got := mode(t, b.path("nextcloud", "data")); got != 0o750 {
+					t.Errorf("data folder mode %v", got)
+				}
+				info, err := os.Lstat(setuid)
+				if err != nil || info.Mode() != 0o644|fs.ModeSetuid {
+					t.Errorf("a file of data/ changed rights: %v %v", info, err)
+				}
+			}
+		})
 	}
 }
