@@ -99,7 +99,11 @@ func (s *Server) trustsPeer(r *http.Request) bool {
 }
 
 func (s *Server) trustsAddress(address netip.Addr) bool {
-	for _, prefix := range s.trustedProxies {
+	return prefixesContain(s.trustedProxies, address)
+}
+
+func prefixesContain(prefixes []netip.Prefix, address netip.Addr) bool {
+	for _, prefix := range prefixes {
 		if prefix.Contains(address.Unmap()) {
 			return true
 		}

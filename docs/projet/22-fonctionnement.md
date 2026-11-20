@@ -4774,6 +4774,49 @@ directement (pas par la socket de commande) : qui peut la lancer lit déjà
 l'en-tête et les identités admises en `forward` (la liste de `config.toml`
 telle que la commande la lit, que `serve` ait été redémarré ou non).
 
+### Ce qu'un client peut tenir ouvert
+
+Le serveur HTTP borne ce qu'un client garde ouvert (R-A2-18).
+
+| Borne | Valeur par défaut | Clé de `config.toml` | Effet au-delà |
+| --- | --- | --- | --- |
+| Connexions par source | 64 | `max_connections_per_source` | Pair direct : la connexion est fermée à l'acceptation, avant un octet lu. Derrière un mandataire de confiance : `429` sur la requête |
+| Connexions en tout | 1 024 | `max_connections` | La connexion est fermée à l'acceptation |
+| Durée d'écriture d'une réponse hors flux | 30 s | `write_timeout_seconds` | La connexion est coupée si la réponse n'a pas fini de partir |
+
+- **La source** se lit selon le pair TCP, avec la liste `trusted_proxies` que
+  le mode `forward` et les limiteurs d'adresse utilisent déjà.
+  - *Pair qui n'est pas un mandataire* : la source est ce pair (une IPv4, un
+    /64 en IPv6, comme les limiteurs ci-dessus), comptée par connexion.
+  - *Pair de `trusted_proxies`* : la connexion ne compte que dans le total.
+    La borne de 64 se compte alors sur l'adresse du client que le mandataire
+    donne, lue par `clientAddress` (`X-Forwarded-For` de la droite, la même
+    règle que partout), en **requêtes ouvertes en même temps** : un flux
+    garde sa place tant qu'il dure. Au-delà, `429` avec `Retry-After`.
+  - *Sans `trusted_proxies`* derrière Traefik : tous les clients ont pour
+    source l'adresse de Traefik et se partagent les 64 connexions. *Coût :*
+    à déclarer dès qu'on met un mandataire devant.
+- **Pas de `WriteTimeout`** sur le serveur : il couperait aussi les flux. La
+  durée se pose en tête de toute route (`boundResponseWrite`) ; trois
+  familles y échappent (`routes.go`) :
+  - *les flux* (`/api/events`, le flux des journaux, le direct de `/statut`,
+    `/agent/stream`) : pas de durée, un ping régulier montre un client parti ;
+  - *les transferts* (colis, relais restic) : pas de durée, mais coupés quand
+    plus aucun octet ne passe, dans un sens ou l'autre, pendant 3 minutes
+    (`transferIdleTimeout`, plus que les 2 minutes où le relais attend la tête
+    de la réponse de la cible). Un transfert lent mais vivant, dont chaque
+    morceau relance le compte, n'est pas coupé ;
+  - *browse* (`POST …/actions/browse`) : sa propre borne, l'attente de la
+    cible (45 s) plus 15 s de marge pour que sa réponse, un `504` au besoin,
+    parte.
+
+  *Coût :* une route ajoutée est bornée sans qu'on y pense ; un flux oublié
+  dans la liste est coupé à 30 s.
+- **Le journal** de `serve` dit une connexion refusée une fois par minute et
+  par source (`WARN connection refused`, avec la borne atteinte).
+- **Pas encore posé** : le plafond de 4 attentes longues `?wait=` par jeton
+  vient avec D8 (`GET /api/actions/{id}`).
+
 ## Comment un agent IA lit openCloud
 
 openCloud ne parle pas MCP. **mcp-maison**, un serveur MCP à part

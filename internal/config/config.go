@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -23,6 +24,11 @@ const (
 	DefaultPath     = brand.ConfigPath
 	defaultListen   = "127.0.0.1:8080"
 	defaultStateDir = brand.StateDir
+	// R-A2-18 : de quoi servir les agents derrière une même adresse, pas de
+	// quoi en tenir mille ouvertes depuis une seule.
+	defaultMaxConnections          = 1024
+	defaultMaxConnectionsPerSource = 64
+	defaultWriteTimeoutSeconds     = 30
 	// Une liste d'identités se lit à l'œil : au-delà, c'est un annuaire, et
 	// c'est au mandataire de le tenir.
 	maxForwardUsers = 64
@@ -54,12 +60,21 @@ type Config struct {
 	// mode forward : une seconde serrure derrière le SSO. Comparaison exacte,
 	// casse comprise. Vide : toute identité transmise est admise.
 	ForwardUsers []string `toml:"forward_users"`
+	// Ce qu'un client peut tenir ouvert : connexions en tout et par source
+	// (une IPv4, un /64 en IPv6), et secondes qu'une réponse hors flux a pour
+	// partir. Les flux n'ont pas cette durée.
+	MaxConnections          int `toml:"max_connections" validate:"min=1,max=1000000"`
+	MaxConnectionsPerSource int `toml:"max_connections_per_source" validate:"min=1,max=1000000"`
+	WriteTimeoutSeconds     int `toml:"write_timeout_seconds" validate:"min=1,max=3600"`
 }
 
 func Default() Config {
 	return Config{
-		Listen:   defaultListen,
-		StateDir: defaultStateDir,
+		Listen:                  defaultListen,
+		StateDir:                defaultStateDir,
+		MaxConnections:          defaultMaxConnections,
+		MaxConnectionsPerSource: defaultMaxConnectionsPerSource,
+		WriteTimeoutSeconds:     defaultWriteTimeoutSeconds,
 	}
 }
 
@@ -76,6 +91,11 @@ func (c Config) SlogLevel() slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+// WriteTimeout est la durée d'écriture d'une réponse hors flux.
+func (c Config) WriteTimeout() time.Duration {
+	return time.Duration(c.WriteTimeoutSeconds) * time.Second
 }
 
 // TrustedPrefixes rend les mandataires sous forme utilisable ; la validation

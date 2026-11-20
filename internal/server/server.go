@@ -448,6 +448,10 @@ type Server struct {
 	// Les onglets en direct de l'administration ; ceux de la page publique
 	// sont comptés dans son paquet.
 	eventTabs *ratelimit.Slots
+	// clientSlots compte les requêtes ouvertes par client derrière un
+	// mandataire de confiance (limits.go) ; refusals dit ces refus au journal.
+	clientSlots *ratelimit.SourceSlots
+	refusals    *refusalLog
 	// La socket de commande ne sert que les routes du fichier de l'annuaire.
 	controlHandler http.Handler
 	publicURL      string
@@ -536,6 +540,12 @@ type Options struct {
 	ForwardUsers []string
 	// Listen est l'adresse d'écoute : son hôte est un Host reconnu.
 	Listen string
+	// ResponseWriteTimeout est le temps qu'une réponse hors flux a pour
+	// partir (limits.go) ; zéro : aucune borne, pour les tests.
+	ResponseWriteTimeout time.Duration
+	// ConnectionsPerSource est la borne par client derrière un mandataire de
+	// confiance (limits.go) ; zéro : aucune, pour les tests.
+	ConnectionsPerSource int
 	// Clock remplace l'horloge, pour les tests ; nil = time.Now.
 	Clock func() time.Time
 }
@@ -638,7 +648,16 @@ func New(opts Options) (*Server, error) {
 		Clock:         opts.Clock,
 	})
 	server.mcpCheck = mcpcheck.New(opts.MCPURL, server.now)
-	server.handler = server.chain(securityHeaders(server.refuseEncodedSlash(server.mux())))
+	routed := server.refuseEncodedSlash(server.mux())
+	if opts.ResponseWriteTimeout > 0 {
+		routed = boundResponseWrite(opts.ResponseWriteTimeout, routed)
+	}
+	if opts.ConnectionsPerSource > 0 {
+		server.clientSlots = ratelimit.NewSourceSlots(opts.ConnectionsPerSource)
+		server.refusals = newRefusalLog(opts.Logger)
+		routed = server.limitClientsBehindProxy(routed)
+	}
+	server.handler = server.chain(securityHeaders(routed))
 	server.controlHandler = server.chain(server.controlMux())
 	return server, nil
 }
