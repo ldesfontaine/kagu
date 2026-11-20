@@ -113,10 +113,6 @@ func isOperatorRoute(pattern string) bool {
 // access ce qu'un jeton d'API en obtient.
 func (s *Server) requireOperator(next http.HandlerFunc, firstSetup bool, access tokenAccess) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.isCompiledAsset(r) {
-			next(w, r)
-			return
-		}
 		state, err := s.auth.State(r.Context())
 		if err != nil {
 			s.apiInternalError(w, r, err)
@@ -260,16 +256,29 @@ func (s *Server) authorizationLapsed(r *http.Request) bool {
 	return !current.Same(authorizing)
 }
 
-// isCompiledAsset dit si la requête lit un fichier du front compilé, hors
-// index.html : la page de statut publique charge ses scripts, ses styles et
-// ses polices par le même fourre-tout que l'interface, et un visiteur sans
+// openCompiledAssets sert sans identifiants les fichiers du front compilé,
+// hors index.html : la page de statut publique charge ses scripts, ses styles
+// et ses polices par le même fourre-tout que l'interface, et un visiteur sans
 // identifiants verrait une page vide. Ces fichiers sont le même code pour
-// tous, embarqué dans le binaire : les données restent derrière /api.
+// tous, embarqué dans le binaire : les données restent derrière /api. Seule
+// la route du front est enveloppée : un fichier compilé n'ouvre aucune autre.
+func (s *Server) openCompiledAssets(open, guarded http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.isCompiledAsset(r) {
+			open(w, r)
+			return
+		}
+		guarded(w, r)
+	}
+}
+
+// isCompiledAsset juge le chemin encodé : un %2F n'est pas un séparateur, le
+// nettoyer après décodage ferait passer /..%2Ftheme.js pour /theme.js.
 func (s *Server) isCompiledAsset(r *http.Request) bool {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return false
 	}
-	name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+	name := strings.TrimPrefix(path.Clean(r.URL.EscapedPath()), "/")
 	if name == legacyFavicon {
 		name = brandFavicon
 	}
