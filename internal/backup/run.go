@@ -250,7 +250,7 @@ func (s *Service) send(ctx context.Context, plan Plan, at time.Time) (delivery, 
 	}
 	parcelID, files := writer.Seal()
 	sent := delivery{destination: destination, size: archiveSize(files, plan.FilePrefix())}
-	sent.run, err = s.sendReceive(ctx, destination, parcelID, files)
+	sent.run, err = s.sendReceive(ctx, destination, parcelID, files, archiveKind(plan))
 	if err != nil || sent.run.State.IsFinished() {
 		// L'ordre n'est pas parti : personne ne viendra chercher le colis.
 		writer.Discard()
@@ -271,8 +271,21 @@ func archiveSize(files []agentwire.ParcelFile, prefix string) int64 {
 	return 0
 }
 
-func (s *Service) sendReceive(ctx context.Context, destination Destination, parcelID string, files []agentwire.ParcelFile) (action.Run, error) {
-	params, err := json.Marshal(agentwire.BackupReceiveParams{Parcel: parcelID, Path: destination.Path, Files: files})
+// archiveKind dit ce que le colis d'un plan porte : l'agent en tire son
+// plafond de taille. Un plan agent livre des archives d'invités (vzdump).
+func archiveKind(plan Plan) string {
+	switch {
+	case plan.IsFirewallExport():
+		return agentwire.ArchiveFirewall
+	case plan.SourceKind == SourceAgent:
+		return agentwire.ArchiveGuest
+	default:
+		return agentwire.ArchiveDatabase
+	}
+}
+
+func (s *Service) sendReceive(ctx context.Context, destination Destination, parcelID string, files []agentwire.ParcelFile, archive string) (action.Run, error) {
+	params, err := json.Marshal(agentwire.BackupReceiveParams{Parcel: parcelID, Path: destination.Path, Files: files, Archive: archive})
 	if err != nil {
 		return action.Run{}, fmt.Errorf("encode receive params: %w", err)
 	}

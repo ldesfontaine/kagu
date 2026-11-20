@@ -132,6 +132,9 @@ func TestRun_FirewallExportSendsAnEncryptedConfigurationAndNothingInTheClear(t *
 	if err := json.Unmarshal(b.commands.orders[0].Params, &receive); err != nil {
 		t.Fatal(err)
 	}
+	if receive.Archive != agentwire.ArchiveFirewall {
+		t.Fatalf("archive kind %q, want the firewall", receive.Archive)
+	}
 	var prune agentwire.BackupPruneParams
 	if err := json.Unmarshal(b.commands.orders[1].Params, &prune); err != nil || prune.Prefix != "bordure" || prune.Keep != 5 {
 		t.Fatalf("prune %+v %v", prune, err)

@@ -29,6 +29,9 @@ const (
 	// suivants au-delà.
 	receiveTimeout = 50 * time.Minute
 	maxParcelFiles = 8
+	// La taille annoncée d'une archive de la base ou du pare-feu : au-delà,
+	// l'ordre est refusé. L'archive d'un invité (vzdump) n'a pas de plafond.
+	maxAnnouncedSize = 2 << 30
 	// L'en-tête d'un fichier age binaire.
 	ageHeader = "age-encryption.org/v1\n"
 	// Pendant le téléchargement, le fichier s'appelle « .<nom>.part ».
@@ -103,8 +106,26 @@ func readBackupReceive(body agentwire.OrderBody, cover coveringPath, writable wr
 	if err := json.Unmarshal(body.Params, &params); err != nil || !isReceivable(params) {
 		return params, "", &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
+	if exceedsSizeCap(params) {
+		return params, "", &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonArchiveTooLarge}
+	}
 	granted, refused := judgeGranted(body, params.Path, cover, writable)
 	return params, granted, refused
+}
+
+// exceedsSizeCap dit si un fichier annonce plus que le plafond de son type
+// d'archive. Le type vient de l'ordre signé, jamais du nom du fichier ; absent,
+// c'est la base.
+func exceedsSizeCap(params agentwire.BackupReceiveParams) bool {
+	if params.Archive == agentwire.ArchiveGuest {
+		return false
+	}
+	for _, file := range params.Files {
+		if file.Size > maxAnnouncedSize {
+			return true
+		}
+	}
+	return false
 }
 
 func readBackupPrune(body agentwire.OrderBody, cover coveringPath, writable writableCheck) (agentwire.BackupPruneParams, string, *agentwire.ActionResult) {
@@ -191,7 +212,7 @@ func refuseLinks(base *os.Root, below string) error {
 // isReceivable : un colis de sauvegarde ne porte que des fichiers des deux
 // formes que l'agent écrit, sans doublon, avec une taille et une somme.
 func isReceivable(params agentwire.BackupReceiveParams) bool {
-	if params.Parcel == "" || len(params.Files) == 0 || len(params.Files) > maxParcelFiles {
+	if params.Parcel == "" || len(params.Files) == 0 || len(params.Files) > maxParcelFiles || !agentwire.IsArchiveKind(params.Archive) {
 		return false
 	}
 	seen := map[string]bool{}
@@ -247,15 +268,35 @@ func receiveFile(ctx context.Context, source parcelSource, root *os.Root, parcel
 			return err
 		}
 	}
-	if err := root.Rename(part, file.Name); err != nil {
+	if err := publish(root, part, file.Name); err != nil {
 		_ = root.Remove(part)
-		return failWith(agentwire.ReasonPathUnwritable, err)
-	}
-	// fsync du dossier, sinon le rename peut se perdre à la coupure.
-	if err := fsx.SyncDir(root, "."); err != nil {
-		return failWith(agentwire.ReasonPathUnwritable, err)
+		return err
 	}
 	return verifyOnDisk(root, file)
+}
+
+// publish donne au .part son nom final. Une archive reçue ne remplace jamais
+// une archive gardée : le nom se prend en exclusif, et deux réceptions
+// croisées ne s'écrasent pas. Seule la clé scellée se remplace, d'un coup.
+func publish(root *os.Root, part, name string) error {
+	if agentwire.IsBackupKeyFile(name) {
+		if err := root.Rename(part, name); err != nil {
+			return failWith(agentwire.ReasonPathUnwritable, err)
+		}
+		// fsync du dossier, sinon le rename peut se perdre à la coupure.
+		if err := fsx.SyncDir(root, "."); err != nil {
+			return failWith(agentwire.ReasonPathUnwritable, err)
+		}
+		return nil
+	}
+	err := fsx.LinkExclusive(root, part, name)
+	if errors.Is(err, fs.ErrExist) {
+		return failWith(agentwire.ReasonPathExists, err)
+	}
+	if err != nil {
+		return failWith(agentwire.ReasonPathUnwritable, err)
+	}
+	return nil
 }
 
 // downloadTo écrit le fichier dans part, en s'arrêtant un octet après la

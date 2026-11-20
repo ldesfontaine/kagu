@@ -104,6 +104,9 @@ const (
 	ReasonDownloadFailed   = "download_failed"
 	ReasonDigestMismatch   = "digest_mismatch"
 	ReasonNotAgeFile       = "not_an_age_file"
+	// backup.receive : la taille annoncée d'une archive de la base ou du
+	// pare-feu dépasse le plafond de l'agent.
+	ReasonArchiveTooLarge = "archive_too_large"
 	// Le compte sous lequel tourne l'agent ne possède pas le dossier (il n'y a
 	// pas accès en écriture), ou n'a pas accès à la socket de Docker : refusé
 	// avant d'écrire quoi que ce soit.
@@ -277,7 +280,7 @@ func RefusalReasons() []string {
 		ReasonWrongAgent, ReasonExpired, ReasonReplayed, ReasonUnknownKind, ReasonRightMissing,
 		ReasonAnchorMissing, ReasonAnchorUnreadable, ReasonAnchorOutside,
 		ReasonStateUnwritable, ReasonNotImplemented, ReasonPathOutsideRight, ReasonPathUnwritable,
-		ReasonDownloadFailed, ReasonDigestMismatch, ReasonNotAgeFile, ReasonBusy,
+		ReasonDownloadFailed, ReasonDigestMismatch, ReasonNotAgeFile, ReasonArchiveTooLarge, ReasonBusy,
 		ReasonNotSelfUpdatable, ReasonReleaseKeyMissing, ReasonSignatureInvalid, ReasonVersionMismatch,
 		ReasonDowngrade, ReasonSelfCheckFailed,
 		ReasonNoPrevious, ReasonPreviousIdentical, ReasonGuardMissing,

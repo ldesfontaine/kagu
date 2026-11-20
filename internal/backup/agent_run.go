@@ -364,7 +364,7 @@ func (p *agentPass) finish(ctx context.Context, current *targetRun) (action.Run,
 		// ou autre chose avec : rien ne part à la destination.
 		return action.Run{}, &targetFailure{reason: agentwire.ReasonUploadFailed}
 	}
-	received, err := s.sendReceive(ctx, p.destination, current.upload.ID(), files)
+	received, err := s.sendReceive(ctx, p.destination, current.upload.ID(), files, archiveKind(p.plan))
 	if err != nil {
 		return action.Run{}, sendFailure(err, machine.CapabilityBackupReceive)
 	}

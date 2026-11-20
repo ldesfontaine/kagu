@@ -269,6 +269,9 @@ func (a *agents) receive(machineID string, order agentwire.OrderBody) {
 		a.finish(machineID, order.RunID, agentwire.ActionSucceeded, "")
 		return
 	}
+	if params.Archive != agentwire.ArchiveGuest {
+		a.t.Errorf("archive kind %q, want a guest", params.Archive)
+	}
 	a.note(machineID, "receive "+target)
 	files := map[string][]byte{}
 	for _, entry := range params.Files {

@@ -11,10 +11,29 @@ import (
 // BackupReceiveParams sont les paramètres de backup.receive : le colis à
 // télécharger, le dossier où écrire, les fichiers attendus avec leur taille
 // et leur somme. Rien ici n'est un secret : le contenu est déjà chiffré.
+//
+// Archive dit ce que le colis porte (ArchiveDatabase, ArchiveFirewall,
+// ArchiveGuest) : l'agent en tire son plafond de taille, jamais du nom du
+// fichier. Absent, c'est la base.
 type BackupReceiveParams struct {
-	Parcel string       `json:"parcel"`
-	Path   string       `json:"path"`
-	Files  []ParcelFile `json:"files"`
+	Parcel  string       `json:"parcel"`
+	Path    string       `json:"path"`
+	Files   []ParcelFile `json:"files"`
+	Archive string       `json:"archive,omitempty"`
+}
+
+// Les types d'archive d'un colis de sauvegarde. Seule l'archive d'un invité
+// (vzdump) n'a pas de plafond de taille en dur.
+const (
+	ArchiveDatabase = "database"
+	ArchiveFirewall = "firewall"
+	ArchiveGuest    = "guest"
+)
+
+// IsArchiveKind dit si un type d'archive est connu : vide (la base), ou l'un
+// des trois.
+func IsArchiveKind(kind string) bool {
+	return kind == "" || kind == ArchiveDatabase || kind == ArchiveFirewall || kind == ArchiveGuest
 }
 
 // BackupPruneParams sont ceux de backup.prune : le dossier, le préfixe des

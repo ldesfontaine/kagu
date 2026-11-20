@@ -515,6 +515,7 @@ reason_path_denied = "Le compte de l'agent ne possède pas ce dossier : rien n'a
 reason_download_failed = "L'agent n'a pas pu télécharger le colis depuis {product}."
 reason_digest_mismatch = "Ce que l'agent a reçu ne correspond pas à la somme signée : rien n'a été gardé."
 reason_not_an_age_file = "Le fichier écrit n'est pas un fichier age : rien n'a été gardé."
+reason_archive_too_large = "La taille annoncée de l'archive dépasse le plafond de l'agent (2 Gio pour la base et le pare-feu) : rien n'a été écrit."
 reason_busy = "L'agent est occupé : trop d'ordres longs en attente, ou une sauvegarde relayée en cours sur ce dépôt. Réessayez plus tard."
 reason_not_self_updatable = "L'agent ne tourne pas depuis son dossier bin/ : changez son unité une fois (installation, « Mettre à jour »)."
 reason_release_key_missing = "Le binaire de l'agent n'embarque pas de clé de version, ou les a toutes retirées : il ne peut rien vérifier."

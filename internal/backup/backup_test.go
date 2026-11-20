@@ -345,6 +345,9 @@ func TestRun_StagesAnEncryptedArchiveAndSendsReceiveThenPrune(t *testing.T) {
 	if receive.Path != "/srv/backups" || len(receive.Files) != 2 || receive.Files[0].Name != archiveName || receive.Files[1].Name != keyName {
 		t.Fatalf("receive %+v", receive)
 	}
+	if receive.Archive != agentwire.ArchiveDatabase {
+		t.Fatalf("archive kind %q, want the database", receive.Archive)
+	}
 	var prune agentwire.BackupPruneParams
 	if err := json.Unmarshal(b.commands.orders[1].Params, &prune); err != nil || prune.Path != "/srv/backups" || prune.Prefix != "opencloud" || prune.Keep != 3 {
 		t.Fatalf("prune %+v %v", prune, err)

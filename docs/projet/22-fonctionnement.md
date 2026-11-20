@@ -1629,9 +1629,17 @@ s'ouvre sous lui, un lien symbolique sur le chemin est refusé
 (`path_outside_right`), et aucune écriture ne sort du droit, liens compris. Il crée le dossier s'il manque (`0700`), télécharge chaque fichier
 du colis (borné à la taille signée, plus un octet pour voir un dépassement),
 écrit `.<nom>.part` en `0600`, vérifie taille et somme (`digest_mismatch`),
-`fsync`, renomme, `fsync` du dossier, puis **relit** le fichier : somme
+`fsync`, donne son nom au fichier **sans jamais en remplacer un** (lien dur
+exclusif : un nom déjà présent est refusé `path_exists`, l'archive gardée reste
+intacte ; seule la clé scellée se remplace, d'un coup), `fsync` du dossier, puis **relit** le fichier : somme
 recalculée sur le disque, et en-tête `age-encryption.org/v1` pour un `.age`
-(`not_an_age_file`). Il rend une ligne par fichier, `written <nom> <taille>
+(`not_an_age_file`). **Plafond** : l'ordre porte un type d'archive (`archive` :
+`database`, `firewall` ou `guest`, posé par `serve`, jamais lu dans le nom du
+fichier ; absent, c'est la base). La base et le pare-feu annoncent 2 Gio au plus
+(`archive_too_large`, refus avant d'écrire) ; l'archive d'un invité (vzdump) n'a
+pas de plafond. Tous les types : un fichier plus long que sa taille annoncée est
+coupé et refusé (`digest_mismatch`). Un agent d'avant ignore `archive` : il
+garde son ancien comportement (renommer par-dessus). Il rend une ligne par fichier, `written <nom> <taille>
 sha256:<hex>`, et n'envoie aucun contenu. `backup.prune` porte un
 `Prefix` obligatoire (le préfixe du plan : un sujet ou `opencloud`) ; sans lui,
 ou s'il n'a pas la forme d'un préfixe, l'ordre est refusé `bad_order`. Il ne
