@@ -657,7 +657,7 @@ func New(opts Options) (*Server, error) {
 		server.refusals = newRefusalLog(opts.Logger)
 		routed = server.limitClientsBehindProxy(routed)
 	}
-	server.handler = server.chain(securityHeaders(routed))
+	server.handler = server.chain(server.securityHeaders(routed))
 	server.controlHandler = server.chain(server.controlMux())
 	return server, nil
 }
