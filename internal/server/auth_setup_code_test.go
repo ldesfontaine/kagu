@@ -5,6 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -14,6 +17,9 @@ import (
 
 	"github.com/ldesfontaine/opencloud/internal/audit"
 	"github.com/ldesfontaine/opencloud/internal/auth"
+	"github.com/ldesfontaine/opencloud/internal/auth/authtest"
+	"github.com/ldesfontaine/opencloud/internal/store/storetest"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const enablePath = "/api/auth/actions/enable"
@@ -327,6 +333,57 @@ func TestR_A2_5_AuditNeverHoldsSetupCode(t *testing.T) {
 		for _, form := range forms {
 			if strings.Contains(text, form) {
 				t.Errorf("%s holds the setup code (as %q)", where, form)
+			}
+		}
+	}
+}
+
+// R-A2-5 : un seul code, une seule première configuration. N activations
+// parties du même état avec le même code valable : une seule réussit, les
+// autres sont refusées par « déjà activé » ou « l'état a changé », jamais par
+// « code brûlé » (le code n'est brûlé que par celle qui a gagné).
+func TestR_A2_5_OnlyOneActivationWins(t *testing.T) {
+	db := storetest.Open(t)
+	operator, err := auth.New(db, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	operator.SetHashCost(bcrypt.MinCost)
+	ctx := context.Background()
+	none := auth.State{Mode: auth.ModeNone}
+	for _, contenders := range []int{2, 8} {
+		for round := range 10 {
+			code := authtest.SetupCode(t, operator)
+			start := make(chan struct{})
+			results := make(chan error, contenders)
+			for i := range contenders {
+				go func() {
+					<-start
+					_, err := operator.EnableBasic(ctx, none, code, fmt.Sprintf("user%d", i), testPassword)
+					results <- err
+				}()
+			}
+			close(start)
+			wins := 0
+			for range contenders {
+				err := <-results
+				switch {
+				case err == nil:
+					wins++
+				case errors.Is(err, auth.ErrAlreadyEnabled) || errors.Is(err, auth.ErrStateChanged):
+				default:
+					t.Fatalf("%d contenders, round %d: unexpected error: %v", contenders, round, err)
+				}
+			}
+			if wins != 1 {
+				t.Fatalf("%d contenders, round %d: %d activations succeeded, want 1", contenders, round, wins)
+			}
+			state, err := operator.State(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := operator.Disable(ctx, state); err != nil {
+				t.Fatal(err)
 			}
 		}
 	}

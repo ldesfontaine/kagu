@@ -123,7 +123,7 @@ func (s *Service) EnableBasic(ctx context.Context, expected State, setupCode, us
 	if current.Mode != ModeNone {
 		return State{}, ErrAlreadyEnabled
 	}
-	if err := s.requireSetupCode(ctx, setupCode); err != nil {
+	if err := s.requireFirstSetup(ctx, setupCode); err != nil {
 		return State{}, err
 	}
 	if err := ValidateUsername(username); err != nil {
@@ -142,6 +142,24 @@ func (s *Service) EnableBasic(ctx context.Context, expected State, setupCode, us
 	return next, nil
 }
 
+// requireFirstSetup juge le code, puis, s'il est inutilisable, relit l'état :
+// un code effacé parce qu'une autre activation vient de réussir se dit « déjà
+// activé », pas « code brûlé ». L'exclusion reste celle de replaceState.
+func (s *Service) requireFirstSetup(ctx context.Context, setupCode string) error {
+	err := s.requireSetupCode(ctx, setupCode)
+	if !errors.Is(err, ErrSetupCodeUnusable) {
+		return err
+	}
+	current, stateErr := s.store.GetAuthState(ctx)
+	if stateErr != nil {
+		return stateErr
+	}
+	if current.Mode != ModeNone {
+		return ErrAlreadyEnabled
+	}
+	return err
+}
+
 // EnableForward passe en mode forward : l'identité vient de l'en-tête
 // que pose le mandataire. Le serveur vérifie d'abord que la requête qui
 // active le porte déjà, sans quoi l'opérateur s'enfermerait dehors.
@@ -153,7 +171,7 @@ func (s *Service) EnableForward(ctx context.Context, expected State, setupCode, 
 	if current.Mode != ModeNone {
 		return State{}, ErrAlreadyEnabled
 	}
-	if err := s.requireSetupCode(ctx, setupCode); err != nil {
+	if err := s.requireFirstSetup(ctx, setupCode); err != nil {
 		return State{}, err
 	}
 	if err := ValidateHeader(header); err != nil {
