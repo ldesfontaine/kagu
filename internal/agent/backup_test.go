@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"maps"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -864,7 +865,7 @@ func TestR_E3_17_TheCapFollowsTheSignedArchiveKind(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, _, refused := readBackupReceive(agentwire.OrderBody{RunID: "run", Params: raw}, cover, writable)
+			_, _, refused := readBackupReceive(agentwire.OrderBody{RunID: "run", Params: raw}, cover, writable, plenty)
 			got := ""
 			if refused != nil {
 				got = refused.Reason
@@ -885,5 +886,60 @@ func assertOnlyFile(t *testing.T, dir, name, content string) {
 	got, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil || string(got) != content {
 		t.Fatalf("%s holds %q (%v), want %q", name, got, err, content)
+	}
+}
+
+func plenty(string) (uint64, error) { return math.MaxUint64, nil }
+
+// La place se juge à l'ordre, avant tout téléchargement : la somme des tailles
+// annoncées, clé scellée comprise, doit tenir dans la place libre du dossier ;
+// la place illisible refuse aussi.
+func TestBackupReceive_RefusesWhenAnnouncedSizeExceedsFreeSpace(t *testing.T) {
+	files := map[string]string{archiveName: ageLike("sauvegarde chiffrée de test"), keyName: ageLike("clé scellée de test")}
+	var total uint64
+	for _, file := range listed(files) {
+		total += uint64(file.Size)
+	}
+	unreadable := errors.New("statfs failed")
+	for name, test := range map[string]struct {
+		free   uint64
+		err    error
+		reason string
+	}{
+		"room for the sum":             {free: total, reason: ""},
+		"one byte short of the sum":    {free: total - 1, reason: agentwire.ReasonDiskFull},
+		"no room at all":               {free: 0, reason: agentwire.ReasonDiskFull},
+		"unreadable room is a refusal": {err: unreadable, reason: agentwire.ReasonPathUnwritable},
+	} {
+		t.Run(name, func(t *testing.T) {
+			b := newLongBench(t, files)
+			var asked []string
+			b.runner.checks.freeBytes = func(path string) (uint64, error) {
+				asked = append(asked, path)
+				return test.free, test.err
+			}
+			body := longOrder(1, agentwire.KindBackupReceive, agentwire.BackupReceiveParams{Parcel: "colis1", Path: b.dir, Files: listed(files)})
+			b.runner.receive(b.signed(t, body))
+			report := b.results.take()
+			if report == nil || len(report.Results) == 0 {
+				t.Fatalf("report %+v", report)
+			}
+			if len(asked) != 1 || asked[0] != b.dir {
+				t.Errorf("the room was measured on %v, not the granted folder %s", asked, b.dir)
+			}
+			if test.reason == "" {
+				if report.Results[0].State != agentwire.ActionAccepted {
+					t.Fatalf("results %+v", report.Results)
+				}
+				return
+			}
+			if report.Results[0].State != agentwire.ActionRefused || report.Results[0].Reason != test.reason {
+				t.Fatalf("results %+v", report.Results)
+			}
+			if len(b.server.requests) != 0 {
+				t.Errorf("the server was asked: %v", b.server.requests)
+			}
+			assertDirEmpty(t, b.dir)
+		})
 	}
 }

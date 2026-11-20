@@ -97,11 +97,16 @@ type coveringPath func(path string) (string, bool)
 // dossier (une raison de refus), vide s'il le peut.
 type writableCheck func(path string) string
 
+// freeSpace rend l'espace qu'un compte sans privilège peut écrire sous un
+// chemin (freeBytesUnder).
+type freeSpace func(path string) (uint64, error)
+
 // readBackupReceive lit les paramètres de backup.receive et refuse ce que le
-// droit de l'agent ne couvre pas, ou ce que son compte ne peut pas écrire, avant
-// d'accepter l'ordre : un refus immédiat, aucun colis téléchargé, pas un échec
-// plus tard. Il rend aussi le chemin du droit, où l'écriture ouvrira sa racine.
-func readBackupReceive(body agentwire.OrderBody, cover coveringPath, writable writableCheck) (agentwire.BackupReceiveParams, string, *agentwire.ActionResult) {
+// droit de l'agent ne couvre pas, ce que son compte ne peut pas écrire, ou ce
+// qui ne tient pas dans la place libre, avant d'accepter l'ordre : un refus
+// immédiat, aucun colis téléchargé, pas un échec plus tard. Il rend aussi le
+// chemin du droit, où l'écriture ouvrira sa racine.
+func readBackupReceive(body agentwire.OrderBody, cover coveringPath, writable writableCheck, free freeSpace) (agentwire.BackupReceiveParams, string, *agentwire.ActionResult) {
 	var params agentwire.BackupReceiveParams
 	if err := json.Unmarshal(body.Params, &params); err != nil || !isReceivable(params) {
 		return params, "", &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
@@ -110,7 +115,29 @@ func readBackupReceive(body agentwire.OrderBody, cover coveringPath, writable wr
 		return params, "", &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonArchiveTooLarge}
 	}
 	granted, refused := judgeGranted(body, params.Path, cover, writable)
-	return params, granted, refused
+	if refused != nil {
+		return params, granted, refused
+	}
+	return params, granted, judgeRoom(body, params, granted, free)
+}
+
+// judgeRoom : la somme des tailles annoncées, la clé scellée avec l'archive,
+// tient dans la place libre du dossier de réception, mesurée sous le chemin du
+// droit (le même système de fichiers que l'écriture). Une place qu'on ne peut
+// pas lire refuse : jamais d'acceptation par défaut.
+func judgeRoom(body agentwire.OrderBody, params agentwire.BackupReceiveParams, granted string, free freeSpace) *agentwire.ActionResult {
+	available, err := free(granted)
+	if err != nil {
+		return &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonPathUnwritable}
+	}
+	// On retranche fichier par fichier : la somme ne déborde jamais.
+	for _, file := range params.Files {
+		if uint64(file.Size) > available { // #nosec G115 -- isReceivable a refusé les tailles négatives.
+			return &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonDiskFull}
+		}
+		available -= uint64(file.Size) // #nosec G115 -- idem.
+	}
+	return nil
 }
 
 // exceedsSizeCap dit si un fichier annonce plus que le plafond de son type

@@ -272,7 +272,7 @@ func accepted(body agentwire.OrderBody) agentwire.ActionResult {
 }
 
 func (r *orderRunner) acceptBackupReceive(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
-	params, granted, refused := readBackupReceive(body, r.coversBackupPath(), r.checks.writable)
+	params, granted, refused := readBackupReceive(body, r.coversBackupPath(), r.checks.writable, r.checks.freeBytes)
 	if refused != nil {
 		r.journal.notAccepted(body, refused.Reason)
 		return *refused, nil
