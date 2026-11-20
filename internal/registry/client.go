@@ -108,15 +108,30 @@ func (c *Client) Tags(ctx context.Context, ref Reference) ([]string, error) {
 }
 
 // nextPage lit « </v2/…?last=x&n=1000>; rel="next" » ; vide sans suite.
+// Le chemin est collé derrière l'hôte du registre : un registre hostile
+// ne doit pas pouvoir en changer l'autorité (« @hôte », « //hôte »).
 func nextPage(link string) string {
 	for _, part := range strings.Split(link, ",") {
 		target, attributes, _ := strings.Cut(strings.TrimSpace(part), ";")
 		if !strings.Contains(attributes, `rel="next"`) {
 			continue
 		}
-		return strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(target), "<"), ">")
+		path := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(target), "<"), ">")
+		if !isRegistryPath(path) {
+			return ""
+		}
+		return path
 	}
 	return ""
+}
+
+// isRegistryPath : un chemin /v2/… du même hôte, rien qui change l'autorité.
+func isRegistryPath(path string) bool {
+	if !strings.HasPrefix(path, "/v2/") || strings.ContainsAny(path, `@\`) || strings.Contains(path, "//") {
+		return false
+	}
+	parsed, err := url.Parse(path)
+	return err == nil && parsed.Scheme == "" && parsed.Host == "" && parsed.User == nil
 }
 
 // Digest rend l'empreinte de ce qu'un tag pointe, par un HEAD : le Hub
@@ -206,7 +221,7 @@ func (c *Client) authorize(ctx context.Context, ref Reference, challenge string)
 	credentials, hasCredentials := c.keychain.Lookup(ref.Registry)
 	switch strings.ToLower(scheme) {
 	case "bearer":
-		token, err := c.fetchToken(ctx, parseChallenge(parameters), credentials, hasCredentials)
+		token, err := c.fetchToken(ctx, ref.Registry, parseChallenge(parameters), credentials, hasCredentials)
 		if err != nil {
 			return "", err
 		}
@@ -234,11 +249,17 @@ func parseChallenge(parameters string) map[string]string {
 	return values
 }
 
-func (c *Client) fetchToken(ctx context.Context, challenge map[string]string, credentials Credentials, signed bool) (bearerToken, error) {
+// authHost est le seul hôte d'authentification, autre que le registre
+// lui-même, à qui le trousseau est confié : celui du Hub.
+const authHost = "auth.docker.io"
+
+func (c *Client) fetchToken(ctx context.Context, registry string, challenge map[string]string, credentials Credentials, signed bool) (bearerToken, error) {
 	realm, err := url.Parse(challenge["realm"])
-	if err != nil || realm.Scheme != "https" && !isLoopback(realm.Host) {
+	if err != nil || realm.Host == "" || realm.Scheme != "https" && !(realm.Scheme == "http" && isLoopback(registry)) {
 		return bearerToken{}, ErrUnauthorized
 	}
+	// Un realm étranger reste joignable en anonyme, jamais avec le trousseau.
+	signed = signed && (strings.EqualFold(realm.Host, registry) || strings.EqualFold(realm.Hostname(), authHost))
 	query := realm.Query()
 	if service := challenge["service"]; service != "" {
 		query.Set("service", service)
