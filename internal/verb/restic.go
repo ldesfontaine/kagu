@@ -15,6 +15,8 @@ package verb
 // Le ticket #374 distingue « vérifier » et « test de restauration » : c'est
 // un seul ordre (restic.verify : restic check, puis relecture de fichiers du
 // dernier instantané), donc un seul verbe, restic.backup.verify.
+// Vérifier et parcourir envoient l'ordre à la cible du dépôt, pas à la
+// source : leur cible est le lien (TargetResticLink), jugé des deux côtés.
 func init() {
 	Default.MustRegister(Verb{
 		ID: "restic.backup.run", Route: "POST /api/machines/{id}/restic-backups/{backup}/actions/run",
@@ -23,7 +25,7 @@ func init() {
 	})
 	Default.MustRegister(Verb{
 		ID: "restic.backup.verify", Route: "POST /api/machines/{id}/restic-backups/{backup}/actions/verify",
-		Params: []string{"id", "backup"}, Body: []string{}, Target: TargetMachine,
+		Params: []string{"id", "backup"}, Body: []string{}, Target: TargetResticLink,
 		Label: "api_token.verb_restic_backup_verify", Summary: "api_token.verb_restic_backup_verify_text", Reverse: "restic.backup.verify",
 	})
 	// Restaurer écrit sur la machine source, à côté de l'original, sans rien
@@ -38,7 +40,7 @@ func init() {
 	// Parcourir un dépôt n'écrit ni n'efface rien : il est son propre inverse.
 	Default.MustRegister(Verb{
 		ID: "restic.backup.browse", Route: "POST /api/machines/{id}/restic-backups/{backup}/actions/browse",
-		Params: []string{"id", "backup"}, Body: []string{"snapshot", "path"}, Target: TargetMachine,
+		Params: []string{"id", "backup"}, Body: []string{"snapshot", "path"}, Target: TargetResticLink,
 		Label: "api_token.verb_restic_backup_browse", Summary: "api_token.verb_restic_backup_browse_text", Reverse: "restic.backup.browse",
 	})
 }

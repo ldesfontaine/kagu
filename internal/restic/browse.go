@@ -91,7 +91,7 @@ func (s *Service) deliverBrowse(result agentwire.ActionResult) bool {
 // rejugé contre ses bornes. Lire ne demande pas le dépôt : une sauvegarde ou une
 // rétention en cours n'empêche pas de parcourir.
 func (s *Service) Browse(ctx context.Context, sourceID, id string, request BrowseRequest) (agentwire.ResticBrowseReport, error) {
-	current, err := s.ownedBackup(ctx, sourceID, id)
+	current, err := s.OwnedBackup(ctx, sourceID, id)
 	if err != nil {
 		return agentwire.ResticBrowseReport{}, err
 	}

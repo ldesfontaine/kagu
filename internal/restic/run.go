@@ -65,7 +65,7 @@ type RunRecord struct {
 // arrive par le signal de la source. Un dépôt qui reçoit déjà une
 // sauvegarde refuse.
 func (s *Service) RunNow(ctx context.Context, sourceID, id string) (action.Run, error) {
-	current, err := s.ownedBackup(ctx, sourceID, id)
+	current, err := s.OwnedBackup(ctx, sourceID, id)
 	if err != nil {
 		return action.Run{}, err
 	}
