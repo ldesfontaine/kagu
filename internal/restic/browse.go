@@ -37,9 +37,10 @@ type BrowseRequest struct {
 
 // browseSlot attend le résultat d'un ordre de parcours.
 type browseSlot struct {
-	done   chan struct{}
-	once   sync.Once
-	result agentwire.ActionResult
+	machineID string
+	done      chan struct{}
+	once      sync.Once
+	result    agentwire.ActionResult
 }
 
 // sendBrowse envoie l'ordre et ouvre son créneau sans qu'un résultat puisse
@@ -56,7 +57,7 @@ func (s *Service) sendBrowse(ctx context.Context, machineID string, params []byt
 	if s.browses == nil {
 		s.browses = map[string]*browseSlot{}
 	}
-	slot := &browseSlot{done: make(chan struct{})}
+	slot := &browseSlot{machineID: machineID, done: make(chan struct{})}
 	s.browses[run.ID] = slot
 	return run, slot, nil
 }
@@ -68,14 +69,20 @@ func (s *Service) dropBrowseSlot(runID string) {
 }
 
 // deliverBrowse donne un résultat fini à l'écran qui l'attend. Rend vrai si le
-// résultat est celui d'un parcours. Les noms ne sont gardés nulle part : ni
+// résultat est celui d'un parcours. Seule la machine à qui l'ordre est parti
+// peut le livrer : celui d'une autre est jeté et compté (R-E3-16), et ne tombe
+// pas non plus dans les autres suivis. Les noms ne sont gardés nulle part : ni
 // base, ni journal, seulement ce créneau, le temps de la requête.
-func (s *Service) deliverBrowse(result agentwire.ActionResult) bool {
+func (s *Service) deliverBrowse(machineID string, result agentwire.ActionResult) bool {
 	s.browseMu.Lock()
 	slot, found := s.browses[result.RunID]
 	s.browseMu.Unlock()
 	if !found {
 		return false
+	}
+	if slot.machineID != machineID {
+		s.logger.Warn("restic browse result from another machine dropped", "run_id", result.RunID, "reporter", machineID, "target", slot.machineID)
+		return true
 	}
 	if agentState(result.State) != StateRunning {
 		slot.once.Do(func() {
