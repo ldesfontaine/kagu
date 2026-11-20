@@ -14,6 +14,10 @@ const maxLines = 1200;
 const trimTo = 800;
 const tail = 100;
 
+// L'agent coupe un suivi à 15 minutes (dockerwatch.MaxFollowDuration) : une
+// fin qui tombe après ce délai n'est pas voulue, le suivi se rouvre.
+const followLimitMs = 15 * 60 * 1000;
+
 type Status = "connecting" | "live" | "fallback" | "ended" | "error";
 
 interface Shown extends LogLine {
@@ -30,6 +34,7 @@ export function LogViewer({ containerID }: { containerID: string }) {
   const [status, setStatus] = useState<Status>("connecting");
   const [error, setError] = useState<ApiError | null>(null);
   const [following, setFollowing] = useState(true);
+  const [reopened, setReopened] = useState(0);
   const nextKey = useRef(1);
   const stickToBottom = useRef(true);
   const pane = useRef<HTMLDivElement>(null);
@@ -62,6 +67,7 @@ export function LogViewer({ containerID }: { containerID: string }) {
     setError(null);
     setStatus("connecting");
     let received = false;
+    const openedAt = Date.now();
     // Un identifiant qui n'en a pas la forme : rien ne part, l'erreur se dit.
     let path: string;
     try {
@@ -80,8 +86,12 @@ export function LogViewer({ containerID }: { containerID: string }) {
     });
     source.addEventListener("end", (event: MessageEvent<string>) => {
       source.close();
-      setFollowing(false);
       const payload = JSON.parse(event.data) as { error?: string };
+      if (!payload.error && Date.now() - openedAt >= followLimitMs) {
+        setReopened((count) => count + 1);
+        return;
+      }
+      setFollowing(false);
       if (payload.error) {
         setError(new ApiError(502, payload.error));
         setStatus("error");
@@ -99,7 +109,7 @@ export function LogViewer({ containerID }: { containerID: string }) {
       }
     };
     return () => source.close();
-  }, [containerID, following, append, fetchOnce]);
+  }, [containerID, following, reopened, append, fetchOnce]);
 
   useEffect(() => {
     const element = pane.current;

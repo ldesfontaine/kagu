@@ -20,6 +20,14 @@ const (
 	LogsUnavailable = "service.logs_failed"
 )
 
+// Les bornes que l'agent tient lui-même sur les suivis qu'il sert : un
+// serveur compromis ne tient pas les siennes (container.MaxFollowsPerMachine
+// reste celle du serveur, distincte). Valeurs fixes.
+const (
+	MaxAgentFollows   = 8
+	MaxFollowDuration = 15 * time.Minute
+)
+
 // containerIDPattern est un identifiant Docker complet : 64 hexadécimaux
 // minuscules. Rien d'autre ne part vers l'API (un chemin, un nom, un
 // identifiant tronqué ne passent pas).
@@ -34,8 +42,8 @@ var inventoryWait = 10 * time.Second
 const logIDPrefix = 12
 
 // OpenLogs sert un journal par lots : toutes les secondes ou dès 64 lignes.
-// Le canal se ferme après le lot final, Done ou Error. Au-delà de quatre
-// suivis, refusé tout de suite. La commande n'est pas signée : seul le
+// Le canal se ferme après le lot final, Done ou Error. Au-delà de
+// MaxAgentFollows suivis, refusé tout de suite. La commande n'est pas signée : seul le
 // journal d'un conteneur que l'agent a lui-même rapporté s'ouvre, et le
 // refus tombe avant tout appel à Docker.
 func (w *Watcher) OpenLogs(ctx context.Context, request container.LogRequest) (<-chan container.LogBatch, error) {
@@ -103,7 +111,7 @@ func clip(value string, limit int) string {
 func (w *Watcher) takeFollow() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.follows >= container.MaxFollowsPerMachine {
+	if w.follows >= MaxAgentFollows {
 		return false
 	}
 	w.follows++

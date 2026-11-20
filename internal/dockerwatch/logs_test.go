@@ -283,3 +283,30 @@ func TestRun_KnowsEveryContainerBeforeReportingIt(t *testing.T) {
 		t.Fatalf("rapportés avant d'être connus: %v", sink.unknown)
 	}
 }
+
+// R-A4-22 : l'agent borne lui-même ses suivis, sans attendre le serveur :
+// huit ouverts, le neuvième refusé « service.logs_busy », quinze minutes
+// chacun. La borne du serveur reste la sienne, à quatre.
+func TestR_A4_22(t *testing.T) {
+	if MaxAgentFollows != 8 || MaxFollowDuration != 15*time.Minute {
+		t.Fatalf("bornes de l'agent = %d, %v", MaxAgentFollows, MaxFollowDuration)
+	}
+	if container.MaxFollowsPerMachine != 4 {
+		t.Fatalf("la borne du serveur a bougé : %d", container.MaxFollowsPerMachine)
+	}
+	watcher := newWatcher(serve(t, newDaemon(t, true).mux), newSink())
+	watcher.rememberAll([]string{fixtureID})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for i := 0; i < MaxAgentFollows; i++ {
+		if _, err := watcher.OpenLogs(ctx, container.LogRequest{ContainerID: fixtureID, Follow: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if batch := firstBatch(t, watcher, container.LogRequest{ContainerID: fixtureID, Follow: true}); batch.Error != LogsBusy {
+		t.Fatalf("le neuvième suivi : %+v", batch)
+	}
+	if LogsBusy != "service.logs_busy" {
+		t.Fatalf("clé figée changée : %s", LogsBusy)
+	}
+}
