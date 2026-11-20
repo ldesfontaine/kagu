@@ -117,6 +117,7 @@ var (
 	ErrChannelHomeserver      = refusal.Invalid("channel.matrix_homeserver_invalid", "alert: matrix homeserver must be an https url")
 	ErrChannelRoomInvalid     = refusal.Invalid("channel.matrix_room_invalid", "alert: matrix room id invalid")
 	ErrChannelTokenMissing    = refusal.Invalid("channel.matrix_token_missing", "alert: matrix access token missing")
+	ErrChannelSecretRequired  = refusal.Invalid("channel.secret_required", "alert: matrix token required when the homeserver changes")
 	ErrTooManyChannels        = refusal.Invalid("channel.too_many", "alert: too many channels")
 )
 

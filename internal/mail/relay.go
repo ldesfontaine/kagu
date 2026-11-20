@@ -65,6 +65,13 @@ func (r Relay) Configured() bool {
 	return r.Host != ""
 }
 
+// SameDestination dit si les deux relais mènent au même endroit, de la
+// même façon : hôte, port et mode TLS. Un mot de passe n'a de sens que là
+// où il a été donné ; l'expéditeur et l'identifiant n'y changent rien.
+func (r Relay) SameDestination(other Relay) bool {
+	return strings.EqualFold(r.Host, other.Host) && r.Port == other.Port && r.TLS == other.TLS
+}
+
 // Validate vérifie ce qu'on peut vérifier sans réseau. Un relais en clair
 // nommé par son nom se revérifie à la connexion, sur l'adresse obtenue.
 func (r Relay) Validate() error {

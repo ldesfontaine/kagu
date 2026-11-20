@@ -1,6 +1,7 @@
 package alert
 
 import (
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -52,8 +53,12 @@ func channelEvent(action audit.Action, written Channel) audit.Event {
 	}
 }
 
-func channelUpdateEvent(written Channel, urlChanged, secretChanged bool) audit.Event {
+func channelUpdateEvent(written Channel, previousURL string, urlChanged, secretChanged bool) audit.Event {
 	event := channelEvent(audit.ChannelUpdate, written)
+	if urlChanged {
+		event.Details["previous_host"] = urlHost(previousURL)
+		event.Details["host"] = urlHost(written.URL)
+	}
 	event.Details["url_changed"] = strconv.FormatBool(urlChanged)
 	event.Details["secret_changed"] = strconv.FormatBool(secretChanged)
 	return event
@@ -73,4 +78,14 @@ func muteEvent(action audit.Action, written Mute) audit.Event {
 			"public_title": written.PublicTitle,
 		},
 	}
+}
+
+// urlHost rend l'hôte d'une adresse, sans identifiants ni chemin : l'adresse
+// entière peut porter un secret et n'entre jamais dans le journal.
+func urlHost(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return parsed.Hostname()
 }
