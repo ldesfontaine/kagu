@@ -111,3 +111,8 @@ test("des invités limités montrent le champ des numéros, et un numéro invali
   expect(markup).toContain("api_token.reach_guests_label");
   expect(markup).toContain("api_token.reach_guests_invalid");
 });
+
+test("le formulaire dit où vit le jeton, pour un client local et pour mcp-maison (R-G2-8)", () => {
+  const markup = renderToStaticMarkup(<APITokensBlock state={state([])} reload={() => {}} />);
+  expect(markup).toContain("api_token.home");
+});

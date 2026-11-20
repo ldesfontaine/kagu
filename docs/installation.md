@@ -774,7 +774,8 @@ sous `state_dir`, en `0700` ; l'interface et l'API ne le réaffichent jamais.
 ## Brancher un agent IA
 
 openCloud ne parle pas MCP lui-même. **mcp-maison**, un serveur MCP à part,
-tourne sur la machine openCloud dans Docker, lit l'API avec un **jeton d'API
+tourne sur la machine openCloud dans Docker (réseau `bridge`, pas
+celui de l'hôte), lit l'API avec un **jeton d'API
 en lecture**, et sert ses outils à Claude (claude.ai, Claude Code) ou à tout
 client MCP. Chaque personne s'y connecte par l'IdP OIDC de l'opérateur
 (Authelia, Authentik, Keycloak, GitLab). openCloud marche sans lui.
@@ -784,12 +785,27 @@ client MCP. Chaque personne s'y connecte par l'IdP OIDC de l'opérateur
 | Docker Compose 2.24 ou plus sur la machine openCloud | mcp-maison est une image épinglée |
 | Un IdP OIDC | La seule identité que mcp-maison accepte en production |
 | Un nom, `mcp.example.org`, routé par Traefik vers mcp-maison | claude.ai le joint en HTTPS |
-| Le port 3000 libre sur l'hôte de `listen` | mcp-maison écoute à côté d'openCloud |
+| Le port 3000 libre sur la machine | mcp-maison y est publié (`MCP_HOST`), à côté d'openCloud |
 
 **1. Le jeton.** Paramètres → **Agent IA** → **Jetons d'API** → nom « mcp-maison », échéance →
 **Créer**. Trois lignes s'affichent une fois : `MCP_HOST`, `OPENCLOUD_URL`
 (tirés de `listen` : mcp-maison joint openCloud en direct, jamais par Traefik
 ni le SSO, qui arrêterait le jeton) et `OPENCLOUD_TOKEN`.
+
+Le jeton ne sert qu'à **mcp-maison** : un autre client (Claude Code sur votre
+poste, un script) a le sien. Il vit dans le `.env` de mcp-maison, sur la
+machine openCloud, lisible par root seul (`0600`). Pour le faire tourner :
+créez-en un neuf, remplacez la ligne `OPENCLOUD_TOKEN`, `docker compose up -d`,
+révoquez l'ancien.
+
+mcp-maison est dans un conteneur : il joint openCloud par l'IP du pont
+`docker0` (`host-gateway`), pas par `127.0.0.1`. **`listen` doit donc viser
+cette IP** (`172.17.0.1:8080` par défaut). La page tire `OPENCLOUD_URL` de
+`listen` : si elle affiche encore `127.0.0.1`, `listen` n'a pas été changé.
+Changez-le (`config.toml`, puis `systemctl restart opencloud`) et recréez le
+jeton ; ne corrigez pas la ligne à la main. Le prix : openCloud
+n'écoute plus sur la boucle locale seule, mais sur le pont, que joignent les
+conteneurs de la machine ; le jeton les en protège, pas le réseau.
 
 **2. L'application chez l'IdP.** Retour `https://mcp.example.org/oauth/callback`,
 client confidentiel, scopes `openid profile email`. Avec Authelia
@@ -825,8 +841,8 @@ Le `.env` :
 
 ```sh
 # Les trois lignes d'openCloud (Paramètres → Agent IA → Jetons d'API), montrées une fois
-MCP_HOST=127.0.0.1
-OPENCLOUD_URL=http://127.0.0.1:8080
+MCP_HOST=172.17.0.1
+OPENCLOUD_URL=http://172.17.0.1:8080
 OPENCLOUD_TOKEN=
 # mcp-maison derrière Traefik, sous son propre nom
 MCP_PUBLIC_URL=https://mcp.example.org
@@ -873,10 +889,10 @@ sed -i 's|^\( *image:\).*|\1 mcp-maison:0b55aac|' compose.yml
 
 ```sh
 docker compose up -d && docker compose ps     # mcp : healthy
-curl -s http://127.0.0.1:3000/health           # des outils opencloud_*, skippedGroups vide
+curl -s http://172.17.0.1:3000/health           # des outils opencloud_*, skippedGroups vide
 ```
 
-Dans `/etc/opencloud/config.toml` : `mcp_url = "http://127.0.0.1:3000"` (l'hôte
+Dans `/etc/opencloud/config.toml` : `mcp_url = "http://172.17.0.1:3000"` (l'hôte
 de `MCP_HOST`), puis `systemctl restart opencloud`. Paramètres → **Agent IA** →
 **Vérifier** : « Joignable », la version, le nombre d'outils. Sous **Jetons
 d'API**, le jeton montre son dernier usage.
@@ -885,11 +901,14 @@ d'API**, le jeton montre son dernier usage.
 middleware SSO** : Claude doit atteindre `/mcp`, `/.well-known/…`,
 `/register`, `/authorize`, `/token`, `/revoke`, `/oauth/callback`.
 
-| `listen` d'openCloud | `MCP_HOST` | URL du service Traefik |
+`MCP_HOST` est l'hôte de `listen`, tel que la page l'affiche : Docker y publie
+le port 3000 de mcp-maison, et lui seul le joint.
+
+| Traefik | `listen` (donc `MCP_HOST`) | URL du service Traefik |
 | --- | --- | --- |
-| `127.0.0.1:8080` (Traefik en mode host) | `127.0.0.1` | `http://127.0.0.1:3000` |
-| `172.17.0.1:8080` (Traefik en conteneur) | `172.17.0.1` | `http://host.docker.internal:3000` |
-| L'IP privée de la machine (Traefik sur une autre machine) | cette IP | `http://<cette IP>:3000` |
+| En mode host | `172.17.0.1:8080` | `http://172.17.0.1:3000` (l'hôte joint le pont `docker0`) |
+| En conteneur | `172.17.0.1:8080` | `http://host.docker.internal:3000` |
+| Sur une autre machine | l'IP privée de la machine openCloud | `http://<cette IP>:3000` |
 
 mcp-maison accepte `OPENCLOUD_URL` en `http://` sur la boucle locale
 (`localhost`, `127.0.0.1`, `[::1]`) et vers une IP privée RFC 1918 (`10.0.0.0/8`,
@@ -918,7 +937,7 @@ http:
     mcp-maison:
       loadBalancer:
         servers:
-          - url: "http://127.0.0.1:3000"   # la colonne de droite ci-dessus
+          - url: "http://172.17.0.1:3000"   # la colonne de droite ci-dessus
 ```
 
 **6. Claude.** claude.ai : Paramètres → Connecteurs → ajouter un connecteur
