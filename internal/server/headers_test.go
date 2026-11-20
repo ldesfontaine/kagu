@@ -47,3 +47,35 @@ func TestCSP_IndexHasNoInlineScriptOrStyle(t *testing.T) {
 		}
 	}
 }
+
+// R-D5-17 : en HTTPS, serve pose lui-même HSTS et COOP ; en http://, aucun
+// HSTS (il enfermerait localhost en HTTPS pendant un an).
+func TestR_D5_17(t *testing.T) {
+	cases := []struct {
+		name      string
+		publicURL string
+		wantHSTS  string
+		wantCOOP  string
+	}{
+		{"https", "https://cloud.exemple.fr", "max-age=31536000", "same-origin"},
+		{"https en majuscules", "HTTPS://cloud.exemple.fr/", "max-age=31536000", "same-origin"},
+		{"http", "http://localhost:8080", "", ""},
+		{"sans public_url", "", "", ""},
+		{"schéma sans séparateur", "https.exemple.fr", "", ""},
+		{"https ailleurs dans l'adresse", "http://exemple.fr/?next=https://x", "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			server := newTestServer(t)
+			server.publicURL = c.publicURL
+			recorder := httptest.NewRecorder()
+			server.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+			if got := recorder.Header().Get("Strict-Transport-Security"); got != c.wantHSTS {
+				t.Errorf("Strict-Transport-Security = %q, want %q", got, c.wantHSTS)
+			}
+			if got := recorder.Header().Get("Cross-Origin-Opener-Policy"); got != c.wantCOOP {
+				t.Errorf("Cross-Origin-Opener-Policy = %q, want %q", got, c.wantCOOP)
+			}
+		})
+	}
+}

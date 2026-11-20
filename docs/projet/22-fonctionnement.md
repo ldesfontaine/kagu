@@ -4117,6 +4117,12 @@ chemin inconnu.
    `frame-ancestors *` sans `X-Frame-Options`, par une fonction testée ;
    elle ne porte aucun bouton, il n'y a rien à y détourner. Son API et
    tout le reste gardent la politique stricte.
+9. **HSTS et COOP seulement en HTTPS** : quand `public_url` est en `https://`,
+   chaque réponse de `serve` porte `Strict-Transport-Security: max-age=31536000`
+   et `Cross-Origin-Opener-Policy: same-origin` (`securityHeaders`). En
+   `http://` ou sans `public_url`, ni l'un ni l'autre : HSTS ferait retenir au
+   navigateur de ne plus joindre `localhost` qu'en HTTPS, pendant un an. Coût :
+   une fois vu, HSTS ne se retire pas avant un an côté navigateur.
 
 | Objet | Son état | Ce que le composant en fait |
 | --- | --- | --- |

@@ -47,9 +47,24 @@ func isPublicStatusPage(path string) bool {
 	return !strings.Contains(slug, "/")
 }
 
-func securityHeaders(next http.Handler) http.Handler {
+// Un an : la durée que demande la fiche D5 (R-D5-17).
+const strictTransportSecurity = "max-age=31536000"
+
+// servesOverHTTPS dit si public_url est en HTTPS. Elle seule décide de HSTS :
+// posé sur une adresse en http:// (essai local, tunnel SSH), il ferait retenir
+// au navigateur de ne plus joindre localhost qu'en HTTPS, pendant un an.
+func (s *Server) servesOverHTTPS() bool {
+	scheme, _, found := strings.Cut(s.publicURL, "://")
+	return found && strings.EqualFold(scheme, "https")
+}
+
+func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		headers := w.Header()
+		if s.servesOverHTTPS() {
+			headers.Set("Strict-Transport-Security", strictTransportSecurity)
+			headers.Set("Cross-Origin-Opener-Policy", "same-origin")
+		}
 		if isPublicStatusPage(r.URL.Path) {
 			headers.Set("Content-Security-Policy", embeddablePolicy)
 		} else {
