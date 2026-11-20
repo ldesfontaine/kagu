@@ -487,3 +487,153 @@ func TestVerbRequests_ConfirmingARequestOfARemovedVerbRefusesItAndReplaysNothing
 		t.Error("the refusal is not in the audit")
 	}
 }
+
+// confirmRequest confirme la demande comme le bouton de l'écran.
+func (ts *testServer) confirmRequest(id string) *httptest.ResponseRecorder {
+	return callAPI(ts.Server, http.MethodPost, "/api/verb-requests/"+id+"/actions/confirm", nil)
+}
+
+// requireLapsed vérifie qu'une confirmation a clos la demande « caduque » :
+// 409, la machine reste, la demande ne attend plus, l'audit garde la clôture,
+// et une seconde confirmation la voit décidée.
+func (ts *testServer) requireLapsed(t *testing.T, requestID string, before int64) {
+	t.Helper()
+	got := ts.confirmRequest(requestID)
+	if got.Code != http.StatusConflict || errorCode(t, got) != "verb_request.lapsed" {
+		t.Fatalf("confirm: %d %s", got.Code, got.Body.String())
+	}
+	if !ts.machineExists(t, remoteID) {
+		t.Fatal("a lapsed request deleted the machine")
+	}
+	if len(ts.pendingRequests(t)) != 0 {
+		t.Fatal("a lapsed request still waits")
+	}
+	lapsed := 0
+	for _, event := range ts.auditSince(t, before) {
+		switch event.Action {
+		case audit.VerbLapse:
+			lapsed++
+			if event.ObjectID != requestID || event.Actor.Kind != audit.ActorOperator {
+				t.Fatalf("event %+v", event)
+			}
+		case audit.MachineDelete:
+			t.Fatalf("a lapsed request replayed: %+v", event)
+		}
+	}
+	if lapsed != 1 {
+		t.Fatalf("%d verb.lapse events, want 1", lapsed)
+	}
+	if again := ts.confirmRequest(requestID); again.Code != http.StatusConflict || errorCode(t, again) != "verb_request.already_decided" {
+		t.Fatalf("confirm after lapse: %d %s", again.Code, again.Body.String())
+	}
+}
+
+// R-A4-16 : confirmer rejoue la demande sous le jeton qui l'a déposée ; sa
+// portée rétrécie ou son échéance passée avant la confirmation rend la demande
+// caduque, et rien n'est rejoué.
+func TestR_A4_16(t *testing.T) {
+	t.Run("a reach narrowed before the confirmation lapses the request", func(t *testing.T) {
+		server := newTestServer(t)
+		server.enroll(t, "vps-paris-1", remoteID)
+		bearer, token := server.issueWriteToken(t, "agent", "machine.delete")
+		reply := server.askDeletion(t, bearer, remoteID)
+		if _, err := server.apiTokens.SetReach(context.Background(), token.ID, apitoken.Reach{OnlyMachines: true, Machines: []string{"local"}}); err != nil {
+			t.Fatal(err)
+		}
+		server.requireLapsed(t, reply.RequestID, server.latestAuditID(t))
+	})
+	t.Run("an expired token lapses the request", func(t *testing.T) {
+		server := newTestServer(t)
+		server.enroll(t, "vps-paris-1", remoteID)
+		days := 30
+		bearer, _, err := server.apiTokens.Create(context.Background(), apitoken.Request{
+			Name: "court", Scope: apitoken.ScopeWrite, Verbs: []string{"machine.delete"}, Days: &days,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		reply := server.askDeletion(t, bearer, remoteID)
+		server.apiTokens.SetClock(func() time.Time { return testNow.Add(31 * 24 * time.Hour) })
+		server.requireLapsed(t, reply.RequestID, server.latestAuditID(t))
+	})
+	t.Run("a token still holding is replayed", func(t *testing.T) {
+		server := newTestServer(t)
+		server.enroll(t, "vps-paris-1", remoteID)
+		bearer, token := server.issueWriteToken(t, "agent", "machine.delete")
+		reply := server.askDeletion(t, bearer, remoteID)
+		if _, err := server.apiTokens.SetReach(context.Background(), token.ID, apitoken.Reach{OnlyMachines: true, Machines: []string{remoteID}}); err != nil {
+			t.Fatal(err)
+		}
+		if got := server.confirmRequest(reply.RequestID); got.Code != http.StatusNoContent || server.machineExists(t, remoteID) {
+			t.Fatalf("confirm: %d %s", got.Code, got.Body.String())
+		}
+	})
+	t.Run("the replayed handler sees the token that filed the request", func(t *testing.T) {
+		server := newTestServer(t)
+		token := apitoken.Token{ID: "tok-1", Name: "agent", Scope: apitoken.ScopeWrite}
+		request := verbrequest.Request{ID: "req-1", Verb: "machine.delete", Params: map[string]string{"id": remoteID}, Body: `{"variables":{"A":"b"}}`, OnBehalfOf: "alice-sub"}
+		person := httptest.NewRequest(http.MethodPost, "/api/verb-requests/req-1/actions/confirm", nil)
+		person = person.WithContext(audit.WithActor(person.Context(), audit.Operator("lucas")))
+
+		replay, err := verbReplayOf(person.Context(), request, token, http.MethodDelete, "/api/machines/{id}")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Un champ réservé à la personne se juge dans le handler par apiTokenFrom :
+		// sans le jeton dans le contexte, il passerait.
+		reserved := func(w http.ResponseWriter, r *http.Request) {
+			if _, byToken := apiTokenFrom(r.Context()); byToken {
+				server.apiRefuse(w, http.StatusForbidden, "deploy.variables_from_token")
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}
+		got := httptest.NewRecorder()
+		reserved(got, replay)
+		if got.Code != http.StatusForbidden {
+			t.Fatalf("replay: %d, the token was not in the context", got.Code)
+		}
+		if seen, _ := apiTokenFrom(replay.Context()); seen.ID != token.ID {
+			t.Fatalf("token %+v", seen)
+		}
+		if actor := audit.ActorFrom(replay.Context()); actor.Kind != audit.ActorOperator || actor.Name != "lucas" || actor.OnBehalfOf != "alice-sub" {
+			t.Fatalf("actor %+v", actor)
+		}
+		if replay.PathValue("id") != remoteID || replay.URL.Path != "/api/machines/"+remoteID {
+			t.Fatalf("replay %s %q", replay.URL.Path, replay.PathValue("id"))
+		}
+	})
+}
+
+// R-GESTE-8 : confirmer une demande la rejoue sous le jeton qui l'a déposée ;
+// un jeton révoqué rend sa demande caduque, sans rejeu.
+func TestR_GESTE_8(t *testing.T) {
+	t.Run("a revoked token leaves nothing to confirm", func(t *testing.T) {
+		server := newTestServer(t)
+		server.enroll(t, "vps-paris-1", remoteID)
+		bearer, token := server.issueWriteToken(t, "agent", "machine.delete")
+		reply := server.askDeletion(t, bearer, remoteID)
+		if got := callAPI(server.Server, http.MethodDelete, "/api/settings/api-tokens/"+token.ID, nil); got.Code != http.StatusNoContent {
+			t.Fatalf("revoke: %d %s", got.Code, got.Body.String())
+		}
+		if got := server.confirmRequest(reply.RequestID); got.Code != http.StatusNotFound || !server.machineExists(t, remoteID) {
+			t.Fatalf("confirm: %d, machine kept: %v", got.Code, server.machineExists(t, remoteID))
+		}
+	})
+	t.Run("a token that lost its scope is not replayed", func(t *testing.T) {
+		server := newTestServer(t)
+		server.enroll(t, "vps-paris-1", remoteID)
+		const otherID = "99999999-2222-4333-8444-555555555555"
+		server.enroll(t, "vps-lyon-2", otherID)
+		bearer, token := server.issueWriteToken(t, "agent", "machine.delete")
+		reply := server.askDeletion(t, bearer, remoteID)
+		if _, err := server.apiTokens.SetReach(context.Background(), token.ID, apitoken.Reach{OnlyMachines: true, Machines: []string{otherID}}); err != nil {
+			t.Fatal(err)
+		}
+		server.requireLapsed(t, reply.RequestID, server.latestAuditID(t))
+		if !server.machineExists(t, otherID) {
+			t.Fatal("the other machine was deleted")
+		}
+	})
+}

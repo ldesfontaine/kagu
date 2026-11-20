@@ -131,12 +131,27 @@ func (s *Server) admitAPIToken(w http.ResponseWriter, r *http.Request, bearer st
 	next(w, r.WithContext(ctx))
 }
 
-// admitVerb juge l'action d'un verbe pour ce jeton, déjà vérifié : une
-// portée read n'écrit jamais (route_forbidden) ; un verbe que le jeton ne
-// porte pas est refusé et journalisé (verb_forbidden) ; un jeton qui va trop
-// vite attend (429). Le débit se compte après le droit : un refus ne coûte
-// rien à l'agent, il se voit à l'audit.
+// admitVerb juge l'action d'un verbe pour ce jeton, déjà vérifié : ce que
+// admitVerbRights tient, puis le débit (429 pour un jeton qui va trop vite).
+// Le débit se compte après le droit : un refus ne coûte rien à l'agent, il se
+// voit à l'audit.
 func (s *Server) admitVerb(w http.ResponseWriter, r *http.Request, token apitoken.Token, verbID string) bool {
+	if !s.admitVerbRights(w, r, token, verbID) {
+		return false
+	}
+	if !s.verbLimit.Allow(token.ID) {
+		s.logger.Warn("api token rate limited", "token_id", token.ID, "verb", verbID)
+		httpx.WriteTooMany(w)
+		return false
+	}
+	return true
+}
+
+// admitVerbRights juge le droit d'un jeton à un verbe, sans débit : une portée
+// read n'écrit jamais (route_forbidden) ; un verbe que le jeton ne porte pas
+// est refusé et journalisé (verb_forbidden) ; la machine visée tient dans sa
+// portée (admitReach). Confirmer une demande le rejoue tel quel.
+func (s *Server) admitVerbRights(w http.ResponseWriter, r *http.Request, token apitoken.Token, verbID string) bool {
 	if token.Scope != apitoken.ScopeWrite {
 		s.apiRefuse(w, http.StatusForbidden, codeAPITokenRouteForbidden)
 		return false
@@ -150,15 +165,7 @@ func (s *Server) admitVerb(w http.ResponseWriter, r *http.Request, token apitoke
 		s.apiRefuse(w, http.StatusForbidden, codeAPITokenVerbForbidden)
 		return false
 	}
-	if !s.admitReach(w, r, token, verbID) {
-		return false
-	}
-	if !s.verbLimit.Allow(token.ID) {
-		s.logger.Warn("api token rate limited", "token_id", token.ID, "verb", verbID)
-		httpx.WriteTooMany(w)
-		return false
-	}
-	return true
+	return s.admitReach(w, r, token, verbID)
 }
 
 // admitReach juge la machine et l'invité que le verbe vise contre la portée

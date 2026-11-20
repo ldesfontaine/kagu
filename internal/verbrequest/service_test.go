@@ -107,7 +107,7 @@ func TestConfirm_OnlyOneOfTwoSimultaneousConfirmationsWins(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
-			_, err := b.Confirm(ctx, request.ID, offeredAll)
+			_, err := b.Confirm(ctx, request.ID, offeredAll, holdsAlways)
 			switch {
 			case err == nil:
 				wins.Add(1)
@@ -132,13 +132,13 @@ func TestConfirm_RefusesAnExpiredAndAnUnknownRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	*b.now = start.Add(verbrequest.TTL)
-	if _, err := b.Confirm(ctx, request.ID, offeredAll); !errors.Is(err, verbrequest.ErrExpired) {
+	if _, err := b.Confirm(ctx, request.ID, offeredAll, holdsAlways); !errors.Is(err, verbrequest.ErrExpired) {
 		t.Fatalf("échue : %v", err)
 	}
 	if _, err := b.Reject(ctx, request.ID); !errors.Is(err, verbrequest.ErrExpired) {
 		t.Fatalf("échue, refus : %v", err)
 	}
-	if _, err := b.Confirm(ctx, "inconnue", offeredAll); !errors.Is(err, verbrequest.ErrNotFound) {
+	if _, err := b.Confirm(ctx, "inconnue", offeredAll, holdsAlways); !errors.Is(err, verbrequest.ErrNotFound) {
 		t.Fatalf("inconnue : %v", err)
 	}
 }
@@ -160,6 +160,8 @@ func TestSubmit_AnExpiredRequestFreesTheCeiling(t *testing.T) {
 
 func offeredAll(string) bool { return true }
 
+func holdsAlways(verbrequest.Request) (bool, error) { return true, nil }
+
 // Un verbe retiré du registre depuis le dépôt de la demande : la confirmation
 // la refuse (elle ne reste pas en attente), rien n'est rejoué, et une seconde
 // tentative la voit décidée.
@@ -171,13 +173,52 @@ func TestConfirm_ARequestOfARemovedVerbIsRefusedNotReplayed(t *testing.T) {
 		t.Fatal(err)
 	}
 	offeredNothing := func(string) bool { return false }
-	if _, err := b.Confirm(ctx, request.ID, offeredNothing); !errors.Is(err, verbrequest.ErrVerbRemoved) {
+	if _, err := b.Confirm(ctx, request.ID, offeredNothing, holdsAlways); !errors.Is(err, verbrequest.ErrVerbRemoved) {
 		t.Fatalf("verbe retiré : %v", err)
 	}
 	if pending, _ := b.ListPending(ctx); len(pending) != 0 {
 		t.Fatalf("la demande reste en attente : %+v", pending)
 	}
-	if _, err := b.Confirm(ctx, request.ID, offeredAll); !errors.Is(err, verbrequest.ErrDecided) {
+	if _, err := b.Confirm(ctx, request.ID, offeredAll, holdsAlways); !errors.Is(err, verbrequest.ErrDecided) {
 		t.Fatalf("seconde confirmation : %v", err)
+	}
+}
+
+// R-A4-16 : un jeton qui ne tient plus clôt la demande « caduque » ; elle ne
+// reste pas en attente, ne se confirme plus, et l'audit garde la clôture.
+func TestConfirm_ARequestWhoseTokenNoLongerHoldsLapses(t *testing.T) {
+	b := newBench(t)
+	ctx := context.Background()
+	request, err := b.Submit(ctx, b.submission("m1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	notHolding := func(verbrequest.Request) (bool, error) { return false, nil }
+	if _, err := b.Confirm(ctx, request.ID, offeredAll, notHolding); !errors.Is(err, verbrequest.ErrLapsed) {
+		t.Fatalf("jeton qui ne tient plus : %v", err)
+	}
+	if pending, _ := b.ListPending(ctx); len(pending) != 0 {
+		t.Fatalf("la demande reste en attente : %+v", pending)
+	}
+	if _, err := b.Confirm(ctx, request.ID, offeredAll, holdsAlways); !errors.Is(err, verbrequest.ErrDecided) {
+		t.Fatalf("confirmation d'une demande caduque : %v", err)
+	}
+}
+
+// Une erreur en relisant le jeton n'est ni une confirmation ni une clôture :
+// la demande attend toujours.
+func TestConfirm_AFailureRereadingTheTokenLeavesTheRequestWaiting(t *testing.T) {
+	b := newBench(t)
+	ctx := context.Background()
+	request, err := b.Submit(ctx, b.submission("m1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	broken := errors.New("base indisponible")
+	if _, err := b.Confirm(ctx, request.ID, offeredAll, func(verbrequest.Request) (bool, error) { return false, broken }); !errors.Is(err, broken) {
+		t.Fatalf("erreur de relecture : %v", err)
+	}
+	if pending, _ := b.ListPending(ctx); len(pending) != 1 {
+		t.Fatalf("la demande n'attend plus : %+v", pending)
 	}
 }

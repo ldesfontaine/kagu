@@ -243,6 +243,7 @@ const (
 	VerbRequest Action = "verb.request"
 	VerbReject  Action = "verb.reject"
 	VerbExpire  Action = "verb.expire"
+	VerbLapse   Action = "verb.lapse"
 )
 
 func Actions() []Action {
@@ -270,7 +271,7 @@ func Actions() []Action {
 		BackupKeyringCreate, BackupKeyringReplace, BackupDestinationCreate, BackupDestinationDelete,
 		BackupPlanUpdate, BackupPlanDelete, BackupPlanRun,
 		FirewallCreate, FirewallUpdate, FirewallDelete,
-		VerbRequest, VerbReject, VerbExpire,
+		VerbRequest, VerbReject, VerbExpire, VerbLapse,
 		ResticTargetSetup, ResticTargetRemove, ResticBackupCreate, ResticBackupUpdate, ResticBackupDelete, ResticBackupRetentionLower, ResticBackupRun, ResticBackupVerify, ResticBackupBrowse, ResticBackupRestore,
 	}
 }

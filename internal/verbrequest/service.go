@@ -140,17 +140,40 @@ func (s *Service) ListPending(ctx context.Context) ([]Request, error) {
 // reçoit ErrDecided. Le service ne rejoue rien lui-même. offered dit si le
 // registre propose encore le verbe : sinon (un verbe retiré depuis le dépôt
 // de la demande), la demande est refusée et ErrVerbRemoved rendu, sans rien
-// rejouer.
-func (s *Service) Confirm(ctx context.Context, id string, offered func(verb string) bool) (Request, error) {
+// rejouer. holds dit si le jeton qui a déposé la demande la permet encore
+// (R-A4-16) : sinon la demande est close « caduque » et ErrLapsed rendu, sans
+// rien rejouer.
+func (s *Service) Confirm(ctx context.Context, id string, offered func(verb string) bool, holds func(Request) (bool, error)) (Request, error) {
 	s.Sweep(ctx)
 	request, err := s.store.GetVerbRequest(ctx, id)
-	if err == nil && request.State == StateAwaiting && !offered(request.Verb) {
-		if _, err := s.Reject(ctx, id); err != nil {
+	if err == nil && request.State == StateAwaiting {
+		if !offered(request.Verb) {
+			if _, err := s.Reject(ctx, id); err != nil {
+				return Request{}, err
+			}
+			return Request{}, ErrVerbRemoved
+		}
+		allowed, err := holds(request)
+		if err != nil {
 			return Request{}, err
 		}
-		return Request{}, ErrVerbRemoved
+		if !allowed {
+			return Request{}, s.lapse(ctx, id)
+		}
 	}
 	return s.decide(ctx, id, StateConfirmed)
+}
+
+// lapse clôt la demande dont le jeton ne tient plus et rend ErrLapsed ; si
+// quelqu'un l'a décidée entre-temps, c'est cette décision qui est rendue.
+func (s *Service) lapse(ctx context.Context, id string) error {
+	request, err := s.decide(ctx, id, StateLapsed)
+	if err != nil {
+		return err
+	}
+	s.logger.Info("verb request lapsed", "request_id", request.ID, "verb", request.Verb, "token_id", request.TokenID)
+	s.auditor.Record(ctx, requestEvent(audit.VerbLapse, request))
+	return ErrLapsed
 }
 
 // Reject refuse la demande : rien n'est exécuté, l'audit garde le refus.
