@@ -41,7 +41,7 @@ func TestR_D5_19(t *testing.T) {
 		Name: "api", Kind: probe.KindHTTP, Target: "https://u:hunter2zz@h.example.org/", MachineID: machine.LocalID,
 	}, testNow)
 
-	if err := server.probes.RemoveTargetPasswords(ctx); err != nil {
+	if _, err := server.probes.RemoveTargetPasswords(ctx); err != nil {
 		t.Fatal(err)
 	}
 
