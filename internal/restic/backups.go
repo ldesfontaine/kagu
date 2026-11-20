@@ -364,7 +364,7 @@ func judgeDockerRight(source machine.Status, content ServiceContent) error {
 // et ce qui est sauvegardé ne changent pas (un autre dépôt, une autre
 // sauvegarde).
 func (s *Service) UpdateBackup(ctx context.Context, sourceID, id, name string, retention Retention, confirmName string) (Backup, error) {
-	current, err := s.ownedBackup(ctx, sourceID, id)
+	current, err := s.OwnedBackup(ctx, sourceID, id)
 	if err != nil {
 		return Backup{}, err
 	}
@@ -401,7 +401,7 @@ func (s *Service) UpdateBackup(ctx context.Context, sourceID, id, name string, r
 // cible partie, la cible ferme le dépôt (restic.user.remove) et les mots de
 // passe du lien s'effacent de la base.
 func (s *Service) DeleteBackup(ctx context.Context, sourceID, id string) error {
-	current, err := s.ownedBackup(ctx, sourceID, id)
+	current, err := s.OwnedBackup(ctx, sourceID, id)
 	if err != nil {
 		return err
 	}
@@ -415,9 +415,10 @@ func (s *Service) DeleteBackup(ctx context.Context, sourceID, id string) error {
 	return nil
 }
 
-// ownedBackup rend la sauvegarde si elle part bien de cette source : la
-// route nomme la machine, la portée d'un jeton se juge sur elle.
-func (s *Service) ownedBackup(ctx context.Context, sourceID, id string) (Backup, error) {
+// OwnedBackup rend la sauvegarde si elle part bien de cette source : la
+// route nomme la machine, la portée d'un jeton se juge sur elle, et sur la
+// cible de la sauvegarde quand l'ordre y part.
+func (s *Service) OwnedBackup(ctx context.Context, sourceID, id string) (Backup, error) {
 	current, err := s.store.GetResticBackup(ctx, id)
 	if err != nil {
 		return Backup{}, err

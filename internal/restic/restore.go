@@ -35,7 +35,7 @@ type RestoreRequest struct {
 // signal de la source. L'ordre ne porte aucun secret. L'audit garde qui, quoi,
 // quel instantané et la destination exacte.
 func (s *Service) Restore(ctx context.Context, sourceID, id string, request RestoreRequest) (action.Run, error) {
-	current, err := s.ownedBackup(ctx, sourceID, id)
+	current, err := s.OwnedBackup(ctx, sourceID, id)
 	if err != nil {
 		return action.Run{}, err
 	}

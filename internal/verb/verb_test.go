@@ -186,3 +186,31 @@ func TestDefault_ResticVerbsAreTheFourOfTheTicketAndNoWrite(t *testing.T) {
 		t.Errorf("verbes restic %v, attendus %v", got, want)
 	}
 }
+
+// Un verbe de dépôt restic vise le lien : {id} est la source, la cible suit.
+func TestRegister_JudgesTheTargetKind(t *testing.T) {
+	link := valid()
+	link.Target = TargetResticLink
+	if err := (&Registry{}).Register(link); err != nil {
+		t.Fatalf("restic_link: %v", err)
+	}
+	unknown := valid()
+	unknown.Target = "elsewhere"
+	if err := (&Registry{}).Register(unknown); !errors.Is(err, ErrTargetInvalid) {
+		t.Fatalf("unknown target: got %v, want ErrTargetInvalid", err)
+	}
+}
+
+// R-A4-11 : verify et browse envoient leur ordre à la cible du dépôt, run et
+// restore à la source seule.
+func TestDefault_ResticVerbsThatReachTheTargetJudgeTheLink(t *testing.T) {
+	for id, want := range map[string]Target{
+		"restic.backup.verify": TargetResticLink, "restic.backup.browse": TargetResticLink,
+		"restic.backup.run": TargetMachine, "restic.backup.restore": TargetMachine,
+	} {
+		found, ok := Default.Lookup(id)
+		if !ok || found.Target != want {
+			t.Errorf("%s: target %q, want %q", id, found.Target, want)
+		}
+	}
+}

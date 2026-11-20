@@ -19,6 +19,7 @@ import (
 	"github.com/ldesfontaine/opencloud/internal/audit"
 	"github.com/ldesfontaine/opencloud/internal/heartbeat"
 	"github.com/ldesfontaine/opencloud/internal/probe"
+	"github.com/ldesfontaine/opencloud/internal/restic"
 	"github.com/ldesfontaine/opencloud/internal/server/httpx"
 	"github.com/ldesfontaine/opencloud/internal/verb"
 )
@@ -168,18 +169,18 @@ func (s *Server) admitVerbRights(w http.ResponseWriter, r *http.Request, token a
 	return s.admitReach(w, r, token, verbID)
 }
 
-// admitReach juge la machine et l'invité que le verbe vise contre la portée
-// du jeton : 403 out_of_scope, journalisé comme un refus de verbe (même
-// limite de trace). Un jeton sans limite ne coûte aucune lecture. Ce qu'on ne
-// sait pas rattacher à une machine (sonde ou tâche inconnue, tâche sans
-// machine) est hors portée : le doute ferme, et un 404 ne dirait pas à un jeton
-// limité que l'objet existe ailleurs.
+// admitReach juge chaque machine qui recevra un ordre, et l'invité que le
+// verbe vise, contre la portée du jeton : 403 out_of_scope, journalisé comme
+// un refus de verbe (même limite de trace). Un jeton sans limite ne coûte
+// aucune lecture. Ce qu'on ne sait pas rattacher à une machine (sonde ou
+// tâche inconnue, tâche sans machine) est hors portée : le doute ferme, et un
+// 404 ne dirait pas à un jeton limité que l'objet existe ailleurs.
 func (s *Server) admitReach(w http.ResponseWriter, r *http.Request, token apitoken.Token, verbID string) bool {
 	if !token.Reach.IsLimited() {
 		return true
 	}
 	offered, _ := verb.Default.Lookup(verbID)
-	machineID, err := s.machineTargeted(r, offered)
+	machineIDs, err := s.machinesTargeted(r, offered)
 	if err != nil {
 		s.apiInternalError(w, r, err)
 		return false
@@ -189,37 +190,48 @@ func (s *Server) admitReach(w http.ResponseWriter, r *http.Request, token apitok
 		// Un numéro illisible reste zéro : aucune liste ne le contient.
 		vmid, _ = strconv.Atoi(r.PathValue("vmid"))
 	}
-	if token.Reach.AllowsMachine(machineID) && (!offered.TargetsGuest() || token.Reach.AllowsGuest(vmid)) {
+	refusedIndex := slices.IndexFunc(machineIDs, func(machineID string) bool { return !token.Reach.AllowsMachine(machineID) })
+	if refusedIndex < 0 && (!offered.TargetsGuest() || token.Reach.AllowsGuest(vmid)) {
 		return true
 	}
+	// Seul l'invité est refusé : la machine nommée à l'audit est la première.
+	refused := machineIDs[max(refusedIndex, 0)]
 	if s.verbDenyLimit.Allow(token.ID) {
 		ctx := audit.WithActor(r.Context(), audit.API(token.ID, token.Name, onBehalfOf(r)))
-		s.apiTokens.RecordOutOfScope(ctx, token, verbID, printable(machineID, maxAuditedMachineRunes), vmid)
+		s.apiTokens.RecordOutOfScope(ctx, token, verbID, printable(refused, maxAuditedMachineRunes), vmid)
 	}
 	s.apiRefuse(w, http.StatusForbidden, codeAPITokenOutOfScope)
 	return false
 }
 
-// machineTargeted rend la machine dont le verbe touche l'agent : celle du
-// chemin, ou celle d'une sonde ou d'une tâche. Vide quand la sonde ou la
-// tâche n'existe pas, ou que la tâche n'a pas de machine.
-func (s *Server) machineTargeted(r *http.Request, offered verb.Verb) (string, error) {
+// machinesTargeted rend les machines qui recevront un ordre du verbe : celle
+// du chemin, celle d'une sonde ou d'une tâche, ou, pour un dépôt restic, la
+// source puis la cible. Une machine vide veut dire sonde ou tâche inconnue, ou
+// tâche sans machine. Une sauvegarde inconnue ou d'une autre source ne
+// désigne aucune cible : la route répondra 404, rien ne part.
+func (s *Server) machinesTargeted(r *http.Request, offered verb.Verb) ([]string, error) {
 	id := r.PathValue("id")
 	switch offered.Target {
 	case verb.TargetProbe:
 		found, err := s.reader.GetProbe(r.Context(), id)
 		if errors.Is(err, probe.ErrNotFound) {
-			return "", nil
+			return []string{""}, nil
 		}
-		return found.MachineID, err
+		return []string{found.MachineID}, err
 	case verb.TargetJob:
 		found, err := s.reader.GetHeartbeat(r.Context(), id)
 		if errors.Is(err, heartbeat.ErrNotFound) {
-			return "", nil
+			return []string{""}, nil
 		}
-		return found.MachineID, err
+		return []string{found.MachineID}, err
+	case verb.TargetResticLink:
+		found, err := s.restic.OwnedBackup(r.Context(), id, r.PathValue("backup"))
+		if errors.Is(err, restic.ErrBackupNotFound) {
+			return []string{id}, nil
+		}
+		return []string{id, found.TargetMachineID}, err
 	default:
-		return id, nil
+		return []string{id}, nil
 	}
 }
 

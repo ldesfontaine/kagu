@@ -49,7 +49,7 @@ func verifyDue(now time.Time, verify VerifyOutcome) bool {
 // la cible rapporte ses comptes par son signal. Un dépôt qui reçoit déjà une
 // sauvegarde, une rétention ou une vérification refuse.
 func (s *Service) VerifyNow(ctx context.Context, sourceID, id string) (action.Run, error) {
-	current, err := s.ownedBackup(ctx, sourceID, id)
+	current, err := s.OwnedBackup(ctx, sourceID, id)
 	if err != nil {
 		return action.Run{}, err
 	}

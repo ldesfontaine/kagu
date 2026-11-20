@@ -379,6 +379,7 @@ type ResticService interface {
 	UpdateBackup(ctx context.Context, sourceID, id, name string, retention restic.Retention, confirmName string) (restic.Backup, error)
 	DeleteBackup(ctx context.Context, sourceID, id string) error
 	RunNow(ctx context.Context, sourceID, id string) (action.Run, error)
+	OwnedBackup(ctx context.Context, sourceID, id string) (restic.Backup, error)
 	VerifyNow(ctx context.Context, sourceID, id string) (action.Run, error)
 	Browse(ctx context.Context, sourceID, id string, request restic.BrowseRequest) (agentwire.ResticBrowseReport, error)
 	Restore(ctx context.Context, sourceID, id string, request restic.RestoreRequest) (action.Run, error)

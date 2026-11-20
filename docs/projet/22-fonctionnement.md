@@ -5036,9 +5036,11 @@ création et modifiables ensuite :
 | `probe.pause`, `probe.resume` | La machine **de la sonde** : celle qui sonde (`probes.machine_id`), pas la cible sondée |
 | `job.pause`, `job.resume` | La machine de la tâche. Une tâche **sans machine** n'est dans aucune liste : un jeton limité aux machines est refusé |
 | `proxmox.vm.*` | L'hôte du chemin (`{id}`) jugé par la liste des **machines**, **et** l'invité (`{vmid}`) jugé par la liste des **invités**. Les deux doivent passer |
+| `restic.backup.verify`, `restic.backup.browse` | La **source** du chemin (`{id}`) **et** la **cible** du dépôt (`TargetMachineID` de la sauvegarde) : l'ordre part à la cible, les deux doivent passer. Une sauvegarde inconnue, ou d'une autre source, ne désigne aucune cible : la source seule est jugée et la route répond `404`, rien ne part |
+| `restic.backup.run`, `restic.backup.restore` | La machine du chemin (`{id}`), la source : l'ordre lui est destiné |
 
 Le registre porte cette règle : chaque verbe déclare ce que son `{id}`
-désigne (`verb.Target` : `machine`, `probe` ou `job`) et l'enregistrement
+désigne (`verb.Target` : `machine`, `probe`, `job` ou `restic_link`) et l'enregistrement
 refuse un verbe qui ne le dit pas. Le contrôle est **côté serveur**, dans
 l'admission des jetons (`admitReach`, `internal/server/api_tokens.go`), juste
 après le contrôle du verbe et avant le débit : un refus ne consomme rien. Une
@@ -5047,7 +5049,7 @@ enregistrable.
 
 **Le refus.** `403 api_token.out_of_scope`. L'événement `api_token.deny` est
 écrit, avec l'acteur `api:<id>`, `on_behalf_of`, et `details` : `verb`,
-`reason` = `out_of_scope`, `machine` (l'identifiant visé : celui du chemin, ou
+`reason` = `out_of_scope`, `machine` (l'identifiant refusé : celui du chemin, la cible d'un dépôt restic, ou
 la machine que la base donne à la sonde ou à la tâche, bornés à 64
 caractères) et `guest` (le numéro, pour un geste Proxmox). La trace a la même
 limite par jeton que les refus de verbe (5 puis une par minute) ; le refus

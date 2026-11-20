@@ -33,13 +33,18 @@ type Verb struct {
 
 // Target dit ce que le segment {id} d'un verbe désigne : la machine dont
 // l'agent reçoit l'ordre, ou une sonde ou une tâche, qu'on rattache à sa
-// machine. Un verbe de Proxmox vise en plus l'invité du segment {vmid}.
+// machine, ou un dépôt restic : {id} est la source et l'ordre part aussi à la
+// cible du dépôt, jugée comme la source. Un verbe de Proxmox vise en plus
+// l'invité du segment {vmid}.
 type Target string
 
 const (
 	TargetMachine Target = "machine"
 	TargetProbe   Target = "probe"
 	TargetJob     Target = "job"
+	// TargetResticLink : la machine du chemin est la source du dépôt ; sa
+	// cible reçoit aussi un ordre.
+	TargetResticLink Target = "restic_link"
 )
 
 // TargetsGuest dit si le verbe vise un invité Proxmox, en plus de sa machine.
@@ -67,7 +72,7 @@ var (
 	ErrNoReverse      = errors.New("verb: a verb without a reverse cannot be registered unless it asks for a confirmation")
 	ErrConfirmReverse = errors.New("verb: a verb to confirm has no reverse")
 	ErrParamsMismatch = errors.New("verb: params do not match the route path")
-	ErrTargetInvalid  = errors.New("verb: target must be machine, probe or job, and the route must carry {id}")
+	ErrTargetInvalid  = errors.New("verb: target must be machine, probe, job or restic_link, and the route must carry {id}")
 	ErrDuplicate      = errors.New("verb: already registered")
 	ErrConfirmTarget  = errors.New("verb: a verb to confirm must target a machine")
 	ErrUnknownReverse = errors.New("verb: reverse is not registered")
@@ -106,7 +111,7 @@ func (r *Registry) Register(v Verb) error {
 	if !slices.Equal(v.Params, PathParams(v.Route)) {
 		return fmt.Errorf("%w: %s", ErrParamsMismatch, v.ID)
 	}
-	if !slices.Contains([]Target{TargetMachine, TargetProbe, TargetJob}, v.Target) || !slices.Contains(v.Params, "id") {
+	if !slices.Contains([]Target{TargetMachine, TargetProbe, TargetJob, TargetResticLink}, v.Target) || !slices.Contains(v.Params, "id") {
 		return fmt.Errorf("%w: %s", ErrTargetInvalid, v.ID)
 	}
 	if _, found := r.Lookup(v.ID); found {
