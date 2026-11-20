@@ -195,6 +195,71 @@ func TestPauseTargetsWithCredentials_HoldsOldProbesUntilTheTargetChanges(t *test
 	}
 }
 
+// R-D5-19 : le mot de passe d'une cible d'avant est retiré, l'utilisateur
+// reste, la sonde est en pause et une alerte la signale ; les cibles sans mot
+// de passe ne bougent pas, et rejouer ne signale pas deux fois.
+func TestRemoveTargetPasswords_KeepsTheUserPausesAndSignalsOnce(t *testing.T) {
+	fixture := newBench(t)
+	alerter := &recordingAlerter{}
+	fixture.service.SetAlerter(alerter)
+	ctx := context.Background()
+	clean := fixture.create(t, "site", "https://cloud.exemple.fr/")
+	userOnly := storetest.InsertProbe(t, fixture.db, "00000000000000a2", probe.Definition{
+		Name: "feed", Kind: probe.KindHTTP, Target: "https://u@feed.exemple.fr/", MachineID: machine.LocalID,
+	}, testNow)
+	legacy := storetest.InsertProbe(t, fixture.db, "00000000000000a1", probe.Definition{
+		Name: "api", Kind: probe.KindHTTP, Target: "https://svc:hunter2zz@api.exemple.fr/health?x=1", MachineID: machine.LocalID,
+	}, testNow)
+
+	for range 2 {
+		if err := fixture.service.RemoveTargetPasswords(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := fixture.get(t, legacy.ID)
+	if got.Target != "https://svc@api.exemple.fr/health?x=1" || !got.IsPaused() {
+		t.Fatalf("attendu l'utilisateur gardé, sans mot de passe, en pause: %q %q", got.Target, got.Status)
+	}
+	if got := fixture.get(t, clean.ID); got.Target != "https://cloud.exemple.fr/" || got.IsPaused() {
+		t.Fatalf("une cible sans identifiants ne bouge pas: %q %q", got.Target, got.Status)
+	}
+	if got := fixture.get(t, userOnly.ID); got.Target != "https://u@feed.exemple.fr/" || got.IsPaused() {
+		t.Fatalf("une cible sans mot de passe ne bouge pas, la pause des identifiants est un autre passage: %q %q", got.Target, got.Status)
+	}
+	if len(alerter.credentialsRemoved) != 1 || alerter.credentialsRemoved[0].ID != legacy.ID {
+		t.Fatalf("une seule alerte, sur la sonde nettoyée: %+v", alerter.credentialsRemoved)
+	}
+	if strings.Contains(alerter.credentialsRemoved[0].Target, "hunter2zz") {
+		t.Fatal("l'alerte ne porte pas le mot de passe")
+	}
+}
+
+// Une sonde déjà en pause garde sa pause et perd son mot de passe ; effacée,
+// jamais : l'historique reste.
+func TestRemoveTargetPasswords_KeepsTheProbeAndItsHistory(t *testing.T) {
+	fixture := newBench(t)
+	ctx := context.Background()
+	legacy := storetest.InsertProbe(t, fixture.db, "00000000000000a1", probe.Definition{
+		Name: "api", Kind: probe.KindHTTP, Target: "https://svc:hunter2zz@api.exemple.fr/", MachineID: machine.LocalID,
+	}, testNow)
+	if err := fixture.service.Pause(ctx, legacy.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := fixture.service.RemoveTargetPasswords(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	got := fixture.get(t, legacy.ID)
+	if got.ID != legacy.ID || got.Target != "https://svc@api.exemple.fr/" || !got.IsPaused() || !got.CreatedAt.Equal(legacy.CreatedAt) {
+		t.Fatalf("la sonde reste, en pause, sans mot de passe: %+v", got)
+	}
+	if err := fixture.service.Resume(ctx, legacy.ID); !errors.Is(err, probe.ErrTargetCredentials) {
+		t.Fatalf("elle ne reprend qu'avec une cible réglée à nouveau: attendu %v, obtenu %v", probe.ErrTargetCredentials, err)
+	}
+}
+
 const remoteMachineID = "11111111-2222-4333-8444-555555555555"
 
 // enrollRemote ajoute une seconde machine : une sonde peut surveiller un
@@ -699,8 +764,9 @@ func TestCreate_ConcurrentCreations_StopAtTheCeiling(t *testing.T) {
 // recordingAlerter note chaque sonde que le service montre au moteur des
 // alertes, dans l'ordre.
 type recordingAlerter struct {
-	mu     sync.Mutex
-	probes []probe.Probe
+	mu                 sync.Mutex
+	probes             []probe.Probe
+	credentialsRemoved []probe.Probe
 }
 
 func (a *recordingAlerter) ProbeChanged(_ context.Context, found probe.Probe) {
@@ -710,6 +776,12 @@ func (a *recordingAlerter) ProbeChanged(_ context.Context, found probe.Probe) {
 }
 
 func (a *recordingAlerter) ProbeRemoved(context.Context, string) {}
+
+func (a *recordingAlerter) ProbeCredentialsRemoved(_ context.Context, found probe.Probe) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.credentialsRemoved = append(a.credentialsRemoved, found)
+}
 
 func (a *recordingAlerter) last() probe.Probe {
 	a.mu.Lock()

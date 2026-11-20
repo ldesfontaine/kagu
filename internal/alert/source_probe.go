@@ -38,6 +38,18 @@ func (e *Engine) ProbeChanged(ctx context.Context, found probe.Probe) {
 	e.judgeCertificate(ctx, found, object)
 }
 
+// ProbeCredentialsRemoved signale une sonde dont la migration a retiré le mot
+// de passe : elle est en pause, l'alerte reste ouverte jusqu'à ce que la cible
+// soit réglée à nouveau (l'édition de la sonde la résout, comme toute pause).
+func (e *Engine) ProbeCredentialsRemoved(ctx context.Context, found probe.Probe) {
+	e.Open(ctx, Fact{
+		Kind: KindProbePasswordRemoved, Severity: SeverityAttention,
+		Object:    Object{Kind: ObjectProbe, ID: found.ID, Name: found.Name},
+		MachineID: found.MachineID, ServiceID: found.ServiceID,
+		Details: Details{Target: probe.RedactTarget(found.Target)},
+	})
+}
+
 func (e *Engine) ProbeRemoved(ctx context.Context, id string) {
 	e.removed(ctx, Object{Kind: ObjectProbe, ID: id})
 }

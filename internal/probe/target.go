@@ -116,10 +116,23 @@ func TargetPassword(target string) string {
 	return password
 }
 
+// StripTargetPassword retire le mot de passe d'une cible
+// « https://user:mot@hôte » et garde le nom d'utilisateur : la migration des
+// cibles d'avant le refus des identifiants (R-D5-19).
+func StripTargetPassword(target string) string {
+	return replaceTargetPassword(target, "")
+}
+
 // RedactTarget masque le mot de passe d'une cible « https://user:mot@hôte » :
 // la cible va dans un plan, un journal technique et un écran, qui ne portent
 // jamais un secret. Toute ligne de journal qui cite une cible passe par elle. Le nom d'utilisateur reste, pour qu'on reconnaisse la cible.
 func RedactTarget(target string) string {
+	return replaceTargetPassword(target, ":…")
+}
+
+// replaceTargetPassword remplace « :mot » par la marque donnée, quand la
+// cible porte un mot de passe ; sinon la cible reste telle quelle.
+func replaceTargetPassword(target, mark string) string {
 	schemeEnd := strings.Index(target, "://")
 	if schemeEnd < 0 {
 		return target
@@ -138,5 +151,5 @@ func RedactTarget(target string) string {
 	if !hasPassword {
 		return target
 	}
-	return target[:schemeEnd+3] + user + ":…" + authority[at:] + rest[authorityEnd:]
+	return target[:schemeEnd+3] + user + mark + authority[at:] + rest[authorityEnd:]
 }

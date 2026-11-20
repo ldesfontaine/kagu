@@ -14,6 +14,7 @@ export type AlertKind =
   | "job_late"
   | "job_failed"
   | "probe_down"
+  | "probe_password_removed"
   | "cert_expiring"
   | "cert_expired"
   | "cert_untrusted"
@@ -37,6 +38,7 @@ export const alertKinds: readonly AlertKind[] = [
   "job_late",
   "job_failed",
   "probe_down",
+  "probe_password_removed",
   "cert_expiring",
   "cert_expired",
   "cert_untrusted",

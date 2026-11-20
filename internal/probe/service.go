@@ -87,6 +87,9 @@ type Watcher interface {
 type Alerter interface {
 	ProbeChanged(ctx context.Context, probe Probe)
 	ProbeRemoved(ctx context.Context, probeID string)
+	// ProbeCredentialsRemoved : la migration a retiré le mot de passe de la
+	// cible, la sonde est en pause et attend d'être réglée à nouveau.
+	ProbeCredentialsRemoved(ctx context.Context, probe Probe)
 }
 
 type Service struct {
@@ -412,6 +415,39 @@ func (s *Service) setStatus(ctx context.Context, id string, status Status, wasPa
 	}
 	s.Assign(ctx, found.MachineID)
 	s.changed(found.MachineID)
+	return nil
+}
+
+// RemoveTargetPasswords retire le mot de passe des cibles qui le portent
+// encore en clair, acceptées avant que la création refuse les identifiants
+// (R-D5-19). Le nom d'utilisateur reste. La sonde est mise en pause d'abord,
+// jamais effacée : son historique reste, l'alerte dit de la régler à nouveau.
+// Rejouée à chaque démarrage, elle ne touche plus une cible déjà nettoyée.
+func (s *Service) RemoveTargetPasswords(ctx context.Context) error {
+	probes, err := s.store.ListProbes(ctx, "")
+	if err != nil {
+		return fmt.Errorf("list probes: %w", err)
+	}
+	for _, found := range probes {
+		if found.Kind == KindTCP || TargetPassword(found.Target) == "" {
+			continue
+		}
+		if !found.IsPaused() {
+			if err := s.Pause(ctx, found.ID); err != nil {
+				return fmt.Errorf("pause probe %s: %w", found.ID, err)
+			}
+			found.Status = StatusPaused
+		}
+		found.Target = StripTargetPassword(found.Target)
+		if err := s.store.UpdateProbe(ctx, Revision{Probe: found}); err != nil {
+			return fmt.Errorf("remove password of probe %s: %w", found.ID, err)
+		}
+		s.logger.Warn("probe paused, the password of its target was removed: set the target again to resume it",
+			"probe_id", found.ID, "name", found.Name, "machine_id", found.MachineID, "target", found.Target)
+		if s.alerter != nil {
+			s.alerter.ProbeCredentialsRemoved(ctx, found)
+		}
+	}
 	return nil
 }
 

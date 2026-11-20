@@ -96,6 +96,8 @@ export function describeAlert(t: Translate, alert: Alert, now: number, threshold
       return lines(t, alert.kind, [], [object, details.exit_code ?? 0]);
     case "probe_down":
       return lines(t, alert.kind, [], [object, details.target ?? "", t(`probe.reason_${details.reason ?? "unreachable"}`)]);
+    case "probe_password_removed":
+      return lines(t, alert.kind, [], [object, details.target ?? ""]);
     case "cert_expiring":
       return lines(t, alert.kind, [], [details.target ?? "", details.not_after ? daysUntil(details.not_after, now) : 0]);
     case "cert_expired":

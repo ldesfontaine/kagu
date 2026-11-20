@@ -78,6 +78,8 @@ func describe(catalog lang.Catalog, alert Alert, now time.Time, escape func(stri
 		return text(catalog, "job_failed", nil, []any{object, details.ExitCode})
 	case KindProbeDown:
 		return text(catalog, "probe_down", nil, []any{object, details.Target, catalog.Get("probe.reason_" + details.Reason)})
+	case KindProbePasswordRemoved:
+		return text(catalog, "probe_password_removed", nil, []any{object, details.Target})
 	case KindCertExpiring:
 		return text(catalog, "cert_expiring", nil, []any{details.Target, daysUntil(details.NotAfter, now)})
 	case KindCertExpired:
