@@ -1637,7 +1637,11 @@ recalculée sur le disque, et en-tête `age-encryption.org/v1` pour un `.age`
 `database`, `firewall` ou `guest`, posé par `serve`, jamais lu dans le nom du
 fichier ; absent, c'est la base). La base et le pare-feu annoncent 2 Gio au plus
 (`archive_too_large`, refus avant d'écrire) ; l'archive d'un invité (vzdump) n'a
-pas de plafond. Tous les types : un fichier plus long que sa taille annoncée est
+pas de plafond. **Place** : avant tout téléchargement, la somme des tailles
+annoncées (clé scellée comprise) doit tenir dans la place libre d'un compte
+sans privilège (`Bavail`), mesurée sous le chemin du droit : sinon `disk_full`,
+refus immédiat, aucun `.part` écrit ; une place illisible est refusée
+`path_unwritable`, jamais acceptée par défaut. Tous les types : un fichier plus long que sa taille annoncée est
 coupé et refusé (`digest_mismatch`). Un agent d'avant ignore `archive` : il
 garde son ancien comportement (renommer par-dessus). Il rend une ligne par fichier, `written <nom> <taille>
 sha256:<hex>`, et n'envoie aucun contenu. `backup.prune` porte un

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -43,6 +44,8 @@ type hostChecks struct {
 	// writable : le dossier existe et s'écrit, ou se crée sous le plus proche
 	// parent qui existe.
 	writable func(path string) string
+	// freeBytes : l'espace libre sous un chemin, même s'il n'existe pas encore.
+	freeBytes func(path string) (uint64, error)
 	// agentUpdate : l'agent tourne depuis <état>/bin/ et ce dossier s'écrit.
 	agentUpdate func() string
 	// lookPath : un programme du PATH, ou un chemin absolu, que le compte peut
@@ -66,6 +69,7 @@ func newHostChecks(socket string, updater *selfUpdater) hostChecks {
 	return hostChecks{
 		docker:      func(ctx context.Context) string { return dockerReason(ctx, dockerBinary, socket) },
 		writable:    writableOrCreatable,
+		freeBytes:   freeBytesUnder,
 		agentUpdate: func() string { return updater.unavailableReason(writableOrCreatable) },
 		lookPath:    exec.LookPath,
 		sudoList:    sudoListsProgram,
@@ -82,6 +86,7 @@ func allowAll() hostChecks {
 	return hostChecks{
 		docker:         func(context.Context) string { return "" },
 		writable:       func(string) string { return "" },
+		freeBytes:      func(string) (uint64, error) { return math.MaxUint64, nil },
 		agentUpdate:    func() string { return "" },
 		lookPath:       func(name string) (string, error) { return name, nil },
 		sudoList:       func(context.Context, string) error { return nil },
