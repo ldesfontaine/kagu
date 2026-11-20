@@ -449,7 +449,7 @@ func TestOpenLogs_DisappearedContainerAndBusyMachine(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	for i := 0; i < container.MaxFollowsPerMachine; i++ {
+	for i := 0; i < MaxAgentFollows; i++ {
 		if _, err := watcher.OpenLogs(ctx, container.LogRequest{ContainerID: fixtureID, Follow: true}); err != nil {
 			t.Fatal(err)
 		}

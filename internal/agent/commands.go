@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/ldesfontaine/opencloud/internal/agentwire"
 	"github.com/ldesfontaine/opencloud/internal/container"
+	"github.com/ldesfontaine/opencloud/internal/dockerwatch"
 	"github.com/ldesfontaine/opencloud/internal/probe"
 	"github.com/ldesfontaine/opencloud/internal/update"
 )
@@ -28,12 +30,15 @@ type commandRunner struct {
 	orders  *orderRunner
 	logger  *slog.Logger
 
+	// followLimit est la durée d'un suivi ; variable pour les tests.
+	followLimit time.Duration
+
 	mu   sync.Mutex
 	open map[string]context.CancelFunc
 }
 
 func newCommandRunner(ctx context.Context, client *Client, session string, logs container.LogSource, probes probe.Assignable, updates update.Assignable, orders *orderRunner, logger *slog.Logger) *commandRunner {
-	return &commandRunner{ctx: ctx, client: client, session: session, logs: logs, probes: probes, updates: updates, orders: orders, logger: logger, open: make(map[string]context.CancelFunc)}
+	return &commandRunner{ctx: ctx, client: client, session: session, logs: logs, probes: probes, updates: updates, orders: orders, logger: logger, followLimit: dockerwatch.MaxFollowDuration, open: make(map[string]context.CancelFunc)}
 }
 
 // handle lit un événement du flux. Un ordre part à son juge sans être lu
@@ -79,8 +84,10 @@ func (r *commandRunner) handle(name, data string) {
 	}
 }
 
+// startLogs ouvre un suivi qui s'arrête seul après followLimit ; le
+// plafond du nombre de suivis est tenu par le Watcher, qui refuse le neuf.
 func (r *commandRunner) startLogs(request container.LogRequest) {
-	ctx, cancel := context.WithCancel(r.ctx)
+	ctx, cancel := context.WithTimeout(r.ctx, r.followLimit)
 	r.mu.Lock()
 	r.open[request.ID] = cancel
 	r.mu.Unlock()
@@ -120,5 +127,10 @@ func (r *commandRunner) serveLogs(ctx context.Context, request container.LogRequ
 			}
 			return
 		}
+	}
+	// Le suivi a atteint sa durée : le serveur est prévenu, sans quoi sa
+	// place resterait prise jusqu'à ce que le navigateur parte.
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		_ = r.client.PostLogs(r.ctx, r.session, request.ID, container.LogBatch{Done: true})
 	}
 }

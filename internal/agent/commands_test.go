@@ -15,6 +15,7 @@ import (
 
 	"github.com/ldesfontaine/opencloud/internal/agentwire"
 	"github.com/ldesfontaine/opencloud/internal/container"
+	"github.com/ldesfontaine/opencloud/internal/dockerwatch"
 	"github.com/ldesfontaine/opencloud/internal/probe"
 	"github.com/ldesfontaine/opencloud/internal/update"
 	"github.com/ldesfontaine/opencloud/internal/wait/waittest"
@@ -237,5 +238,33 @@ func TestCommandRunner_RejudgesTheProbeSetItReceives(t *testing.T) {
 	}
 	if strings.Contains(text, "s3cr3t") {
 		t.Fatalf("le journal porte la requête de la cible:\n%s", text)
+	}
+}
+
+// R-A4-22 : un suivi s'arrête seul à sa durée, et l'agent le dit au serveur
+// (lot final) pour que la place se libère ; le front le rouvre.
+func TestR_A4_22_FollowStopsAtItsLimit(t *testing.T) {
+	posted := &postedLogs{batches: make(map[string][]container.LogBatch), wake: make(chan struct{}, 16)}
+	server := httptest.NewServer(http.HandlerFunc(posted.handler))
+	defer server.Close()
+	client, err := NewClient(server.URL, "", "v", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runner := newCommandRunner(ctx, client, "session-1", &fakeLogs{}, &fakeProber{}, &fakeUpdater{}, nil, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	if runner.followLimit != dockerwatch.MaxFollowDuration {
+		t.Fatalf("followLimit = %v", runner.followLimit)
+	}
+	runner.followLimit = 100 * time.Millisecond
+
+	runner.handle(string(agentwire.KindLogs), `{"id":"long","container_id":"c1","follow":true}`)
+	posted.waitFor(t, "long", 2)
+	waitUntilClosed(t, runner, "long", "the follow stops by itself")
+	posted.mu.Lock()
+	defer posted.mu.Unlock()
+	if last := posted.batches["long"][len(posted.batches["long"])-1]; !last.Done {
+		t.Fatalf("last batch = %+v", last)
 	}
 }
