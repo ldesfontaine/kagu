@@ -198,9 +198,9 @@ func TestApply_CreatedNameTakenMeanwhileIsAStalePlan(t *testing.T) {
 }
 
 // Un fichier qui met des identifiants dans une cible est refusé, comme dans
-// l'interface. Une sonde d'avant le refus qui en porte encore se relit
-// « inchangée » depuis son propre export, et les perd par le fichier : le
-// plan le dit sans jamais montrer le mot de passe.
+// l'interface. Une sonde d'avant le refus qui en porte encore
+// perd ses identifiants par le fichier : le plan le dit sans jamais montrer le
+// mot de passe, et l'export ne l'écrit pas non plus.
 func TestPlan_TargetCredentialsAreRefusedAndOldOnesRemovedUnseen(t *testing.T) {
 	b, data := seeded(t)
 	b.requireRefused(t, replaceOnce(t, data, "target: https://wiki.example.org/healthz", "target: https://u:one@wiki.example.org/healthz"), false, "probe.target_credentials")
@@ -217,11 +217,8 @@ heartbeats:
 		t.Fatal(err)
 	}
 	exported := string(b.export(t))
-	if !strings.Contains(exported, "https://u:one@") {
-		t.Fatalf("the operator's export keeps the target as stored:\n%s", exported)
-	}
-	if again := b.plan(t, exported, false); !again.Applicable() || len(again.Changes) > 0 {
-		t.Fatalf("an old probe re-read from its own export is unchanged: %v %v", problemKeys(again), changeLabels(again))
+	if strings.Contains(exported, ":one@") || !strings.Contains(exported, "https://u:…@wiki.example.org/healthz") {
+		t.Fatalf("the export masks the password of a target the migration has not reached (R-D5-19):\n%s", exported)
 	}
 
 	plan := b.plan(t, data, false)

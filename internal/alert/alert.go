@@ -47,10 +47,13 @@ const (
 	KindJobLate          Kind = "job_late"
 	KindJobFailed        Kind = "job_failed"
 	KindProbeDown        Kind = "probe_down"
-	KindCertExpiring     Kind = "cert_expiring"
-	KindCertExpired      Kind = "cert_expired"
-	KindCertUntrusted    Kind = "cert_untrusted"
-	KindDiskFull         Kind = "disk_full"
+	// KindProbePasswordRemoved : la migration a retiré le mot de passe d'une
+	// cible de sonde ; la sonde est en pause, à régler à nouveau.
+	KindProbePasswordRemoved Kind = "probe_password_removed"
+	KindCertExpiring         Kind = "cert_expiring"
+	KindCertExpired          Kind = "cert_expired"
+	KindCertUntrusted        Kind = "cert_untrusted"
+	KindDiskFull             Kind = "disk_full"
 	// La moyenne du processeur ou de la mémoire d'une machine dépasse son
 	// seuil sur toute la fenêtre réglée.
 	KindCPUHigh    Kind = "cpu_high"
@@ -75,7 +78,7 @@ const (
 func Kinds() []Kind {
 	return []Kind{
 		KindMachineLost, KindServiceDown, KindServiceUnhealthy, KindServiceRestart,
-		KindJobLate, KindJobFailed, KindProbeDown,
+		KindJobLate, KindJobFailed, KindProbeDown, KindProbePasswordRemoved,
 		KindCertExpiring, KindCertExpired, KindCertUntrusted, KindDiskFull, KindCPUHigh, KindMemoryHigh, KindAgentRolledBack, KindServiceRolledBack,
 		KindBackupStale, KindRestoreTestStale, KindSourceUnprotected, KindTargetFull, KindTargetUnreachable,
 	}

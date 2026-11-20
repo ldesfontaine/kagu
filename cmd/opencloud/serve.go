@@ -188,7 +188,11 @@ func runServe(args []string) error {
 	runLoop(&loops, func() { parts.firewalls.Watch(ctx) })
 	defer func() { stop(); loops.Wait() }()
 	// Une sonde dont la cible porte des identifiants, d'avant leur refus, ne
-	// repart pas : elle attend que l'opérateur change sa cible.
+	// repart pas : le mot de passe est retiré, elle attend que l'opérateur
+	// règle sa cible à nouveau.
+	if err := parts.probes.RemoveTargetPasswords(ctx); err != nil {
+		logger.Warn("remove probe target passwords", "error", err)
+	}
 	if err := parts.probes.PauseTargetsWithCredentials(ctx); err != nil {
 		logger.Warn("pause probes with credentials", "error", err)
 	}

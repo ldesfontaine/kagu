@@ -277,11 +277,11 @@ func TestAPIToken_ReadsAreRedacted(t *testing.T) {
 	})
 
 	t.Run("manifest export", func(t *testing.T) {
-		if !strings.Contains(read(t, "/api/manifest/export", false), password) {
-			t.Fatal("the operator export should carry the target as written: apply compares it")
-		}
-		if body := read(t, "/api/manifest/export", true); strings.Contains(body, password) || !strings.Contains(body, "cloud.exemple.fr") {
-			t.Fatalf("a token must read the export without the password:\n%s", body)
+		// R-D5-19 : l'export masque le mot de passe pour tout le monde.
+		for _, byToken := range []bool{false, true} {
+			if body := read(t, "/api/manifest/export", byToken); strings.Contains(body, password) || !strings.Contains(body, "cloud.exemple.fr") {
+				t.Fatalf("the export (token %v) must not carry the password:\n%s", byToken, body)
+			}
 		}
 	})
 }
