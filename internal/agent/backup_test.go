@@ -777,3 +777,113 @@ func (b *orderBench) signedOrder(t *testing.T, body agentwire.OrderBody) agentwi
 	}
 	return agentwire.SignedOrder{Body: encoded, Signature: ed25519.Sign(b.private, agentwire.OrderSigningBytes(encoded))}
 }
+
+// R-E3-17 : une archive reçue ne remplace jamais une archive gardée ; une
+// archive plus grande que la taille annoncée est coupée et refusée ; la base et
+// le pare-feu ont un plafond sur la taille annoncée, l'archive d'un invité non.
+func TestR_E3_17(t *testing.T) {
+	t.Run("a name already there is refused and the kept archive is intact", func(t *testing.T) {
+		dir := backupDir(t)
+		kept := ageLike("l'archive gardée")
+		if err := os.WriteFile(filepath.Join(dir, archiveName), []byte(kept), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		files := map[string]string{archiveName: ageLike("une autre archive, même nom")}
+		_, err := receiveBackup(context.Background(), sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
+		assertReason(t, err, agentwire.ReasonPathExists)
+		assertOnlyFile(t, dir, archiveName, kept)
+	})
+
+	t.Run("a longer file than announced is cut and refused, nothing is renamed", func(t *testing.T) {
+		dir := backupDir(t)
+		content := ageLike(strings.Repeat("x", 4096))
+		files := map[string]string{archiveName: content}
+		announced := listed(files)
+		announced[0].Size = 100
+		_, err := receiveBackup(context.Background(), sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: announced})
+		assertReason(t, err, agentwire.ReasonDigestMismatch)
+		assertDirEmpty(t, dir)
+	})
+
+	t.Run("the sealed key file is replaced in one go", func(t *testing.T) {
+		dir := backupDir(t)
+		if err := os.WriteFile(filepath.Join(dir, keyName), []byte(ageLike("ancienne clé")), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		files := map[string]string{keyName: ageLike("nouvelle clé")}
+		if _, err := receiveBackup(context.Background(), sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)}); err != nil {
+			t.Fatal(err)
+		}
+		assertOnlyFile(t, dir, keyName, files[keyName])
+	})
+
+	t.Run("a refused name leaves the sealed key replaced and no part behind", func(t *testing.T) {
+		dir := backupDir(t)
+		kept := ageLike("l'archive gardée")
+		if err := os.WriteFile(filepath.Join(dir, archiveName), []byte(kept), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		files := map[string]string{archiveName: ageLike("autre"), keyName: ageLike("clé")}
+		_, err := receiveBackup(context.Background(), sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
+		assertReason(t, err, agentwire.ReasonPathExists)
+		content, readErr := os.ReadFile(filepath.Join(dir, archiveName))
+		if readErr != nil || string(content) != kept {
+			t.Fatalf("the kept archive changed: %q %v", content, readErr)
+		}
+		entries, _ := os.ReadDir(dir)
+		for _, entry := range entries {
+			if strings.HasSuffix(entry.Name(), partSuffix) {
+				t.Fatalf("a part is left: %s", entry.Name())
+			}
+		}
+	})
+}
+
+// Le plafond se juge à l'ordre, sur le type d'archive que le serveur a signé :
+// absent, c'est la base ; un type inconnu est un ordre faux ; le nom du fichier
+// n'y est pour rien.
+func TestR_E3_17_TheCapFollowsTheSignedArchiveKind(t *testing.T) {
+	big := []agentwire.ParcelFile{{Name: archiveName, Size: maxAnnouncedSize + 1, SHA256: strings.Repeat("a", 64)}}
+	atCap := []agentwire.ParcelFile{{Name: archiveName, Size: maxAnnouncedSize, SHA256: strings.Repeat("a", 64)}}
+	cover := func(path string) (string, bool) { return path, true }
+	writable := func(string) string { return "" }
+	for name, test := range map[string]struct {
+		archive string
+		files   []agentwire.ParcelFile
+		want    string
+	}{
+		"no kind is the database, over the cap": {"", big, agentwire.ReasonArchiveTooLarge},
+		"the database over the cap":             {agentwire.ArchiveDatabase, big, agentwire.ReasonArchiveTooLarge},
+		"the firewall over the cap":             {agentwire.ArchiveFirewall, big, agentwire.ReasonArchiveTooLarge},
+		"the database at the cap":               {agentwire.ArchiveDatabase, atCap, ""},
+		"a guest has no cap":                    {agentwire.ArchiveGuest, big, ""},
+		"an unknown kind":                       {"vm", atCap, agentwire.ReasonBadOrder},
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw, err := json.Marshal(agentwire.BackupReceiveParams{Parcel: "colis1", Path: "/srv/backups", Files: test.files, Archive: test.archive})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _, refused := readBackupReceive(agentwire.OrderBody{RunID: "run", Params: raw}, cover, writable)
+			got := ""
+			if refused != nil {
+				got = refused.Reason
+			}
+			if got != test.want {
+				t.Fatalf("reason %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func assertOnlyFile(t *testing.T, dir, name, content string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 || entries[0].Name() != name {
+		t.Fatalf("the folder holds %v (%v), want only %s", entries, err, name)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil || string(got) != content {
+		t.Fatalf("%s holds %q (%v), want %q", name, got, err, content)
+	}
+}

@@ -97,6 +97,14 @@ func CreateExclusive(root *os.Root, name string, data []byte, perm os.FileMode) 
 	if err := writeTemp(root, temp, data, perm, os.O_EXCL); err != nil {
 		return err
 	}
+	return LinkExclusive(root, temp, name)
+}
+
+// LinkExclusive donne à un fichier déjà écrit son nom final, sans jamais en
+// remplacer un : il échoue (errors.Is(err, fs.ErrExist)) si name existe. Le
+// temporaire disparaît dans tous les cas. C'est la fin de CreateExclusive,
+// pour un contenu trop gros pour tenir en mémoire.
+func LinkExclusive(root *os.Root, temp, name string) error {
 	// Link échoue si name existe : c'est là que se joue l'exclusivité.
 	linkErr := root.Link(temp, name)
 	_ = root.Remove(temp)
