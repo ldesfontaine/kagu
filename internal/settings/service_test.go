@@ -5,10 +5,12 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ldesfontaine/opencloud/internal/alert"
+	"github.com/ldesfontaine/opencloud/internal/audit"
 	"github.com/ldesfontaine/opencloud/internal/lang"
 	"github.com/ldesfontaine/opencloud/internal/mail"
 	"github.com/ldesfontaine/opencloud/internal/refusal"
@@ -262,5 +264,97 @@ func TestCurrentReads_DatabaseDown_FallBack(t *testing.T) {
 	}
 	if service.CurrentLifecycleEnabled() {
 		t.Error("lifecycle must be off when the setting cannot be read")
+	}
+}
+
+// R-A2-14 : le mot de passe gardé n'est gardé que si l'hôte, le port et le
+// mode TLS ne changent pas ; l'expéditeur et l'identifiant n'y changent rien.
+func TestR_A2_14(t *testing.T) {
+	ctx := context.Background()
+	original := mail.Relay{Host: "smtp.example.org", Port: 587, TLS: mail.TLSStartTLS, Username: "alerts", Password: "s3cret", From: "oc@example.org"}
+	for name, change := range map[string]func(*mail.Relay){
+		"host": func(r *mail.Relay) { r.Host = "smtp.other.org" },
+		"port": func(r *mail.Relay) { r.Port = 2525 },
+		"tls":  func(r *mail.Relay) { r.TLS = mail.TLSImplicit; r.Port = 587 },
+	} {
+		service, db := newService(t)
+		if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: original}); err != nil {
+			t.Fatal(err)
+		}
+		typed := original
+		typed.Password = ""
+		change(&typed)
+		_, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: typed})
+		if !errors.Is(err, settings.ErrMailPasswordRequired) {
+			t.Errorf("%s: want password_required, got %v", name, err)
+		}
+		if saved := load(t, db); saved.MailHost != original.Host || saved.MailPort != original.Port || saved.MailPassword != "s3cret" {
+			t.Errorf("%s: the refusal must write nothing: %+v", name, saved)
+		}
+	}
+
+	service, db := newService(t)
+	if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: original}); err != nil {
+		t.Fatal(err)
+	}
+	typed := original
+	typed.Password = ""
+	typed.From = "other@example.org"
+	typed.Username = "someone"
+	typed.Host = "SMTP.example.org"
+	if relay, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: typed}); err != nil || relay.Password != "s3cret" || relay.From != "other@example.org" {
+		t.Fatalf("sender change keeps the password: %+v, %v", relay, err)
+	}
+	moved := original
+	moved.Host = "smtp.other.org"
+	moved.Password = "new-secret"
+	if relay, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: moved}); err != nil || relay.Password != "new-secret" {
+		t.Fatalf("new host with a new password: %+v, %v", relay, err)
+	}
+	moved.Password = ""
+	if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: mail.Relay{}}); err != nil {
+		t.Fatalf("removing the relay needs no password: %v", err)
+	}
+	if saved := load(t, db); saved.MailHost != "" || saved.MailPassword != "" {
+		t.Fatalf("saved: %+v", saved)
+	}
+	// Premier réglage : rien n'est gardé, rien n'est redemandé.
+	if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: moved}); err != nil {
+		t.Fatalf("first setup without password: %v", err)
+	}
+}
+
+// R-SEC-7 : le refus ne montre pas le mot de passe, le journal dit l'ancien
+// et le nouvel hôte sans lui.
+func TestR_SEC_7(t *testing.T) {
+	service, db := newService(t)
+	service.SetAuditor(audit.New(db, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	ctx := context.Background()
+	original := mail.Relay{Host: "smtp.example.org", Port: 587, TLS: mail.TLSStartTLS, Password: "s3cret", From: "oc@example.org"}
+	if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: original}); err != nil {
+		t.Fatal(err)
+	}
+	moved := original
+	moved.Host, moved.Password = "smtp.other.org", ""
+	_, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: moved})
+	if err == nil || strings.Contains(err.Error(), "s3cret") {
+		t.Fatalf("refusal: %v", err)
+	}
+	moved.Password = "new-secret"
+	if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: moved}); err != nil {
+		t.Fatal(err)
+	}
+	events, err := db.ListAuditEvents(ctx, audit.Query{Limit: 10})
+	if err != nil || len(events) != 2 {
+		t.Fatalf("events: %+v, %v", events, err)
+	}
+	details := events[0].Details
+	if details["previous_host"] != "smtp.example.org" || details["host"] != "smtp.other.org" {
+		t.Errorf("hosts: %+v", details)
+	}
+	for name, value := range details {
+		if strings.Contains(value, "s3cret") || strings.Contains(value, "new-secret") {
+			t.Errorf("leaks %s=%s", name, value)
+		}
 	}
 }

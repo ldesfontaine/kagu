@@ -3,6 +3,7 @@ package alert
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -58,8 +59,14 @@ func (e *Engine) UpdateChannel(ctx context.Context, id int64, definition Channel
 	if err != nil {
 		return Channel{}, err
 	}
+	// Le jeton gardé n'a été donné qu'au serveur d'accueil d'alors.
+	if definition.Format == FormatMatrix && definition.Secret == "" && !definition.ClearSecret &&
+		channel.Secret != "" && !(channel.Format == FormatMatrix && sameHomeserver(channel.URL, definition.URL)) {
+		return Channel{}, ErrChannelSecretRequired
+	}
 	// Ce qui a changé se dit sans la valeur : l'URL et le secret en sont.
 	urlChanged := channel.URL != definition.URL
+	previousURL := channel.URL
 	channel.Name = strings.TrimSpace(definition.Name)
 	channel.URL = definition.URL
 	channel.Format = definition.Format
@@ -85,9 +92,32 @@ func (e *Engine) UpdateChannel(ctx context.Context, id int64, definition Channel
 		return Channel{}, err
 	}
 	e.logger.Info("alert channel updated", "channel_id", id, "name", channel.Name, "enabled", channel.Enabled)
-	e.auditor.Record(ctx, channelUpdateEvent(channel, urlChanged, definition.Secret != "" || definition.ClearSecret))
+	e.auditor.Record(ctx, channelUpdateEvent(channel, previousURL, urlChanged, definition.Secret != "" || definition.ClearSecret))
 	e.changed()
 	return e.store.GetChannel(ctx, id)
+}
+
+// sameHomeserver dit si deux adresses visent le même serveur : schéma, hôte
+// et port, celui du schéma quand l'adresse n'en dit pas.
+func sameHomeserver(first, second string) bool {
+	firstParsed, firstErr := url.Parse(first)
+	secondParsed, secondErr := url.Parse(second)
+	if firstErr != nil || secondErr != nil {
+		return false
+	}
+	return firstParsed.Scheme == secondParsed.Scheme &&
+		strings.EqualFold(firstParsed.Hostname(), secondParsed.Hostname()) &&
+		effectivePort(firstParsed) == effectivePort(secondParsed)
+}
+
+func effectivePort(address *url.URL) string {
+	if port := address.Port(); port != "" {
+		return port
+	}
+	if address.Scheme == "http" {
+		return "80"
+	}
+	return "443"
 }
 
 func (e *Engine) DeleteChannel(ctx context.Context, id int64) error {

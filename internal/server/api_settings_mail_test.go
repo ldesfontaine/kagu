@@ -37,12 +37,21 @@ func TestAPI_MailSettings_SaveNeverReturnThePasswordAndKeepIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	request.Password = ""
-	request.Port = 2525
+	request.From = "autre@exemple.fr"
 	callAPI(server.Server, http.MethodPut, "/api/settings/mail", request)
 	file, err := server.db.LoadSettings(context.Background())
-	if err != nil || file.Language != "en" || file.MailPassword != "rotated-elsewhere" || file.MailPort != 2525 {
+	if err != nil || file.Language != "en" || file.MailPassword != "rotated-elsewhere" || file.MailFrom != "autre@exemple.fr" {
 		t.Fatalf("file %+v %v", file, err)
 	}
+	// Une autre destination redemande le mot de passe (R-A2-14).
+	request.Port = 2525
+	if got := callAPI(server.Server, http.MethodPut, "/api/settings/mail", request); got.Code != http.StatusUnprocessableEntity || errorCode(t, got) != "settings.mail_password_required" {
+		t.Fatalf("moved port without password: %d %s", got.Code, got.Body.String())
+	}
+	if file, _ := server.db.LoadSettings(context.Background()); file.MailPort != 587 || file.MailPassword != "rotated-elsewhere" {
+		t.Fatalf("the refusal must write nothing: %+v", file)
+	}
+	request.Port = 0
 	request.ClearPassword = true
 	callAPI(server.Server, http.MethodPut, "/api/settings/mail", request)
 	if file, _ := server.db.LoadSettings(context.Background()); file.MailPassword != "" {

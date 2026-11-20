@@ -26,6 +26,10 @@ type Store interface {
 // Le délai du rappel est hors de 0 à alert.MaxReminderHours heures.
 var ErrReminderInvalid = refusal.Invalid("settings.reminder_invalid", "settings: danger reminder invalid")
 
+// Le relais change d'hôte, de port ou de mode TLS : le mot de passe gardé
+// n'a pas été donné à cette destination, il se redonne.
+var ErrMailPasswordRequired = refusal.Invalid("settings.mail_password_required", "settings: mail password required when the relay destination changes")
+
 // Le code est celui du commutateur de langue : la clé existe déjà dans les
 // catalogues.
 var ErrLanguageUnknown = refusal.Invalid("error.unknown_language", "settings: unknown language")
@@ -85,7 +89,16 @@ func (s *Service) SetMailRelay(ctx context.Context, change MailRelayChange) (mai
 		}
 	}
 	keepPassword := relay.Password == "" && !change.ClearPassword
+	var refused error
+	var previous mail.Relay
 	written, err := s.store.UpdateSettings(ctx, func(current *Settings) {
+		previous = current.MailRelay()
+		// Le refus se décide sur la valeur relue ici ; la transaction
+		// réécrit alors les réglages tels quels.
+		if keepPassword && current.MailPassword != "" && relay.Host != "" && !relay.SameDestination(previous) {
+			refused = ErrMailPasswordRequired
+			return
+		}
 		if keepPassword {
 			relay.Password = current.MailPassword
 		}
@@ -94,7 +107,10 @@ func (s *Service) SetMailRelay(ctx context.Context, change MailRelayChange) (mai
 	if err != nil {
 		return mail.Relay{}, err
 	}
-	s.auditor.Record(ctx, mailRelayEvent(written.MailRelay(), !keepPassword))
+	if refused != nil {
+		return mail.Relay{}, refused
+	}
+	s.auditor.Record(ctx, mailRelayEvent(written.MailRelay(), previous.Host, !keepPassword))
 	return written.MailRelay(), nil
 }
 

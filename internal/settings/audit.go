@@ -26,8 +26,9 @@ func settingsEvent(key string, details audit.Details) audit.Event {
 }
 
 // mailRelayEvent : le relais sans son mot de passe ; seulement s'il a changé.
-func mailRelayEvent(written mail.Relay, passwordChanged bool) audit.Event {
+func mailRelayEvent(written mail.Relay, previousHost string, passwordChanged bool) audit.Event {
 	return settingsEvent(keyMailRelay, audit.Details{
+		"previous_host":    previousHost,
 		"host":             written.Host,
 		"port":             strconv.Itoa(written.Port),
 		"tls":              string(written.TLS),
