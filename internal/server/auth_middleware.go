@@ -286,6 +286,20 @@ func (s *Server) isCompiledAsset(r *http.Request) bool {
 	return name != "" && path.Ext(name) != ".html" && s.isAppFile(name)
 }
 
+// refuseEncodedSlash ferme /api aux chemins qui cachent un séparateur : aucun
+// identifiant de l'API n'en contient, et le mux les décode après avoir choisi
+// la route. Il juge le chemin brut, comme isCompiledAsset, avant tout routage.
+func (s *Server) refuseEncodedSlash(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		escaped := r.URL.EscapedPath()
+		if strings.HasPrefix(escaped, "/api/") && strings.Contains(strings.ToLower(escaped), "%2f") {
+			s.writeAPIError(w, http.StatusBadRequest, codeEncodedSlash)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // checkBasic répond lui-même 401 ou 429 quand il refuse.
 func (s *Server) checkBasic(w http.ResponseWriter, r *http.Request, state auth.State) bool {
 	username, password, presented := r.BasicAuth()

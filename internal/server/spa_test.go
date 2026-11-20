@@ -196,4 +196,17 @@ func TestR_A2_13(t *testing.T) {
 	if got := anonymous("/api/counts"); got.Code != http.StatusUnauthorized {
 		t.Errorf("/api/counts: %d, want 401", got.Code)
 	}
+	// Le refus du %2F ne dépend pas de la session.
+	for _, signedIn := range []bool{false, true} {
+		request := httptest.NewRequest(http.MethodGet, "/api/machines/..%2F..%2Ftheme.js", nil)
+		request.Host = "localhost"
+		if signedIn {
+			request.SetBasicAuth(testUsername, testPassword)
+		}
+		recorder := httptest.NewRecorder()
+		server.Server.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusBadRequest {
+			t.Errorf("signed in %v: %d, want 400", signedIn, recorder.Code)
+		}
+	}
 }

@@ -29,11 +29,12 @@ type apiError struct {
 }
 
 const (
-	codeNotFound = "not_found"
-	codeBadJSON  = "bad_json"
-	codeInternal = "internal"
-	codeOrigin   = "bad_origin"
-	codeHost     = "bad_host"
+	codeNotFound     = "not_found"
+	codeBadJSON      = "bad_json"
+	codeInternal     = "internal"
+	codeOrigin       = "bad_origin"
+	codeHost         = "bad_host"
+	codeEncodedSlash = "bad_path"
 )
 
 func (s *Server) readAPI(w http.ResponseWriter, r *http.Request, into any) bool {
