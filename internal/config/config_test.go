@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParse_EmptyFile_UsesDefaults(t *testing.T) {
@@ -208,5 +209,34 @@ func TestParse_ForwardUsers_TheErrorNamesTheEntryWithoutControlCharacters(t *tes
 	}
 	if strings.ContainsRune(err.Error(), '\n') || !strings.Contains(err.Error(), "forward_users") {
 		t.Fatalf("got %q", err)
+	}
+}
+
+func TestParse_ConnectionLimits_DefaultAndCustom(t *testing.T) {
+	cfg, _, err := Parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MaxConnections != 1024 || cfg.MaxConnectionsPerSource != 64 || cfg.WriteTimeout() != 30*time.Second {
+		t.Fatalf("got %+v, want 1024, 64 and 30s", cfg)
+	}
+	cfg, _, err = Parse([]byte("max_connections = 10\nmax_connections_per_source = 2\nwrite_timeout_seconds = 5\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MaxConnections != 10 || cfg.MaxConnectionsPerSource != 2 || cfg.WriteTimeout() != 5*time.Second {
+		t.Fatalf("got %+v", cfg)
+	}
+}
+
+func TestParse_ConnectionLimits_ABadValueStopsTheStart(t *testing.T) {
+	for _, line := range []string{
+		"max_connections = 0", "max_connections = -1",
+		"max_connections_per_source = 0",
+		"write_timeout_seconds = 0", "write_timeout_seconds = -30", "write_timeout_seconds = 86400",
+	} {
+		if _, _, err := Parse([]byte(line + "\n")); err == nil {
+			t.Errorf("%q was accepted", line)
+		}
 	}
 }

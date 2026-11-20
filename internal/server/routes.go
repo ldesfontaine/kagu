@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/ldesfontaine/opencloud/internal/agentwire"
 	"github.com/ldesfontaine/opencloud/internal/proxmox"
 	"github.com/ldesfontaine/opencloud/internal/verb"
 )
@@ -254,6 +256,41 @@ var apiTokenRoutes = []string{
 	"GET /api/token/verbs",
 }
 
+// Les routes de flux : elles restent ouvertes tant que leur client y est, et
+// n'ont pas de durée d'écriture (limits.go). Le journal d'un conteneur, les
+// flux des onglets et des visiteurs, celui de l'agent : chacun envoie un
+// ping régulier, un client parti se voit à l'écriture. Toute autre route est
+// bornée par défaut. Une route de flux de plus se dit ici.
+var streamRoutes = []string{
+	"GET /api/events", "GET /api/containers/{id}/logs/stream",
+	"GET /statut/{slug}/api/events",
+	"GET /agent/stream",
+}
+
+// Les routes de transfert : un colis, un relais restic (jusqu'à 256 Mio par
+// requête). Pas de durée d'écriture non plus, mais coupées quand plus aucun
+// octet ne passe pendant transferIdleTimeout.
+var transferRoutes = []string{
+	"GET " + agentwire.ParcelRoute + "{parcel}/{name}", "PUT " + agentwire.ParcelRoute + "{parcel}/{name}",
+	anyMethod + " " + agentwire.ResticRelayRoute + "{target}/",
+	"GET " + agentwire.ResticRelayBodyRoute + "{id}", "POST " + agentwire.ResticRelayResponseRoute + "{id}",
+}
+
+// Les routes qui ont leur propre durée d'écriture : browse, qui attend la
+// cible plus longtemps que la durée générale.
+var ownBoundRoutes = map[string]time.Duration{
+	"POST /api/machines/{id}/restic-backups/{backup}/actions/browse": browseWriteBound,
+}
+
+// isStreamRoute dit si la route est un flux, hors de la durée d'écriture.
+func isStreamRoute(method, pattern string) bool {
+	return slices.Contains(streamRoutes, method+" "+pattern)
+}
+
+func isTransferRoute(method, pattern string) bool {
+	return slices.Contains(transferRoutes, method+" "+pattern)
+}
+
 // isAPITokenRoute dit si un jeton d'API ouvre la route.
 func isAPITokenRoute(method, pattern string) bool {
 	return slices.Contains(apiTokenRoutes, method+" "+pattern)
@@ -312,6 +349,15 @@ func (s *Server) mux() *http.ServeMux {
 		}
 		if isAPI {
 			handler = s.requireKnownHost(handler)
+		}
+		switch {
+		case isStreamRoute(route.method, route.pattern):
+			handler = liftWriteDeadline(handler)
+		case isTransferRoute(route.method, route.pattern):
+			handler = liftWriteDeadline(cutIfIdle(transferIdleTimeout, handler))
+		}
+		if bound, ok := ownBoundRoutes[route.method+" "+route.pattern]; ok {
+			handler = boundWriteTo(bound, handler)
 		}
 		pattern := route.pattern
 		if route.method != anyMethod {

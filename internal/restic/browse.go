@@ -14,9 +14,9 @@ import (
 	"github.com/ldesfontaine/opencloud/internal/refusal"
 )
 
-// browseWait : combien de temps l'écran attend la cible. Une cible qui ne
+// BrowseWait : combien de temps l'écran attend la cible. Une cible qui ne
 // répond pas dans ce délai est dite injoignable ; l'ordre, lui, expire seul.
-const browseWait = 45 * time.Second
+const BrowseWait = 45 * time.Second
 
 var (
 	// La cible n'a pas restic.browse : l'écran propose de la ré-enrôler.
@@ -142,7 +142,7 @@ func (s *Service) auditBrowse(ctx context.Context, current Backup, request Brows
 }
 
 func (s *Service) awaitBrowse(ctx context.Context, run action.Run, slot *browseSlot) (agentwire.ResticBrowseReport, error) {
-	waitCtx, cancel := context.WithTimeout(ctx, browseWait)
+	waitCtx, cancel := context.WithTimeout(ctx, BrowseWait)
 	defer cancel()
 	finished := make(chan action.Run, 1)
 	go func() {

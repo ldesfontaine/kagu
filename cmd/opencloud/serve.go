@@ -213,6 +213,8 @@ func runServe(args []string) error {
 	options.Live = bus
 	options.PublicLive = publicBus
 	options.ForwardSecret = forwardSecret
+	options.ResponseWriteTimeout = cfg.WriteTimeout()
+	options.ConnectionsPerSource = cfg.MaxConnectionsPerSource
 	server, err := server.New(options)
 	if err != nil {
 		return err
@@ -226,12 +228,27 @@ func runServe(args []string) error {
 	// Le port principal s'ouvre avant la socket de commande : un second serve
 	// sur le même state_dir échoue ici, avant d'avoir touché à la socket du
 	// premier.
-	listener, err := net.Listen("tcp", cfg.Listen)
+	listener, err := listenLimited(cfg, logger)
 	if err != nil {
-		return fmt.Errorf("serve: %w", err)
+		return err
 	}
 	control := startControlSocket(logger, stateDir, cfg.StateDir, server.ControlHandler())
 	return listenUntilSignal(ctx, logger, newHTTPServer(cfg.Listen, server), listener, control, cfg)
+}
+
+// listenLimited ouvre le port principal ; ses connexions sont comptées à
+// l'acceptation (R-A2-18).
+func listenLimited(cfg config.Config, logger *slog.Logger) (net.Listener, error) {
+	listener, err := net.Listen("tcp", cfg.Listen)
+	if err != nil {
+		return nil, fmt.Errorf("serve: %w", err)
+	}
+	return server.LimitConnections(listener, server.ConnectionLimits{
+		Total:     cfg.MaxConnections,
+		PerSource: cfg.MaxConnectionsPerSource,
+		Trusted:   cfg.TrustedPrefixes(),
+		Logger:    logger,
+	}), nil
 }
 
 // logInterfaceAccess dit au journal comment l'interface est gardée. Sans
@@ -295,6 +312,10 @@ func openStateDir(path string) (*os.Root, error) {
 // quoi Shutdown les attendrait jusqu'à son délai. Une requête courte en
 // cours au même instant voit aussi son contexte annulé : sa transaction
 // est annulée, l'agent ou le navigateur la rejoue.
+//
+// Ni ReadTimeout ni WriteTimeout : celui d'écriture couperait aussi les
+// flux. La durée d'écriture se pose route par route (server/limits.go), et
+// les connexions se comptent à l'acceptation (server.LimitConnections).
 //
 // Pas de ReadTimeout : net/http annule le contexte d'une requête dont la
 // lecture expire, même une fois le corps lu, ce qui couperait tous les

@@ -62,6 +62,20 @@ trusted_proxies = ["127.0.0.1/32", "::1/128"]
 # "Lucas" n'est pas "lucas". Relu au démarrage seulement.
 # forward_users = ["lucas"]
 
+# Ce qu'un client peut tenir ouvert. Au-delà, la connexion est fermée à
+# l'acceptation ; le journal le dit une fois par minute et par source. Pour un
+# pair de trusted_proxies, la connexion ne compte que dans le total, et la
+# borne par source se prend sur l'adresse du client que le mandataire donne
+# (429 au-delà). Sans trusted_proxies derrière Traefik, tous les clients
+# partagent la borne de l'adresse de Traefik. Valeurs par défaut :
+# max_connections = 1024
+# max_connections_per_source = 64
+# Secondes qu'une réponse a pour partir, hors flux : /api/events, journaux,
+# /statut en direct, /agent/stream, colis et relais restic n'ont pas cette
+# durée (un transfert est coupé après 3 minutes sans octet) ; browse a la sienne
+# (60 s). Par défaut 30.
+# write_timeout_seconds = 30
+
 # Niveau du journal (JSON sur stderr) : debug, info, warn, error.
 # Vide (défaut) : info. En debug, chaque requête HTTP fait une ligne.
 log_level = "info"
