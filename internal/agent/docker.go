@@ -3,10 +3,12 @@ package agent
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -547,10 +549,17 @@ func envOf(dir *os.Root, job dockerJob) string {
 	return string(content)
 }
 
-// envSecrets rend les valeurs d'un .env, les plus longues d'abord : une ligne
-// sans « = » compte en entier (Compose la citerait dans son erreur).
+// envSecrets rend les valeurs d'un .env, les plus longues d'abord : la valeur
+// lue comme Compose la lit (coupée au premier « # » hors guillemets), avec ses
+// formes encodées pour une URL et en base64. Une ligne sans « = » compte en
+// entier (Compose la citerait dans son erreur).
 func envSecrets(env string) []string {
 	var secrets []string
+	add := func(candidate string) {
+		if !slices.Contains(secrets, candidate) {
+			secrets = append(secrets, candidate)
+		}
+	}
 	for line := range strings.Lines(env) {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -558,16 +567,39 @@ func envSecrets(env string) []string {
 		}
 		value := line
 		if _, after, found := strings.Cut(line, "="); found {
-			value = strings.TrimSpace(after)
+			value = cutEnvComment(strings.TrimSpace(after))
 		}
-		for _, candidate := range []string{value, strings.Trim(value, `"'`)} {
-			if len(candidate) >= minSecretBytes && !slices.Contains(secrets, candidate) {
-				secrets = append(secrets, candidate)
-			}
+		bare := strings.Trim(value, `"'`)
+		if len(bare) >= minSecretBytes {
+			add(bare)
+			add(url.QueryEscape(bare))
+			add(url.PathEscape(bare))
+			add(base64.StdEncoding.EncodeToString([]byte(bare)))
+			add(base64.URLEncoding.EncodeToString([]byte(bare)))
+		}
+		if len(value) >= minSecretBytes {
+			add(value)
 		}
 	}
 	slices.SortFunc(secrets, func(a, b string) int { return len(b) - len(a) })
 	return secrets
+}
+
+// cutEnvComment coupe une valeur au premier « # » précédé d'une espace et hors
+// guillemets : c'est où Compose cesse de la lire.
+func cutEnvComment(value string) string {
+	var open rune
+	for i, char := range value {
+		switch {
+		case open != 0 && char == open:
+			open = 0
+		case open == 0 && (char == '"' || char == '\''):
+			open = char
+		case open == 0 && char == '#' && i > 0 && (value[i-1] == ' ' || value[i-1] == '\t'):
+			return strings.TrimSpace(value[:i])
+		}
+	}
+	return value
 }
 
 // redactText remplace chaque secret par marker dans une ligne de texte : la

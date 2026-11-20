@@ -3,13 +3,16 @@ package agent
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -726,7 +729,77 @@ func TestEnvSecrets_ReadsTheValuesOfAnEnv(t *testing.T) {
 	// Les plus longues d'abord : une valeur qui en contient une autre se
 	// masque en entier.
 	want := []string{"une valeur longue", "LIGNE SANS EGAL", "'quotée ici'", "quotée ici"}
-	if strings.Join(got, "|") != strings.Join(want, "|") {
-		t.Fatalf("secrets %q, want %q", got, want)
+	for _, value := range want {
+		if !slices.Contains(got, value) {
+			t.Fatalf("secrets %q miss %q", got, value)
+		}
+	}
+	if len(got[0]) < len(got[len(got)-1]) {
+		t.Fatalf("secrets %q: longest first", got)
+	}
+}
+
+// R-D3-9 : la valeur lue comme Compose la lit, et ses formes encodées.
+func TestR_D3_9(t *testing.T) {
+	const secret = "valeur-secrete"
+	forms := map[string]string{
+		"plain":  secret,
+		"url":    url.QueryEscape(secret + " é/+"),
+		"base64": base64.StdEncoding.EncodeToString([]byte(secret)),
+	}
+	secrets := envSecrets("A=" + secret + " # c\nB=\"" + secret + " é/+\" # c\n")
+	for name, form := range forms {
+		got := redactText("journal "+form+" fin", secrets, redactedText)
+		if strings.Contains(got, form) {
+			t.Errorf("%s form not masked: %q", name, got)
+		}
+	}
+	if got := redactText("c", secrets, redactedText); got != "c" {
+		t.Errorf("the comment must not be masked: %q", got)
+	}
+
+	// Négatifs : sous 6 octets rien ne se masque, ni sa forme encodée ;
+	// un « # » collé à la valeur ou entre guillemets en fait partie.
+	if short := envSecrets("A=abc12 # c\nB=true\n"); len(short) != 0 {
+		t.Errorf("short values must not be masked: %q", short)
+	}
+	for env, want := range map[string]string{
+		"A=ab#cdefgh # c":  "ab#cdefgh",
+		`A="ab # cdef" #c`: "ab # cdef",
+	} {
+		if got := envSecrets(env); !slices.Contains(got, want) {
+			t.Errorf("%q: %q missing from %q", env, want, got)
+		}
+	}
+	if got := envSecrets("A=" + secret + " # c\n"); slices.Contains(got, secret+" # c") {
+		t.Errorf("the comment is part of the secret: %q", got)
+	}
+}
+
+// R-SEC-6 : le masque a une seule définition, et la sortie d'un service libre
+// n'emporte aucun secret de son .env.
+func TestR_SEC_6(t *testing.T) {
+	defs := 0
+	err := filepath.WalkDir("..", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".go") {
+			return err
+		}
+		content, readErr := os.ReadFile(path)
+		defs += strings.Count(string(content), "\nfunc envSecrets(")
+		return readErr
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defs != 1 {
+		t.Fatalf("func envSecrets defined %d times, want 1", defs)
+	}
+
+	secrets := envSecrets("MDP=s3cret-long # prod\n")
+	lines := []agentwire.OutputLine{{Line: "pull s3cret-long failed"}, {Line: "auth " + base64.StdEncoding.EncodeToString([]byte("s3cret-long"))}}
+	for _, line := range redactLines(lines, secrets, redactedText) {
+		if strings.Contains(line.Line, "s3cret-long") || strings.Contains(line.Line, "czNjcmV0LWxvbmc=") {
+			t.Errorf("secret left in output: %q", line.Line)
+		}
 	}
 }
