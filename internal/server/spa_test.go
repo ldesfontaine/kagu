@@ -157,3 +157,56 @@ func listAssets(t *testing.T, server *Server) []string {
 	}
 	return assets
 }
+
+// R-A2-13 : seule la route du front sert un fichier compilé sans session, et
+// elle juge le chemin encodé. Un %2F ne fait jamais passer une route /api/…
+// pour un fichier du front.
+func TestR_A2_13(t *testing.T) {
+	servertest.RequireFront(t)
+	server := newFirstSetupServer(t)
+	server.enableBasic(t)
+
+	anonymous := func(target string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodGet, target, nil)
+		request.Host = "localhost"
+		recorder := httptest.NewRecorder()
+		server.Server.ServeHTTP(recorder, request)
+		return recorder
+	}
+
+	if got := anonymous("/theme.js"); got.Code != http.StatusOK {
+		t.Errorf("/theme.js: %d, want 200", got.Code)
+	}
+	for _, target := range []string{
+		"/api/machines/..%2F..%2Ftheme.js",
+		"/api/machines/..%2f..%2ftheme.js",
+		"/api/machines/%2E%2E%2Ftheme.js",
+		"/api/counts%2F..%2Ftheme.js",
+	} {
+		got := anonymous(target)
+		if got.Code != http.StatusBadRequest && got.Code != http.StatusUnauthorized {
+			t.Errorf("%s: %d, want 400 or 401", target, got.Code)
+		}
+		if strings.Contains(got.Body.String(), "localStorage") || got.Header().Get("Cache-Control") == "no-cache" {
+			t.Errorf("%s served the compiled file", target)
+		}
+	}
+	// Un fichier compilé nommé hors du front reste fermé : la route /api/ sans
+	// %2F demande la session.
+	if got := anonymous("/api/counts"); got.Code != http.StatusUnauthorized {
+		t.Errorf("/api/counts: %d, want 401", got.Code)
+	}
+	// Le refus du %2F ne dépend pas de la session.
+	for _, signedIn := range []bool{false, true} {
+		request := httptest.NewRequest(http.MethodGet, "/api/machines/..%2F..%2Ftheme.js", nil)
+		request.Host = "localhost"
+		if signedIn {
+			request.SetBasicAuth(testUsername, testPassword)
+		}
+		recorder := httptest.NewRecorder()
+		server.Server.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusBadRequest {
+			t.Errorf("signed in %v: %d, want 400", signedIn, recorder.Code)
+		}
+	}
+}

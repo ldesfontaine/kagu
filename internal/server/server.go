@@ -638,7 +638,7 @@ func New(opts Options) (*Server, error) {
 		Clock:         opts.Clock,
 	})
 	server.mcpCheck = mcpcheck.New(opts.MCPURL, server.now)
-	server.handler = server.chain(securityHeaders(server.mux()))
+	server.handler = server.chain(securityHeaders(server.refuseEncodedSlash(server.mux())))
 	server.controlHandler = server.chain(server.controlMux())
 	return server, nil
 }

@@ -388,8 +388,8 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 		status       int
 		key          string
 	}{
-		{bearer, "/api/jobs/" + url.PathEscape("a/b"), http.StatusNotFound, codeNotFound},
-		{bearer, "/api/machines/" + url.PathEscape("x/network"), http.StatusNotFound, codeNotFound},
+		{bearer, "/api/jobs/" + url.PathEscape("a/b"), http.StatusBadRequest, codeEncodedSlash},
+		{bearer, "/api/machines/" + url.PathEscape("x/network"), http.StatusBadRequest, codeEncodedSlash},
 		{bearer, "/api/settings/api-tokens", http.StatusForbidden, codeAPITokenRouteForbidden},
 		{"ock_" + strings.Repeat("9", 52), "/api/counts", http.StatusUnauthorized, codeAPITokenInvalid},
 	} {
@@ -583,7 +583,6 @@ func TestAPIToken_PathVariantsDoNotWidenTheList(t *testing.T) {
 		{http.MethodGet, "/API/settings/mcp"},
 		{http.MethodGet, "/api/Settings/mcp"},
 		{http.MethodGet, "/api/settings/mcp/"},
-		{http.MethodGet, "/api/settings%2Fmcp"},
 		{http.MethodGet, "/api/settings/api-tokens"},
 		{http.MethodGet, "/api/auth"},
 		{http.MethodPost, "/api/auth/actions/enable"},
@@ -602,6 +601,10 @@ func TestAPIToken_PathVariantsDoNotWidenTheList(t *testing.T) {
 		if got.Code != http.StatusForbidden {
 			t.Errorf("%s %s: %d %s, want 403", attempt.method, attempt.path, got.Code, got.Body.String())
 		}
+	}
+	// Un %2F est refusé avant tout routage : 400, jamais 403 ni 404.
+	if got := callBearerWith(server.Server, http.MethodGet, "/api/settings%2Fmcp", bearer, ""); got.Code != http.StatusBadRequest || errorCode(t, got) != codeEncodedSlash {
+		t.Errorf("GET /api/settings%%2Fmcp: %d %s, want 400 %s", got.Code, got.Body.String(), codeEncodedSlash)
 	}
 	// Un chemin à nettoyer est redirigé avant toute garde, sans réponse de
 	// handler ; la cible redirigée reste refusée ci-dessus.

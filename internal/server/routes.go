@@ -12,6 +12,10 @@ import (
 // La méthode « * » : toutes, pour un fourre-tout.
 const anyMethod = "*"
 
+// frontPattern est le fourre-tout du front : la seule route dont les fichiers
+// compilés s'servent sans identifiants.
+const frontPattern = "/"
+
 type route struct {
 	method  string
 	pattern string
@@ -226,7 +230,7 @@ func (s *Server) routes() []route {
 	s.agent.Routes(add)
 	s.pings.Routes(add)
 	s.public.Routes(add)
-	return append(routes, route{anyMethod, "/", s.serveApp})
+	return append(routes, route{anyMethod, frontPattern, s.serveApp})
 }
 
 // Les lectures qu'un jeton d'API ouvre : ce que mcp-maison sert à un agent
@@ -300,7 +304,11 @@ func (s *Server) mux() *http.ServeMux {
 			handler = s.requireSameOrigin(handler)
 		}
 		if isOperatorRoute(route.pattern) {
-			handler = s.requireOperator(s.withOperatorActor(handler), isFirstSetupRoute(route.method, route.pattern), access)
+			acting := s.withOperatorActor(handler)
+			handler = s.requireOperator(acting, isFirstSetupRoute(route.method, route.pattern), access)
+			if route.pattern == frontPattern {
+				handler = s.openCompiledAssets(acting, handler)
+			}
 		}
 		if isAPI {
 			handler = s.requireKnownHost(handler)
