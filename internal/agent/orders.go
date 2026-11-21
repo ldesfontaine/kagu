@@ -278,7 +278,7 @@ func (r *orderRunner) acceptBackupReceive(body agentwire.OrderBody) (agentwire.A
 		return *refused, nil
 	}
 	return accepted(body), func(ctx context.Context) {
-		output, err := receiveBackup(ctx, r.fetch, granted, params)
+		output, err := receiveBackup(ctx, r.logger, r.fetch, granted, params)
 		r.finishLong(body, output, err)
 	}
 }

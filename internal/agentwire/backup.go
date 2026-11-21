@@ -2,6 +2,7 @@ package agentwire
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +50,7 @@ type BackupPruneParams struct {
 const (
 	backupFileTimeLayout = "20060102-150405"
 	backupFileSuffix     = ".tar.age"
+	backupKeySuffix      = ".age"
 	// DatabaseSubject est le sujet du plan de la base : ses fichiers gardent
 	// le nom d'avant les plans multiples (opencloud-AAAAMMJJ-HHMMSS.tar.age).
 	DatabaseSubject = "database"
@@ -66,7 +68,7 @@ var (
 	backupFilePattern    = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*-\d{8}-\d{6}\.tar\.age$`)
 	backupPrefixPattern  = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 	backupStampPattern   = regexp.MustCompile(`^\d{8}-\d{6}\.tar\.age$`)
-	backupKeyFilePattern = regexp.MustCompile(`^` + regexp.QuoteMeta(brand.BackupKeyFilePrefix) + `[0-9a-f]{16}\.age$`)
+	backupKeyFilePattern = regexp.MustCompile(`^` + regexp.QuoteMeta(brand.BackupKeyFilePrefix) + `([0-9a-f]{16})(\.[1-9][0-9]*)?` + regexp.QuoteMeta(backupKeySuffix) + `$`)
 )
 
 // BackupFilePrefix est ce que les fichiers d'un plan ont en commun : le
@@ -117,11 +119,36 @@ func IsBackupFileOf(name, prefix string) bool {
 // BackupKeyFileName nomme la clé scellée déposée à côté des sauvegardes
 // qu'elle ouvre.
 func BackupKeyFileName(fingerprint string) string {
-	return brand.BackupKeyFilePrefix + fingerprint + ".age"
+	return brand.BackupKeyFilePrefix + fingerprint + backupKeySuffix
 }
 
-// IsBackupKeyFile : la forme exacte d'une clé déposée. Avec IsBackupFile, ce
-// sont les deux seuls noms que backup.receive écrit.
+// BackupKeyFileVersion nomme la version numéro version d'une clé reçue sous
+// name : l'agent y pose une clé qui diffère de celle qu'il garde déjà sous ce
+// nom, sans jamais la remplacer. Le nom finit toujours par « .age ».
+func BackupKeyFileVersion(name string, version int) string {
+	return strings.TrimSuffix(name, backupKeySuffix) + "." + strconv.Itoa(version) + backupKeySuffix
+}
+
+// IsBackupKeyFile : la forme exacte d'une clé déposée, la clé reçue ou l'une
+// de ses versions gardées à côté. L'élagage n'en touche aucune.
 func IsBackupKeyFile(name string) bool {
 	return backupKeyFilePattern.MatchString(name)
+}
+
+// IsSentBackupKeyFile : la clé telle que le serveur la nomme, sans numéro de
+// version. Avec IsBackupFile, ce sont les deux seuls noms que backup.receive
+// accepte : seul l'agent numérote une version.
+func IsSentBackupKeyFile(name string) bool {
+	match := backupKeyFilePattern.FindStringSubmatch(name)
+	return match != nil && match[2] == ""
+}
+
+// BackupKeyFingerprint rend l'empreinte que porte le nom d'une clé, vide si
+// le nom n'est pas celui d'une clé.
+func BackupKeyFingerprint(name string) string {
+	match := backupKeyFilePattern.FindStringSubmatch(name)
+	if match == nil {
+		return ""
+	}
+	return match[1]
 }
