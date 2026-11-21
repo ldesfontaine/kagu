@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/opencloud/internal/container"
+	"github.com/ldesfontaine/opencloud/internal/wait/waittest"
 )
 
 // loggedWatcher monte un veilleur sur un faux démon, avec un journal qu'on
@@ -285,11 +286,12 @@ func TestRun_KnowsEveryContainerBeforeReportingIt(t *testing.T) {
 }
 
 // R-A4-22 : l'agent borne lui-même ses suivis, sans attendre le serveur :
-// huit ouverts, le neuvième refusé « service.logs_busy », quinze minutes
-// chacun. La borne du serveur reste la sienne, à quatre.
+// quatre ouverts, le cinquième refusé « service.logs_busy », un suivi libéré
+// rend sa place, quinze minutes chacun. La borne du serveur reste la sienne,
+// à quatre.
 func TestR_A4_22(t *testing.T) {
-	if MaxAgentFollows != 8 || MaxFollowDuration != 15*time.Minute {
-		t.Fatalf("bornes de l'agent = %d, %v", MaxAgentFollows, MaxFollowDuration)
+	if MaxAgentFollows != 4 || MaxFollowDuration != 15*time.Minute {
+		t.Errorf("bornes de l'agent = %d, %v", MaxAgentFollows, MaxFollowDuration)
 	}
 	if container.MaxFollowsPerMachine != 4 {
 		t.Fatalf("la borne du serveur a bougé : %d", container.MaxFollowsPerMachine)
@@ -298,14 +300,42 @@ func TestR_A4_22(t *testing.T) {
 	watcher.rememberAll([]string{fixtureID})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	for i := 0; i < MaxAgentFollows; i++ {
-		if _, err := watcher.OpenLogs(ctx, container.LogRequest{ContainerID: fixtureID, Follow: true}); err != nil {
-			t.Fatal(err)
+	cancels := make([]context.CancelFunc, 0, 4)
+	for i := 0; i < 4; i++ {
+		followCtx, cancelFollow := context.WithCancel(ctx)
+		cancels = append(cancels, cancelFollow)
+		if _, err := watcher.OpenLogs(followCtx, container.LogRequest{ContainerID: fixtureID, Follow: true}); err != nil {
+			t.Fatalf("le suivi %d : %v", i+1, err)
 		}
 	}
-	if batch := firstBatch(t, watcher, container.LogRequest{ContainerID: fixtureID, Follow: true}); batch.Error != LogsBusy {
-		t.Fatalf("le neuvième suivi : %+v", batch)
+	// Contexte annulable : si le cinquième était accepté, son flux ne reste pas ouvert.
+	fifthCtx, cancelFifth := context.WithCancel(ctx)
+	defer cancelFifth()
+	fifth, err := watcher.OpenLogs(fifthCtx, container.LogRequest{ContainerID: fixtureID, Follow: true})
+	if err != nil {
+		t.Fatal(err)
 	}
+	select {
+	case batch := <-fifth:
+		if batch.Error != LogsBusy {
+			t.Fatalf("le cinquième suivi : %+v", batch)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("le cinquième suivi est accepté, il devait être refusé en service.logs_busy")
+	}
+	cancels[0]()
+	waittest.Until(t, "la place du suivi libéré rendue", func() bool {
+		batches, err := watcher.OpenLogs(ctx, container.LogRequest{ContainerID: fixtureID, Follow: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case batch := <-batches:
+			return batch.Error != LogsBusy
+		case <-time.After(200 * time.Millisecond):
+			return true
+		}
+	})
 	if LogsBusy != "service.logs_busy" {
 		t.Fatalf("clé figée changée : %s", LogsBusy)
 	}

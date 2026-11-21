@@ -22,9 +22,10 @@ const (
 
 // Les bornes que l'agent tient lui-même sur les suivis qu'il sert : un
 // serveur compromis ne tient pas les siennes (container.MaxFollowsPerMachine
-// reste celle du serveur, distincte). Valeurs fixes.
+// reste celle du serveur, distincte). Quatre suivis : autant que le serveur en
+// accorde par machine, donc aucun suivi légitime n'est refusé ici. Valeurs fixes.
 const (
-	MaxAgentFollows   = 8
+	MaxAgentFollows   = 4
 	MaxFollowDuration = 15 * time.Minute
 )
 
