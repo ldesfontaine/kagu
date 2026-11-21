@@ -154,6 +154,12 @@ Elle chiffre la sauvegarde de la base (« Comment une sauvegarde se fait »,
 STREAM ChaCha20-Poly1305, en-tête HMAC) coûterait environ 500 lignes de
 cryptographie à maintenir et à éprouver contre les vecteurs de test.
 
+Lire un `.env` comme Compose : `github.com/compose-spec/compose-go/v2`, son
+seul sous-paquet `dotenv`, version épinglée (`v2.17.0`). Il tire `logrus`
+(un WARN par variable non définie, que l'agent éteint) et `x/sys`. Coût : une
+dépendance et le `go 1.26.11` de son `go.mod` ; gain : aucune lecture maison à
+tenir alignée sur Compose.
+
 Le front demande Node ≥ 20.19 et npm. Les paquets sont épinglés à la version
 exacte dans `web/package.json` (`save-exact`), le verrou est
 versionné, la CI joue `npm ci`. Le npm 9 de Debian plante parfois pour

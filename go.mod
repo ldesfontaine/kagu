@@ -1,13 +1,13 @@
 module github.com/ldesfontaine/opencloud
 
-go 1.26.0
-
-toolchain go1.26.11
+go 1.26.11
 
 require (
 	filippo.io/age v1.3.2
+	github.com/compose-spec/compose-go/v2 v2.17.0
 	github.com/go-playground/validator/v10 v10.30.5
 	github.com/pelletier/go-toml/v2 v2.4.3
+	github.com/sirupsen/logrus v1.10.1
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.58.0
 	modernc.org/sqlite v1.61.0
