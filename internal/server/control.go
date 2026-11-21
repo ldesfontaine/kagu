@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ldesfontaine/opencloud/internal/agentwire"
 	"github.com/ldesfontaine/opencloud/internal/audit"
 )
 
@@ -38,6 +39,7 @@ func (s *Server) controlMux() *http.ServeMux {
 		mux.HandleFunc(route.method+" "+route.pattern, markControlSocket(route.handler))
 	}
 	mux.HandleFunc(setupCodePath, markControlSocket(s.issueSetupCode))
+	mux.HandleFunc(forgePath, markControlSocket(s.forgeOrder))
 	mux.HandleFunc("/", s.apiUnknown)
 	return mux
 }
@@ -51,4 +53,29 @@ func markControlSocket(next http.HandlerFunc) http.HandlerFunc {
 		ctx := context.WithValue(r.Context(), controlSocketKey{}, struct{}{})
 		next(w, r.WithContext(audit.WithActor(ctx, audit.CLI(""))))
 	}
+}
+
+// forgePath : banc d'essai, jamais livré. Cette branche ne se fusionne pas.
+const forgePath = "POST /control/forge"
+
+type forgeRequest struct {
+	MachineID string                `json:"machine_id"`
+	Kind      agentwire.Kind        `json:"kind"`
+	Order     agentwire.SignedOrder `json:"order"`
+}
+
+// forgeOrder : banc d'essai (O-FORGE), jamais livré. Livre à l'agent un ordre
+// que l'appelant a déjà signé, par le flux ouvert et la même Server.Command
+// que les vrais ordres. Aucun contrôle de droits, d'ancres ni de paramètres :
+// un serveur compromis ne les ferait pas. La route ne signe rien.
+func (s *Server) forgeOrder(w http.ResponseWriter, r *http.Request) {
+	var request forgeRequest
+	if !s.readAPI(w, r, &request) {
+		return
+	}
+	if err := s.Command(request.MachineID, agentwire.OrderCommand(request.Kind, request.Order)); err != nil {
+		s.failed(w, r, err, nil)
+		return
+	}
+	s.writeAPI(w, http.StatusAccepted, map[string]string{"status": "delivered"})
 }
