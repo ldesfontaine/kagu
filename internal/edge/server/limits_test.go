@@ -156,7 +156,7 @@ func TestR_A2_18(t *testing.T) {
 		}
 		mux := http.NewServeMux()
 		mux.HandleFunc("GET /slow", slow)
-		mux.HandleFunc("GET /stream", liftWriteDeadline(slow))
+		mux.HandleFunc("GET /stream", liftDeadlines(slow))
 		address := listenLimitedForTest(t, ConnectionLimits{Total: 1024, PerSource: 64}, boundResponseWrite(bound, mux))
 
 		_, _ = http.Get("http://" + address + "/slow")
@@ -178,7 +178,7 @@ func TestR_A2_18(t *testing.T) {
 		outcomes := make(chan error, 1)
 		mux := http.NewServeMux()
 		mux.HandleFunc("GET /short", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
-		mux.HandleFunc("GET /stream", liftWriteDeadline(func(w http.ResponseWriter, _ *http.Request) {
+		mux.HandleFunc("GET /stream", liftDeadlines(func(w http.ResponseWriter, _ *http.Request) {
 			outcomes <- writeAfter(w, hold)
 		}))
 		address := listenLimitedForTest(t, ConnectionLimits{Total: 1024, PerSource: 64}, boundResponseWrite(bound, mux))
@@ -216,11 +216,19 @@ func writeAfter(w http.ResponseWriter, hold time.Duration) error {
 	return http.NewResponseController(w).Flush()
 }
 
-// deadlineRecorder garde l'échéance d'écriture posée en dernier.
+// deadlineRecorder garde les échéances d'écriture et de lecture posées en
+// dernier.
 type deadlineRecorder struct {
 	*httptest.ResponseRecorder
-	deadline time.Time
-	set      bool
+	deadline     time.Time
+	set          bool
+	readDeadline time.Time
+	readSet      bool
+}
+
+func (r *deadlineRecorder) SetReadDeadline(deadline time.Time) error {
+	r.readDeadline, r.readSet = deadline, true
+	return nil
 }
 
 func (r *deadlineRecorder) SetWriteDeadline(deadline time.Time) error {
@@ -232,7 +240,7 @@ func (r *deadlineRecorder) SetWriteDeadline(deadline time.Time) error {
 // gardent : lu sur l'arbre réel, sans attendre un flux de 30 s.
 func TestR_A2_18_StreamRoutesLiftTheDeadlineOthersKeepIt(t *testing.T) {
 	bench := newTestServer(t)
-	handler := boundResponseWrite(30*time.Second, bench.mux())
+	handler := boundRequestRead(30*time.Second, boundResponseWrite(30*time.Second, bench.mux()))
 	deadlineOf := func(method, path string) *deadlineRecorder {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -246,10 +254,16 @@ func TestR_A2_18_StreamRoutesLiftTheDeadlineOthersKeepIt(t *testing.T) {
 		if recorded := deadlineOf(http.MethodGet, path); !recorded.set || !recorded.deadline.IsZero() {
 			t.Errorf("GET %s: write deadline %v, want none", path, recorded.deadline)
 		}
+		if recorded := deadlineOf(http.MethodGet, path); !recorded.readSet || !recorded.readDeadline.IsZero() {
+			t.Errorf("GET %s: read deadline %v, want none", path, recorded.readDeadline)
+		}
 	}
 	browse := deadlineOf(http.MethodPost, "/api/machines/m1/restic-backups/b1/actions/browse")
 	if left := time.Until(browse.deadline); !browse.set || left < browseWriteBound-5*time.Second || left > browseWriteBound {
 		t.Errorf("browse: write deadline in %v, want about %v", left, browseWriteBound)
+	}
+	if left := time.Until(browse.readDeadline); !browse.readSet || left < browseWriteBound-5*time.Second || left > browseWriteBound {
+		t.Errorf("browse: read deadline in %v, want about %v", left, browseWriteBound)
 	}
 	if browseWriteBound <= restic.BrowseWait {
 		t.Errorf("browse bound %v leaves no margin over the wait %v", browseWriteBound, restic.BrowseWait)
@@ -258,6 +272,9 @@ func TestR_A2_18_StreamRoutesLiftTheDeadlineOthersKeepIt(t *testing.T) {
 		recorded := deadlineOf(http.MethodGet, path)
 		if left := time.Until(recorded.deadline); !recorded.set || left < 25*time.Second || left > 30*time.Second {
 			t.Errorf("GET %s: write deadline in %v, want about 30s", path, left)
+		}
+		if left := time.Until(recorded.readDeadline); !recorded.readSet || left < 25*time.Second || left > 30*time.Second {
+			t.Errorf("GET %s: read deadline in %v, want about 30s", path, left)
 		}
 	}
 }

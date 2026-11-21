@@ -543,6 +543,9 @@ type Options struct {
 	// ResponseWriteTimeout est le temps qu'une réponse hors flux a pour
 	// partir (limits.go) ; zéro : aucune borne, pour les tests.
 	ResponseWriteTimeout time.Duration
+	// RequestReadTimeout est le temps qu'une requête hors flux a pour être
+	// lue en entier (limits.go) ; zéro : aucune borne, pour les tests.
+	RequestReadTimeout time.Duration
 	// ConnectionsPerSource est la borne par client derrière un mandataire de
 	// confiance (limits.go) ; zéro : aucune, pour les tests.
 	ConnectionsPerSource int
@@ -656,6 +659,11 @@ func New(opts Options) (*Server, error) {
 		server.clientSlots = ratelimit.NewSourceSlots(opts.ConnectionsPerSource)
 		server.refusals = newRefusalLog(opts.Logger)
 		routed = server.limitClientsBehindProxy(routed)
+	}
+	// Hors de la borne par client : une requête refusée (429) laisse aussi
+	// son corps à drainer.
+	if opts.RequestReadTimeout > 0 {
+		routed = boundRequestRead(opts.RequestReadTimeout, routed)
 	}
 	server.handler = server.chain(server.securityHeaders(routed))
 	server.controlHandler = server.chain(server.controlMux())

@@ -15,8 +15,9 @@ import (
 )
 
 // Ce qu'un client peut tenir ouvert (R-A2-18) : des connexions, comptées à
-// l'acceptation, et le temps qu'une réponse hors flux met à partir. Le
-// serveur HTTP ne pose pas de WriteTimeout : il couperait aussi les flux.
+// l'acceptation, et le temps qu'une requête hors flux met à être lue et sa
+// réponse à partir. Le serveur HTTP ne pose ni ReadTimeout ni WriteTimeout :
+// ils couperaient aussi les flux.
 const (
 	// Une source dont la connexion est refusée est dite au journal une fois
 	// par minute, pas une ligne par tentative.
@@ -42,6 +43,17 @@ func (l *refusalLog) note(address, limit string) {
 		return
 	}
 	l.logger.Warn("connection refused: too many open connections", "source", address, "limit", limit)
+}
+
+// noteForwardedFromUndeclaredPeer dit, une fois par minute et par pair, qu'un
+// X-Forwarded-For arrive d'un pair absent de trusted_proxies : l'en-tête est
+// ignoré, et tous les clients derrière ce mandataire partagent la borne d'une
+// seule source. Sans cette ligne, l'opérateur ne voit que des refus sans cause.
+func (l *refusalLog) noteForwardedFromUndeclaredPeer(peer string) {
+	if l.logger == nil || !l.seen.Allow("forwarded:"+peer) {
+		return
+	}
+	l.logger.Warn("X-Forwarded-For ignored: peer is not in trusted_proxies", "source", peer)
 }
 
 // ConnectionLimits borne les connexions ouvertes en même temps.
@@ -150,20 +162,39 @@ func boundResponseWrite(timeout time.Duration, next http.Handler) http.Handler {
 	})
 }
 
-// liftWriteDeadline laisse un flux ouvert aussi longtemps que son client :
-// net/http ne remet pas l'échéance à zéro d'une requête à l'autre sur une
-// connexion gardée, et celle d'une réponse précédente couperait le flux.
-func liftWriteDeadline(next http.HandlerFunc) http.HandlerFunc {
+// boundRequestRead pose, avant toute route, la durée qu'une requête a pour
+// être lue en entier. Sans elle, net/http draine le corps que le handler n'a
+// pas lu, sans échéance, après avoir rendu la place du client
+// (limitClientsBehindProxy) : un corps envoyé au compte-gouttes tiendrait la
+// connexion hors de toute borne. Pas de ReadTimeout sur le serveur : il
+// couperait aussi les flux ; ils lèvent celle-ci (liftDeadlines).
+func boundRequestRead(timeout time.Duration, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		setReadDeadline(w, time.Now().Add(timeout))
+		next.ServeHTTP(w, r)
+	})
+}
+
+// liftDeadlines laisse un flux ouvert aussi longtemps que son client :
+// net/http ne remet pas les échéances à zéro d'une requête à l'autre sur une
+// connexion gardée, et celles d'une requête précédente couperaient le flux.
+// L'échéance de lecture échue annule aussi le contexte de la requête.
+func liftDeadlines(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setWriteDeadline(w, time.Time{})
+		setReadDeadline(w, time.Time{})
 		next(w, r)
 	}
 }
 
-// setWriteDeadline ignore l'erreur : un écrivain sans échéance (le
-// httptest.ResponseRecorder) n'a pas de connexion à borner.
+// setWriteDeadline et setReadDeadline ignorent l'erreur : un écrivain sans
+// échéance (le httptest.ResponseRecorder) n'a pas de connexion à borner.
 func setWriteDeadline(w http.ResponseWriter, deadline time.Time) {
 	_ = http.NewResponseController(w).SetWriteDeadline(deadline)
+}
+
+func setReadDeadline(w http.ResponseWriter, deadline time.Time) {
+	_ = http.NewResponseController(w).SetReadDeadline(deadline)
 }
 
 // limitClientsBehindProxy borne, pour un pair de trusted_proxies, ce que
@@ -175,6 +206,9 @@ func setWriteDeadline(w http.ResponseWriter, deadline time.Time) {
 func (s *Server) limitClientsBehindProxy(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.trustsPeer(r) {
+			if r.Header.Get("X-Forwarded-For") != "" {
+				s.refusals.noteForwardedFromUndeclaredPeer(httpx.PeerHost(r))
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -197,11 +231,13 @@ const (
 	browseWriteBound  = restic.BrowseWait + browseWriteMargin
 )
 
-// boundWriteTo remplace, pour une route, la durée d'écriture générale par la
-// sienne.
-func boundWriteTo(bound time.Duration, next http.HandlerFunc) http.HandlerFunc {
+// boundTo remplace, pour une route, les durées générales de lecture et
+// d'écriture par la sienne : la lecture aussi, car son échéance échue
+// annulerait la requête qui attend la cible.
+func boundTo(bound time.Duration, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		setWriteDeadline(w, time.Now().Add(bound))
+		setReadDeadline(w, time.Now().Add(bound))
 		next(w, r)
 	}
 }
