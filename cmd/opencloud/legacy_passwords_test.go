@@ -16,6 +16,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/ldesfontaine/opencloud/internal/domain/alert"
 	"github.com/ldesfontaine/opencloud/internal/edge/store"
 	"github.com/ldesfontaine/opencloud/internal/edge/store/storetest"
 	"github.com/ldesfontaine/opencloud/internal/fact/machine"
@@ -109,7 +110,7 @@ func TestR_D5_19_StartupLeavesNoPasswordInTheFiles(t *testing.T) {
 	}
 	probes := probe.New(db, logger)
 
-	removeLegacyProbePasswords(ctx, probes, db, logger)
+	removeLegacyProbePasswords(ctx, probes, alert.New(db, logger), db, logger)
 
 	for _, leftover := range []string{"hunter2zz", "staleOldPw99"} {
 		if bytes.Contains(databaseBytes(t, stateDir), []byte(leftover)) {
@@ -125,8 +126,8 @@ func TestRemoveLegacyProbePasswords_CompactsOnceThenNoMore(t *testing.T) {
 	probes := probe.New(db, logger)
 	compactor := &countingCompactor{}
 
-	removeLegacyProbePasswords(ctx, probes, compactor, logger)
-	removeLegacyProbePasswords(ctx, probes, compactor, logger)
+	removeLegacyProbePasswords(ctx, probes, alert.New(db, logger), compactor, logger)
+	removeLegacyProbePasswords(ctx, probes, alert.New(db, logger), compactor, logger)
 
 	if compactor.calls != 1 {
 		t.Fatalf("the first start compacts, the second finds nothing to remove: %d compactions", compactor.calls)
@@ -138,7 +139,7 @@ func TestRemoveLegacyProbePasswords_NothingToRemoveNeverCompacts(t *testing.T) {
 	logger := quietLogger(io.Discard)
 	compactor := &countingCompactor{}
 
-	removeLegacyProbePasswords(context.Background(), probe.New(db, logger), compactor, logger)
+	removeLegacyProbePasswords(context.Background(), probe.New(db, logger), alert.New(db, logger), compactor, logger)
 
 	if compactor.calls != 0 {
 		t.Fatalf("no password removed, no compaction: %d", compactor.calls)
@@ -152,12 +153,44 @@ func TestRemoveLegacyProbePasswords_CompactionFailureIsLoggedAndStartupGoesOn(t 
 	_, db := openWithLegacyProbe(t, logger)
 	compactor := &countingCompactor{err: errors.New("disk full")}
 
-	removeLegacyProbePasswords(context.Background(), probe.New(db, logger), compactor, logger)
+	removeLegacyProbePasswords(context.Background(), probe.New(db, logger), alert.New(db, logger), compactor, logger)
 
 	if !strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "disk full") {
 		t.Fatalf("expected an error log with the cause:\n%s", logs.String())
 	}
 	if strings.Contains(logs.String(), "hunter2zz") {
 		t.Fatal("the log must not carry the password")
+	}
+}
+
+// TU-22 : de 4229874 à 621466e, une alerte probe_down écrivait la cible brute
+// dans alerts.details. La résolution garde la ligne 90 jours : le démarrage
+// la nettoie et compacte, même quand aucune sonde ne porte plus de mot de passe.
+func TestRemoveLegacyProbePasswords_RedactsOldProbeDownAlertTarget(t *testing.T) {
+	ctx := context.Background()
+	logger := quietLogger(io.Discard)
+	stateDir, db := openWithLegacyProbe(t, logger)
+	at := time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC)
+	if _, err := db.InsertAlert(ctx, alert.Alert{
+		Kind: alert.KindProbeDown, Severity: alert.SeverityDanger, Status: alert.StatusResolved,
+		Object:    alert.Object{Kind: alert.ObjectProbe, ID: "00000000000000a1", Name: "api"},
+		MachineID: machine.LocalID,
+		Details:   alert.Details{Target: "https://u:alertOldPw77@h.example.org/", Reason: "timeout"},
+		OpenedAt:  at, UpdatedAt: at, ResolvedAt: at.Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	removeLegacyProbePasswords(ctx, probe.New(db, logger), alert.New(db, logger), db, logger)
+
+	if bytes.Contains(databaseBytes(t, stateDir), []byte("alertOldPw77")) {
+		t.Fatal("le mot de passe est encore dans alerts.details, le fichier de base ou son -wal après le démarrage")
+	}
+	alerts, err := db.ListAlerts(ctx, alert.Filter{Kind: alert.KindProbeDown})
+	if err != nil || len(alerts) != 1 {
+		t.Fatalf("alertes: %v, %v", alerts, err)
+	}
+	if got := alerts[0].Details.Target; got != "https://u:…@h.example.org/" {
+		t.Fatalf("la cible de l'alerte garde son utilisateur sans son mot de passe: %q", got)
 	}
 }

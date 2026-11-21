@@ -190,7 +190,7 @@ func runServe(args []string) error {
 	// Une sonde dont la cible porte des identifiants, d'avant leur refus, ne
 	// repart pas : le mot de passe est retiré, elle attend que l'opérateur
 	// règle sa cible à nouveau.
-	removeLegacyProbePasswords(ctx, parts.probes, db, logger)
+	removeLegacyProbePasswords(ctx, parts.probes, parts.alerts, db, logger)
 	if err := parts.probes.PauseTargetsWithCredentials(ctx); err != nil {
 		logger.Warn("pause probes with credentials", "error", err)
 	}
