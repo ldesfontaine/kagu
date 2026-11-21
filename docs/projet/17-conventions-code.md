@@ -9,32 +9,37 @@ go.dev) : un point d'entrée sous `cmd/`, tout le reste sous `internal/`, que
 le compilateur interdit d'importer d'ailleurs. Pas de `src/`, pas de `pkg/`.
 
 ```
-cmd/opencloud/               # le seul main : il aiguille vers la commande
-internal/<composant>/        # un package par composant
-internal/reader/             # l'interface Reader : les lectures de la base sans règle, partagées (types seulement)
-internal/agentwire/          # le protocole agent ↔ serveur entier : en-têtes, corps JSON, sections du signal, liste fermée de ce que le serveur pousse, enveloppe signée des ordres
-internal/server/             # la couche HTTP : montage, middlewares, API JSON, front servi
-internal/server/agentapi/    # les routes /agent/… : enrôlement, flux, signal, journaux
-internal/server/ping/        # les routes /ping/… d'un cron
-internal/server/public/      # la page de statut publique sous /statut : page, instantané, chaînes, direct
-internal/server/sse/         # la boucle des flux text/event-stream, partagée par l'administration et la page publique
-internal/server/httpx/       # les gestes de réponse que la racine et ses sous-paquets partagent : JSON, événement SSE, 429, adresse du pair
-internal/server/servertest/  # ce que les tests de server et de ses sous-paquets partagent
-internal/wait/waittest/      # attendre une condition dans un test (borne de 30 s)
-internal/goldentest/         # comparer une sortie à son fichier de référence, drapeau -update
-internal/testkit/            # les petits gestes de test partagés : racine vide, port fermé, empreinte, JSON
-web/                         # le front React : src/, public/, dist/ embarqué par web/embed.go
-migrations/                  # SQL numéroté, embarqué ; 001_schema.sql est le schéma lisible
-docs/projet/                 # méthode, conventions, direction artistique
-.github/                     # CI, gabarits de tickets
+cmd/opencloud/                     # le seul main : il aiguille vers la commande
+internal/<famille>/<paquet>/       # un paquet par concept, rangé dans sa famille (« Les familles »)
+internal/kit/                      # rang 0 : les outils sans règle d'openCloud
+internal/fact/                     # rang 1 : ce qu'on sait d'un objet
+internal/wire/agentwire/           # rang 2 : le protocole agent ↔ serveur entier : en-têtes, corps JSON, sections du signal, liste fermée de ce que le serveur pousse, enveloppe signée des ordres
+internal/gesture/                  # rang 3 : les gestes : runs, verbes, demandes, jetons
+internal/domain/                   # rang 4 : les domaines qui agissent
+internal/view/reader/              # rang 5 : l'interface Reader : les lectures de la base sans règle, partagées (types seulement)
+internal/edge/server/              # rang 6 : la couche HTTP : montage, middlewares, API JSON, front servi
+internal/edge/server/agentapi/     # les routes /agent/… : enrôlement, flux, signal, journaux
+internal/edge/server/ping/         # les routes /ping/… d'un cron
+internal/edge/server/public/       # la page de statut publique sous /statut : page, instantané, chaînes, direct
+internal/edge/server/sse/          # la boucle des flux text/event-stream, partagée par l'administration et la page publique
+internal/edge/server/httpx/        # les gestes de réponse que la racine et ses sous-paquets partagent : JSON, événement SSE, 429, adresse du pair
+internal/edge/server/servertest/   # ce que les tests de server et de ses sous-paquets partagent
+internal/kit/wait/waittest/        # attendre une condition dans un test (borne de 30 s)
+internal/kit/goldentest/           # comparer une sortie à son fichier de référence, drapeau -update
+internal/kit/testkit/              # les petits gestes de test partagés : racine vide, port fermé, empreinte, JSON
+web/                               # le front React : src/, public/, dist/ embarqué par web/embed.go
+migrations/                        # SQL numéroté, embarqué ; 001_schema.sql est le schéma lisible
+scripts/familles.tsv               # la table ancien chemin → nouveau chemin du rangement par famille
+docs/projet/                       # méthode, conventions, direction artistique
+.github/                           # CI, gabarits de tickets
 ```
 
 **Le Go vit dans `internal/`, le front dans `web/`.** `web/` et `migrations/`
 sont à la racine parce qu'un `embed` ne remonte pas au-dessus de son
 dossier, et qu'un humain les cherche là ; le seul Go de `web/` est
-`embed.go`, qui expose `dist/` à `internal/server`. `web/dist` est produit
+`embed.go`, qui expose `dist/` à `internal/edge/server`. `web/dist` est produit
 par `make front` : il n'est pas versionné, et tout build ou test Go le fait
-d'abord. `internal/server` se découpe par consommateur : l'agent
+d'abord. `internal/edge/server` se découpe par consommateur : l'agent
 (`server/agentapi`), les pings (`server/ping`) et la page de statut publique
 (`server/public`) en sont sortis, chacun avec ses seules dépendances, son
 format de réponse et ses limiteurs ; la racine garde le montage des routes, la
@@ -64,7 +69,7 @@ l'opérateur en français** — interface, refus, notifications, documentation.
 Un fichier de chaînes par langue dès le départ, même s'il n'y en a qu'une.
 
 **Le nom du produit ne s'écrit qu'à un seul endroit** : aucun littéral
-« openCloud », « opencloud » ni préfixe de jeton en dehors de `internal/brand`
+« openCloud », « opencloud » ni préfixe de jeton en dehors de `internal/kit/brand`
 (`brand.ProductName`, `brand.Command`…). Les catalogues posent `{product}`,
 `{command}` ou `{signature_header}`, les pages HTML `{{product}}`. Un test
 (`TestNameOnlyInBrand`) l'impose ; les commentaires et les identifiants Go ne
@@ -178,36 +183,80 @@ binaire par plateforme.
 - Les types du domaine portent les noms du modèle (`24-modele-cible.md`) :
   `Machine`, `Container`, `Probe`, `Service` et `Unit` de l'annuaire.
 
-### Les couches
+### Les familles
 
-| Couche | Paquets | Ce qu'elle fait | Jamais |
+**Un dossier par rang d'import**, pas par domaine métier : des dossiers par
+domaine (machines, services, données, réseau, surveillance) s'importent en
+rond (`probe → machine`, `proxmox → agentwire`, `agentwire → probe`) ; les
+dossiers par rang ne font aucun cycle. Un rang ne se regroupe avec aucun
+autre : chacun a sa règle d'import.
+
+| Dossier | Rang | Ce qu'il porte | N'importe que |
 | --- | --- | --- | --- |
-| Entrée | `cmd/opencloud` | Aiguille vers la commande, ouvre la base, construit les composants et les branche : une fois, dans `components.go`, pour `serve` et les commandes qui en ont besoin | Une règle métier |
-| HTTP | `internal/server` (racine) | Le montage des routes, la chaîne de middlewares, les gardes (hôte, même-origine, opérateur), l'API JSON, le front servi | Du SQL, une règle métier |
-| HTTP par consommateur | `server/agentapi`, `server/ping`, `server/public`, `server/sse` | Les routes d'un seul consommateur, avec ses dépendances, son format de réponse et ses limiteurs (« Le dépôt ») | Importer `server` |
-| HTTP partagé | `server/httpx` | Les gestes de réponse de la racine et des sous-paquets : `WriteJSON`, `WriteEvent`, `WriteTooMany`, `PeerHost`, `ConvertAll`, `TimeOrNil` | Une route, un composant |
-| Composants | `machine`, `container`, `probe`, `heartbeat`, `resource`, `directory`, `manifest`, `status`, `alert`, `update`, `lifecycle`, `settings`, `auth`, `apitoken`, `action` (les ordres signés aux agents : la clé du serveur, le run écrit avant l'envoi, la réponse, l'expiration, les colis), `backup` (la sauvegarde de la base : la paire de clés, l'archive chiffrée, le plan ; il envoie par `action`, sans connaître le serveur ni le store) | Les règles : vérifier, valider, écrire, publier sur le direct, donner les faits aux alertes | HTTP, SQL, relayer une lecture de la base sans rien y ajouter |
-| Lecture partagée | `internal/reader` | L'interface `Reader` : les lectures de la base sans règle (`List*`, `Get*`, `Count*`) que le serveur, la page de statut et le fichier de l'annuaire partagent ; `*store.DB` la satisfait (`var _ reader.Reader = (*DB)(nil)`) | Une requête, une règle, une écriture ; rendre les types d'un paquet qui l'importe (`status`, `manifest`) |
-| Base | `internal/store` | Tout le SQL : requêtes, transactions, migrations, les comptes (`CountContainers`, `CountContainerUpdates`), et les contrôles qui doivent tenir dans la transaction de l'écriture (unicité de l'annuaire) | Une règle qu'un composant peut porter |
-| Protocole agent | `internal/agentwire` | Le protocole entier, figé par les agents installés : en-têtes, corps, sections du signal ; la liste fermée de ce que le serveur pousse (`Kind`, `Command` typée, plus d'`any` sur le fil) et l'enveloppe des ordres (`OrderBody`, `SignedOrder`) ; les octets que les deux côtés signent ou comparent (`OrderSigningBytes`, `KeyFingerprint`) ; sa version (`ProtocolVersion`, l'en-tête `OpenCloud-Agent-Protocol`) et ses bornes (`MaxEventBytes`, `MaxEventLineBytes`, `EventDataLine`). Un changement que les agents installés ne liraient pas passe la version : le serveur refuse l'autre (`426`), jamais en silence. La preuve de l'agent (`machine.SignedPayload`) reste dans `machine`, que `agentwire` importe Un domaine ne nomme jamais un événement : il déclare son commandeur typé (`container.Commander.RequestLogs`), le serveur l'encode | Une règle, un appel |
-| Outils | `refusal`, `deletion`, `live`, `fsx`, `seal`, `egress`, `ratelimit`, `ident`, `wait`, `brand`, `lang`, `mail`, `registry`, `dockerapi`, `sampler`, `hostinfo`, `trust`, `proxysecret`, `mcpcheck`, `config`, `audit`, `release`, `rollback` | Un concept chacun, sans règle d'openCloud. `deletion` : la forme du plan d'une suppression et le refus qui le porte, la règle restant au domaine (`machine.RefuseDeletion`) ; `ratelimit` : un limiteur par clé (`New`) ou par source (`BySource`, le /64 calculé dedans), balayé au passage ; `ident.New` : les identifiants de seize hexadécimaux (`machine.NewID`, un UUID, reste à part) ; `wait.For` : une pause qui s'arrête à l'annulation; `audit` : l'acteur dans le contexte et le `Recorder` du journal d'audit, que tous les composants, `server`, `store` et `reader` importent : un outil, sinon un composant qui l'importe et qu'il nommerait ferait un cycle ; `release` : la signature minisign des versions et la vérification d'un fichier contre elle ; la clé publique embarquée ; `rollback` : le marqueur d'une mise à jour d'agent en attente de confirmation, les liens `current` et `previous`, et le lanceur stable (`Guard`) qui rebascule seul à l'échéance | Importer un composant |
-| Agent | `agent`, `dockerwatch` | Ce qui tourne sur une machine gérée | Importer `server` ou `store` |
+| `internal/kit/` | 0 | Les outils sans règle d'openCloud : refus, identifiants, fichiers, langue, sortie réseau, clients bruts (Docker, registre, SMTP) | la bibliothèque standard, `kit` |
+| `internal/fact/` | 1 | Ce qu'on sait d'un objet : machine, conteneur, sonde, lien, droits | `kit` |
+| `internal/wire/` | 2 | Le protocole agent ↔ serveur | `kit`, `fact` |
+| `internal/gesture/` | 3 | Les gestes : runs, verbes, demandes, jetons | `kit`, `fact`, `wire` |
+| `internal/domain/` | 4 | Les domaines qui agissent : annuaire, déploiement, sauvegardes, alertes, réseau | les rangs 0 à 3, `domain` |
+| `internal/view/` | 5 | Les lectures croisées : `reader`, page de statut, fichier de l'annuaire | les rangs 0 à 4, `view` |
+| `internal/edge/` | 6 | Le bord : HTTP, base, agent, configuration | tout le dessous |
 
-Qui peut importer qui :
+`cmd/opencloud` importe tout.
 
-| Paquet | Importe | N'importe jamais |
+| Famille | Paquets |
+| --- | --- |
+| `kit` | `audit`, `brand`, `credential`, `deletion`, `dockerapi`, `egress`, `fsx`, `goldentest`, `hostinfo`, `ident`, `lang`, `live`, `mail` (+ `smtptest`), `mcpcheck`, `module`, `proxysecret`, `ratelimit`, `refusal`, `registry`, `release` (+ `releasetest`), `rollback`, `sampler`, `seal`, `testkit`, `tlsinspect`, `trust`, `version`, `wait` (+ `waittest`) |
+| `fact` | `machine`, `anchor`, `auth`, `container`, `firewall` (+ `opnsense`, `opnsense/opnsensetest`), `hostconn`, `lifecycle`, `link`, `policy`, `probe`, `resource`, `role`, `sshkeys`, `systemdunits`, `update` |
+| `wire` | `agentwire` |
+| `gesture` | `action`, `apitoken`, `verb`, `verbrequest` |
+| `domain` | `alert`, `backup`, `deploy`, `directory`, `dockerwatch`, `heartbeat`, `netmap`, `proxmox`, `restic`, `settings` |
+| `view` | `reader`, `status`, `manifest` |
+| `edge` | `server` (+ `agentapi`, `httpx`, `ping`, `public`, `servertest`, `sse`), `agent`, `config`, `store` (+ `storetest`) |
+
+- **Le nom du paquet ne change pas** avec son dossier : le dernier élément
+  du chemin est le nom (`refusal.Invalid` s'écrit pareil sous
+  `internal/kit/refusal`).
+- **Une famille est un dossier, pas un paquet** : aucun fichier Go n'y vit
+  directement, aucun code n'écrit `kit.`. Pas de `util`, `common` ni `misc`.
+- **Un paquet nouveau naît dans sa famille**, au rang de ce qu'il importe.
+- `config` va au bord parce qu'il lit une borne d'`auth` ; s'il la recevait,
+  il reviendrait dans `kit`.
+- `scripts/familles.tsv` garde la table ancien chemin → nouveau chemin ;
+  `scripts/familles-imports.sh` réécrit les imports Go d'une branche ouverte
+  avant le rangement, `scripts/familles-chemins.sh` les chemins écrits
+  ailleurs (tests, front, documents).
+
+### Les règles d'import
+
+1. Un paquet n'importe que son dossier ou un dossier de rang plus bas.
+2. `kit` n'importe que la bibliothèque standard et `kit`.
+3. `edge/agent` n'importe ni `edge/server`, ni `edge/store`. `edge/server`
+   n'importe pas `edge/store` : il lit par `view/reader`.
+4. Un sous-paquet de `edge/server` n'importe pas `edge/server`, ni un autre
+   sous-paquet (`public` importe `sse`) ; ce qu'il partage avec la racine vit
+   dans `server/httpx`, qui n'importe que la bibliothèque standard.
+5. Un banc (`*test` : `servertest`, `storetest`, `smtptest`, `waittest`,
+   `goldentest`, `testkit`…) n'est importé que par des `_test.go`.
+6. Un paquet vit dans l'un des sept dossiers, nulle part ailleurs.
+
+Le rang se lit **dans le chemin**, sans table à tenir. Aucun test ne tient
+encore ces règles : il viendra à côté de `onedefinition_test.go`, avec une
+table d'exceptions déclarées avec leur raison, vide au départ.
+
+### Ce que porte un paquet
+
+| Paquet | Ce qu'il fait | Jamais |
 | --- | --- | --- |
-| `cmd/opencloud` | tout | — |
-| `server` | ses sous-paquets, les composants, `reader`, les outils, `web` | `store` |
-| `server/agentapi`, `server/ping`, `server/public`, `server/sse` | les composants qu'il sert, les outils, `agentwire`, `server/httpx` ; `public` importe `sse` | `server`, `store`, un autre sous-paquet |
-| `server/httpx` | la bibliothèque standard | `server`, un autre sous-paquet, un composant, `store` |
-| Un composant | d'autres composants (types et gestes), les outils ; `status` et `manifest` importent `reader` | `server`, `store`, `cmd` |
-| `reader` | les composants dont il rend les types : `machine`, `container`, `probe`, `heartbeat`, `directory`, `alert`, `settings` ; l'outil `audit` | `server`, `store`, un composant qui l'importe (`status`, `manifest`) : Go refuserait le cycle |
-| `store` | les composants, pour leurs types ; `reader`, pour l'assertion ; `seal` ; `audit`, pour ses types et son `Store` ; `migrations` | `server` |
-| `agentwire` | les types qu'il transporte : `container`, `probe`, `update`, `sampler` | un composant dont il ne transporte pas les types (`machine`), `server`, `store` |
-| Un outil | d'autres outils, la bibliothèque standard | un composant, `server`, `store` |
-| `agent`, `dockerwatch` | les composants (leurs types), les outils, `agentwire` | `server`, `store` |
-| `servertest`, `storetest`, `smtptest`, `wait/waittest`, `goldentest`, `testkit` | ce qu'un banc demande, `store` compris | — ; seuls des `_test.go` les importent |
+| `cmd/opencloud` | Aiguille vers la commande, ouvre la base, construit les composants et les branche : une fois, dans `components.go`, pour `serve` et les commandes qui en ont besoin | Une règle métier |
+| `edge/server` (racine) | Le montage des routes, la chaîne de middlewares, les gardes (hôte, même-origine, opérateur), l'API JSON, le front servi | Du SQL, une règle métier |
+| `server/agentapi`, `server/ping`, `server/public`, `server/sse` | Les routes d'un seul consommateur, avec ses dépendances, son format de réponse et ses limiteurs (« Le dépôt ») | Importer `server` |
+| `server/httpx` | Les gestes de réponse de la racine et des sous-paquets : `WriteJSON`, `WriteEvent`, `WriteTooMany`, `PeerHost`, `ConvertAll`, `TimeOrNil` | Une route, un composant |
+| Les composants (`fact`, `gesture`, `domain`, `view/status`, `view/manifest`) | Les règles : vérifier, valider, écrire, publier sur le direct, donner les faits aux alertes. `action` : les ordres signés aux agents (la clé du serveur, le run écrit avant l'envoi, la réponse, l'expiration, les colis) ; `backup` : la sauvegarde de la base (la paire de clés, l'archive chiffrée, le plan ; il envoie par `action`, sans connaître le serveur ni le store) | HTTP, SQL, relayer une lecture de la base sans rien y ajouter |
+| `view/reader` | L'interface `Reader` : les lectures de la base sans règle (`List*`, `Get*`, `Count*`) que le serveur, la page de statut et le fichier de l'annuaire partagent ; `*store.DB` la satisfait (`var _ reader.Reader = (*DB)(nil)`) | Une requête, une règle, une écriture ; rendre les types d'un paquet qui l'importe (`status`, `manifest`) |
+| `edge/store` | Tout le SQL : requêtes, transactions, migrations, les comptes (`CountContainers`, `CountContainerUpdates`), et les contrôles qui doivent tenir dans la transaction de l'écriture (unicité de l'annuaire) | Une règle qu'un composant peut porter |
+| `wire/agentwire` | Le protocole entier, figé par les agents installés : en-têtes, corps, sections du signal ; la liste fermée de ce que le serveur pousse (`Kind`, `Command` typée, plus d'`any` sur le fil) et l'enveloppe des ordres (`OrderBody`, `SignedOrder`) ; les octets que les deux côtés signent ou comparent (`OrderSigningBytes`, `KeyFingerprint`) ; sa version (`ProtocolVersion`, l'en-tête `OpenCloud-Agent-Protocol`) et ses bornes (`MaxEventBytes`, `MaxEventLineBytes`, `EventDataLine`). Un changement que les agents installés ne liraient pas passe la version : le serveur refuse l'autre (`426`), jamais en silence. La preuve de l'agent (`machine.SignedPayload`) reste dans `machine`, que `agentwire` importe. Un domaine ne nomme jamais un événement : il déclare son commandeur typé (`container.Commander.RequestLogs`), le serveur l'encode | Une règle, un appel |
+| Les outils (`kit`) | Un concept chacun, sans règle d'openCloud. `deletion` : la forme du plan d'une suppression et le refus qui le porte, la règle restant au domaine (`machine.RefuseDeletion`) ; `ratelimit` : un limiteur par clé (`New`) ou par source (`BySource`, le /64 calculé dedans), balayé au passage ; `ident.New` : les identifiants de seize hexadécimaux (`machine.NewID`, un UUID, reste à part) ; `wait.For` : une pause qui s'arrête à l'annulation ; `audit` : l'acteur dans le contexte et le `Recorder` du journal d'audit, que tous les composants, `server`, `store` et `reader` importent ; `release` : la signature minisign des versions et la vérification d'un fichier contre elle ; la clé publique embarquée ; `rollback` : le marqueur d'une mise à jour d'agent en attente de confirmation, les liens `current` et `previous`, et le lanceur stable (`Guard`) qui rebascule seul à l'échéance | Importer un composant |
+| `edge/agent`, `domain/dockerwatch` | Ce qui tourne sur une machine gérée | Importer `server` ou `store` |
 
 Deux composants qui ont besoin l'un de l'autre ne s'importent pas tous les
 deux (Go le refuse) : l'un déclare une interface et reçoit l'autre par un
@@ -234,20 +283,20 @@ recevoir le `Reader` sans cycle.
 
 ### Le patron d'un composant
 
-Le modèle est `probe.Service` (`internal/probe/service.go`). Un composant
+Le modèle est `probe.Service` (`internal/fact/probe/service.go`). Un composant
 nouveau suit le même ordre, de haut en bas du fichier :
 
 | Pièce | Règle | Dans `probe` |
 | --- | --- | --- |
 | Interfaces | Déclarées chez lui, ce qu'il attend et rien de plus : les écritures et les lectures de sa règle dans `Store` ; ce qu'il lit d'un autre domaine par le `reader.Reader` | `Store`, `Commander`, `Assignable`, `Watcher`, `Alerter` ; `status.New(store, reader, …)` |
 | Constructeur | `New(store, logger)` ; les collaborateurs par `Set*`, au câblage, avant le démarrage | `SetWatcher`, `SetAlerter`, `SetCommander`, `SetClock` |
-| Définition | Fonction pure, testable sans base : `Definition.Complete()` pose les valeurs par défaut, puis `Validate()` rend le premier refus | `internal/probe/probe.go` ; `heartbeat` n'a que `Validate()`, faute de valeur par défaut |
+| Définition | Fonction pure, testable sans base : `Definition.Complete()` pose les valeurs par défaut, puis `Validate()` rend le premier refus | `internal/fact/probe/probe.go` ; `heartbeat` n'a que `Validate()`, faute de valeur par défaut |
 | Geste | Vérifie que ce qu'il référence existe, valide, écrit, journalise (`slog`, puis `auditor.Record` pour un objet déclaré ou une autorité, sans secret), appelle `changed()`, relit et rend l'objet | `Create`, `Update`, `Pause`, `Delete` |
 | `changed()` | Prévient le `Watcher` ; jamais depuis un handler | `ProbesChanged(machineID)` |
 | Lectures | Seules celles qui ajoutent une règle : une fenêtre, un filtre, une vérification, une conversion. Une liste, un objet ou un compte tels qu'en base se lisent par le `Reader` ; le composant ne les relaie pas | `Days`, `Uptimes`, `Certificates` ; pas de `List` ni de `Get` |
 | Boucle | `Watch(ctx)` : rollup, purge, relances, jusqu'à l'annulation du contexte | `Watch` |
 
-- **Nommage** : `Watcher` est le direct (`internal/live`), `Alerter` le
+- **Nommage** : `Watcher` est le direct (`internal/kit/live`), `Alerter` le
   moteur des alertes ; `nil` est toléré pour les deux. `Listener` ne
   s'emploie plus. Le journal d'audit est un outil : il se reçoit tel quel,
   `SetAuditor(*audit.Recorder)`, sans interface déclarée, et un `*Recorder`
@@ -283,7 +332,7 @@ nouveau suit le même ordre, de haut en bas du fichier :
 
 | Règle | Comment |
 | --- | --- |
-| Seul lieu du SQL | Aucune requête hors de `internal/store` ; `*store.DB` satisfait l'interface `Store` de chaque composant |
+| Seul lieu du SQL | Aucune requête hors de `internal/edge/store` ; `*store.DB` satisfait l'interface `Store` de chaque composant |
 | Une transaction par geste | `db.inTx(ctx, "what", func(tx *sql.Tx) error {…})` : `begin what` et `commit what` dans les erreurs, annulée si la fonction échoue |
 | Une ligne, un `scanX` | `scanAlert(row scanner)` lit une ligne ; une liste est `collect(rows, scanAlert)`, jamais `nil` |
 | Une ligne attendue | `notFoundIfNoRow(result, alert.ErrNotFound)` : aucune ligne touchée rend la sentinelle du domaine |
@@ -310,7 +359,7 @@ Petit, nommé, à cette échelle.
 Chaque logique vit à un seul endroit. Avant d'écrire une fonction de forme,
 un refus, une borne ou un geste de test, on cherche s'il existe : par le nom
 **et** par le corps. Les gardes `TestOneDefinition_*`
-(`internal/server/onedefinition_test.go`) lisent le source avec
+(`internal/edge/server/onedefinition_test.go`) lisent le source avec
 `go/ast` ; une exception se déclare dans `oneDefinitionExceptions`, avec sa
 raison. Une garde a son test en négatif : elle échoue sur un source fautif.
 
@@ -337,7 +386,7 @@ où sa garde existe.
   prévu : le journal la garde, l'opérateur lit `internal`.
 - **Toute règle métier refuse par `refusal.*`** : le domaine déclare sa clé
   avec l'erreur, `refusal.Invalid` ou `refusal.Conflict`
-  (`internal/refusal`). Elle se traduit une seule fois : le serveur par
+  (`internal/kit/refusal`). Elle se traduit une seule fois : le serveur par
   `s.failed`, le fichier de l'annuaire par
   `refusal.KeyOf`. Jamais d'`errors.Is` qui choisit une clé dans un handler.
 - `s.apiRefuse` n'est que pour ce que le handler juge lui-même : un
@@ -355,7 +404,7 @@ jamais d'état à moitié appliqué. Clé inconnue = avertissement au démarrage
 
 - Répertoire d'état ouvert une fois par `os.Root` ; tout accès passe par lui.
 - **Écriture atomique** : temporaire dans le même dossier, `fsync`, `rename`,
-  `fsync` du dossier. Un seul helper, `internal/fsx`.
+  `fsync` du dossier. Un seul helper, `internal/kit/fsx`.
 - SQLite en WAL. Les requêtes et les transactions : « Le store », plus haut.
 
 ### Pourquoi des migrations
@@ -373,7 +422,7 @@ migrate`, sans commande à lancer : le binaire se met à niveau tout seul.
   pour savoir ce qu'est la base. Il ne se modifie plus : un changement est
   une migration de plus, à partir de `002`, écrite pour que la table finale
   se lise telle quelle.
-- **Le runner** (`internal/store/store.go`) joue chaque fichier hors clés
+- **Le runner** (`internal/edge/store/store.go`) joue chaque fichier hors clés
   étrangères, dans sa transaction, et lance `PRAGMA foreign_key_check` avant
   le COMMIT : une reconstruction de table (le patron de SQLite : créer la
   nouvelle, recopier, supprimer l'ancienne, renommer) n'emporte rien par
@@ -381,7 +430,7 @@ migrate`, sans commande à lancer : le binaire se met à niveau tout seul.
   le binaire n'embarque pas est refusée.
 - **Du SQL, pas de Go** : une migration qui demanderait du code se discute
   d'abord.
-- **Les garde-fous** (`internal/store/schema_test.go`) : `001_schema.sql` égale
+- **Les garde-fous** (`internal/edge/store/schema_test.go`) : `001_schema.sql` égale
   les anciennes migrations rejouées (gardées dans `testdata`) suivies de
   l'élagage ; chaque clé étrangère vise une clé ; chaque table est lue et
   écrite par le store, chaque colonne y est nommée. Une colonne qui ne sert
@@ -393,7 +442,7 @@ lui-même.
 
 ## À venir : les actions
 
-Le chemin d'un ordre existe (#146, `internal/action`, « Comment un ordre part
+Le chemin d'un ordre existe (#146, `internal/gesture/action`, « Comment un ordre part
 et revient » dans `22-fonctionnement.md`) : liste fermée dans `agentwire`,
 run écrit avant l'envoi, signature de la clé du serveur, réponse par le
 signal. Le seul ordre, `agent.ping`, ne change rien : aucun `exec.Command`,
@@ -473,7 +522,7 @@ pings (`/ping/`) ne changent pas.
   `jobs`) ; le front relit la ressource par l'API. Rien n'est rejoué : à la
   reconnexion le serveur dit `reconnected` et le front relit tout. Un
   composant qui change quelque chose de visible le publie sur
-  `internal/live`, jamais depuis un handler.
+  `internal/kit/live`, jamais depuis un handler.
 - **La chaîne de middlewares**, de l'extérieur vers l'intérieur : panique →
   identifiant de requête → journal → limite de corps (1 Mio). Une enveloppe
   du `ResponseWriter` **relaie `Flush` et `Unwrap`**, sans quoi les deux flux
@@ -504,7 +553,7 @@ direction artistique. Les mêmes règles qu'en Go, transposées :
   le flux du direct dans `useLive`.
 - **Un seul contrat d'API** : les types de `api/<ressource>.ts` décrivent ce
   que le serveur rend, et `api/contract.test.ts` relit les goldens Go
-  (`internal/server/testdata`) pour comparer leurs clés à chaque type, tsc
+  (`internal/edge/server/testdata`) pour comparer leurs clés à chaque type, tsc
   vérifiant que la description a exactement les clés du type. Un champ
   renommé en Go casse le test du front ; un golden nouveau y prend son type,
   ou la raison pour laquelle le front ne le lit pas. Un type exporté est
@@ -550,13 +599,13 @@ scripts relus.
 - **`gofmt`, `goimports`, `staticcheck` obligatoires**, en local et en CI : la
   machine tient le style, l'humain garde l'attention pour le sens.
 - **Fixtures figées** : l'arbre des
-  routes, les réponses JSON de l'API (`internal/server/testdata/*.golden.json`,
-  `go test ./internal/server -update` pour les réécrire après vérification ; la comparaison est `goldentest.Compare`, qui déclare le drapeau `-update`),
+  routes, les réponses JSON de l'API (`internal/edge/server/testdata/*.golden.json`,
+  `go test ./internal/edge/server -update` pour les réécrire après vérification ; la comparaison est `goldentest.Compare`, qui déclare le drapeau `-update`),
   relues aussi par le front (`web/src/api/contract.test.ts`). Tout
   changement casse un test — c'est voulu.
 - **La vraie base** : un composant et ses consommateurs se testent sur une
   SQLite temporaire, ouverte par `storetest.Open(t)`
-  (`internal/store/storetest`, avec `EnrollMachine`,
+  (`internal/edge/store/storetest`, avec `EnrollMachine`,
   `EnrollMachineWithKey` quand le test signe comme l'agent, et
   `EnsureLocalMachine`) ; `server` et ses sous-paquets y ajoutent
   `servertest` (`NewNonce`, `SignedStreamRequest`, `OpenStream`, l'horloge figée `Now`).

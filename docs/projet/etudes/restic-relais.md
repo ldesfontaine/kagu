@@ -62,7 +62,7 @@ flowchart LR
 | --- | --- | --- |
 | Le producteur **signe chaque requête** au lieu d'ouvrir une session | Pas de jeton à renouveler en pleine sauvegarde ; le relais retient les couples (machine, aléa) vus | La signature couvre (aléa, machine, heure), **pas** méthode, chemin ni corps : TLS est indispensable. Le vrai agent signe de même à l'ouverture du flux |
 | `readEvent` recopié (`target.go`) | `agent.readEvent` n'est pas exporté | À factoriser à l'intégration |
-| Agent de la cible et mandataire sont du code d'essai, pas `internal/agent` | Pas de compte, de droits ni d'enrôlement à monter | Les droits, ordres signés et enrôlement existants ne sont pas exercés |
+| Agent de la cible et mandataire sont du code d'essai, pas `internal/edge/agent` | Pas de compte, de droits ni d'enrôlement à monter | Les droits, ordres signés et enrôlement existants ne sont pas exercés |
 | Les routes sont sous `/agent/relay/…` | Même espace que `/agent/stream` | À figer par `routes_test.go` à l'intégration |
 | Un seul serveur HTTP sans Traefik | Aucune machine du homelab | Pas de test de tampon, de délai d'inactivité ni de TLS entre agent et serveur |
 
@@ -413,7 +413,7 @@ chemin. Coût : un saut local de plus. Non mesuré en TLS.
 | Sujet | État |
 | --- | --- |
 | L'agent de la cible rejuge `Allow` quand le relais est contourné ou compromis | Écrit (`Target.callRestServer`), **pas testé seul** |
-| Les verbes d'ordres `restic.*`, les droits, l'enrôlement | **Non faits** : l'essai ne touche ni `internal/agent` ni `agentwire` |
+| Les verbes d'ordres `restic.*`, les droits, l'enrôlement | **Non faits** : l'essai ne touche ni `internal/edge/agent` ni `agentwire` |
 | Un `rest-server` avec `--prometheus`, `--group-accessible-repos`, `--no-verify-upload` | Non essayés |
 | `rest:http+unix://` pour le mandataire local | Non essayé |
 | Plusieurs cibles, plusieurs producteurs en parallèle sur le même relais | Deux producteurs (isolement), jamais en charge |

@@ -202,7 +202,7 @@ si on accepte les deux : voir [#437](#déjà-couvert).
 | --- | --- | --- |
 | **Menus déroulants derrière les fenêtres** | 39 listes, 21 écrans ou fenêtres (machine, service, sonde, tâche, canal, plan, pare-feu, type, « Faire taire », silence, jeton, destination, filtres des pages) | **Aucune masquée.** Deux listes de 13 entrées (type d'alerte) défilent dans leur cadre : 9 visibles, le reste par la molette. À noter : un menu long sans repère de défilement |
 | **Textes d'aide en pavé** | 33 relevés d'écran (paragraphes de plus de 25 mots) | Pires : Paramètres (8 blocs, 63 mots), fenêtre du canal (63), installation (53), fiche Agent (45), Pare-feu (39). **Bons : tâche (T6), alerte (T7), assistants de sonde et de service** : un champ, une ligne |
-| **Noms de menu exacts, liens directs** | 6 renvois « X › Y » dans `internal/lang/fr.toml` + `docs/installation.md` | Ce sont des chaînes du catalogue, rendues en texte (vérifié sur le Journal). 2 sont faux : « Alertes › Canaux » (réel : Paramètres → Notifications → Canaux) et « Paramètres › Jetons d'API » (réel : Paramètres → Agent IA → Jetons d'API) |
+| **Noms de menu exacts, liens directs** | 6 renvois « X › Y » dans `internal/kit/lang/fr.toml` + `docs/installation.md` | Ce sont des chaînes du catalogue, rendues en texte (vérifié sur le Journal). 2 sont faux : « Alertes › Canaux » (réel : Paramètres → Notifications → Canaux) et « Paramètres › Jetons d'API » (réel : Paramètres → Agent IA → Jetons d'API) |
 | **Sauvegardes incompréhensible** | T8 | Confirmé ; **refonte #366** |
 | **Type de machine invisible** | Liste, fiche, vue d'ensemble | Visible (« VPS », « Type inconnu » + « Corriger le type ») : **F3** |
 | **Logo collé au menu** | Toutes les pages | Détaché : **F3** |
@@ -220,7 +220,7 @@ après**, les autres écrans touchés.
 | | |
 | --- | --- |
 | Écran | Fiche › Agent (« changez ses droits ») ; Sauvegardes › Ajouter la destination (« ré-enrôlez-le avec… ») ; fiche d'un hôte sans Docker |
-| Cause probable | Le droit est une propriété de l'agent, posée à l'installation ; l'interface sait qu'il manque, mais n'a pas de geste qui y mène. Le texte vient de la couche du refus (`internal/refusal`), pas de l'écran |
+| Cause probable | Le droit est une propriété de l'agent, posée à l'installation ; l'interface sait qu'il manque, mais n'a pas de geste qui y mène. Le texte vient de la couche du refus (`internal/kit/refusal`), pas de l'écran |
 | Proposition | Chaque refus de droit porte un bouton **Ré-enrôler avec « Mettre à jour l'agent »** qui ouvre la fenêtre déjà cochée. Le sélecteur de destination grise les machines sans le droit, avec la raison à côté. La fenêtre « Ré-enrôler » montre en tête les 3 gestes à faire sur la machine, numérotés |
 | Autres écrans | Déployer un service (`docker.deploy`), écrire des fichiers, producteur Proxmox (`backup.produce`), sondes vers le réseau local (`probe.lan`) |
 | Coût | Un bouton de plus par refus ; le coût de sécurité reste celui de ré-enrôler (jeton neuf) : **c'est à Lucas de dire si la mise à jour de l'agent se coche d'office** |
@@ -238,7 +238,7 @@ après**, les autres écrans touchés.
 ### Gênants
 
 **G1 · Les renvois de menu sont du texte, et deux sont faux**
-Écran : journal (bandeau), erreur d'un jeton hors portée, pare-feu, Services › Projets, fiche › Ré-enrôler (6 occurrences dans `internal/lang/fr.toml`, plus `docs/installation.md:729`).
+Écran : journal (bandeau), erreur d'un jeton hors portée, pare-feu, Services › Projets, fiche › Ré-enrôler (6 occurrences dans `internal/kit/lang/fr.toml`, plus `docs/installation.md:729`).
 Cause : la phrase est écrite en dur dans le catalogue.
 Après : un lien **Paramètres → Notifications → Canaux** qui mène au bon bloc (ancre), et un test qui échoue si la cible n'existe plus. Même défaut : docs.
 
