@@ -18,6 +18,7 @@ import (
 	"github.com/ldesfontaine/opencloud/internal/gesture/apitoken"
 	"github.com/ldesfontaine/opencloud/internal/kit/audit"
 	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/ident"
 	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
 )
 
@@ -216,7 +217,7 @@ func TestVerify_NotesTheLastUseAtMostOncePerMinute(t *testing.T) {
 	cleartext, token, _ := service.Create(ctx, apitoken.Request{Name: "lecteur"})
 	lastUsed := func() time.Time {
 		t.Helper()
-		stored, err := db.GetAPIToken(ctx, apitoken.HashSecret(cleartext))
+		stored, err := db.GetAPIToken(ctx, ident.HashSecret(cleartext))
 		if err != nil {
 			t.Fatal(err)
 		}
