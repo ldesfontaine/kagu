@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
 )
 
 // Le nom du binaire n'est pas dérivé de l'identifiant : il suit ce

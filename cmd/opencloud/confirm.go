@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/lang"
+	"github.com/ldesfontaine/opencloud/internal/kit/lang"
 )
 
 // terminalOpener rend le terminal de l'opérateur. Dans « curl … | sudo sh »,

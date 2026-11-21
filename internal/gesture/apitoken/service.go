@@ -1,0 +1,281 @@
+package apitoken
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+)
+
+// Ce que le service attend du store.
+type Store interface {
+	InsertAPIToken(ctx context.Context, token Token) error
+	GetAPIToken(ctx context.Context, hash string) (Token, error)
+	ListAPITokens(ctx context.Context) ([]Token, error)
+	TouchAPIToken(ctx context.Context, id string, at time.Time) error
+	DeleteAPIToken(ctx context.Context, id string) error
+	DeleteAllAPITokens(ctx context.Context, now time.Time) (int, error)
+	PurgeExpiredAPITokens(ctx context.Context, before time.Time) error
+	// MachineExists juge les machines d'une portée.
+	MachineExists(ctx context.Context, id string) (bool, error)
+	// UpdateAPITokenReach remplace la portée du jeton.
+	UpdateAPITokenReach(ctx context.Context, id string, reach Reach) error
+}
+
+type Service struct {
+	store   Store
+	auditor *audit.Recorder
+	logger  *slog.Logger
+	now     func() time.Time
+	// creating tient compter-puis-insérer d'un seul tenant : deux créations
+	// simultanées ne passent pas toutes deux sur la dernière place.
+	creating sync.Mutex
+}
+
+func New(store Store, logger *slog.Logger) *Service {
+	return &Service{store: store, logger: logger, now: time.Now}
+}
+
+func (s *Service) SetClock(now func() time.Time) {
+	s.now = now
+}
+
+// SetAuditor branche le journal d'audit ; nil est toléré.
+func (s *Service) SetAuditor(auditor *audit.Recorder) {
+	s.auditor = auditor
+}
+
+// Create tire un jeton de la portée et de la durée demandées, rendu en
+// clair une fois.
+func (s *Service) Create(ctx context.Context, request Request) (string, Token, error) {
+	if err := ValidateName(request.Name); err != nil {
+		return "", Token{}, err
+	}
+	scope, err := scopeOf(request.Scope)
+	if err != nil {
+		return "", Token{}, err
+	}
+	verbs, err := verbsOf(scope, request.Verbs)
+	if err != nil {
+		return "", Token{}, err
+	}
+	reach, err := s.reachOf(ctx, scope, request.Reach)
+	if err != nil {
+		return "", Token{}, err
+	}
+	now := s.now()
+	expiresAt, err := expiryOf(request.Days, now)
+	if err != nil {
+		return "", Token{}, err
+	}
+	secret, err := newSecret()
+	if err != nil {
+		return "", Token{}, fmt.Errorf("generate api token: %w", err)
+	}
+	token := Token{
+		ID: secret.id, Hash: secret.hash, Prefix: secret.prefix, Scope: scope,
+		Name: strings.TrimSpace(request.Name), CreatedAt: now, ExpiresAt: expiresAt,
+		Verbs: verbs, Reach: reach,
+	}
+	if err := s.insertUnderCeiling(ctx, token); err != nil {
+		return "", Token{}, err
+	}
+	s.logger.Info("api token created", "token_id", token.ID, "name", token.Name, "scope", string(scope), "verbs", strings.Join(verbs, ","), "reach", reachSummary(reach), "expires_at", expiresAt)
+	s.auditor.Record(ctx, createEvent(token))
+	return secret.cleartext, token, nil
+}
+
+func (s *Service) insertUnderCeiling(ctx context.Context, token Token) error {
+	s.creating.Lock()
+	defer s.creating.Unlock()
+	existing, err := s.List(ctx)
+	if err != nil {
+		return err
+	}
+	if len(existing) >= MaxTokens {
+		return ErrTooMany
+	}
+	// Deux jetons vivants au même nom ne se distinguent plus à l'audit.
+	if slices.ContainsFunc(existing, func(other Token) bool { return strings.EqualFold(other.Name, token.Name) }) {
+		return ErrNameTaken
+	}
+	return s.store.InsertAPIToken(ctx, token)
+}
+
+// List rend les jetons vivants, les plus récents d'abord. Un jeton échu que
+// la purge n'a pas encore effacé n'y figure plus.
+func (s *Service) List(ctx context.Context) ([]Token, error) {
+	tokens, err := s.store.ListAPITokens(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now := s.now()
+	return slices.DeleteFunc(tokens, func(token Token) bool { return token.IsExpired(now) }), nil
+}
+
+// SetReach remplace la portée d'un jeton vivant. La nouvelle liste vaut
+// tout de suite : le jeton est relu à chaque requête.
+func (s *Service) SetReach(ctx context.Context, id string, requested Reach) (Token, error) {
+	tokens, err := s.List(ctx)
+	if err != nil {
+		return Token{}, err
+	}
+	index := slices.IndexFunc(tokens, func(token Token) bool { return token.ID == id })
+	if index < 0 {
+		return Token{}, ErrNotFound
+	}
+	token := tokens[index]
+	reach, err := s.reachOf(ctx, token.Scope, requested)
+	if err != nil {
+		return Token{}, err
+	}
+	if err := s.store.UpdateAPITokenReach(ctx, id, reach); err != nil {
+		return Token{}, err
+	}
+	token.Reach = reach
+	s.logger.Info("api token reach changed", "token_id", id, "reach", reachSummary(reach))
+	s.auditor.Record(ctx, audit.Event{
+		Action: audit.APITokenUpdate, ObjectID: token.ID, ObjectName: token.Name,
+		Details: audit.Details{"reach": reachSummary(reach)},
+	})
+	return token, nil
+}
+
+// Revoke efface le jeton : présenté ensuite, il est inconnu, comme un faux.
+func (s *Service) Revoke(ctx context.Context, id string) error {
+	if err := s.store.DeleteAPIToken(ctx, id); err != nil {
+		return err
+	}
+	s.logger.Info("api token revoked", "token_id", id)
+	s.auditor.Record(ctx, audit.Event{Action: audit.APITokenRevoke, ObjectID: id})
+	return nil
+}
+
+// RevokeAll efface tous les jetons et dit combien. Un compte créé ou
+// recréé n'a pas à hériter des jetons de l'époque d'avant.
+func (s *Service) RevokeAll(ctx context.Context) (int, error) {
+	revoked, err := s.store.DeleteAllAPITokens(ctx, s.now())
+	if err != nil {
+		return 0, err
+	}
+	s.logger.Warn("api tokens revoked", "api_tokens", revoked)
+	s.auditor.Record(ctx, audit.Event{
+		Action:  audit.APITokenRevoke,
+		Details: audit.Details{"all": "true", "api_tokens": strconv.Itoa(revoked)},
+	})
+	return revoked, nil
+}
+
+// Verify accepte un jeton vivant et note son usage, au plus une fois par
+// minute : un client peut enchaîner les lectures.
+func (s *Service) Verify(ctx context.Context, bearer string) (Token, error) {
+	token, err := s.store.GetAPIToken(ctx, HashSecret(bearer))
+	if errors.Is(err, ErrNotFound) {
+		return Token{}, ErrInvalid
+	}
+	if err != nil {
+		return Token{}, err
+	}
+	now := s.now()
+	if token.IsExpired(now) {
+		return Token{}, ErrInvalid
+	}
+	if token.LastUsedAt.IsZero() || now.Sub(token.LastUsedAt) >= time.Minute {
+		if err := s.store.TouchAPIToken(ctx, token.ID, now); err != nil {
+			return Token{}, err
+		}
+		token.LastUsedAt = now
+	}
+	return token, nil
+}
+
+// Purge efface les jetons échus.
+func (s *Service) Purge(ctx context.Context) error {
+	return s.store.PurgeExpiredAPITokens(ctx, s.now())
+}
+
+// Watch purge à cadence fixe jusqu'à l'arrêt.
+func (s *Service) Watch(ctx context.Context) {
+	ticker := time.NewTicker(PurgeEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := s.Purge(ctx); err != nil && ctx.Err() == nil {
+				s.logger.Error("purge api tokens", "error", err)
+			}
+		}
+	}
+}
+
+// createEvent dit le nom, la portée et l'échéance ; ni le jeton ni son
+// préfixe.
+func createEvent(created Token) audit.Event {
+	expires := "never"
+	if !created.ExpiresAt.IsZero() {
+		expires = created.ExpiresAt.UTC().Format(time.RFC3339)
+	}
+	return audit.Event{
+		Action: audit.APITokenCreate, ObjectID: created.ID, ObjectName: created.Name,
+		Details: audit.Details{"scope": string(created.Scope), "verbs": strings.Join(created.Verbs, ","), "reach": reachSummary(created.Reach), "expires_at": expires},
+	}
+}
+
+// RecordDenied journalise un jeton qui a tenté un verbe qu'il ne porte pas :
+// un agent essaie ce qu'il n'a pas le droit de faire, l'opérateur doit le
+// voir. Le verbe tenté est un identifiant du registre, jamais ce que le
+// client a écrit.
+func (s *Service) RecordDenied(ctx context.Context, token Token, verbID string) {
+	s.logger.Warn("api token verb refused", "token_id", token.ID, "verb", verbID)
+	s.auditor.Record(ctx, audit.Event{
+		Action: audit.APITokenDeny, ObjectID: token.ID, ObjectName: token.Name,
+		Details: audit.Details{"verb": verbID},
+	})
+}
+
+// reachSummary dit la portée en une ligne pour le journal : « machines=a,b
+// guests=200 », « machines=all guests=all » pour un jeton sans limite.
+func reachSummary(reach Reach) string {
+	machines, guests := "all", "all"
+	if reach.OnlyMachines {
+		machines = strings.Join(reach.Machines, ",")
+		if machines == "" {
+			machines = "none"
+		}
+	}
+	if reach.OnlyGuests {
+		numbers := make([]string, len(reach.Guests))
+		for i, vmid := range reach.Guests {
+			numbers[i] = strconv.Itoa(vmid)
+		}
+		guests = strings.Join(numbers, ",")
+		if guests == "" {
+			guests = "none"
+		}
+	}
+	return "machines=" + machines + " guests=" + guests
+}
+
+// RecordOutOfScope journalise un jeton qui a visé une machine ou un invité
+// hors de sa portée. machineID est celui que la base a rendu pour une sonde
+// ou une tâche, ou le segment du chemin, borné par l'appelant ; vmid est zéro
+// quand le geste ne vise aucun invité.
+func (s *Service) RecordOutOfScope(ctx context.Context, token Token, verbID, machineID string, vmid int) {
+	s.logger.Warn("api token out of scope", "token_id", token.ID, "verb", verbID, "machine_id", machineID, "guest", vmid)
+	details := audit.Details{"verb": verbID, "reason": "out_of_scope", "machine": machineID}
+	if vmid != 0 {
+		details["guest"] = strconv.Itoa(vmid)
+	}
+	s.auditor.Record(ctx, audit.Event{
+		Action: audit.APITokenDeny, ObjectID: token.ID, ObjectName: token.Name, Details: details,
+	})
+}

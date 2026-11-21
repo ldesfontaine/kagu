@@ -12,7 +12,7 @@ export const settingsSections = [
 
 // Les blocs d'une section qu'un renvoi vise directement : un bloc n'est pas
 // une section, mais le lien « Paramètres → Notifications → Canaux » arrive sur
-// lui. internal/lang/links.go écrit ces mêmes ancres ; le test des renvois
+// lui. internal/kit/lang/links.go écrit ces mêmes ancres ; le test des renvois
 // (menuLinks.test.ts) échoue si l'une manque ici.
 export const settingsBlockAnchors = { channels: "canaux", apiTokens: "jetons-api" } as const;
 

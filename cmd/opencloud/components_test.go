@@ -4,10 +4,10 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/config"
-	"github.com/ldesfontaine/opencloud/internal/live"
-	"github.com/ldesfontaine/opencloud/internal/server"
-	"github.com/ldesfontaine/opencloud/internal/store/storetest"
+	"github.com/ldesfontaine/opencloud/internal/edge/config"
+	"github.com/ldesfontaine/opencloud/internal/edge/server"
+	"github.com/ldesfontaine/opencloud/internal/edge/store/storetest"
+	"github.com/ldesfontaine/opencloud/internal/kit/live"
 )
 
 // Le câblage commun suffit à construire un serveur, une fois le direct

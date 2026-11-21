@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/config"
-	"github.com/ldesfontaine/opencloud/internal/fsx"
+	"github.com/ldesfontaine/opencloud/internal/edge/config"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/fsx"
 )
 
 const exportUsage = `Usage : {command} export [-config chemin] [-o fichier] [-propose]

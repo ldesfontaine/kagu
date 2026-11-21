@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/agent"
-	"github.com/ldesfontaine/opencloud/internal/anchor"
-	"github.com/ldesfontaine/opencloud/internal/lang"
+	"github.com/ldesfontaine/opencloud/internal/edge/agent"
+	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
+	"github.com/ldesfontaine/opencloud/internal/kit/lang"
 )
 
 // enrolledStateDir écrit un état d'agent enrôlé et rend son dossier.

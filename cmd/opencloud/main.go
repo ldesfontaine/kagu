@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
 )
 
 const usage = `Usage : {command} <commande> [options]

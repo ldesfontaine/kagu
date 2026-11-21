@@ -5,11 +5,11 @@ import { expect, test } from "vitest";
 import { App } from "../App";
 import { settingsBlockAnchors, settingsSections } from "./settingsSections";
 
-// Les renvois de menu des textes (internal/lang/links.go) sont figés dans un
+// Les renvois de menu des textes (internal/kit/lang/links.go) sont figés dans un
 // golden par le test Go. Ici : chaque adresse est une route de l'interface et
 // chaque ancre un élément qui existe encore. Un menu renommé ou un bloc
 // supprimé fait échouer ce test, pas l'opérateur.
-const goldens = import.meta.glob<{ id: string; path: string; label: string }[]>("../../../internal/lang/testdata/links.golden.json", {
+const goldens = import.meta.glob<{ id: string; path: string; label: string }[]>("../../../internal/kit/lang/testdata/links.golden.json", {
   eager: true,
   import: "default",
 });

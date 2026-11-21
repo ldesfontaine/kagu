@@ -1,0 +1,302 @@
+package manifest
+
+import (
+	"cmp"
+	"context"
+	"fmt"
+	"slices"
+
+	"github.com/ldesfontaine/opencloud/internal/domain/directory"
+	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
+	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/opencloud/internal/fact/probe"
+)
+
+// ExportOptions règle ce que l'export ajoute à l'annuaire tel qu'il est.
+type ExportOptions struct {
+	// Propose ajoute à la fin du fichier ce que les conteneurs non déclarés
+	// laissent deviner, pour que l'opérateur le relise avant d'appliquer.
+	// Sans lui, l'export est l'annuaire et rien d'autre.
+	Propose bool
+}
+
+// Export écrit tout l'annuaire dans le format que la lecture comprend :
+// projets, services déclarés et leurs unités, sondes, tâches, clés
+// ignorées. Les identifiants y sont toujours, jamais un secret : le mot de passe
+// d'une cible de sonde est masqué pour tout export (R-D5-19). Avec
+// Propose, il y ajoute des propositions (voir addProposals).
+func (m *Manifest) Export(ctx context.Context, annotations Annotations, options ExportOptions) ([]byte, error) {
+	file, err := m.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+	redactProbeTargets(file.Probes)
+	if options.Propose {
+		if file, err = m.addProposals(ctx, file); err != nil {
+			return nil, err
+		}
+	}
+	data, err := Encode(file, annotations)
+	if err != nil {
+		return nil, err
+	}
+	// Le fichier doit pouvoir être relu : au-delà de la borne de la lecture,
+	// l'export échoue plutôt que d'écrire un fichier que Parse refusera.
+	if len(data) > MaxFileBytes {
+		return nil, fmt.Errorf("%w: %d bytes, limit %d", ErrExportTooLarge, len(data), MaxFileBytes)
+	}
+	m.logger.Debug("directory exported", "bytes", len(data), "services", len(file.Services), "probes", len(file.Probes), "heartbeats", len(file.Heartbeats))
+	return data, nil
+}
+
+// addProposals ajoute au fichier ce que l'annuaire propose d'adopter. Chaque
+// proposition devient une entrée sans identifiant, à la fin de la liste, triée par machine puis par nom : le
+// fichier appliqué la crée par (machine, nom), comme tout service nouveau.
+// Les commentaires disent que cela vient des conteneurs, pas de l'opérateur.
+func (m *Manifest) addProposals(ctx context.Context, file File) (File, error) {
+	proposals, err := m.deps.Directory.Proposals(ctx)
+	if err != nil {
+		return File{}, fmt.Errorf("read proposals: %w", err)
+	}
+	names, err := m.deps.Reader.MachineNames(ctx)
+	if err != nil {
+		return File{}, fmt.Errorf("read machine names: %w", err)
+	}
+	var added []Service
+	for _, proposal := range proposals {
+		// Une machine retirée entre les deux lectures n'a plus de nom à écrire.
+		if machine, found := names[proposal.Definition.MachineID]; found {
+			added = append(added, proposedService(proposal.Definition, machine))
+		}
+	}
+	slices.SortFunc(added, func(a, b Service) int {
+		return cmp.Or(cmp.Compare(a.Machine, b.Machine), cmp.Compare(a.Name, b.Name))
+	})
+	file.Services = append(file.Services, added...)
+	return file, nil
+}
+
+func proposedService(definition directory.ServiceDefinition, machine string) Service {
+	service := Service{
+		Machine:        machine,
+		Name:           definition.Name,
+		Title:          definition.Title,
+		Nature:         definition.Nature,
+		Origin:         definition.Origin,
+		ComposeProject: definition.ComposeProject,
+		Proposed:       true,
+	}
+	for _, unit := range definition.Units {
+		service.Units = append(service.Units, proposedUnit(unit))
+	}
+	return service
+}
+
+// proposedUnit écrit « updates: watch » comme pour toute unité conteneur :
+// la proposition ne laisse pas le défaut à deviner.
+func proposedUnit(definition directory.UnitDefinition) Unit {
+	unit := Unit{
+		Name:          definition.Name,
+		Image:         definition.Image,
+		Version:       definition.Version,
+		Digest:        definition.Digest,
+		ContainerName: definition.ContainerName,
+		SystemdUnit:   definition.SystemdUnit,
+		Ports:         definition.Ports,
+		DataPath:      definition.DataPath,
+		Updates:       definition.UpdatePolicy,
+	}
+	if unit.Updates == "" {
+		unit.Updates = container.PolicyWatch
+	}
+	return unit
+}
+
+// Read lit l'annuaire courant dans le vocabulaire du fichier, trié : deux
+// lectures de la même base rendent la même chose, dans le même ordre.
+func (m *Manifest) Read(ctx context.Context) (File, error) {
+	names, err := m.deps.Reader.MachineNames(ctx)
+	if err != nil {
+		return File{}, fmt.Errorf("read machine names: %w", err)
+	}
+	projects, err := m.deps.Reader.ListProjects(ctx)
+	if err != nil {
+		return File{}, fmt.Errorf("read projects: %w", err)
+	}
+	services, err := m.deps.Reader.ListDeclaredServices(ctx, directory.Filter{})
+	if err != nil {
+		return File{}, fmt.Errorf("read services: %w", err)
+	}
+	probes, err := m.deps.Reader.ListProbes(ctx, "")
+	if err != nil {
+		return File{}, fmt.Errorf("read probes: %w", err)
+	}
+	heartbeats, err := m.deps.Reader.ListHeartbeats(ctx)
+	if err != nil {
+		return File{}, fmt.Errorf("read heartbeats: %w", err)
+	}
+	ignored, err := m.deps.Reader.ListIgnoredKeys(ctx, "")
+	if err != nil {
+		return File{}, fmt.Errorf("read ignored keys: %w", err)
+	}
+	return File{
+		Machines:   machinesOf(names),
+		Projects:   projectsOf(projects),
+		Services:   servicesOf(services, projects),
+		Probes:     probesOf(probes),
+		Heartbeats: heartbeatsOf(heartbeats),
+		Ignored:    ignoredOf(ignored, names),
+	}, nil
+}
+
+func machinesOf(names map[string]string) []Machine {
+	machines := make([]Machine, 0, len(names))
+	for _, name := range names {
+		machines = append(machines, Machine{Name: name})
+	}
+	slices.SortFunc(machines, func(a, b Machine) int { return cmp.Compare(a.Name, b.Name) })
+	return machines
+}
+
+func projectsOf(projects []directory.Project) []Project {
+	listed := make([]Project, 0, len(projects))
+	for _, item := range projects {
+		listed = append(listed, Project{ID: item.ID, Name: item.Name, Title: item.Title})
+	}
+	slices.SortFunc(listed, func(a, b Project) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID))
+	})
+	return listed
+}
+
+func servicesOf(services []directory.Service, projects []directory.Project) []Service {
+	projectNames := make(map[string]string, len(projects))
+	for _, item := range projects {
+		projectNames[item.ID] = item.Name
+	}
+	listed := make([]Service, 0, len(services))
+	for _, item := range services {
+		listed = append(listed, serviceOf(item, projectNames))
+	}
+	slices.SortFunc(listed, func(a, b Service) int {
+		return cmp.Or(cmp.Compare(a.Machine, b.Machine), cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID))
+	})
+	return listed
+}
+
+func serviceOf(item directory.Service, projectNames map[string]string) Service {
+	service := Service{
+		ID:             item.ID,
+		Machine:        item.MachineName,
+		Name:           item.Name,
+		Title:          item.Title,
+		Nature:         item.Nature,
+		Category:       item.Category,
+		Origin:         item.Origin,
+		ComposeProject: item.ComposeProject,
+		PublicURL:      item.PublicURL,
+	}
+	// Dans l'ordre de Capabilities() : celui des fournitures dans l'interface.
+	for _, capability := range directory.Capabilities() {
+		if slices.Contains(item.Provides, capability) {
+			service.Provides = append(service.Provides, capability)
+		}
+	}
+	for _, id := range item.ProjectIDs {
+		// Un projet supprimé entre les deux lectures n'a plus de nom à écrire.
+		if name, found := projectNames[id]; found {
+			service.Projects = append(service.Projects, name)
+		}
+	}
+	slices.Sort(service.Projects)
+	// Dans l'ordre de position : celui de l'annuaire.
+	for _, unit := range item.Units {
+		service.Units = append(service.Units, unitOf(unit))
+	}
+	return service
+}
+
+func unitOf(item directory.Unit) Unit {
+	unit := Unit{
+		Name:          item.Name,
+		Image:         item.Image,
+		Version:       item.Version,
+		Digest:        item.Digest,
+		ContainerName: item.ContainerName,
+		SystemdUnit:   item.SystemdUnit,
+		Ports:         item.Ports,
+		DataPath:      item.DataPath,
+	}
+	// Un binaire n'a que « watch » : il ne l'écrit pas.
+	if item.Kind == directory.UnitContainer {
+		unit.Updates = item.UpdatePolicy
+	}
+	return unit
+}
+
+func probesOf(probes []probe.Probe) []Probe {
+	listed := make([]Probe, 0, len(probes))
+	for _, item := range probes {
+		listed = append(listed, probeOf(item))
+	}
+	slices.SortFunc(listed, func(a, b Probe) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID))
+	})
+	return listed
+}
+
+func redactProbeTargets(probes []Probe) {
+	for index := range probes {
+		probes[index].Target = probe.RedactTarget(probes[index].Target)
+	}
+}
+
+func probeOf(item probe.Probe) Probe {
+	listed := Probe{
+		ID:                item.ID,
+		Name:              item.Name,
+		Runner:            item.MachineName,
+		Kind:              item.Kind,
+		Target:            item.Target,
+		Interval:          item.Interval,
+		Timeout:           item.Timeout,
+		FailureThreshold:  item.FailureThreshold,
+		RecoveryThreshold: item.RecoveryThreshold,
+		Method:            item.Method,
+		ExpectedStatus:    item.ExpectedStatus,
+		ExpectedBody:      item.ExpectedBody,
+		FollowRedirects:   item.FollowRedirects,
+		TLS:               item.TLS,
+	}
+	if item.ServiceID != "" {
+		listed.Service = item.ServiceMachineName + "/" + item.ServiceName
+	}
+	return listed
+}
+
+// heartbeatsOf ne copie jamais le jeton de la tâche : seul le marqueur
+// s'écrit, et l'objet du domaine n'a pas d'autre champ à lire.
+func heartbeatsOf(heartbeats []heartbeat.Heartbeat) []Heartbeat {
+	listed := make([]Heartbeat, 0, len(heartbeats))
+	for _, item := range heartbeats {
+		listed = append(listed, Heartbeat{ID: item.ID, Name: item.Name, Machine: item.MachineName, Every: item.Interval, Grace: item.Grace})
+	}
+	slices.SortFunc(listed, func(a, b Heartbeat) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID))
+	})
+	return listed
+}
+
+func ignoredOf(keys []directory.IgnoredKey, names map[string]string) []IgnoredKey {
+	listed := make([]IgnoredKey, 0, len(keys))
+	for _, item := range keys {
+		// Une machine retirée entre les deux lectures n'a plus de nom à écrire.
+		if name, found := names[item.MachineID]; found {
+			listed = append(listed, IgnoredKey{Machine: name, Kind: item.Kind, Value: item.Value})
+		}
+	}
+	slices.SortFunc(listed, func(a, b IgnoredKey) int {
+		return cmp.Or(cmp.Compare(a.Machine, b.Machine), cmp.Compare(a.Kind, b.Kind), cmp.Compare(a.Value, b.Value))
+	})
+	return listed
+}

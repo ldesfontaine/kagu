@@ -1,0 +1,177 @@
+package container
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ldesfontaine/opencloud/internal/fact/link"
+)
+
+var topologyNow = time.Date(2026, time.November, 1, 12, 0, 0, 0, time.UTC)
+
+const (
+	frontNet = "834fd73b3e7c0000c3adeedade3f9823efe78ea4fc3f7e162e89e879f23a5f6e"
+	backNet  = "0af01ef1573714129ced483d26f2250c1de6ce40a2ae2b7911ecc9534c02c3bf"
+)
+
+func attached(networkID, name string) Attachment {
+	return Attachment{NetworkID: networkID, Name: name, IP: "172.20.0.2"}
+}
+
+// Le projet de la planche : web sur deux réseaux et publié, sa base sur le
+// réseau interne, un cache sur les deux avec un port de base de données
+// publié sur toutes les interfaces.
+func fixtureContainers() []Container {
+	return []Container{
+		{ID: "m:web", Name: "web", Group: "ocfix", NetworkMode: "ocfix_back",
+			Ports:     []Port{{IP: "0.0.0.0", HostPort: 18081, ContainerPort: 80, Protocol: "tcp"}, {IP: "::", HostPort: 18081, ContainerPort: 80, Protocol: "tcp"}},
+			Networks:  []Attachment{attached(backNet, "ocfix_back"), attached(frontNet, "ocfix_front")},
+			DependsOn: []Dependency{{Name: "cache", Source: DependencyCompose}, {Name: "db", Source: DependencyCompose}, {Name: "ghost", Source: DependencyCompose}}},
+		{ID: "m:db", Name: "db", Group: "ocfix", NetworkMode: "ocfix_back",
+			Ports:    []Port{{IP: "127.0.0.1", HostPort: 15432, ContainerPort: 5432, Protocol: "tcp"}},
+			Networks: []Attachment{attached(backNet, "ocfix_back")}},
+		{ID: "m:cache", Name: "cache", Group: "ocfix", NetworkMode: "ocfix_back",
+			Ports:    []Port{{IP: "0.0.0.0", HostPort: 16379, ContainerPort: 6379, Protocol: "tcp"}},
+			Networks: []Attachment{attached(backNet, "ocfix_back"), attached(frontNet, "ocfix_front")}},
+		{ID: "m:lonely", Name: "lonely", NetworkMode: "bridge", Networks: []Attachment{attached(strings.Repeat("d", 64), "bridge")}},
+	}
+}
+
+func fixtureNetworks() []Network {
+	return []Network{
+		{NetworkID: strings.Repeat("d", 64), Name: "bridge", Driver: "bridge"},
+		{NetworkID: strings.Repeat("e", 64), Name: "host", Driver: "host"},
+		{NetworkID: strings.Repeat("f", 64), Name: "none", Driver: "null"},
+		{NetworkID: backNet, Name: "ocfix_back", Driver: "bridge", Internal: true, Group: "ocfix"},
+		{NetworkID: frontNet, Name: "ocfix_front", Driver: "bridge", Group: "ocfix"},
+		{NetworkID: strings.Repeat("a", 64), Name: "empty_net", Driver: "bridge"},
+	}
+}
+
+func TestBuildTopology_GroupsByUserNetworkAndPlacesWhereMostNeighbours(t *testing.T) {
+	topology := BuildTopology("m", fixtureContainers(), fixtureNetworks(), nil, topologyNow)
+	// bridge, host, none et le réseau vide ne font pas de groupe.
+	if len(topology.Groups) != 1 {
+		t.Fatalf("groups = %+v", topology.Groups)
+	}
+	back := topology.Groups[0]
+	if back.Name != "ocfix_back" || !back.Internal || strings.Join(back.Members, ",") != "m:web,m:db,m:cache" {
+		t.Fatalf("back = %+v", back)
+	}
+}
+
+func TestBuildTopology_TieGoesToTheFirstNetworkByName(t *testing.T) {
+	containers := []Container{
+		{ID: "m:a", Name: "a", Networks: []Attachment{attached(frontNet, "zeta"), attached(backNet, "alpha")}},
+		{ID: "m:b", Name: "b", Networks: []Attachment{attached(backNet, "alpha")}},
+		{ID: "m:c", Name: "c", Networks: []Attachment{attached(frontNet, "zeta")}},
+	}
+	topology := BuildTopology("m", containers, []Network{
+		{NetworkID: backNet, Name: "alpha", Driver: "bridge"},
+		{NetworkID: frontNet, Name: "zeta", Driver: "bridge"},
+	}, nil, topologyNow)
+	if len(topology.Groups) != 2 || topology.Groups[0].Name != "alpha" || strings.Join(topology.Groups[0].Members, ",") != "m:a,m:b" || strings.Join(topology.Groups[1].Members, ",") != "m:c" {
+		t.Fatalf("groups = %+v", topology.Groups)
+	}
+}
+
+func TestBuildTopology_ANetworkNotListedStillGroupsItsMembers(t *testing.T) {
+	containers := []Container{{ID: "m:a", Name: "a", Networks: []Attachment{attached(backNet, "late_net")}}}
+	topology := BuildTopology("m", containers, nil, nil, topologyNow)
+	if len(topology.Groups) != 1 || topology.Groups[0].Name != "late_net" || topology.Groups[0].Internal {
+		t.Fatalf("groups = %+v", topology.Groups)
+	}
+}
+
+func TestBuildTopology_PublicEdgesDedupeIPv4AndIPv6(t *testing.T) {
+	topology := BuildTopology("m", fixtureContainers(), fixtureNetworks(), nil, topologyNow)
+	var public []Edge
+	for _, edge := range topology.Edges {
+		if edge.Kind == EdgePublic {
+			public = append(public, edge)
+		}
+	}
+	if len(public) != 2 || public[0] != (Edge{From: InternetNode, To: "m:web", Kind: EdgePublic, Port: 18081, Protocol: "tcp"}) || public[1].To != "m:cache" {
+		t.Fatalf("public = %+v", public)
+	}
+}
+
+func TestOrderLinks_ResolveInTheProjectAndUnknownOnesGiveNothing(t *testing.T) {
+	var got []string
+	for _, order := range OrderLinks(fixtureContainers()) {
+		got = append(got, order.From+">"+order.To+":"+string(order.Signal))
+	}
+	if strings.Join(got, " ") != "container:web>container:cache:depends_on container:web>container:db:depends_on" {
+		t.Fatalf("orders = %v", got)
+	}
+}
+
+func TestOrderLinks_AComposeDependencyDoesNotCrossProjects(t *testing.T) {
+	containers := []Container{
+		{ID: "m:web", Name: "web", Group: "one", DependsOn: []Dependency{{Name: "db", Source: DependencyCompose}, {Name: "shared-db", Source: DependencyLink}}},
+		{ID: "m:db", Name: "db", Group: "two"},
+		{ID: "m:shared", Name: "shared-db"},
+	}
+	orders := OrderLinks(containers)
+	if len(orders) != 1 || orders[0].To != "container:shared-db" || orders[0].Signal != link.SignalContainerLink {
+		t.Fatalf("orders = %+v", orders)
+	}
+}
+
+func TestOrderLinks_ReplicasOfAComposeServiceMakeOneLinkKeyedByProjectAndService(t *testing.T) {
+	containers := []Container{
+		{ID: "m:app1", Name: "shop-app-1", Group: "shop", ComposeService: "app", DependsOn: []Dependency{{Name: "shop-db-1", Source: DependencyCompose}}},
+		{ID: "m:app2", Name: "shop-app-2", Group: "shop", ComposeService: "app", DependsOn: []Dependency{{Name: "shop-db-1", Source: DependencyCompose}}},
+		{ID: "m:db", Name: "shop-db-1", Group: "shop", ComposeService: "db"},
+	}
+	orders := OrderLinks(containers)
+	if len(orders) != 1 || orders[0].From != "compose:shop/app" || orders[0].To != "compose:shop/db" {
+		t.Fatalf("orders = %+v", orders)
+	}
+}
+
+func TestBuildTopology_EdgesComeFromStoredLinksOnThisMachineOnly(t *testing.T) {
+	containers := []Container{
+		{ID: "m:web", Name: "web"},
+		{ID: "m:db", Name: "db"},
+		{ID: "m:app1", Name: "app-1", Group: "shop", ComposeService: "app"},
+		{ID: "m:app2", Name: "app-2", Group: "shop", ComposeService: "app"},
+	}
+	seen := topologyNow.Add(-8 * 24 * time.Hour)
+	links := []link.Link{
+		{ID: "l1", From: link.Endpoint{MachineID: "m", Key: "container:web"}, To: link.Endpoint{MachineID: "m", Key: "container:db"}, Nature: link.NatureOrder, Proof: link.ProofDeclared, Signal: link.SignalDependsOn, LastSeen: seen},
+		{ID: "l2", From: link.Endpoint{MachineID: "m", Key: "compose:shop/app"}, To: link.Endpoint{MachineID: "m", Key: "container:db"}, Nature: link.NatureConfig, Proof: link.ProofDeclared, Signal: link.SignalOperator, Port: 5432, LastSeen: seen},
+		{ID: "elsewhere", From: link.Endpoint{MachineID: "m", Key: "container:web"}, To: link.Endpoint{MachineID: "other", Key: "container:db"}, Nature: link.NatureConfig},
+		{ID: "gone", From: link.Endpoint{MachineID: "m", Key: "container:web"}, To: link.Endpoint{MachineID: "m", Key: "container:ghost"}, Nature: link.NatureOrder},
+	}
+	var got []string
+	for _, edge := range BuildTopology("m", containers, nil, links, topologyNow).Edges {
+		got = append(got, fmt.Sprintf("%s>%s:%s:%t:%d", edge.From, edge.To, edge.LinkID, edge.Stale, edge.Port))
+	}
+	want := "m:app1>m:db:l2:false:5432 m:app2>m:db:l2:false:5432 m:web>m:db:l1:true:0"
+	if strings.Join(got, " ") != want {
+		t.Fatalf("edges = %v, attendu %s", got, want)
+	}
+}
+
+func TestExposure_FollowsTheFourRules(t *testing.T) {
+	containers := fixtureContainers()
+	if got := Exposure(containers[0]); len(got) != 1 || got[0] != (Finding{Kind: FindingPortPublic, Level: LevelInfo, Port: 80, Protocol: "tcp"}) {
+		t.Fatalf("web = %+v", got)
+	}
+	if got := Exposure(containers[1]); len(got) != 0 {
+		t.Fatalf("db on loopback = %+v", got)
+	}
+	if got := Exposure(containers[2]); len(got) != 1 || got[0].Kind != FindingDatabasePortPublic || got[0].Level != LevelWarn || got[0].Port != 6379 {
+		t.Fatalf("cache = %+v", got)
+	}
+	host := Container{NetworkMode: "host", Privileged: true, Ports: []Port{{IP: "0.0.0.0", HostPort: 5432, ContainerPort: 5432, Protocol: "tcp"}}}
+	if got := Exposure(host); len(got) != 2 || got[0].Kind != FindingPrivileged || got[1].Kind != FindingHostNetwork {
+		t.Fatalf("host = %+v", got)
+	}
+	if got := Exposure(Container{}); len(got) != 0 {
+		t.Fatalf("clean = %+v", got)
+	}
+}

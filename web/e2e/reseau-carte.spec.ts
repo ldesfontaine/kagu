@@ -10,8 +10,8 @@ import type { NetworkMap } from "../src/api/network";
 // Les données fictives du serveur donnent la carte réelle ; les cas qu'elles ne
 // montrent pas (la forme d'un vrai réseau, tout à plat, quarante machines) sont
 // servis dans la forme exacte de GET /api/network, figée par le serveur
-// (internal/server/testdata/network_*.golden.json). La déduction, elle, est
-// prouvée côté serveur (internal/netmap, api_network_map_test.go).
+// (internal/edge/server/testdata/network_*.golden.json). La déduction, elle, est
+// prouvée côté serveur (internal/domain/netmap, api_network_map_test.go).
 
 async function serve(page: Page, map: NetworkMap): Promise<void> {
   await page.route("**/api/network", (route) => route.fulfill({ json: map }));

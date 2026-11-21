@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/lang"
-	"github.com/ldesfontaine/opencloud/internal/rollback"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/opencloud/internal/kit/rollback"
 )
 
 // opencloud guard : le lanceur stable de l'agent. L'unité systemd lance cette

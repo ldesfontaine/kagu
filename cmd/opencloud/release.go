@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/config"
-	"github.com/ldesfontaine/opencloud/internal/fsx"
-	"github.com/ldesfontaine/opencloud/internal/release"
+	"github.com/ldesfontaine/opencloud/internal/edge/config"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/fsx"
+	"github.com/ldesfontaine/opencloud/internal/kit/release"
 )
 
 // #nosec G101 -- le texte d'aide de la commande, pas un secret.
@@ -42,7 +42,7 @@ const releaseUsage = `Usage : {command} release <sous-commande>
 `
 
 // #nosec G101 -- le nom d'un secret, pas sa valeur.
-const keygenAdvice = "Posez la clé privée dans le secret RELEASE_SIGNING_KEY de l'environnement release (jamais un secret du dépôt), gardez-en une copie dans votre coffre, puis collez la clé publique dans CurrentPublicKey (internal/release/key.go)."
+const keygenAdvice = "Posez la clé privée dans le secret RELEASE_SIGNING_KEY de l'environnement release (jamais un secret du dépôt), gardez-en une copie dans votre coffre, puis collez la clé publique dans CurrentPublicKey (internal/kit/release/key.go)."
 
 // opencloud release : vérifier une version téléchargée, ou en signer une.
 // Les clés de confiance sont celles que le binaire embarque ; les tests en

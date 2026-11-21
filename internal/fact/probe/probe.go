@@ -1,0 +1,502 @@
+package probe
+
+import (
+	"errors"
+	"slices"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/opencloud/internal/kit/deletion"
+	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+)
+
+// Les états d'une sonde, dans le vocabulaire de la direction artistique :
+// Nouveau, En ligne, Dégradé, Hors ligne, En pause.
+type Status string
+
+const (
+	StatusNew      Status = "new"
+	StatusUp       Status = "up"
+	StatusDegraded Status = "degraded"
+	StatusDown     Status = "down"
+	StatusPaused   Status = "paused"
+)
+
+// Statuses liste les états, dans l'ordre des écrans.
+func Statuses() []Status {
+	return []Status{StatusNew, StatusUp, StatusDegraded, StatusDown, StatusPaused}
+}
+
+// Kind est ce que la sonde parle.
+type Kind string
+
+const (
+	KindHTTP Kind = "http"
+	KindTCP  Kind = "tcp"
+)
+
+func Kinds() []Kind {
+	return []Kind{KindHTTP, KindTCP}
+}
+
+// Outcome est ce qu'un essai a donné. Dégradé est un succès : l'hôte
+// répond et sert, seule sa chaîne de certificats est refusée. L'uptime
+// n'en est donc pas entamé, seul l'état change.
+type Outcome string
+
+const (
+	OutcomeUp       Outcome = "up"
+	OutcomeDegraded Outcome = "degraded"
+	OutcomeDown     Outcome = "down"
+)
+
+func Outcomes() []Outcome {
+	return []Outcome{OutcomeUp, OutcomeDegraded, OutcomeDown}
+}
+
+func (o Outcome) IsSuccess() bool {
+	return o == OutcomeUp || o == OutcomeDegraded
+}
+
+// Reason dit pourquoi un essai a donné ce qu'il a donné, par un mot d'une
+// liste fermée : le front le traduit, il ne lit jamais un texte du serveur.
+type Reason string
+
+const (
+	ReasonNone         Reason = ""
+	ReasonTimeout      Reason = "timeout"
+	ReasonRefused      Reason = "refused"
+	ReasonDNS          Reason = "dns"
+	ReasonUnreachable  Reason = "unreachable"
+	ReasonAddress      Reason = "address"
+	ReasonStatus       Reason = "status"
+	ReasonBody         Reason = "body"
+	ReasonRedirect     Reason = "redirect"
+	ReasonTLSUntrusted Reason = "tls_untrusted"
+	ReasonTLSExpired   Reason = "tls_expired"
+	ReasonTLSHostname  Reason = "tls_hostname"
+	// ReasonLAN : la cible est sur le réseau local et l'agent n'a pas le
+	// droit probe.lan. ReasonAgentRefused : l'agent a écarté la sonde à
+	// l'assignation, sans l'essayer (Runner.Assign).
+	ReasonLAN          Reason = "lan"
+	ReasonAgentRefused Reason = "agent_refused"
+)
+
+// Reasons liste les motifs d'échec ; le motif vide, celui d'un succès,
+// n'en est pas un.
+func Reasons() []Reason {
+	return []Reason{
+		ReasonTimeout, ReasonRefused, ReasonDNS, ReasonUnreachable, ReasonAddress,
+		ReasonStatus, ReasonBody, ReasonRedirect, ReasonTLSUntrusted, ReasonTLSExpired, ReasonTLSHostname,
+		ReasonLAN, ReasonAgentRefused,
+	}
+}
+
+func isReason(reason Reason) bool {
+	return reason == ReasonNone || slices.Contains(Reasons(), reason)
+}
+
+// OCSP est ce que l'agrafe remise pendant la poignée de main a dit de la
+// révocation, par un mot d'une liste fermée. Vide : la cible n'agrafe
+// rien, et openCloud ne contacte aucun répondeur pour le savoir.
+type OCSP string
+
+const (
+	OCSPNone    OCSP = ""
+	OCSPGood    OCSP = "good"
+	OCSPRevoked OCSP = "revoked"
+	OCSPUnknown OCSP = "unknown"
+)
+
+// OCSPStatuses liste ce qu'une agrafe peut dire ; le vide, rien d'agrafé,
+// n'est pas un statut.
+func OCSPStatuses() []OCSP {
+	return []OCSP{OCSPGood, OCSPRevoked, OCSPUnknown}
+}
+
+func isOCSP(status OCSP) bool {
+	return status == OCSPNone || slices.Contains(OCSPStatuses(), status)
+}
+
+const (
+	// Plus fin que l'intervalle du signal ne servirait à rien : les essais
+	// remontent avec lui.
+	MinInterval     = 30 * time.Second
+	MaxInterval     = 24 * time.Hour
+	DefaultInterval = time.Minute
+	MinTimeout      = time.Second
+	MaxTimeout      = 30 * time.Second
+	DefaultTimeout  = 10 * time.Second
+
+	// Les seuils amortissent la bascule : un hoquet réseau ne fait pas
+	// clignoter la page, une cible qui revient doit le confirmer.
+	DefaultFailureThreshold  = 3
+	DefaultRecoveryThreshold = 2
+	MaxThreshold             = 10
+
+	MaxNameLength   = 80
+	MaxTargetLength = 512
+	MaxBodyLength   = 200
+	MaxIssuerLength = 255
+
+	// Combien de sondes une machine porte ; au-delà, la création est
+	// refusée. Autant de goroutines chez l'agent, pas plus.
+	MaxProbesPerMachine = 64
+	// Ce qu'un signal peut porter d'essais : une machine coupée une
+	// journée avec ses 64 sondes à 30 s en aurait bien plus, elle perdra
+	// les plus anciens comme le reste.
+	MaxResultsPerReport = 512
+	// Ce que la sonde lit du corps pour y chercher le texte attendu.
+	MaxReadBytes = 64 << 10
+	// Les redirections suivies quand la sonde les suit.
+	MaxRedirects = 5
+	// Une durée d'essai au-delà est absurde : l'agent a une horloge folle.
+	maxDurationMs = 10 * 60 * 1000
+	// Un essai daté d'après cette avance est refusé : horloge fausse.
+	maxFutureSkew = 5 * time.Minute
+
+	// Ce qu'il reste à un certificat avant qu'openCloud le signale. Deux
+	// seuils, pas cinq : sans destinataire, un seuil de plus ne fait
+	// qu'un ton de plus. Le navigateur les dérive, le serveur ne les
+	// applique pas.
+	CertificateWarning = 30
+	CertificateDanger  = 7
+
+	// Le brut sert la fenêtre de 24 h, l'agrégat journalier les autres :
+	// chaque fenêtre lit une table gardée strictement plus longtemps qu'elle.
+	ResultRetention = 7 * 24 * time.Hour
+	DayRetention    = 365 * 24 * time.Hour
+)
+
+// Probe est une sonde telle que la base la connaît. Les dates zéro disent
+// « jamais ».
+type Probe struct {
+	ID   string
+	Name string
+	Kind Kind
+	// L'URL d'une sonde HTTP, « hôte:port » d'une sonde TCP.
+	Target string
+	// La machine qui sonde ; jamais vide, la machine openCloud par défaut.
+	MachineID   string
+	MachineName string
+	// Sans son flux, la machine ne sonde pas : l'état montré est le dernier
+	// connu, et l'interface le dit.
+	MachineOnline bool
+	// Le service de l'annuaire surveillé, sur n'importe quelle machine ; vide
+	// quand la sonde ne tient à aucun. Un service que des sondes visent ne se
+	// supprime pas : il faut les détacher d'abord.
+	ServiceID          string
+	ServiceName        string
+	ServiceMachineName string
+
+	Status            Status
+	Interval          time.Duration
+	Timeout           time.Duration
+	FailureThreshold  int
+	RecoveryThreshold int
+	// Propres à HTTP ; vides pour une sonde TCP.
+	Method          string
+	ExpectedStatus  string
+	ExpectedBody    string
+	FollowRedirects bool
+	// TLS demande à une sonde TCP une poignée de main plutôt qu'une
+	// simple connexion : c'est ce qui couvre un port chiffré qui ne parle
+	// pas HTTP, SMTP ou IMAP. Sans objet pour une sonde HTTP, dont l'URL
+	// dit déjà le protocole.
+	TLS bool
+
+	ConsecutiveFailures  int
+	ConsecutiveSuccesses int
+	LastCheckedAt        time.Time
+	LastDurationMs       int64
+	// nil tant qu'aucun essai n'a rapporté de code HTTP.
+	LastCode   *int
+	LastReason Reason
+	// Le certificat vu au dernier essai chiffré. Un essai qui n'en voit
+	// pas n'efface pas celui qu'on avait : une coupure ne fait pas
+	// disparaître ce que la cible sert.
+	Certificate *Certificate
+	CreatedAt   time.Time
+	// L'instant de la dernière édition qui a remis l'état à zéro ; zéro tant
+	// que la sonde n'a jamais été révisée. Un essai parti avant cet instant
+	// mesurait l'ancien réglage : il va dans l'histoire, pas dans l'état.
+	RevisedAt time.Time
+}
+
+func (p Probe) IsPaused() bool {
+	return p.Status == StatusPaused
+}
+
+// Definition redonne la sonde sous la forme que l'édition remplace entière.
+func (p Probe) Definition() Definition {
+	return Definition{
+		Name:              p.Name,
+		Kind:              p.Kind,
+		Target:            p.Target,
+		MachineID:         p.MachineID,
+		ServiceID:         p.ServiceID,
+		Interval:          p.Interval,
+		Timeout:           p.Timeout,
+		FailureThreshold:  p.FailureThreshold,
+		RecoveryThreshold: p.RecoveryThreshold,
+		Method:            p.Method,
+		ExpectedStatus:    p.ExpectedStatus,
+		ExpectedBody:      p.ExpectedBody,
+		FollowRedirects:   p.FollowRedirects,
+		TLS:               p.TLS,
+	}
+}
+
+// Task rend ce que l'agent a besoin de savoir pour sonder, et rien d'autre.
+func (p Probe) Task() Task {
+	return Task{
+		ID:              p.ID,
+		Kind:            p.Kind,
+		Target:          p.Target,
+		IntervalSeconds: int(p.Interval.Seconds()),
+		TimeoutSeconds:  int(p.Timeout.Seconds()),
+		Method:          p.Method,
+		ExpectedStatus:  p.ExpectedStatus,
+		ExpectedBody:    p.ExpectedBody,
+		FollowRedirects: p.FollowRedirects,
+		TLS:             p.TLS,
+	}
+}
+
+// Certificate est la chaîne que la cible a présentée, réduite à des faits.
+// L'échéance et la confiance en sont deux : un certificat d'autorité
+// interne a une date parfaitement lisible, et c'est justement le cas où
+// l'opérateur se fait avoir. Aucun de ces champs n'est déduit d'un autre
+// ni supposé vrai.
+type Certificate struct {
+	Subject     string    `json:"subject"`
+	Issuer      string    `json:"issuer"`
+	NotBefore   time.Time `json:"not_before"`
+	NotAfter    time.Time `json:"not_after"`
+	Fingerprint string    `json:"fingerprint"`
+	// ChainValid dit que la chaîne remonte à une autorité connue de la
+	// machine qui a sondé, dates comprises.
+	ChainValid bool `json:"chain_valid"`
+	// HostnameMatch dit que le certificat couvre bien le nom demandé :
+	// une chaîne impeccable peut servir le mauvais domaine.
+	HostnameMatch bool `json:"hostname_match"`
+	// OCSP est ce que l'agrafe a dit, quand la cible en a remis une.
+	OCSP OCSP `json:"ocsp,omitempty"`
+}
+
+// Expired dit si la date de fin est passée. C'est un fait du certificat,
+// pas un état de la sonde : un hôte qui sert un certificat expiré répond
+// parfaitement.
+func (c Certificate) Expired(now time.Time) bool {
+	return c.NotAfter.Before(now)
+}
+
+// Result est un essai, tel qu'il part dans le signal puis s'écrit dans
+// l'histoire.
+type Result struct {
+	ProbeID     string       `json:"probe_id"`
+	CheckedAt   time.Time    `json:"checked_at"`
+	Outcome     Outcome      `json:"outcome"`
+	DurationMs  int64        `json:"duration_ms"`
+	Code        *int         `json:"code,omitempty"`
+	Reason      Reason       `json:"reason,omitempty"`
+	Certificate *Certificate `json:"certificate,omitempty"`
+	// Replayed marque ce qui a attendu une reconnexion : écrit dans
+	// l'histoire, mais pas de quoi bouger l'état ni les compteurs.
+	Replayed bool `json:"replayed,omitempty"`
+}
+
+// Certificates est ce que la vue d'ensemble compte. Une sonde en pause n'y
+// est pas : elle ne regarde plus, son certificat est une vieille nouvelle.
+type Certificates struct {
+	Total int
+	// Expiring et Expired sont disjoints : ce qui approche de sa fin n'est
+	// pas ce qui l'a déjà passée, et l'opérateur n'a pas la même chose à
+	// faire dans les deux cas.
+	Expiring int
+	Expired  int
+	// Soonest est la plus proche échéance **à venir** ; zéro quand il n'y
+	// en a aucune. Le navigateur en tire les jours restants.
+	Soonest time.Time
+}
+
+// Day est l'agrégat d'un jour UTC : le compte des essais et des succès,
+// pas un pourcentage, pour que les fenêtres s'additionnent.
+type Day struct {
+	ProbeID    string
+	Day        time.Time
+	Total      int
+	Success    int
+	Degraded   int
+	DurationMs int64
+}
+
+// Definition est ce que l'opérateur donne pour créer une sonde, ou pour
+// remplacer sa définition entière : un champ omis prend sa valeur par défaut.
+type Definition struct {
+	Name              string
+	Kind              Kind
+	Target            string
+	MachineID         string
+	ServiceID         string
+	Interval          time.Duration
+	Timeout           time.Duration
+	FailureThreshold  int
+	RecoveryThreshold int
+	Method            string
+	ExpectedStatus    string
+	ExpectedBody      string
+	FollowRedirects   bool
+	TLS               bool
+}
+
+// Revision est ce qu'une édition écrit : la sonde avec sa nouvelle définition
+// et son RevisedAt, et ce qu'elle remet à zéro. La base décide de l'état à
+// l'écriture : une sonde mise en pause entre-temps reste en pause.
+type Revision struct {
+	Probe             Probe
+	ResetsState       bool
+	ClearsCertificate bool
+}
+
+var (
+	ErrNotFound          = errors.New("probe not found")
+	ErrNameInvalid       = refusal.Invalid("probe.name_invalid", "probe name must be 1 to 80 characters")
+	ErrKindInvalid       = refusal.Invalid("probe.kind_invalid", "probe kind must be http or tcp")
+	ErrTargetInvalid     = refusal.Invalid("probe.target_invalid", "probe target is not a valid url or host:port")
+	ErrTargetForbidden   = refusal.Invalid("probe.target_forbidden", "probe target is a link-local address")
+	ErrTargetCredentials = refusal.Invalid("probe.target_credentials", "probe target must not carry credentials")
+	ErrServiceInvalid    = refusal.Invalid("probe.service_invalid", "probe service must exist in the directory")
+	ErrIntervalInvalid   = refusal.Invalid("probe.interval_invalid", "probe interval must be between 30 seconds and 24 hours")
+	ErrTimeoutInvalid    = refusal.Invalid("probe.timeout_invalid", "probe timeout must be between 1 second and the interval")
+	ErrThresholdInvalid  = refusal.Invalid("probe.threshold_invalid", "probe thresholds must be between 1 and 10")
+	ErrMethodInvalid     = refusal.Invalid("probe.method_invalid", "probe method must be GET, HEAD or POST")
+	ErrStatusInvalid     = refusal.Invalid("probe.status_invalid", "probe expected status must be codes or families")
+	ErrBodyInvalid       = refusal.Invalid("probe.body_invalid", "probe expected body is too long")
+	ErrTooMany           = refusal.Invalid("probe.too_many", "this machine already carries the maximum number of probes")
+	ErrNotPaused         = refusal.Conflict("probe.not_paused", "probe is not paused")
+	ErrReportInvalid     = errors.New("probe report out of range")
+)
+
+// Une page publique affiche la sonde : la retirer d'abord du composant
+// (restrict, migrations/001_schema.sql).
+var ErrShownOnStatus = refusal.Conflict("probe.shown_on_status", "a status component shows the probe")
+
+// Complete pose ce que l'opérateur n'a pas dit : les valeurs par défaut,
+// et rien pour une sonde TCP, qui n'a ni méthode ni code attendu.
+func (d Definition) Complete() Definition {
+	d.Name = strings.TrimSpace(d.Name)
+	d.Target = strings.TrimSpace(d.Target)
+	if d.Interval == 0 {
+		d.Interval = DefaultInterval
+	}
+	if d.Timeout == 0 {
+		d.Timeout = DefaultTimeout
+	}
+	if d.FailureThreshold == 0 {
+		d.FailureThreshold = DefaultFailureThreshold
+	}
+	if d.RecoveryThreshold == 0 {
+		d.RecoveryThreshold = DefaultRecoveryThreshold
+	}
+	if d.Kind != KindHTTP {
+		return Definition{
+			Name: d.Name, Kind: d.Kind, Target: d.Target, MachineID: d.MachineID, ServiceID: d.ServiceID,
+			Interval: d.Interval, Timeout: d.Timeout,
+			FailureThreshold: d.FailureThreshold, RecoveryThreshold: d.RecoveryThreshold,
+			TLS: d.TLS,
+		}
+	}
+	// L'URL d'une sonde HTTP dit déjà le protocole ; le drapeau ne vaut
+	// que pour un port que rien d'autre ne décrit.
+	d.TLS = false
+	d.Method = strings.ToUpper(strings.TrimSpace(d.Method))
+	if d.Method == "" {
+		d.Method = "GET"
+	}
+	if strings.TrimSpace(d.ExpectedStatus) == "" {
+		d.ExpectedStatus = "2xx"
+	}
+	d.ExpectedBody = strings.TrimSpace(d.ExpectedBody)
+	return d
+}
+
+// ResetsState dit si l'édition change ce que la sonde mesure : l'état et les
+// compteurs ne disent plus rien de ce qu'elle mesurera. Le nom, le service,
+// l'intervalle et les seuils n'y touchent pas. d doit être complétée, comme
+// la sonde d'avant l'a été à sa création. Le plan d'un fichier s'en sert
+// pour prévenir avant d'appliquer.
+func (d Definition) ResetsState(before Probe) bool {
+	return d.ClearsCertificate(before) ||
+		d.Method != before.Method ||
+		d.ExpectedStatus != before.ExpectedStatus ||
+		d.ExpectedBody != before.ExpectedBody ||
+		d.FollowRedirects != before.FollowRedirects ||
+		d.Timeout != before.Timeout
+}
+
+// ClearsCertificate dit si l'édition change ce que la sonde regarde : le
+// certificat gardé serait celui d'une autre cible. Un simple réglage de
+// l'essai le laisserait en place, la cible étant la même.
+func (d Definition) ClearsCertificate(before Probe) bool {
+	return d.Kind != before.Kind ||
+		d.Target != before.Target ||
+		d.MachineID != before.MachineID ||
+		d.TLS != before.TLS
+}
+
+func (d Definition) Validate() error {
+	if d.Name == "" || utf8.RuneCountInString(d.Name) > MaxNameLength {
+		return ErrNameInvalid
+	}
+	if !slices.Contains(Kinds(), d.Kind) {
+		return ErrKindInvalid
+	}
+	if d.MachineID == "" {
+		return machine.ErrUnknown
+	}
+	if err := validateTarget(d.Kind, d.Target); err != nil {
+		return err
+	}
+	if d.Interval < MinInterval || d.Interval > MaxInterval {
+		return ErrIntervalInvalid
+	}
+	if d.Timeout < MinTimeout || d.Timeout > MaxTimeout || d.Timeout > d.Interval {
+		return ErrTimeoutInvalid
+	}
+	if d.FailureThreshold < 1 || d.FailureThreshold > MaxThreshold || d.RecoveryThreshold < 1 || d.RecoveryThreshold > MaxThreshold {
+		return ErrThresholdInvalid
+	}
+	if d.Kind != KindHTTP {
+		return nil
+	}
+	return validateHTTPCheck(d.Method, d.ExpectedStatus, d.ExpectedBody)
+}
+
+// validateHTTPCheck juge ce qui est propre à une sonde HTTP : la méthode,
+// le code attendu et le texte attendu. Le serveur la joue à la création,
+// l'agent à la réception (Task.Validate) : une seule règle, deux lecteurs.
+func validateHTTPCheck(method, expectedStatus, expectedBody string) error {
+	// Une sonde n'écrit pas : seules les méthodes sans effet attendu sont
+	// ouvertes, plus POST que réclament certains points de santé.
+	switch method {
+	case "GET", "HEAD", "POST":
+	default:
+		return ErrMethodInvalid
+	}
+	if !isStatusPattern(expectedStatus) {
+		return ErrStatusInvalid
+	}
+	if utf8.RuneCountInString(expectedBody) > MaxBodyLength {
+		return ErrBodyInvalid
+	}
+	return nil
+}
+
+// RefuseDeletion rend le refus de supprimer une sonde que le plan retient,
+// nil sinon.
+func RefuseDeletion(plan deletion.Plan) error {
+	return deletion.Refuse(plan, map[deletion.Kind]error{deletion.KindComponents: ErrShownOnStatus})
+}

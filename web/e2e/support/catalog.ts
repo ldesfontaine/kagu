@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 // Les libellés français du produit, lus dans le catalogue du serveur : le
 // parcours cherche les boutons par ce que l'opérateur lit, sans le recopier.
-const catalogPath = new URL("../../../internal/lang/fr.toml", import.meta.url);
+const catalogPath = new URL("../../../internal/kit/lang/fr.toml", import.meta.url);
 
 function parseCatalog(source: string): Map<string, string> {
   const entries = new Map<string, string>();

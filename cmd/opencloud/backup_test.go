@@ -11,7 +11,7 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/ldesfontaine/opencloud/internal/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
 )
 
 // La phrase de test : des mots, pas un secret.

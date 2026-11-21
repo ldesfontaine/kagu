@@ -14,15 +14,15 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/ldesfontaine/opencloud/internal/agent"
-	"github.com/ldesfontaine/opencloud/internal/anchor"
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/dockerapi"
-	"github.com/ldesfontaine/opencloud/internal/lang"
-	"github.com/ldesfontaine/opencloud/internal/machine"
-	"github.com/ldesfontaine/opencloud/internal/release"
-	"github.com/ldesfontaine/opencloud/internal/trust"
-	"github.com/ldesfontaine/opencloud/internal/version"
+	"github.com/ldesfontaine/opencloud/internal/edge/agent"
+	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
+	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/dockerapi"
+	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/opencloud/internal/kit/release"
+	"github.com/ldesfontaine/opencloud/internal/kit/trust"
+	"github.com/ldesfontaine/opencloud/internal/kit/version"
 )
 
 const defaultAgentStateDir = brand.AgentStateDir

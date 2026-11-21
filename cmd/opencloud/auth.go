@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/audit"
-	"github.com/ldesfontaine/opencloud/internal/auth"
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/config"
-	"github.com/ldesfontaine/opencloud/internal/store"
+	"github.com/ldesfontaine/opencloud/internal/edge/config"
+	"github.com/ldesfontaine/opencloud/internal/edge/store"
+	"github.com/ldesfontaine/opencloud/internal/fact/auth"
+	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
 )
 
 const authUsage = `Usage : {command} auth <status|disable> [-config chemin]

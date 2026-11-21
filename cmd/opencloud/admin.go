@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/auth"
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/config"
+	"github.com/ldesfontaine/opencloud/internal/edge/config"
+	"github.com/ldesfontaine/opencloud/internal/fact/auth"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
 )
 
 const adminUsage = `Usage : {command} admin setup-code [-config chemin]
@@ -26,7 +26,7 @@ const adminUsage = `Usage : {command} admin setup-code [-config chemin]
               state_dir.
 `
 
-// setupCodePath est la route que la socket est seule à servir (internal/server).
+// setupCodePath est la route que la socket est seule à servir (internal/edge/server).
 const setupCodePath = "/control/admin/setup-code"
 
 // opencloud admin : les gestes d'administration qui passent par la socket

@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
 )
 
 const (

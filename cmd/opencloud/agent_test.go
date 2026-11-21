@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/agent"
-	"github.com/ldesfontaine/opencloud/internal/lang"
-	"github.com/ldesfontaine/opencloud/internal/machine"
-	"github.com/ldesfontaine/opencloud/internal/testkit"
+	"github.com/ldesfontaine/opencloud/internal/edge/agent"
+	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/opencloud/internal/kit/testkit"
 )
 
 // failingReader échoue le test si l'entrée est lue.

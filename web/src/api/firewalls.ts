@@ -119,7 +119,7 @@ export interface FirewallLeasesResponse extends FirewallReading {
   leases: FirewallLease[];
 }
 
-// Le modèle des échanges, indépendant du pare-feu (internal/policy) : des zones,
+// Le modèle des échanges, indépendant du pare-feu (internal/fact/policy) : des zones,
 // des objets que les règles désignent, et la grille « qui parle à qui ».
 type ZoneKind = "network" | "self" | "internet";
 

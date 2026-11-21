@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/config"
-	"github.com/ldesfontaine/opencloud/internal/store/storetest"
+	"github.com/ldesfontaine/opencloud/internal/edge/config"
+	"github.com/ldesfontaine/opencloud/internal/edge/store/storetest"
 )
 
 // Un flux en direct ouvert n'empêche plus l'arrêt : il finit avec le

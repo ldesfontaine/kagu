@@ -1,0 +1,398 @@
+package server
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/opencloud/internal/kit/sampler"
+	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+)
+
+func (ts *testServer) agentPost(session, path string, payload any) *httptest.ResponseRecorder {
+	var body bytes.Buffer
+	_ = json.NewEncoder(&body).Encode(payload)
+	request := httptest.NewRequest(http.MethodPost, path, &body)
+	request.Header.Set("Authorization", "Bearer "+session)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	ts.ServeHTTP(recorder, request)
+	return recorder
+}
+
+// readCommand lit le flux de l'agent jusqu'à la commande attendue : il
+// porte aussi le jeu de sondes, poussé dès l'ouverture et à chaque
+// changement.
+func readCommand(t *testing.T, stream *bufio.Reader, want string) string {
+	t.Helper()
+	for {
+		name, data := readStreamEvent(t, stream)
+		if name == want {
+			return data
+		}
+		if name != string(agentwire.KindProbes) && name != string(agentwire.KindImages) {
+			t.Fatalf("commande inattendue %q en attendant %q", name, want)
+		}
+	}
+}
+
+// readStreamEvent lit le prochain événement nommé du flux de l'agent, en
+// sautant les pings.
+func readStreamEvent(t *testing.T, reader *bufio.Reader) (string, string) {
+	t.Helper()
+	var name, data string
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		line = strings.TrimRight(line, "\n")
+		switch {
+		case strings.HasPrefix(line, "event: "):
+			name = strings.TrimPrefix(line, "event: ")
+		case strings.HasPrefix(line, "data: "):
+			data = strings.TrimPrefix(line, "data: ")
+		case line == "" && name != "" && name != "ping":
+			return name, data
+		case line == "":
+			name, data = "", ""
+		}
+	}
+}
+
+// Le signal porte la section services : elle s'écrit au nom de la machine
+// de la session, un rapport hors de mesure est refusé, un agent sans
+// section passe.
+func TestAgentSignal_CarriesContainersAndRefusesBadReports(t *testing.T) {
+	server := newTestServer(t)
+	enrolled, private := server.enroll(t, "vps-paris-1", remoteID)
+	resp, session, _, cancel := openStream(t, server, enrolled.ID, private)
+	defer resp.Body.Close()
+	defer cancel()
+
+	report := container.Report{Complete: true, Inventory: []container.Observed{{
+		ContainerID: strings.Repeat("c", 64), Name: "web", Image: "nginx:1.27", State: container.StateRunning, CreatedAt: testNow,
+	}}}
+	if got := server.agentPost(session, "/agent/signal", agentwire.SignalRequest{Services: &report}); got.Code != http.StatusNoContent {
+		t.Fatalf("signal: %d %s", got.Code, got.Body.String())
+	}
+	containers, err := server.containers.List(context.Background(), remoteID)
+	if err != nil || len(containers) != 1 || containers[0].Name != "web" {
+		t.Fatalf("containers = %+v %v", containers, err)
+	}
+	bad := container.Report{Engine: &container.EngineReport{Present: false}}
+	if got := server.agentPost(session, "/agent/signal", agentwire.SignalRequest{Services: &bad}); got.Code != http.StatusBadRequest || !strings.Contains(got.Body.String(), "bad_services") {
+		t.Fatalf("bad report: %d %s", got.Code, got.Body.String())
+	}
+}
+
+// Une demande de journaux part par le flux de l'agent, les lots reviennent
+// par POST et sortent en SSE vers le navigateur ; un lot pour une requête
+// inconnue est refusé.
+func TestContainerLogs_RemoteRoundTrip(t *testing.T) {
+	server := newTestServer(t)
+	enrolled, private := server.enroll(t, "vps-paris-1", remoteID)
+	resp, session, agentStream, cancel := openStream(t, server, enrolled.ID, private)
+	defer resp.Body.Close()
+	defer cancel()
+	containerID := server.seedContainers(t)
+
+	live := httptest.NewServer(server.Server)
+	defer live.Close()
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, live.URL+"/api/containers/"+containerID+"/logs/stream?tail=20", nil)
+	browser, err := live.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer browser.Body.Close()
+	if browser.StatusCode != http.StatusOK || browser.Header.Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("stream: %d %s", browser.StatusCode, browser.Header.Get("Content-Type"))
+	}
+
+	data := readCommand(t, agentStream, string(agentwire.KindLogs))
+	var command container.LogRequest
+	if err := json.Unmarshal([]byte(data), &command); err != nil {
+		t.Fatal(err)
+	}
+	if command.ID == "" || command.ContainerID != strings.Repeat("b", 64) || command.Tail != 20 || !command.Follow {
+		t.Fatalf("command %+v", command)
+	}
+
+	if got := server.agentPost(session, "/agent/logs/unknown", container.LogBatch{}); got.Code != http.StatusNotFound {
+		t.Fatalf("unknown request: %d", got.Code)
+	}
+	at := testNow
+	batch := container.LogBatch{Lines: []container.LogLine{{At: at, Stream: "stdout", Text: "ready"}, {Stream: "stderr", Text: "oops"}}}
+	if got := server.agentPost(session, "/agent/logs/"+command.ID, batch); got.Code != http.StatusNoContent {
+		t.Fatalf("deliver: %d %s", got.Code, got.Body.String())
+	}
+	if got := server.agentPost(session, "/agent/logs/"+command.ID, container.LogBatch{Done: true}); got.Code != http.StatusNoContent {
+		t.Fatalf("deliver done: %d", got.Code)
+	}
+
+	reader := bufio.NewReader(browser.Body)
+	var events []string
+	for len(events) < 3 {
+		name, data := readStreamEvent(t, reader)
+		events = append(events, name+" "+data)
+	}
+	if !strings.HasPrefix(events[0], `line {"at":"2026-09-12T12:00:00Z","stream":"stdout","text":"ready"}`) || !strings.Contains(events[1], `"stream":"stderr"`) || !strings.HasPrefix(events[2], "end ") {
+		t.Fatalf("events = %v", events)
+	}
+	// Le serveur ne veut plus rien pour cette requête.
+	if got := server.agentPost(session, "/agent/logs/"+command.ID, container.LogBatch{}); got.Code != http.StatusNotFound {
+		t.Fatalf("after done: %d", got.Code)
+	}
+}
+
+// Quand le navigateur part, l'agent reçoit l'ordre d'arrêter.
+func TestContainerLogs_BrowserLeaving_StopsTheAgent(t *testing.T) {
+	server := newTestServer(t)
+	enrolled, private := server.enroll(t, "vps-paris-1", remoteID)
+	resp, _, agentStream, cancel := openStream(t, server, enrolled.ID, private)
+	defer resp.Body.Close()
+	defer cancel()
+	containerID := server.seedContainers(t)
+
+	live := httptest.NewServer(server.Server)
+	defer live.Close()
+	ctx, stop := context.WithCancel(context.Background())
+	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, live.URL+"/api/containers/"+containerID+"/logs/stream", nil)
+	browser, err := live.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := readCommand(t, agentStream, string(agentwire.KindLogs))
+	browser.Body.Close()
+	stop()
+	stopData := readCommand(t, agentStream, string(agentwire.KindLogsStop))
+	if !strings.Contains(data, jsonID(t, stopData)) {
+		t.Fatalf("la commande d'arrêt ne porte pas la requête ouverte: %s", stopData)
+	}
+}
+
+func jsonID(t *testing.T, data string) string {
+	t.Helper()
+	var request container.LogRequest
+	if err := json.Unmarshal([]byte(data), &request); err != nil {
+		t.Fatal(err)
+	}
+	return request.ID
+}
+
+// Sans flux, les journaux d'une machine distante sont un refus traduit ;
+// la fiche d'un conteneur inconnu est un 404.
+func TestContainerLogs_OfflineMachineAndUnknownContainer(t *testing.T) {
+	server := newTestServer(t)
+	server.enroll(t, "vps-paris-1", remoteID)
+	containerID := server.seedContainers(t)
+	got := callAPI(server.Server, http.MethodGet, "/api/containers/"+containerID+"/logs", nil)
+	if got.Code != http.StatusConflict || errorCode(t, got) != "machine.offline" {
+		t.Fatalf("offline: %d %s", got.Code, got.Body.String())
+	}
+	got = callAPI(server.Server, http.MethodGet, "/api/containers/"+containerID+"/logs/stream", nil)
+	if got.Code != http.StatusConflict {
+		t.Fatalf("offline stream: %d", got.Code)
+	}
+	for _, path := range []string{"/api/containers/nope", "/api/containers/nope/transitions", "/api/containers/nope/logs", "/api/machines/nope/containers"} {
+		if got := callAPI(server.Server, http.MethodGet, path, nil); got.Code != http.StatusNotFound {
+			t.Fatalf("%s: %d", path, got.Code)
+		}
+	}
+}
+
+// Une machine ne livre pas dans la requête poussée à une autre : sans quoi
+// un agent enrôlé écrirait dans les journaux qu'un onglet lit ailleurs.
+func TestContainerLogs_BatchFromAnotherMachine_IsRefused(t *testing.T) {
+	server := newTestServer(t)
+	enrolled, private := server.enroll(t, "vps-paris-1", remoteID)
+	resp, session, agentStream, cancel := openStream(t, server, enrolled.ID, private)
+	defer resp.Body.Close()
+	defer cancel()
+	intruder, intruderKey := server.enroll(t, "vps-lyon-1", "22222222-3333-4444-8555-666666666666")
+	intruderResp, intruderSession, _, intruderCancel := openStream(t, server, intruder.ID, intruderKey)
+	defer intruderResp.Body.Close()
+	defer intruderCancel()
+	containerID := server.seedContainers(t)
+
+	live := httptest.NewServer(server.Server)
+	defer live.Close()
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, live.URL+"/api/containers/"+containerID+"/logs/stream", nil)
+	browser, err := live.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer browser.Body.Close()
+	requestID := jsonID(t, readCommand(t, agentStream, string(agentwire.KindLogs)))
+
+	if got := server.agentPost(intruderSession, "/agent/logs/"+requestID, container.LogBatch{Lines: []container.LogLine{{Text: "intrus"}}}); got.Code != http.StatusNotFound {
+		t.Fatalf("intruder: %d %s", got.Code, got.Body.String())
+	}
+	if got := server.agentPost(session, "/agent/logs/"+requestID, container.LogBatch{}); got.Code != http.StatusNoContent {
+		t.Fatalf("owner: %d %s", got.Code, got.Body.String())
+	}
+}
+
+// Un lot de journaux n'est pas un signe de vie : il ne publie pas
+// « machines », sans quoi un suivi bavard ferait relire la liste à chaque
+// onglet toutes les secondes.
+func TestAgentLogs_DoesNotPublishMachines(t *testing.T) {
+	server := newTestServer(t)
+	enrolled, private := server.enroll(t, "vps-paris-1", remoteID)
+	resp, session, _, cancel := openStream(t, server, enrolled.ID, private)
+	defer resp.Body.Close()
+	defer cancel()
+	subscription := server.bus.Subscribe()
+	defer subscription.Close()
+	if got := server.agentPost(session, "/agent/logs/unknown", container.LogBatch{}); got.Code != http.StatusNotFound {
+		t.Fatalf("deliver: %d", got.Code)
+	}
+	ctx, stop := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer stop()
+	if topics, err := subscription.Next(ctx); err == nil {
+		t.Fatalf("published %v", topics)
+	}
+}
+
+// Les seize places sont prises d'un geste : sous la concurrence, jamais
+// une de plus.
+func TestLogSlots_ConcurrentTakers_NeverExceedTheCeiling(t *testing.T) {
+	server := newTestServer(t)
+	var taken atomic.Int32
+	var takers sync.WaitGroup
+	for range 200 {
+		takers.Add(1)
+		go func() {
+			defer takers.Done()
+			if server.takeLogSlot() {
+				taken.Add(1)
+			}
+		}()
+	}
+	takers.Wait()
+	if taken.Load() != maxLogStreams {
+		t.Fatalf("taken = %d", taken.Load())
+	}
+}
+
+// Le tirage unique et le suivi comptent dans les mêmes seize places : au-delà,
+// la clé du catalogue.
+func TestContainerLogs_FetchAndStreamShareTheCeiling(t *testing.T) {
+	server := newTestServer(t)
+	server.enroll(t, "vps-paris-1", remoteID)
+	containerID := server.seedContainers(t)
+	for range maxLogStreams {
+		server.takeLogSlot()
+	}
+	got := callAPI(server.Server, http.MethodGet, "/api/containers/"+containerID+"/logs", nil)
+	if got.Code != http.StatusServiceUnavailable || errorCode(t, got) != codeLogsBusy {
+		t.Fatalf("fetch: %d %s", got.Code, got.Body.String())
+	}
+	got = callAPI(server.Server, http.MethodGet, "/api/containers/"+containerID+"/logs/stream", nil)
+	if got.Code != http.StatusServiceUnavailable || errorCode(t, got) != codeLogsBusy {
+		t.Fatalf("stream: %d %s", got.Code, got.Body.String())
+	}
+	server.releaseLogSlot()
+	got = callAPI(server.Server, http.MethodGet, "/api/containers/"+containerID+"/logs", nil)
+	if errorCode(t, got) != "machine.offline" {
+		t.Fatalf("a freed slot lets the next one through: %d %s", got.Code, got.Body.String())
+	}
+}
+
+// File de commandes pleine : les journaux refusent avec une clé, pas un
+// 500 ; le jeu de sondes refusé repart au cycle suivant.
+func TestCommandQueueFull_RefusesLogsAndResendsProbes(t *testing.T) {
+	server := newTestServer(t)
+	enrolled, _ := server.enroll(t, "vps-paris-1", remoteID)
+	containerID := server.seedContainers(t)
+	// Une session sans boucle de flux : personne ne vide la file.
+	session, err := server.machines.Connect(context.Background(), enrolled, "51.15.20.114", "v0.0.1", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.machines.Disconnect(session)
+	for server.machines.Push(remoteID, machine.StreamEvent{Name: "filler"}) == nil {
+	}
+
+	got := callAPI(server.Server, http.MethodGet, "/api/containers/"+containerID+"/logs", nil)
+	if got.Code != http.StatusServiceUnavailable || errorCode(t, got) != codeMachineBusy {
+		t.Fatalf("logs: %d %s", got.Code, got.Body.String())
+	}
+
+	server.probes.Assign(context.Background(), remoteID)
+	for len(session.Events()) > 0 {
+		<-session.Events()
+	}
+	server.probes.ResendUnsent(context.Background())
+	if len(session.Events()) != 1 || (<-session.Events()).Name != string(agentwire.KindProbes) {
+		t.Fatal("the probe set was not resent")
+	}
+	server.probes.ResendUnsent(context.Background())
+	if len(session.Events()) != 0 {
+		t.Fatal("a delivered set is resent again")
+	}
+}
+
+// Une lecture hors de mesure ne fait plus perdre les conteneurs du même
+// signal : chaque section s'écrit seule, la refusée est nommée dans la
+// réponse pour un agent qui sait la lire, en 400 pour un plus vieux.
+func TestAgentSignal_RefusedSection_KeepsTheOthers(t *testing.T) {
+	server := newTestServer(t)
+	enrolled, private := server.enroll(t, "vps-paris-1", remoteID)
+	resp, session, _, cancel := openStream(t, server, enrolled.ID, private)
+	defer resp.Body.Close()
+	defer cancel()
+
+	send := func(name string, sections bool) *httptest.ResponseRecorder {
+		report := container.Report{Complete: true, Inventory: []container.Observed{{
+			ContainerID: strings.Repeat("c", 64), Name: name, Image: "nginx:1.27", State: container.StateRunning, CreatedAt: testNow,
+		}}}
+		var body bytes.Buffer
+		_ = json.NewEncoder(&body).Encode(agentwire.SignalRequest{Readings: []sampler.Reading{testReading(testNow, 250)}, Services: &report})
+		request := httptest.NewRequest(http.MethodPost, "/agent/signal", &body)
+		request.Header.Set("Authorization", "Bearer "+session)
+		request.Header.Set("Content-Type", "application/json")
+		if sections {
+			request.Header.Set(agentwire.HeaderSignalSections, "1")
+		}
+		recorder := httptest.NewRecorder()
+		server.ServeHTTP(recorder, request)
+		return recorder
+	}
+	recordedName := func() string {
+		containers, err := server.containers.List(context.Background(), remoteID)
+		if err != nil || len(containers) != 1 {
+			t.Fatalf("containers = %+v %v", containers, err)
+		}
+		return containers[0].Name
+	}
+
+	got := send("web", true)
+	if got.Code != http.StatusOK || strings.TrimSpace(got.Body.String()) != `{"rejected":{"readings":"bad_readings"}}` {
+		t.Fatalf("agent récent: %d %s", got.Code, got.Body.String())
+	}
+	if name := recordedName(); name != "web" {
+		t.Fatalf("conteneurs perdus avec la lecture refusée: %q", name)
+	}
+	got = send("web-renamed", false)
+	if got.Code != http.StatusBadRequest || !strings.Contains(got.Body.String(), "bad_readings") {
+		t.Fatalf("agent ancien: %d %s", got.Code, got.Body.String())
+	}
+	if name := recordedName(); name != "web-renamed" {
+		t.Fatalf("agent ancien, conteneurs perdus: %q", name)
+	}
+}

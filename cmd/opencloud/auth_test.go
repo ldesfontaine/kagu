@@ -12,10 +12,10 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/ldesfontaine/opencloud/internal/auth"
-	"github.com/ldesfontaine/opencloud/internal/auth/authtest"
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/store"
+	"github.com/ldesfontaine/opencloud/internal/edge/store"
+	"github.com/ldesfontaine/opencloud/internal/fact/auth"
+	"github.com/ldesfontaine/opencloud/internal/fact/auth/authtest"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
 )
 
 // writeConfig écrit une configuration minimale vers un state_dir neuf.

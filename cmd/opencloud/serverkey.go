@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ldesfontaine/opencloud/internal/action"
-	"github.com/ldesfontaine/opencloud/internal/brand"
+	"github.com/ldesfontaine/opencloud/internal/gesture/action"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
 )
 
 // openServerKey lit la clé qui signe les ordres, ou la crée au premier

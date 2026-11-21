@@ -4,10 +4,10 @@ import { writes } from "./routes";
 
 // La parité UI / MCP (doc refonte-ux, §3.7) : toute écriture d'écran est une
 // route de l'API, tout verbe du registre a son geste d'écran. Le versant Go
-// (une route d'écriture sans appelant) est internal/server/parity_test.go.
+// (une route d'écriture sans appelant) est internal/edge/server/parity_test.go.
 
-const routesFile = import.meta.glob<string>("../../../internal/server/testdata/routes.txt", { eager: true, import: "default", query: "?raw" });
-const verbsFile = import.meta.glob<string>("../../../internal/server/testdata/verbs.golden.json", { eager: true, import: "default", query: "?raw" });
+const routesFile = import.meta.glob<string>("../../../internal/edge/server/testdata/routes.txt", { eager: true, import: "default", query: "?raw" });
+const verbsFile = import.meta.glob<string>("../../../internal/edge/server/testdata/verbs.golden.json", { eager: true, import: "default", query: "?raw" });
 const sources = import.meta.glob<string>(["./*.ts", "!./*.test.ts", "!./routes.ts"], { eager: true, import: "default", query: "?raw" });
 
 function onlyContent(files: Record<string, string>): string {

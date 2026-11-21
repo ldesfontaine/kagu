@@ -9,14 +9,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/agent"
-	"github.com/ldesfontaine/opencloud/internal/anchor"
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/lang"
+	"github.com/ldesfontaine/opencloud/internal/edge/agent"
+	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/lang"
 )
 
 // opencloud agent trust list | add <type> <valeur> | remove <type> <valeur> :
-// les ancres de confiance locales de l'agent (internal/anchor). Seule voie qui
+// les ancres de confiance locales de l'agent (internal/fact/anchor). Seule voie qui
 // les change après l'installation ; réservée à root. Le message d'un
 // changement est écrit au journal du système (journald, via /dev/log).
 func runAgentTrust(args []string, out io.Writer, openTerminal terminalOpener, euid int) error {

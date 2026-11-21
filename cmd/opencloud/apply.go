@@ -14,10 +14,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/config"
-	"github.com/ldesfontaine/opencloud/internal/lang"
-	"github.com/ldesfontaine/opencloud/internal/manifest"
+	"github.com/ldesfontaine/opencloud/internal/edge/config"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/opencloud/internal/view/manifest"
 )
 
 const applyUsage = `Usage : {command} apply [-config chemin] [-prune] [-yes] [-dry-run] <fichier>

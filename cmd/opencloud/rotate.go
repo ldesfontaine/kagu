@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/action"
-	"github.com/ldesfontaine/opencloud/internal/audit"
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/seal"
-	"github.com/ldesfontaine/opencloud/internal/store"
+	"github.com/ldesfontaine/opencloud/internal/edge/store"
+	"github.com/ldesfontaine/opencloud/internal/gesture/action"
+	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/seal"
 )
 
 // rotateSecrets change la clé de chiffrement sans rien perdre :

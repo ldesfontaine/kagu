@@ -1,0 +1,364 @@
+package server
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/opencloud/internal/fact/probe"
+	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+)
+
+func (ts *testServer) createProbeVia(t *testing.T, request probeRequest) probeJSON {
+	t.Helper()
+	recorder := callAPI(ts.Server, http.MethodPost, "/api/probes", request)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", recorder.Code, recorder.Body.String())
+	}
+	var created probeJSON
+	decodeAPI(t, recorder, &created)
+	return created
+}
+
+func TestAPI_CreateProbe_ReturnsItAndRefusesBadDefinitionsWithTheirKey(t *testing.T) {
+	server := newTestServer(t)
+	created := server.createProbeVia(t, probeRequest{
+		Name: "site nextcloud", Kind: "http", Target: "https://cloud.exemple.fr/", MachineID: machine.LocalID,
+	})
+	if created.Status != string(probe.StatusNew) || created.IntervalSeconds != 60 || created.Method != "GET" {
+		t.Fatalf("created %+v", created)
+	}
+	if created.MachineName == "" || created.MachineOnline {
+		t.Fatalf("la machine openCloud, nommée, hors ligne sans le flux de son agent: %+v", created)
+	}
+	if got, err := server.db.GetProbe(context.Background(), created.ID); err != nil || got.Name != "site nextcloud" {
+		t.Fatalf("stored %+v %v", got, err)
+	}
+
+	cases := map[string]struct {
+		request probeRequest
+		key     string
+	}{
+		"nom vide":              {probeRequest{Name: " ", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID}, "probe.name_invalid"},
+		"type inconnu":          {probeRequest{Name: "x", Kind: "ping", Target: "a.fr", MachineID: machine.LocalID}, "probe.kind_invalid"},
+		"cible illisible":       {probeRequest{Name: "x", Kind: "http", Target: "cloud.exemple.fr", MachineID: machine.LocalID}, "probe.target_invalid"},
+		"cible interdite":       {probeRequest{Name: "x", Kind: "http", Target: "http://169.254.169.254/", MachineID: machine.LocalID}, "probe.target_forbidden"},
+		"cible à identifiants":  {probeRequest{Name: "x", Kind: "http", Target: "https://u:mdp@a.fr/", MachineID: machine.LocalID}, "probe.target_credentials"},
+		"machine inconnue":      {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: "nope"}, "machine.unknown"},
+		"intervalle trop court": {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, IntervalSeconds: 5}, "probe.interval_invalid"},
+		"méthode qui écrit":     {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, Method: "DELETE"}, "probe.method_invalid"},
+		"code illisible":        {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, ExpectedStatus: "deux-cents"}, "probe.status_invalid"},
+	}
+	for name, testCase := range cases {
+		got := callAPI(server.Server, http.MethodPost, "/api/probes", testCase.request)
+		if got.Code != http.StatusUnprocessableEntity || errorCode(t, got) != testCase.key {
+			t.Errorf("%s: %d %s", name, got.Code, got.Body.String())
+		}
+	}
+}
+
+// La sonde vise un service déclaré de l'annuaire, sur n'importe quelle
+// machine : un service inconnu ou un identifiant de conteneur est refusé.
+func TestAPI_CreateProbe_AcceptsADeclaredServiceOfAnyMachineAndRefusesTheRest(t *testing.T) {
+	server := newTestServer(t)
+	server.enroll(t, "vps-paris-1", remoteID)
+	containerID := server.seedContainers(t)
+	declaredID := server.seedGaps(t)
+
+	cases := map[string]probeRequest{
+		"service inconnu":      {Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, ServiceID: "inexistant"},
+		"fiche d'un conteneur": {Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, ServiceID: containerID},
+	}
+	for name, request := range cases {
+		got := callAPI(server.Server, http.MethodPost, "/api/probes", request)
+		if got.Code != http.StatusUnprocessableEntity || errorCode(t, got) != "probe.service_invalid" {
+			t.Errorf("%s: %d %s", name, got.Code, got.Body.String())
+		}
+	}
+
+	// Le service tourne sur la machine distante, la sonde sur la machine openCloud.
+	request := probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, ServiceID: declaredID}
+	created := server.createProbeVia(t, request)
+	if created.ServiceID != declaredID || created.ServiceName != "nextcloud" || created.ServiceMachineName != "vps-paris-1" {
+		t.Fatalf("le service d'une autre machine devait se rattacher: %+v", created)
+	}
+}
+
+func TestAPI_ProbeActions_PauseResumeDelete(t *testing.T) {
+	server := newTestServer(t)
+	created := server.createProbeVia(t, probeRequest{Name: "site", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID})
+
+	if got := callAPI(server.Server, http.MethodPost, "/api/probes/"+created.ID+"/actions/resume", nil); got.Code != http.StatusConflict || errorCode(t, got) != "probe.not_paused" {
+		t.Fatalf("resume while running: %d %s", got.Code, got.Body.String())
+	}
+	if got := callAPI(server.Server, http.MethodPost, "/api/probes/"+created.ID+"/actions/pause", nil); got.Code != http.StatusNoContent {
+		t.Fatalf("pause: %d %s", got.Code, got.Body.String())
+	}
+	if found, _ := server.db.GetProbe(context.Background(), created.ID); !found.IsPaused() {
+		t.Fatalf("not paused: %+v", found)
+	}
+	if got := callAPI(server.Server, http.MethodPost, "/api/probes/"+created.ID+"/actions/resume", nil); got.Code != http.StatusNoContent {
+		t.Fatalf("resume: %d %s", got.Code, got.Body.String())
+	}
+	if got := callAPI(server.Server, http.MethodDelete, "/api/probes/"+created.ID, nil); got.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d", got.Code)
+	}
+	if got := callAPI(server.Server, http.MethodGet, "/api/probes/"+created.ID, nil); got.Code != http.StatusNotFound {
+		t.Fatalf("after delete: %d", got.Code)
+	}
+}
+
+func TestAPI_MachineProbes_AnswersNotFoundForAnUnknownMachine(t *testing.T) {
+	server := newTestServer(t)
+	if got := callAPI(server.Server, http.MethodGet, "/api/machines/nope/probes", nil); got.Code != http.StatusNotFound {
+		t.Fatalf("unknown machine: %d %s", got.Code, got.Body.String())
+	}
+}
+
+// Le flux qui s'ouvre repart avec le jeu de sondes de sa machine, et une
+// sonde créée ensuite part sur le flux déjà ouvert : sans l'un ni l'autre,
+// un agent ne sonderait que ce qu'il avait au démarrage.
+func TestAgentStream_PushesTheProbeSetOnConnectAndOnChange(t *testing.T) {
+	server := newTestServer(t)
+	enrolled, private := server.enroll(t, "vps-paris-1", remoteID)
+	first := server.createProbeVia(t, probeRequest{Name: "site", Kind: "http", Target: "https://a.fr/", MachineID: remoteID})
+
+	response, _, stream, cancel := openStream(t, server, enrolled.ID, private)
+	defer response.Body.Close()
+	defer cancel()
+
+	assignment := nextAssignment(t, stream)
+	if len(assignment.Probes) != 1 || assignment.Probes[0].ID != first.ID || assignment.Probes[0].Target != "https://a.fr/" {
+		t.Fatalf("le jeu poussé à la connexion ne porte pas la sonde: %+v", assignment)
+	}
+
+	second := server.createProbeVia(t, probeRequest{Name: "base", Kind: "tcp", Target: "10.8.0.2:5432", MachineID: remoteID})
+	assignment = nextAssignment(t, stream)
+	if len(assignment.Probes) != 2 {
+		t.Fatalf("le jeu poussé après la création ne porte pas les deux sondes: %+v", assignment)
+	}
+
+	if got := callAPI(server.Server, http.MethodPost, "/api/probes/"+second.ID+"/actions/pause", nil); got.Code != http.StatusNoContent {
+		t.Fatalf("pause: %d", got.Code)
+	}
+	assignment = nextAssignment(t, stream)
+	if len(assignment.Probes) != 1 || assignment.Probes[0].ID != first.ID {
+		t.Fatalf("une sonde en pause reste dans le jeu poussé: %+v", assignment)
+	}
+}
+
+// nextAssignment lit la prochaine commande « probes » du flux de l'agent.
+func nextAssignment(t *testing.T, stream *bufio.Reader) probe.Assignment {
+	t.Helper()
+	name, data := nextCommand(t, stream, 3*time.Second)
+	// Le flux qui s'ouvre porte aussi les exclusions d'images : on passe.
+	if name == string(agentwire.KindImages) {
+		name, data = nextCommand(t, stream, 3*time.Second)
+	}
+	if name != string(agentwire.KindProbes) {
+		t.Fatalf("attendu la commande %q, obtenu %q", string(agentwire.KindProbes), name)
+	}
+	var assignment probe.Assignment
+	if err := json.Unmarshal([]byte(data), &assignment); err != nil {
+		t.Fatal(err)
+	}
+	return assignment
+}
+
+// nextCommand lit la prochaine commande du flux, en sautant la session et
+// les pings, sans jamais laisser le test attendre sans fin : une commande
+// qui ne vient pas doit faire échouer, pas bloquer.
+func nextCommand(t *testing.T, stream *bufio.Reader, within time.Duration) (string, string) {
+	t.Helper()
+	type event struct{ name, data string }
+	arrived := make(chan event, 1)
+	go func() {
+		var name, data string
+		for {
+			line, err := stream.ReadString('\n')
+			if err != nil {
+				return
+			}
+			line = strings.TrimRight(line, "\n")
+			switch {
+			case strings.HasPrefix(line, "event: "):
+				name = strings.TrimPrefix(line, "event: ")
+			case strings.HasPrefix(line, "data: "):
+				data = strings.TrimPrefix(line, "data: ")
+			case line == "" && name != "" && name != "ping" && name != "session":
+				arrived <- event{name: name, data: data}
+				return
+			case line == "":
+				name, data = "", ""
+			}
+		}
+	}()
+	select {
+	case got := <-arrived:
+		return got.name, got.data
+	case <-time.After(within):
+		t.Fatal("aucune commande reçue sur le flux de l'agent")
+		return "", ""
+	}
+}
+
+// Le signal porte les essais des sondes à côté des mesures ; un essai hors
+// de ce qu'un agent peut avoir observé refuse toute la section.
+func TestAgentSignal_CarriesProbeResultsAndRefusesBadOnes(t *testing.T) {
+	server := newTestServer(t)
+	enrolled, private := server.enroll(t, "vps-paris-1", remoteID)
+	created := server.createProbeVia(t, probeRequest{Name: "site", Kind: "http", Target: "https://a.fr/", MachineID: remoteID})
+	response, session, _, cancel := openStream(t, server, enrolled.ID, private)
+	defer response.Body.Close()
+	defer cancel()
+
+	signal := func(report probe.Report) *httptest.ResponseRecorder {
+		var body bytes.Buffer
+		_ = json.NewEncoder(&body).Encode(agentwire.SignalRequest{Probes: &report})
+		request := httptest.NewRequest(http.MethodPost, "/agent/signal", &body)
+		request.Header.Set("Authorization", "Bearer "+session)
+		request.Header.Set("Content-Type", "application/json")
+		recorder := httptest.NewRecorder()
+		server.ServeHTTP(recorder, request)
+		return recorder
+	}
+
+	code := 200
+	good := probe.Report{Results: []probe.Result{{ProbeID: created.ID, CheckedAt: testNow, Outcome: probe.OutcomeUp, DurationMs: 118, Code: &code}}}
+	if got := signal(good); got.Code != http.StatusNoContent {
+		t.Fatalf("signal: %d %s", got.Code, got.Body.String())
+	}
+	stored, err := server.db.GetProbe(context.Background(), created.ID)
+	if err != nil || stored.Status != probe.StatusUp || stored.LastDurationMs != 118 {
+		t.Fatalf("l'essai n'a pas été écrit: %+v %v", stored, err)
+	}
+
+	bad := probe.Report{Results: []probe.Result{{ProbeID: created.ID, CheckedAt: testNow.Add(time.Hour), Outcome: probe.OutcomeUp}}}
+	got := signal(bad)
+	if got.Code != http.StatusBadRequest {
+		t.Fatalf("un essai daté du futur devait refuser le lot: %d %s", got.Code, got.Body.String())
+	}
+}
+
+func probeRequestOf(created probeJSON) probeRequest {
+	return probeRequest{
+		Name: created.Name, Kind: created.Kind, Target: created.Target, MachineID: created.MachineID,
+		IntervalSeconds: created.IntervalSeconds, TimeoutSeconds: created.TimeoutSeconds,
+		FailureThreshold: created.FailureThreshold, RecoveryThreshold: created.RecoveryThreshold,
+		Method: created.Method, ExpectedStatus: created.ExpectedStatus,
+	}
+}
+
+func TestAPI_UpdateProbe_KeepsItAndRefusesWithTheKey(t *testing.T) {
+	server := newTestServer(t)
+	created := server.createProbeVia(t, probeRequest{Name: "site", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID})
+
+	request := probeRequestOf(created)
+	request.Name = "site nextcloud"
+	request.IntervalSeconds = 300
+	recorder := callAPI(server.Server, http.MethodPut, "/api/probes/"+created.ID, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("update: %d %s", recorder.Code, recorder.Body.String())
+	}
+	var updated probeJSON
+	decodeAPI(t, recorder, &updated)
+	if updated.ID != created.ID || updated.Name != "site nextcloud" || updated.IntervalSeconds != 300 || updated.Status != string(probe.StatusNew) {
+		t.Fatalf("updated %+v", updated)
+	}
+	if got, err := server.db.GetProbe(context.Background(), created.ID); err != nil || got.Interval != 5*time.Minute {
+		t.Fatalf("stored %+v %v", got, err)
+	}
+
+	// Comme à la création, un champ omis prend sa valeur par défaut.
+	recorder = callAPI(server.Server, http.MethodPut, "/api/probes/"+created.ID, probeRequest{
+		Name: "minimale", Kind: "http", Target: "https://b.fr/", MachineID: machine.LocalID,
+	})
+	decodeAPI(t, recorder, &updated)
+	if updated.IntervalSeconds != 60 || updated.Method != "GET" || updated.ExpectedStatus != "2xx" || updated.FailureThreshold != 3 {
+		t.Fatalf("defaults not applied: %+v", updated)
+	}
+
+	cases := map[string]struct {
+		request probeRequest
+		key     string
+	}{
+		"nom vide":              {probeRequest{Name: " ", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID}, "probe.name_invalid"},
+		"type inconnu":          {probeRequest{Name: "x", Kind: "ping", Target: "a.fr", MachineID: machine.LocalID}, "probe.kind_invalid"},
+		"cible illisible":       {probeRequest{Name: "x", Kind: "http", Target: "cloud.exemple.fr", MachineID: machine.LocalID}, "probe.target_invalid"},
+		"cible interdite":       {probeRequest{Name: "x", Kind: "http", Target: "http://169.254.169.254/", MachineID: machine.LocalID}, "probe.target_forbidden"},
+		"cible à identifiants":  {probeRequest{Name: "x", Kind: "http", Target: "https://u:mdp@a.fr/", MachineID: machine.LocalID}, "probe.target_credentials"},
+		"machine inconnue":      {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: "nope"}, "machine.unknown"},
+		"intervalle trop court": {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, IntervalSeconds: 5}, "probe.interval_invalid"},
+		"délai trop long":       {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, IntervalSeconds: 30, TimeoutSeconds: 31}, "probe.timeout_invalid"},
+		"seuil hors limites":    {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, FailureThreshold: 11}, "probe.threshold_invalid"},
+		"méthode qui écrit":     {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, Method: "DELETE"}, "probe.method_invalid"},
+		"code illisible":        {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, ExpectedStatus: "deux-cents"}, "probe.status_invalid"},
+		"texte trop long":       {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, ExpectedBody: strings.Repeat("x", 201)}, "probe.body_invalid"},
+		"service inconnu":       {probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, ServiceID: "inexistant"}, "probe.service_invalid"},
+	}
+	for name, testCase := range cases {
+		got := callAPI(server.Server, http.MethodPut, "/api/probes/"+created.ID, testCase.request)
+		if got.Code != http.StatusUnprocessableEntity || errorCode(t, got) != testCase.key {
+			t.Errorf("%s: %d %s", name, got.Code, got.Body.String())
+		}
+	}
+
+	valid := probeRequestOf(created)
+	if got := callAPI(server.Server, http.MethodPut, "/api/probes/inconnue", valid); got.Code != http.StatusNotFound {
+		t.Fatalf("unknown probe: %d %s", got.Code, got.Body.String())
+	}
+	// Une sonde inconnue l'emporte sur une machine inconnue.
+	unknownMachine := valid
+	unknownMachine.MachineID = "nope"
+	if got := callAPI(server.Server, http.MethodPut, "/api/probes/inconnue", unknownMachine); got.Code != http.StatusNotFound {
+		t.Fatalf("unknown probe and machine: %d %s", got.Code, got.Body.String())
+	}
+}
+
+func TestAPI_UpdateProbe_TooManyOnTheNewMachine(t *testing.T) {
+	server := newTestServer(t)
+	server.enroll(t, "vps-paris-1", remoteID)
+	for range probe.MaxProbesPerMachine {
+		server.createProbeVia(t, probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: remoteID})
+	}
+	created := server.createProbeVia(t, probeRequest{Name: "site", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID})
+
+	request := probeRequestOf(created)
+	request.MachineID = remoteID
+	got := callAPI(server.Server, http.MethodPut, "/api/probes/"+created.ID, request)
+	if got.Code != http.StatusUnprocessableEntity || errorCode(t, got) != "probe.too_many" {
+		t.Fatalf("%d %s", got.Code, got.Body.String())
+	}
+}
+
+// Une édition repart sur le flux déjà ouvert de la machine : sans cela,
+// un agent sonderait l'ancienne cible jusqu'à sa prochaine connexion.
+func TestAgentStream_PushesTheNewSetAfterAnEdit(t *testing.T) {
+	server := newTestServer(t)
+	enrolled, private := server.enroll(t, "vps-paris-1", remoteID)
+	created := server.createProbeVia(t, probeRequest{Name: "site", Kind: "http", Target: "https://a.fr/", MachineID: remoteID})
+
+	response, _, stream, cancel := openStream(t, server, enrolled.ID, private)
+	defer response.Body.Close()
+	defer cancel()
+	nextAssignment(t, stream)
+
+	request := probeRequestOf(created)
+	request.Target = "https://b.fr/"
+	request.IntervalSeconds = 120
+	if got := callAPI(server.Server, http.MethodPut, "/api/probes/"+created.ID, request); got.Code != http.StatusOK {
+		t.Fatalf("update: %d %s", got.Code, got.Body.String())
+	}
+	assignment := nextAssignment(t, stream)
+	if len(assignment.Probes) != 1 || assignment.Probes[0].ID != created.ID ||
+		assignment.Probes[0].Target != "https://b.fr/" || assignment.Probes[0].IntervalSeconds != 120 {
+		t.Fatalf("le jeu poussé après l'édition ne porte pas la nouvelle définition: %+v", assignment)
+	}
+}
