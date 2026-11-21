@@ -36,17 +36,44 @@ func TestIsBackupFile_OnlyTheExactForm(t *testing.T) {
 	}
 }
 
+// Une clé est la clé envoyée ou l'une de ses versions numérotées par
+// l'agent ; seul le nom envoyé est accepté d'un ordre.
 func TestIsBackupKeyFile_OnlyTheExactForm(t *testing.T) {
-	for name, want := range map[string]bool{
-		"opencloud-key-0123456789abcdef.age":      true,
-		"opencloud-key-0123456789ABCDEF.age":      false,
-		"opencloud-key-0123456789abcde.age":       false,
-		"opencloud-key-0123456789abcdef.age.part": false,
-		"opencloud-20261021-030000.tar.age":       false,
-		"../opencloud-key-0123456789abcdef.age":   false,
-	} {
-		if got := IsBackupKeyFile(name); got != want {
-			t.Errorf("IsBackupKeyFile(%q) = %t, want %t", name, got, want)
+	cases := []struct {
+		name      string
+		key, sent bool
+	}{
+		{"opencloud-key-0123456789abcdef.age", true, true},
+		{"opencloud-key-0123456789abcdef.1.age", true, false},
+		{"opencloud-key-0123456789abcdef.12.age", true, false},
+		{"opencloud-key-0123456789abcdef.0.age", false, false},
+		{"opencloud-key-0123456789abcdef.01.age", false, false},
+		{"opencloud-key-0123456789abcdef..age", false, false},
+		{"opencloud-key-0123456789abcdef.-1.age", false, false},
+		{"opencloud-key-0123456789ABCDEF.age", false, false},
+		{"opencloud-key-0123456789abcde.age", false, false},
+		{"opencloud-key-0123456789abcdef.age.part", false, false},
+		{".opencloud-key-0123456789abcdef.age.part", false, false},
+		{"opencloud-20261021-030000.tar.age", false, false},
+		{"../opencloud-key-0123456789abcdef.age", false, false},
+		{"opencloud-key-0123456789abcdef.1.age\n", false, false},
+	}
+	for _, c := range cases {
+		if got := IsBackupKeyFile(c.name); got != c.key {
+			t.Errorf("IsBackupKeyFile(%q) = %t, want %t", c.name, got, c.key)
+		}
+		if got := IsSentBackupKeyFile(c.name); got != c.sent {
+			t.Errorf("IsSentBackupKeyFile(%q) = %t, want %t", c.name, got, c.sent)
+		}
+	}
+}
+
+func TestBackupKeyFileVersion_IsAKeyButNeverASentOne(t *testing.T) {
+	sent := BackupKeyFileName("0123456789abcdef")
+	for version, want := range map[int]string{1: "opencloud-key-0123456789abcdef.1.age", 10: "opencloud-key-0123456789abcdef.10.age"} {
+		got := BackupKeyFileVersion(sent, version)
+		if got != want || !IsBackupKeyFile(got) || IsSentBackupKeyFile(got) || IsBackupFile(got) || BackupKeyFingerprint(got) != "0123456789abcdef" {
+			t.Errorf("version %d: got %q", version, got)
 		}
 	}
 }

@@ -245,7 +245,7 @@ func packArchive(dir *os.Root, name string, entry packEntry, recipient age.Recip
 	if err := fsx.SyncDir(dir, "."); err != nil {
 		return agentwire.ParcelFile{}, writeFailure(err)
 	}
-	if err := verifyOnDisk(dir, file); err != nil {
+	if err := verifyOnDisk(dir, file.Name, file); err != nil {
 		return agentwire.ParcelFile{}, err
 	}
 	return file, nil

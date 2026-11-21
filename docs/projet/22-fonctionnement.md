@@ -1631,7 +1631,7 @@ du colis (borné à la taille signée, plus un octet pour voir un dépassement),
 écrit `.<nom>.part` en `0600`, vérifie taille et somme (`digest_mismatch`),
 `fsync`, donne son nom au fichier **sans jamais en remplacer un** (lien dur
 exclusif : un nom déjà présent est refusé `path_exists`, l'archive gardée reste
-intacte ; seule la clé scellée se remplace, d'un coup), `fsync` du dossier, puis **relit** le fichier : somme
+intacte), `fsync` du dossier, puis **relit** le fichier : somme
 recalculée sur le disque, et en-tête `age-encryption.org/v1` pour un `.age`
 (`not_an_age_file`). **Plafond** : l'ordre porte un type d'archive (`archive` :
 `database`, `firewall` ou `guest`, posé par `serve`, jamais lu dans le nom du
@@ -1643,14 +1643,28 @@ sans privilège (`Bavail`), mesurée sous le chemin du droit : sinon `disk_full`
 refus immédiat, aucun `.part` écrit ; une place illisible est refusée
 `path_unwritable`, jamais acceptée par défaut. Tous les types : un fichier plus long que sa taille annoncée est
 coupé et refusé (`digest_mismatch`). Un agent d'avant ignore `archive` : il
-garde son ancien comportement (renommer par-dessus). Il rend une ligne par fichier, `written <nom> <taille>
-sha256:<hex>`, et n'envoie aucun contenu. `backup.prune` porte un
+garde son ancien comportement (renommer par-dessus). **La clé scellée ne se
+remplace ni ne s'efface jamais** (TU-19) : le serveur la renvoie avec chaque
+sauvegarde, et un serveur compromis enverrait d'autres octets sous le même nom.
+Nom libre : lien dur exclusif, comme une archive. Mêmes octets qu'une clé gardée
+sous ce nom ou l'une de ses versions : rien ne s'écrit, `unchanged <nom> <taille>
+sha256:<hex>`. Octets différents : la clé gardée reste, la reçue se pose sous
+la première version libre `opencloud-key-<empreinte>.<n>.age` (`n` ≥ 1, lien
+exclusif, jamais réutilisé), ligne `kept <nom> sha256:<hex>: the received key
+differs`, et `WARN` au journal de l'agent (empreinte, deux sommes, aucun
+contenu) ; la réception réussit. Un ordre ne nomme jamais une version
+(`bad_order`) : seul l'agent numérote. Coût : aucune borne de nombre, un serveur
+compromis peut accumuler des versions, chacune bornée par la taille annoncée et
+la place libre ; chaque réception relit (somme) les versions déjà là. Il rend
+une ligne par fichier, `written <nom> <taille> sha256:<hex>`, et n'envoie aucun
+contenu. `backup.prune` porte un
 `Prefix` obligatoire (le préfixe du plan : un sujet ou `opencloud`) ; sans lui,
 ou s'il n'a pas la forme d'un préfixe, l'ordre est refusé `bad_order`. Il ne
 supprime que les fichiers de la forme exacte `<préfixe>-AAAAMMJJ-HHMMSS.tar.age` :
 après `<préfixe>-`, le reste doit être **exactement** l'horodatage. Le plan `pve`
 ne prend donc jamais un fichier `pve-vm-100-…` ni `opencloud-…`. Il garde les
-`keep` plus récents (tri par nom), ne touche jamais une clé `-key-` ni autre
+`keep` plus récents (tri par nom), ne touche jamais une clé `-key-` (versions
+comprises) ni autre
 chose, et rend `removed <nom>` puis `kept <n>`. Aucune compatibilité avec un
 ancien ordre sans `Prefix` n'est gardée : aucun agent installé n'a reçu de
 `backup.prune` d'un serveur de cette version. Dans l'autre sens, un agent

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/opencloud/internal/agentwire"
+	"github.com/ldesfontaine/opencloud/internal/testkit"
 )
 
 const (
@@ -184,7 +186,7 @@ func TestBackupReceive_WritesVerifiesAndReportsEachFile(t *testing.T) {
 	files := map[string]string{archiveName: ageLike("sauvegarde chiffrée de test"), keyName: ageLike("clé scellée de test")}
 	server := &parcelServer{files: files}
 
-	output, err := receiveBackup(context.Background(), sourceFor(t, server), filepath.Dir(dir), agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
+	output, err := receiveBackup(context.Background(), discardLogger, sourceFor(t, server), filepath.Dir(dir), agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +232,7 @@ func TestBackupReceive_DigestMismatchLeavesNoFile(t *testing.T) {
 			files := map[string]string{archiveName: ageLike("sauvegarde chiffrée de test")}
 			files2 := listed(files)
 			change(&files2[0])
-			_, err := receiveBackup(context.Background(), sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: files2})
+			_, err := receiveBackup(context.Background(), discardLogger, sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: files2})
 			assertReason(t, err, agentwire.ReasonDigestMismatch)
 			assertDirEmpty(t, dir)
 		})
@@ -240,7 +242,7 @@ func TestBackupReceive_DigestMismatchLeavesNoFile(t *testing.T) {
 func TestBackupReceive_RefusesANonAgeFile(t *testing.T) {
 	dir := backupDir(t)
 	files := map[string]string{archiveName: "#!/bin/sh\necho pas du age\n"}
-	_, err := receiveBackup(context.Background(), sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
+	_, err := receiveBackup(context.Background(), discardLogger, sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
 	assertReason(t, err, agentwire.ReasonNotAgeFile)
 	assertDirEmpty(t, dir)
 }
@@ -249,7 +251,7 @@ func TestBackupReceive_ReportsADownloadThatFails(t *testing.T) {
 	dir := backupDir(t)
 	files := map[string]string{archiveName: ageLike("x")}
 	server := &parcelServer{files: map[string]string{}}
-	_, err := receiveBackup(context.Background(), sourceFor(t, server), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
+	_, err := receiveBackup(context.Background(), discardLogger, sourceFor(t, server), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
 	assertReason(t, err, agentwire.ReasonDownloadFailed)
 	assertDirEmpty(t, dir)
 
@@ -257,7 +259,7 @@ func TestBackupReceive_ReportsADownloadThatFails(t *testing.T) {
 	offline := &fetcher{}
 	offline.use(server.client(t))
 	before := len(server.requests)
-	_, err = receiveBackup(context.Background(), offline, dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
+	_, err = receiveBackup(context.Background(), discardLogger, offline, dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
 	assertReason(t, err, agentwire.ReasonDownloadFailed)
 	if len(server.requests) != before {
 		t.Fatalf("a request left without a session: %v", server.requests)
@@ -277,7 +279,7 @@ func TestBackupReceive_ReportsAnUnwritablePath(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 	files := map[string]string{archiveName: ageLike("x")}
-	_, err := receiveBackup(context.Background(), sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
+	_, err := receiveBackup(context.Background(), discardLogger, sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
 	assertReason(t, err, agentwire.ReasonPathUnwritable)
 }
 
@@ -622,7 +624,7 @@ func TestBackupReceive_RefusesASymlinkLeavingTheRight(t *testing.T) {
 	files := map[string]string{archiveName: ageLike("sauvegarde chiffrée de test")}
 	server := &parcelServer{files: files}
 	for _, destination := range []string{filepath.Join(granted, "sortie"), filepath.Join(granted, "sortie", "nuit")} {
-		_, err := receiveBackup(context.Background(), sourceFor(t, server), granted, agentwire.BackupReceiveParams{Parcel: "colis1", Path: destination, Files: listed(files)})
+		_, err := receiveBackup(context.Background(), discardLogger, sourceFor(t, server), granted, agentwire.BackupReceiveParams{Parcel: "colis1", Path: destination, Files: listed(files)})
 		assertReason(t, err, agentwire.ReasonPathOutsideRight)
 		_, err = pruneBackups(granted, agentwire.BackupPruneParams{Path: destination, Prefix: "opencloud", Keep: 1})
 		assertReason(t, err, agentwire.ReasonPathOutsideRight)
@@ -644,7 +646,7 @@ func TestBackupReceive_RefusesASymlinkLeavingTheRight(t *testing.T) {
 	if err := os.Symlink(target, filepath.Join(granted, partPrefix+archiveName+partSuffix)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := receiveBackup(context.Background(), sourceFor(t, server), granted, agentwire.BackupReceiveParams{Parcel: "colis1", Path: granted, Files: listed(files)}); err != nil {
+	if _, err := receiveBackup(context.Background(), discardLogger, sourceFor(t, server), granted, agentwire.BackupReceiveParams{Parcel: "colis1", Path: granted, Files: listed(files)}); err != nil {
 		t.Fatal(err)
 	}
 	if content, _ := os.ReadFile(target); string(content) != "à garder" {
@@ -790,7 +792,7 @@ func TestR_E3_17(t *testing.T) {
 			t.Fatal(err)
 		}
 		files := map[string]string{archiveName: ageLike("une autre archive, même nom")}
-		_, err := receiveBackup(context.Background(), sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
+		_, err := receiveBackup(context.Background(), discardLogger, sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
 		assertReason(t, err, agentwire.ReasonPathExists)
 		assertOnlyFile(t, dir, archiveName, kept)
 	})
@@ -801,31 +803,19 @@ func TestR_E3_17(t *testing.T) {
 		files := map[string]string{archiveName: content}
 		announced := listed(files)
 		announced[0].Size = 100
-		_, err := receiveBackup(context.Background(), sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: announced})
+		_, err := receiveBackup(context.Background(), discardLogger, sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: announced})
 		assertReason(t, err, agentwire.ReasonDigestMismatch)
 		assertDirEmpty(t, dir)
 	})
 
-	t.Run("the sealed key file is replaced in one go", func(t *testing.T) {
-		dir := backupDir(t)
-		if err := os.WriteFile(filepath.Join(dir, keyName), []byte(ageLike("ancienne clé")), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		files := map[string]string{keyName: ageLike("nouvelle clé")}
-		if _, err := receiveBackup(context.Background(), sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)}); err != nil {
-			t.Fatal(err)
-		}
-		assertOnlyFile(t, dir, keyName, files[keyName])
-	})
-
-	t.Run("a refused name leaves the sealed key replaced and no part behind", func(t *testing.T) {
+	t.Run("a refused name leaves the sealed key written and no part behind", func(t *testing.T) {
 		dir := backupDir(t)
 		kept := ageLike("l'archive gardée")
 		if err := os.WriteFile(filepath.Join(dir, archiveName), []byte(kept), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		files := map[string]string{archiveName: ageLike("autre"), keyName: ageLike("clé")}
-		_, err := receiveBackup(context.Background(), sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
+		_, err := receiveBackup(context.Background(), discardLogger, sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
 		assertReason(t, err, agentwire.ReasonPathExists)
 		content, readErr := os.ReadFile(filepath.Join(dir, archiveName))
 		if readErr != nil || string(content) != kept {
@@ -874,6 +864,22 @@ func TestR_E3_17_TheCapFollowsTheSignedArchiveKind(t *testing.T) {
 				t.Fatalf("reason %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+// assertFolderHolds : le dossier porte exactement ces fichiers, avec ces
+// contenus.
+func assertFolderHolds(t *testing.T, dir string, want map[string]string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != len(want) {
+		t.Fatalf("the folder holds %v (%v), want %d files", entries, err, len(want))
+	}
+	for name, content := range want {
+		got, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil || string(got) != content {
+			t.Fatalf("%s holds %q (%v), want %q", name, got, err, content)
+		}
 	}
 }
 
@@ -941,5 +947,192 @@ func TestBackupReceive_RefusesWhenAnnouncedSizeExceedsFreeSpace(t *testing.T) {
 			}
 			assertDirEmpty(t, b.dir)
 		})
+	}
+}
+
+// receiveKey reçoit une clé scellée seule sous dir et rend les lignes du
+// résultat.
+func receiveKey(t *testing.T, logger *slog.Logger, dir, content string) []string {
+	t.Helper()
+	files := map[string]string{keyName: content}
+	output, err := receiveBackup(context.Background(), logger, sourceFor(t, &parcelServer{files: files}), dir, agentwire.BackupReceiveParams{Parcel: "colis1", Path: dir, Files: listed(files)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []string
+	for _, line := range output {
+		lines = append(lines, line.Line)
+	}
+	return lines
+}
+
+// TU-19 : une clé neuve se pose sous le nom envoyé.
+func TestBackupReceive_ANewKeyTakesItsName(t *testing.T) {
+	dir := backupDir(t)
+	key := ageLike("la clé")
+	lines := receiveKey(t, discardLogger, dir, key)
+	want := fmt.Sprintf("written %s %d sha256:%s", keyName, len(key), testkit.SHA256Hex([]byte(key)))
+	if len(lines) != 1 || lines[0] != want {
+		t.Fatalf("output %q, want %q", lines, want)
+	}
+	assertOnlyFile(t, dir, keyName, key)
+}
+
+// TU-19 : le serveur renvoie la même clé avec chaque sauvegarde ; rien ne
+// s'écrit, le fichier gardé n'est pas touché, la réception réussit.
+func TestBackupReceive_TheSameKeyAgainWritesNothing(t *testing.T) {
+	dir := backupDir(t)
+	key := ageLike("la clé")
+	kept := filepath.Join(dir, keyName)
+	if err := os.WriteFile(kept, []byte(key), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	if err := os.Chtimes(kept, past, past); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(kept)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := receiveKey(t, discardLogger, dir, key)
+	want := fmt.Sprintf("unchanged %s %d sha256:%s", keyName, len(key), testkit.SHA256Hex([]byte(key)))
+	if len(lines) != 1 || lines[0] != want {
+		t.Fatalf("output %q, want %q", lines, want)
+	}
+	after, err := os.Stat(kept)
+	if err != nil || !os.SameFile(before, after) || !after.ModTime().Equal(past) {
+		t.Fatalf("the kept key was touched: %v %v", after.ModTime(), err)
+	}
+	assertOnlyFile(t, dir, keyName, key)
+}
+
+// TU-19 : une clé qui diffère sous le même nom ne remplace jamais la clé
+// gardée ; elle se pose à côté sous la version libre suivante, et toutes
+// s'accumulent. Le journal dit l'empreinte et les deux sommes, jamais le
+// contenu.
+func TestBackupReceive_ADifferentKeyNeverReplacesAKeptOne(t *testing.T) {
+	dir := backupDir(t)
+	first := ageLike("la clé d'origine")
+	if err := os.WriteFile(filepath.Join(dir, keyName), []byte(first), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{keyName: first}
+	for version := 1; version <= 3; version++ {
+		var journal bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&journal, nil))
+		key := ageLike(fmt.Sprintf("clé envoyée %d", version))
+		versioned := agentwire.BackupKeyFileVersion(keyName, version)
+		lines := receiveKey(t, logger, dir, key)
+		wantLines := []string{
+			fmt.Sprintf("kept %s sha256:%s: the received key differs", keyName, testkit.SHA256Hex([]byte(first))),
+			fmt.Sprintf("written %s %d sha256:%s", versioned, len(key), testkit.SHA256Hex([]byte(key))),
+		}
+		if !slices.Equal(lines, wantLines) {
+			t.Fatalf("version %d: output %q, want %q", version, lines, wantLines)
+		}
+		logged := journal.String()
+		for _, part := range []string{"level=WARN", "fingerprint=0123456789abcdef", "kept_sha256=" + testkit.SHA256Hex([]byte(first)), "received_sha256=" + testkit.SHA256Hex([]byte(key))} {
+			if !strings.Contains(logged, part) {
+				t.Fatalf("version %d: the journal %q misses %q", version, logged, part)
+			}
+		}
+		if strings.Contains(logged, "clé") {
+			t.Fatalf("the journal holds a key content: %q", logged)
+		}
+		want[versioned] = key
+		assertFolderHolds(t, dir, want)
+	}
+
+	// Une clé déjà gardée sous une version ne s'écrit pas une seconde fois.
+	again := want[agentwire.BackupKeyFileVersion(keyName, 2)]
+	lines := receiveKey(t, discardLogger, dir, again)
+	if len(lines) != 2 || lines[1] != fmt.Sprintf("unchanged %s %d sha256:%s", agentwire.BackupKeyFileVersion(keyName, 2), len(again), testkit.SHA256Hex([]byte(again))) {
+		t.Fatalf("output %q", lines)
+	}
+	assertFolderHolds(t, dir, want)
+}
+
+// TU-19 : un ordre ne nomme jamais une version ; seul l'agent numérote.
+func TestBackupReceive_RefusesAKeyVersionInTheOrder(t *testing.T) {
+	files := map[string]string{agentwire.BackupKeyFileVersion(keyName, 1): ageLike("clé")}
+	if isReceivable(agentwire.BackupReceiveParams{Parcel: "colis1", Path: "/srv/backups", Files: listed(files)}) {
+		t.Fatal("a versioned key name was accepted from an order")
+	}
+}
+
+// TU-19 : l'élagage ne touche aucune clé, quelle que soit sa version, même
+// sous un préfixe qui ressemble au nom d'une clé.
+func TestBackupPrune_NeverTouchesAKey(t *testing.T) {
+	dir := backupDir(t)
+	want := map[string]string{
+		keyName: ageLike("k0"),
+		agentwire.BackupKeyFileVersion(keyName, 1):  ageLike("k1"),
+		agentwire.BackupKeyFileVersion(keyName, 2):  ageLike("k2"),
+		agentwire.BackupKeyFileVersion(keyName, 10): ageLike("k10"),
+		"opencloud-20261023-030000.tar.age":         ageLike("la plus récente"),
+	}
+	for name, content := range want {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "opencloud-20261021-030000.tar.age"), []byte(ageLike("ancienne")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, prefix := range []string{"opencloud", "opencloud-key", "opencloud-key-0123456789abcdef"} {
+		if _, err := pruneBackups(dir, agentwire.BackupPruneParams{Path: dir, Prefix: prefix, Keep: 1}); err != nil {
+			t.Fatalf("%s: %v", prefix, err)
+		}
+	}
+	assertFolderHolds(t, dir, want)
+}
+
+// TU-19 : deux réceptions croisées de clés différentes sous le même nom ne
+// perdent rien : chacune prend son nom en exclusif. À lancer avec -race.
+func TestPublishKey_ConcurrentReceptionsLoseNothing(t *testing.T) {
+	dir := backupDir(t)
+	const receptions = 8
+	contents := map[string]bool{}
+	var wait sync.WaitGroup
+	errs := make(chan error, receptions)
+	for index := range receptions {
+		key := ageLike(fmt.Sprintf("clé %d", index))
+		contents[key] = true
+		part := fmt.Sprintf(".part-%d", index)
+		if err := os.WriteFile(filepath.Join(dir, part), []byte(key), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		file := agentwire.ParcelFile{Name: keyName, Size: int64(len(key)), SHA256: testkit.SHA256Hex([]byte(key))}
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			root, err := os.OpenRoot(dir)
+			if err != nil {
+				errs <- err
+				return
+			}
+			defer root.Close()
+			_, err = publishKey(discardLogger, root, part, file)
+			errs <- err
+		}()
+	}
+	wait.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != receptions {
+		t.Fatalf("the folder holds %v (%v), want %d keys", entries, err, receptions)
+	}
+	for _, entry := range entries {
+		content, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil || !agentwire.IsBackupKeyFile(entry.Name()) || !contents[string(content)] {
+			t.Fatalf("%s holds %q (%v)", entry.Name(), content, err)
+		}
+		delete(contents, string(content))
 	}
 }

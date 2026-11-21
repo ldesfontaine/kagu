@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path"
 	"slices"
@@ -244,7 +245,7 @@ func isReceivable(params agentwire.BackupReceiveParams) bool {
 	}
 	seen := map[string]bool{}
 	for _, file := range params.Files {
-		isKnownName := agentwire.IsBackupFile(file.Name) || agentwire.IsBackupKeyFile(file.Name)
+		isKnownName := agentwire.IsBackupFile(file.Name) || agentwire.IsSentBackupKeyFile(file.Name)
 		if !isKnownName || seen[file.Name] || file.Size < 0 || !isSHA256(file.SHA256) {
 			return false
 		}
@@ -262,8 +263,9 @@ func isSHA256(text string) bool {
 // créé s'il manque, chaque fichier est téléchargé dans un .part, vérifié
 // contre la taille et la somme que l'ordre a signées, écrit sur le disque,
 // renommé, puis relu depuis le disque. Il ne lit rien d'autre et ne renvoie
-// aucun contenu : seulement une ligne par fichier.
-func receiveBackup(ctx context.Context, source parcelSource, granted string, params agentwire.BackupReceiveParams) ([]agentwire.OutputLine, error) {
+// aucun contenu : seulement une ligne par fichier, deux pour une clé qui
+// diffère de celle gardée (publishKey).
+func receiveBackup(ctx context.Context, logger *slog.Logger, source parcelSource, granted string, params agentwire.BackupReceiveParams) ([]agentwire.OutputLine, error) {
 	ctx, cancel := context.WithTimeout(ctx, receiveTimeout)
 	defer cancel()
 	// Une écriture ne sort jamais du chemin du droit : le Root refuse « .. »
@@ -275,47 +277,46 @@ func receiveBackup(ctx context.Context, source parcelSource, granted string, par
 	defer root.Close()
 	var output []agentwire.OutputLine
 	for _, file := range params.Files {
-		if err := receiveFile(ctx, source, root, params.Parcel, file); err != nil {
+		lines, err := receiveFile(ctx, logger, source, root, params.Parcel, file)
+		output = append(output, lines...)
+		if err != nil {
 			return output, err
 		}
-		output = append(output, stdout(fmt.Sprintf("written %s %d sha256:%s", file.Name, file.Size, file.SHA256)))
 	}
 	return output, nil
 }
 
-func receiveFile(ctx context.Context, source parcelSource, root *os.Root, parcel string, file agentwire.ParcelFile) error {
+func receiveFile(ctx context.Context, logger *slog.Logger, source parcelSource, root *os.Root, parcel string, file agentwire.ParcelFile) ([]agentwire.OutputLine, error) {
 	part := partPrefix + file.Name + partSuffix
 	if err := downloadTo(ctx, source, root, parcel, file, part); err != nil {
 		_ = root.Remove(part)
-		return err
+		return nil, err
 	}
-	if agentwire.IsBackupFile(file.Name) || agentwire.IsBackupKeyFile(file.Name) {
-		if err := checkAgeHeader(root, part); err != nil {
-			_ = root.Remove(part)
-			return err
-		}
+	if err := checkAgeHeader(root, part); err != nil {
+		_ = root.Remove(part)
+		return nil, err
+	}
+	if agentwire.IsBackupKeyFile(file.Name) {
+		return publishKey(logger, root, part, file)
 	}
 	if err := publish(root, part, file.Name); err != nil {
 		_ = root.Remove(part)
-		return err
+		return nil, err
 	}
-	return verifyOnDisk(root, file)
+	if err := verifyOnDisk(root, file.Name, file); err != nil {
+		return nil, err
+	}
+	return []agentwire.OutputLine{writtenLine(file.Name, file)}, nil
 }
 
-// publish donne au .part son nom final. Une archive reçue ne remplace jamais
-// une archive gardée : le nom se prend en exclusif, et deux réceptions
-// croisées ne s'écrasent pas. Seule la clé scellée se remplace, d'un coup.
+func writtenLine(name string, file agentwire.ParcelFile) agentwire.OutputLine {
+	return stdout(fmt.Sprintf("written %s %d sha256:%s", name, file.Size, file.SHA256))
+}
+
+// publish donne au .part d'une archive son nom final. Une archive reçue ne
+// remplace jamais une archive gardée : le nom se prend en exclusif, et deux
+// réceptions croisées ne s'écrasent pas.
 func publish(root *os.Root, part, name string) error {
-	if agentwire.IsBackupKeyFile(name) {
-		if err := root.Rename(part, name); err != nil {
-			return failWith(agentwire.ReasonPathUnwritable, err)
-		}
-		// fsync du dossier, sinon le rename peut se perdre à la coupure.
-		if err := fsx.SyncDir(root, "."); err != nil {
-			return failWith(agentwire.ReasonPathUnwritable, err)
-		}
-		return nil
-	}
 	err := fsx.LinkExclusive(root, part, name)
 	if errors.Is(err, fs.ErrExist) {
 		return failWith(agentwire.ReasonPathExists, err)
@@ -382,23 +383,85 @@ func checkAgeHeader(root *os.Root, name string) error {
 	return nil
 }
 
-// verifyOnDisk relit le fichier écrit : taille, somme et en-tête sont ceux de
-// ce que le disque garde, pas de ce que l'agent croit avoir écrit.
-func verifyOnDisk(root *os.Root, file agentwire.ParcelFile) error {
-	written, err := root.Open(file.Name)
+// publishKey pose la clé scellée reçue sans jamais remplacer ni effacer une
+// clé gardée : c'est la seule qui ouvre les sauvegardes déjà là, et un serveur
+// compromis enverrait d'autres octets sous le même nom. Le nom envoyé, puis
+// ses versions .1, .2… : le premier libre se prend en lien exclusif (deux
+// réceptions croisées ne s'écrasent pas) ; s'il en est un qui porte déjà ces
+// octets, rien ne s'écrit. Une clé qui diffère de celle du nom envoyé se dit
+// au journal et dans le résultat, sommes seulement.
+func publishKey(logger *slog.Logger, root *os.Root, part string, file agentwire.ParcelFile) ([]agentwire.OutputLine, error) {
+	defer func() { _ = root.Remove(part) }()
+	var output []agentwire.OutputLine
+	for version := 0; ; version++ {
+		name := keyVersionName(file.Name, version)
+		linkErr := root.Link(part, name)
+		if linkErr == nil {
+			return append(output, writtenLine(name, file)), syncPublishedKey(root, part, name, file)
+		}
+		if !errors.Is(linkErr, fs.ErrExist) {
+			return output, failWith(agentwire.ReasonPathUnwritable, linkErr)
+		}
+		size, sum, err := sumOnDisk(root, name)
+		if err != nil {
+			return output, failWith(agentwire.ReasonPathUnwritable, err)
+		}
+		if size == file.Size && sum == file.SHA256 {
+			return append(output, stdout(fmt.Sprintf("unchanged %s %d sha256:%s", name, size, sum))), nil
+		}
+		if version == 0 {
+			logger.Warn("received backup key differs from the kept one: both kept",
+				"fingerprint", agentwire.BackupKeyFingerprint(file.Name), "kept_sha256", sum, "received_sha256", file.SHA256)
+			output = append(output, stdout(fmt.Sprintf("kept %s sha256:%s: the received key differs", name, sum)))
+		}
+	}
+}
+
+// keyVersionName : la version 0 est le nom envoyé.
+func keyVersionName(name string, version int) string {
+	if version == 0 {
+		return name
+	}
+	return agentwire.BackupKeyFileVersion(name, version)
+}
+
+// syncPublishedKey retire le .part, fsync le dossier (sans quoi le lien peut
+// se perdre à la coupure), puis relit la clé posée.
+func syncPublishedKey(root *os.Root, part, name string, file agentwire.ParcelFile) error {
+	_ = root.Remove(part)
+	if err := fsx.SyncDir(root, "."); err != nil {
+		return failWith(agentwire.ReasonPathUnwritable, err)
+	}
+	return verifyOnDisk(root, name, file)
+}
+
+// verifyOnDisk relit le fichier écrit sous name : taille, somme et en-tête
+// sont ceux de ce que le disque garde, pas de ce que l'agent croit avoir écrit.
+func verifyOnDisk(root *os.Root, name string, file agentwire.ParcelFile) error {
+	size, sum, err := sumOnDisk(root, name)
 	if err != nil {
 		return failWith(agentwire.ReasonPathUnwritable, err)
 	}
-	defer written.Close()
+	if size != file.Size || sum != file.SHA256 {
+		return failWith(agentwire.ReasonDigestMismatch, fmt.Errorf("%s changed on disk", name))
+	}
+	return checkAgeHeader(root, name)
+}
+
+// sumOnDisk rend la taille et la somme SHA-256 d'un fichier sous root, sans
+// en garder le contenu.
+func sumOnDisk(root *os.Root, name string) (int64, string, error) {
+	kept, err := root.Open(name)
+	if err != nil {
+		return 0, "", err
+	}
+	defer kept.Close()
 	hasher := sha256.New()
-	size, err := io.Copy(hasher, written)
+	size, err := io.Copy(hasher, kept)
 	if err != nil {
-		return failWith(agentwire.ReasonPathUnwritable, err)
+		return 0, "", err
 	}
-	if size != file.Size || hex.EncodeToString(hasher.Sum(nil)) != file.SHA256 {
-		return failWith(agentwire.ReasonDigestMismatch, fmt.Errorf("%s changed on disk", file.Name))
-	}
-	return checkAgeHeader(root, file.Name)
+	return size, hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 // pruneBackups garde les params.Keep sauvegardes les plus récentes du

@@ -2291,6 +2291,11 @@ les deux fichiers de la destination : l'archive
 `opencloud-AAAAMMJJ-HHMMSS.tar.age` et la clé `opencloud-key-<empreinte>.age`
 de la **même** sauvegarde.
 
+Plusieurs `opencloud-key-<empreinte>.<n>.age` à côté de la clé : la destination
+a reçu, sous la même empreinte, une clé qui différait de celle qu'elle gardait
+(anomalie, ligne `WARN` dans le journal de l'agent). Elle les garde toutes ; la
+bonne est celle que **votre** phrase ouvre.
+
 ```sh
 systemctl stop opencloud
 opencloud backup restore -key opencloud-key-0123456789abcdef.age \
