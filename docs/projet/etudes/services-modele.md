@@ -69,15 +69,15 @@ Ce que ça apprend :
 
 | Fait | Où | Preuve |
 | --- | --- | --- |
-| L'agent lit Docker (`/containers/json`, inspection, réseaux, volumes) par la socket, via le **groupe `docker`** (équivaut à root sur l'hôte : « The `docker` group grants root-level privileges to the user », [doc Docker](https://docs.docker.com/engine/install/linux-postinstall/)) | `internal/dockerwatch/inventory.go` ; `docs/installation.md` (« par le groupe `docker`, la socket Docker ») | |
-| Par conteneur : nom, projet et service Compose, ports publiés, mode réseau, réseaux joints **avec adresse et alias**, `depends_on` et `--link`, labels de **la marque seulement** | `internal/dockerwatch/inspect.go:16-52,192-230` | |
-| **`Config.Env` n'est pas lu** : `dockerapi.ContainerConfig` ne déclare ni `Env` ni `Cmd`, le décodeur les ignore | `internal/dockerapi/containers.go:98-107` | |
-| **Aucun label Traefik ou Compose ne part** (hors ceux ci-dessus), règle posée exprès | `internal/dockerwatch/inspect.go:68-80` ; `22-fonctionnement.md:2144` | |
-| L'agent lit `/proc` (CPU, mémoire, réseau en octets), `systemd-detect-virt`, les cartes réseau (MAC), les montages | `internal/sampler`, `internal/hostinfo/detect.go` | |
-| **Il ne lit ni systemd, ni sockets, ni connexions** | grep `systemctl`/`/proc/net/tcp` dans `internal/agent`, `hostinfo`, `sampler` : rien | |
-| L'annuaire connaît des unités `binary` (`systemd_unit`) mais « une unité binaire ne rapproche jamais rien » | `internal/directory/match.go` (doc de `Match`) ; `22-fonctionnement.md:2278` | |
-| La topologie d'une machine : arêtes `public` (port publié) et `depends` (Compose, `--link`) ; « ce qu'un réseau partagé laisse deviner n'est pas une dépendance : c'est une joignabilité » | `internal/container/topology.go` ; `22-fonctionnement.md:2703-2760` | |
-| Capacités d'un service d'infra (`sso`, `proxy`, `tls`, `backup-target`) et `public_url` | `internal/directory/directory.go` ; `001_schema.sql:188-234` | |
+| L'agent lit Docker (`/containers/json`, inspection, réseaux, volumes) par la socket, via le **groupe `docker`** (équivaut à root sur l'hôte : « The `docker` group grants root-level privileges to the user », [doc Docker](https://docs.docker.com/engine/install/linux-postinstall/)) | `internal/domain/dockerwatch/inventory.go` ; `docs/installation.md` (« par le groupe `docker`, la socket Docker ») | |
+| Par conteneur : nom, projet et service Compose, ports publiés, mode réseau, réseaux joints **avec adresse et alias**, `depends_on` et `--link`, labels de **la marque seulement** | `internal/domain/dockerwatch/inspect.go:16-52,192-230` | |
+| **`Config.Env` n'est pas lu** : `dockerapi.ContainerConfig` ne déclare ni `Env` ni `Cmd`, le décodeur les ignore | `internal/kit/dockerapi/containers.go:98-107` | |
+| **Aucun label Traefik ou Compose ne part** (hors ceux ci-dessus), règle posée exprès | `internal/domain/dockerwatch/inspect.go:68-80` ; `22-fonctionnement.md:2144` | |
+| L'agent lit `/proc` (CPU, mémoire, réseau en octets), `systemd-detect-virt`, les cartes réseau (MAC), les montages | `internal/kit/sampler`, `internal/kit/hostinfo/detect.go` | |
+| **Il ne lit ni systemd, ni sockets, ni connexions** | grep `systemctl`/`/proc/net/tcp` dans `internal/edge/agent`, `hostinfo`, `sampler` : rien | |
+| L'annuaire connaît des unités `binary` (`systemd_unit`) mais « une unité binaire ne rapproche jamais rien » | `internal/domain/directory/match.go` (doc de `Match`) ; `22-fonctionnement.md:2278` | |
+| La topologie d'une machine : arêtes `public` (port publié) et `depends` (Compose, `--link`) ; « ce qu'un réseau partagé laisse deviner n'est pas une dépendance : c'est une joignabilité » | `internal/fact/container/topology.go` ; `22-fonctionnement.md:2703-2760` | |
+| Capacités d'un service d'infra (`sso`, `proxy`, `tls`, `backup-target`) et `public_url` | `internal/domain/directory/directory.go` ; `001_schema.sql:188-234` | |
 | **Aucun lien n'est stocké** : `depends` est recalculé à chaque lecture, **entre conteneurs d'une même machine** | `BuildTopology` | |
 
 Non lus : les tickets **#361** (module Traefik) et **#375** (vue des flux), absents du dépôt (voir « Non vérifié »).
@@ -250,7 +250,7 @@ Pastille de preuve : trois états, sur le patron de `GapPill` (`web/src/componen
 | **Agent** | Lire systemd en lecture (`list-units`, `show`) ; déclarer `Env` avec le type de §2.4 ; (option) lire la table `/proc/net/tcp` de l'hôte. **Chaque lecture neuve est une classe de donnée neuve** : `22-fonctionnement.md` (« ce qui est stocké ») et le pare-feu de bornes du serveur se mettent à jour |
 | **Protocole** | Champs optionnels dans le signal, `ProtocolVersion` inchangée (règle d'`agentwire`) ; bornes posées aussi côté serveur |
 | **Droits** | Une nouvelle capacité d'observation (décision 3), cochée **par machine** à l'enrôlement ; machines existantes : ré-enrôlement pour l'avoir. **Aucun droit élevé** (décision 5) |
-| **`directory`** | `ProposeAll` : une proposition par **service Compose** ; `Match` : rattachement par `(projet, service)` ; refus déclarés (`internal/refusal`) pour les liens (cible inconnue, doublon, soi-même) |
+| **`directory`** | `ProposeAll` : une proposition par **service Compose** ; `Match` : rattachement par `(projet, service)` ; refus déclarés (`internal/kit/refusal`) pour les liens (cible inconnue, doublon, soi-même) |
 | **Routes** | Lecture des liens (par service, par machine) ; écriture des liens déclarés ; confirmer / écarter. Toutes dans `routes.txt` et la parité UI / MCP (architecture §3.7) |
 | **Écrans** | Liste Services (instances dépliées), fiche service (Instances, Liens), Réseau de la machine (liens stockés), propositions (une par service) |
 | **mcp-maison** | Source **absente** de cet espace de travail : à lire avant de chiffrer. Attendu : `opencloud_services` voit instances et liens (champs en plus) ; un outil de lecture des liens si Lucas le veut, ouvert aux jetons seulement par entrée dans la liste fermée |
@@ -264,10 +264,10 @@ Une branche `feat/…` chacun, un commit par fonctionnalité (`12-methode.md`). 
 | --- | --- | --- | --- | --- |
 | L1 | **Un service par service Compose** | Proposition par service, index levé, rattachement `(projet, service)`, groupe d'exécution affiché ; services existants intacts ; regroupement automatique des instances de même nom et même image (décision 2) | — | Aucun |
 | L2 | **Instances systemd** | L'agent relève les unités ; unité binaire rapprochée de l'unité déclarée (`systemd_unit`) ; état visible ; port à déclarer | — | Aucun (mesuré) |
-| L3 | **Liens stockés, déclarés et d'ordre** (fait, v0.5.2 L3 : `030_links.sql`, `internal/link`, carte Liens de la fiche service) | Tables, routes, fiche service > Liens ; `depends_on` et `--link` passent en liens `declared` ; l'opérateur ajoute les siens ; Réseau lit les liens stockés | L1 | Aucun |
-| L4 (fait, v0.5.2 L4 : `internal/directory/deduced_links.go`, aucune migration) | **Liens déduits** | `public_url` + capacité `proxy` → `route` déduit ; confirmer / écarter | L3 | Aucun |
+| L3 | **Liens stockés, déclarés et d'ordre** (fait, v0.5.2 L3 : `030_links.sql`, `internal/fact/link`, carte Liens de la fiche service) | Tables, routes, fiche service > Liens ; `depends_on` et `--link` passent en liens `declared` ; l'opérateur ajoute les siens ; Réseau lit les liens stockés | L1 | Aucun |
+| L4 (fait, v0.5.2 L4 : `internal/domain/directory/deduced_links.go`, aucune migration) | **Liens déduits** | `public_url` + capacité `proxy` → `route` déduit ; confirmer / écarter | L3 | Aucun |
 | L5 (fait, v0.5.2 L5 : `observe.env`, `dockerapi.EnvHosts`, `031_link_environment.sql`) | **Environnement** | `Env` lu avec la liste blanche de §2.4, banc de non-fuite | L3 | Nouveau droit d'observation, coché par machine |
-| L6 (fait, v0.5.2 L6 : `internal/hostconn`, `internal/directory/observed_links.go`, aucune migration) | **Connexions de l'hôte** | Table de l'hôte → liens `observed` pour les binaires et les ports publiés ; **pas** de connexion entre conteneurs (décision 5) | L2, L3 | Aucun (table) ; processus non attribué |
+| L6 (fait, v0.5.2 L6 : `internal/fact/hostconn`, `internal/domain/directory/observed_links.go`, aucune migration) | **Connexions de l'hôte** | Table de l'hôte → liens `observed` pour les binaires et les ports publiés ; **pas** de connexion entre conteneurs (décision 5) | L2, L3 | Aucun (table) ; processus non attribué |
 | L7 | **Traefik, plus tard** | Routes lues par le module #361 → liens `route` ; d'ici là, **aucun label Traefik ne quitte la machine** (décision 4) | #361, L3 | Selon #361 |
 
 Le **MCP** et la **vue des flux** (#375) se branchent sur L3 ; leur chiffrage attend la lecture du ticket et du code de mcp-maison.

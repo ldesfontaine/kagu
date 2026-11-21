@@ -5,7 +5,7 @@ import type { IconName } from "../components/Icon";
 // Le registre des modules : seul lieu qui sait qu'un module a une entrée de
 // menu, un onglet de fiche ou un premier geste de configuration. Le serveur
 // dit quels modules existent et lesquels une machine ou l'installation porte
-// (internal/module) ; ici, ce que l'écran en fait.
+// (internal/kit/module) ; ici, ce que l'écran en fait.
 
 export type ModuleID = "containers" | "hypervisor" | "guest" | "ssh_keys" | "systemd_units" | "probes" | "firewall" | "backups" | "jobs";
 

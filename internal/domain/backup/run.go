@@ -1,0 +1,395 @@
+package backup
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"time"
+
+	"filippo.io/age"
+
+	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/opencloud/internal/gesture/action"
+	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+)
+
+// snapshotName est le nom, dans le colis, de la copie de la base en clair :
+// elle n'y reste que le temps d'être emballée.
+const snapshotName = "snapshot.db"
+
+// ErrNotWired : le composant est construit sans de quoi envoyer (une
+// commande hors ligne) ; une sauvegarde ne part pas d'ici.
+var ErrNotWired = errors.New("backup: nothing wired to send an order")
+
+// RunNow lance la sauvegarde du plan tout de suite. Un refus avant l'ordre se
+// rend à l'appelant et s'écrit aussi dans le plan, pour que la page le montre.
+// Un plan machine dure des heures : RunNow rend son premier ordre
+// (backup.produce) et mène la suite derrière la requête ; un plan qui passe
+// déjà, ou un autre en cours, est refusé (ErrRunInProgress).
+func (s *Service) RunNow(ctx context.Context, subject string) (action.Run, error) {
+	if s.sender == nil || s.parcels == nil {
+		return action.Run{}, ErrNotWired
+	}
+	if !s.running.TryLock() {
+		return action.Run{}, ErrRunInProgress
+	}
+	// Le verrou est rendu ici sur tous les chemins, panique comprise (le
+	// serveur la rattrape et continue) ; sauf quand un passage est parti, qui
+	// le garde jusqu'à sa fin.
+	handedToPass := false
+	defer func() {
+		if !handedToPass {
+			s.running.Unlock()
+		}
+	}()
+	plan, err := s.readPlan(ctx, subject)
+	if err != nil {
+		return action.Run{}, err
+	}
+	if !plan.producedByServer() {
+		first, err := s.startAgentPass(ctx, plan)
+		handedToPass = err == nil
+		return first, err
+	}
+	return s.runOnServer(ctx, plan)
+}
+
+// run mène le plan jusqu'au bout, sans rendre la main avant : c'est le passage
+// de la nuit, qui attend son tour derrière celui qui court. Un plan à la fois :
+// la nuit lance les siens l'un après l'autre.
+func (s *Service) run(ctx context.Context, subject string) (action.Run, error) {
+	if s.sender == nil || s.parcels == nil {
+		return action.Run{}, ErrNotWired
+	}
+	s.running.Lock()
+	defer s.running.Unlock()
+	plan, err := s.readPlan(ctx, subject)
+	if err != nil {
+		return action.Run{}, err
+	}
+	if !plan.producedByServer() {
+		return s.runAgentPass(ctx, plan)
+	}
+	return s.runOnServer(ctx, plan)
+}
+
+func (s *Service) readPlan(ctx context.Context, subject string) (Plan, error) {
+	plan, err := s.store.GetBackupPlan(ctx, subject)
+	if errors.Is(err, ErrNotFound) {
+		return Plan{}, ErrPlanMissing
+	}
+	if err != nil {
+		return Plan{}, fmt.Errorf("read backup plan: %w", err)
+	}
+	return plan, nil
+}
+
+// runOnServer mène un plan que le serveur produit lui-même (la base, ou la
+// configuration d'un pare-feu) : il prépare l'archive chiffrée, l'envoie à l'agent de la
+// destination, puis lui demande d'élaguer. L'ordre backup.receive rendu est
+// celui dont l'état dit si la sauvegarde est arrivée.
+func (s *Service) runOnServer(ctx context.Context, plan Plan) (action.Run, error) {
+	at := s.now()
+	sent, err := s.send(ctx, plan, at)
+	if err != nil {
+		s.noteFailure(ctx, plan, at, err)
+		return action.Run{}, err
+	}
+	run := sent.run
+	if err := s.store.NoteBackupAttempt(ctx, plan.Subject, at, "", run.ID); err != nil {
+		return run, fmt.Errorf("note backup attempt: %w", err)
+	}
+	s.followServerRun(plan, at, sent)
+	s.logger.Info("backup sent", "plan_id", plan.ID, "subject", plan.Subject, "run_id", run.ID, "destination_id", plan.DestinationID)
+	s.auditor.Record(ctx, audit.Event{
+		Action: audit.BackupPlanRun, ObjectID: plan.ID, ObjectName: plan.Subject,
+		Details: audit.Details{"run_id": run.ID, "destination_id": plan.DestinationID},
+	})
+	s.changed()
+	return run, nil
+}
+
+// followServerRun écrit dans l'historique ce que devient la sauvegarde de la
+// base : l'ordre backup.receive est parti, mais c'est son état qui dit si
+// l'archive est arrivée. Le suivi vit avec le serveur, pas avec la requête.
+func (s *Service) followServerRun(plan Plan, at time.Time, sent delivery) {
+	if sent.run.State.IsFinished() {
+		// L'ordre n'est pas parti : il n'y a rien à attendre.
+		s.recordServerRun(s.lifetime, plan, at, sent, sent.run)
+		return
+	}
+	s.background.Add(1)
+	go func() {
+		defer s.background.Done()
+		finished, err := s.waitFor(s.lifetime, sent.run.ID)
+		if err != nil {
+			if s.lifetime.Err() == nil {
+				s.logger.Warn("backup receive not followed", "subject", plan.Subject, "run_id", sent.run.ID, "error", err)
+			}
+			return
+		}
+		s.recordServerRun(s.lifetime, plan, at, sent, finished)
+	}()
+}
+
+func (s *Service) recordServerRun(ctx context.Context, plan Plan, at time.Time, sent delivery, finished action.Run) {
+	record := RunRecord{
+		Source: plan.sourceKey(), StartedAt: at, Result: ResultOK, SizeBytes: &sent.size, ActionRunID: sent.run.ID,
+	}
+	if finished.State != action.StateSucceeded {
+		record.Result, record.Reason, record.SizeBytes = ResultFailed, runReason(finished), nil
+	}
+	s.recordRun(ctx, plan, sent.destination, at, record)
+	s.changed()
+}
+
+// recordRun écrit une ligne de l'historique du plan ; une écriture qui échoue
+// se journalise sans arrêter le passage.
+func (s *Service) recordRun(ctx context.Context, plan Plan, destination Destination, passAt time.Time, record RunRecord) {
+	record.Subject, record.PassAt = plan.Subject, passAt
+	record.DestinationID, record.DestinationName = destination.ID, destination.Name
+	record.FinishedAt = s.now()
+	if record.FinishedAt.Before(record.StartedAt) {
+		record.FinishedAt = record.StartedAt
+	}
+	if err := s.store.RecordBackupRun(ctx, record); err != nil {
+		s.logger.Error("record backup run", "subject", plan.Subject, "error", err)
+	}
+}
+
+// noteFailure écrit dans le plan pourquoi la tentative n'est pas partie : la
+// clé du refus, ou celle d'une préparation qui a échoué. Elle n'est pas
+// rejouée avant la nuit suivante ou le bouton. L'historique la garde aussi.
+func (s *Service) noteFailure(ctx context.Context, plan Plan, at time.Time, cause error) {
+	key, isRefusal := refusal.KeyOf(cause)
+	result := ResultRefused
+	if !isRefusal {
+		s.logger.Error("backup not prepared", "subject", plan.Subject, "error", cause)
+		key, result = PrepareFailedKey, ResultFailed
+	}
+	if err := s.store.NoteBackupAttempt(ctx, plan.Subject, at, key, ""); err != nil {
+		s.logger.Error("note backup attempt", "error", err)
+	}
+	// Un plan machine refusé avant sa première cible n'a pas de source : c'est
+	// le plan entier.
+	source := ""
+	if plan.producedByServer() {
+		source = plan.sourceKey()
+	}
+	s.recordRun(ctx, plan, s.destinationOf(ctx, plan), at, RunRecord{Source: source, StartedAt: at, Result: result, Reason: key})
+	s.changed()
+}
+
+// destinationOf rend la destination du plan pour l'historique ; si elle ne se
+// lit pas, son identifiant seul.
+func (s *Service) destinationOf(ctx context.Context, plan Plan) Destination {
+	destination, err := s.store.GetBackupDestination(ctx, plan.DestinationID)
+	if err != nil {
+		return Destination{ID: plan.DestinationID}
+	}
+	return destination
+}
+
+// prepareDelivery juge ce que tout plan demande de la destination avant de
+// partir : la clé, la destination, le droit de son agent, sa machine en ligne.
+func (s *Service) prepareDelivery(ctx context.Context, plan Plan) (Keyring, Destination, machine.Status, error) {
+	keyring, err := s.store.GetBackupKeyring(ctx)
+	if errors.Is(err, ErrNotFound) {
+		return Keyring{}, Destination{}, machine.Status{}, ErrKeyringMissing
+	}
+	if err != nil {
+		return Keyring{}, Destination{}, machine.Status{}, fmt.Errorf("read backup key: %w", err)
+	}
+	destination, err := s.store.GetBackupDestination(ctx, plan.DestinationID)
+	if err != nil {
+		return Keyring{}, Destination{}, machine.Status{}, fmt.Errorf("read destination: %w", err)
+	}
+	target, err := s.machines.Get(ctx, destination.MachineID)
+	if err != nil {
+		return Keyring{}, Destination{}, machine.Status{}, fmt.Errorf("get machine: %w", err)
+	}
+	if right, _ := rightOf(target, destination.Path); right == RightMissing {
+		return Keyring{}, Destination{}, machine.Status{}, ErrRightMissing
+	}
+	if !target.Online {
+		return Keyring{}, Destination{}, machine.Status{}, ErrMachineOffline
+	}
+	return keyring, destination, target, nil
+}
+
+// delivery est ce qu'un envoi a lancé : l'ordre de réception, la destination, et
+// la taille de l'archive qui part.
+type delivery struct {
+	run         action.Run
+	destination Destination
+	size        int64
+}
+
+// send juge ce qu'il faut pour partir (clé, destination, machine, droit),
+// prépare le colis de la base, puis envoie les deux ordres. Un colis dont
+// l'ordre n'est pas parti est jeté.
+func (s *Service) send(ctx context.Context, plan Plan, at time.Time) (delivery, error) {
+	keyring, destination, _, err := s.prepareDelivery(ctx, plan)
+	if err != nil {
+		return delivery{}, err
+	}
+
+	writer, err := s.parcels.Create(destination.MachineID)
+	if err != nil {
+		return delivery{}, fmt.Errorf("create parcel: %w", err)
+	}
+	if err := s.stageArchive(ctx, writer, keyring, plan, at); err != nil {
+		writer.Discard()
+		return delivery{}, err
+	}
+	parcelID, files := writer.Seal()
+	sent := delivery{destination: destination, size: archiveSize(files, plan.FilePrefix())}
+	sent.run, err = s.sendReceive(ctx, destination, parcelID, files, archiveKind(plan))
+	if err != nil || sent.run.State.IsFinished() {
+		// L'ordre n'est pas parti : personne ne viendra chercher le colis.
+		writer.Discard()
+		return sent, err
+	}
+	s.sendPrune(ctx, destination, plan.FilePrefix(), plan.Keep)
+	return sent, nil
+}
+
+// archiveSize rend la taille de l'archive du colis, celle dont le nom porte le
+// préfixe du plan ; la clé scellée qui l'accompagne n'y compte pas.
+func archiveSize(files []agentwire.ParcelFile, prefix string) int64 {
+	for _, file := range files {
+		if agentwire.IsBackupFileOf(file.Name, prefix) {
+			return file.Size
+		}
+	}
+	return 0
+}
+
+// archiveKind dit ce que le colis d'un plan porte : l'agent en tire son
+// plafond de taille. Un plan agent livre des archives d'invités (vzdump).
+func archiveKind(plan Plan) string {
+	switch {
+	case plan.IsFirewallExport():
+		return agentwire.ArchiveFirewall
+	case plan.SourceKind == SourceAgent:
+		return agentwire.ArchiveGuest
+	default:
+		return agentwire.ArchiveDatabase
+	}
+}
+
+func (s *Service) sendReceive(ctx context.Context, destination Destination, parcelID string, files []agentwire.ParcelFile, archive string) (action.Run, error) {
+	params, err := json.Marshal(agentwire.BackupReceiveParams{Parcel: parcelID, Path: destination.Path, Files: files, Archive: archive})
+	if err != nil {
+		return action.Run{}, fmt.Errorf("encode receive params: %w", err)
+	}
+	return s.sender.Send(ctx, destination.MachineID, agentwire.KindBackupReceive, params)
+}
+
+// sendPrune demande à l'agent de ne garder que les plus récentes du plan,
+// sous son préfixe : les fichiers des autres plans du même dossier ne sont
+// pas à lui. L'agent exécute ses ordres longs l'un après l'autre : l'élagage
+// passe après la réception. S'il ne part pas, la sauvegarde est faite quand
+// même, et le prochain passage élaguera.
+func (s *Service) sendPrune(ctx context.Context, destination Destination, prefix string, keep int) {
+	if _, err := s.requestPrune(ctx, destination, prefix, keep); err != nil {
+		s.logger.Warn("backup prune not sent", "destination_id", destination.ID, "error", err)
+	}
+}
+
+// requestPrune envoie l'élagage d'un préfixe et rend son ordre.
+func (s *Service) requestPrune(ctx context.Context, destination Destination, prefix string, keep int) (action.Run, error) {
+	params, err := json.Marshal(agentwire.BackupPruneParams{Path: destination.Path, Prefix: prefix, Keep: keep})
+	if err != nil {
+		return action.Run{}, fmt.Errorf("encode prune params: %w", err)
+	}
+	return s.sender.Send(ctx, destination.MachineID, agentwire.KindBackupPrune, params)
+}
+
+// stageArchive écrit dans le colis ce que le plan envoie : la base ou la
+// configuration de son pare-feu.
+func (s *Service) stageArchive(ctx context.Context, writer *action.ParcelWriter, keyring Keyring, plan Plan, at time.Time) error {
+	if plan.IsFirewallExport() {
+		return s.stageFirewall(ctx, writer, keyring, plan, at)
+	}
+	return s.stage(ctx, writer, keyring, plan.Subject, at)
+}
+
+// stage écrit dans le colis l'archive chiffrée et la clé scellée. La copie
+// de la base en clair n'existe que le temps d'être emballée, dans le dossier
+// du colis (0700, même disque que la base) : elle est effacée avant l'envoi.
+func (s *Service) stage(ctx context.Context, writer *action.ParcelWriter, keyring Keyring, subject string, at time.Time) error {
+	recipient, err := age.ParseX25519Recipient(keyring.Recipient)
+	if err != nil {
+		return fmt.Errorf("parse backup recipient: %w", err)
+	}
+	// Le fichier de l'instantané naît vide en 0600 (VACUUM INTO accepte un
+	// fichier vide) : SQLite le créerait sinon en 0644, umask compris.
+	placeholder, err := writer.Create(snapshotName)
+	if err != nil {
+		return err
+	}
+	if err := placeholder.Close(); err != nil {
+		return err
+	}
+	if err := s.store.SnapshotDatabase(ctx, writer.Path(snapshotName)); err != nil {
+		return fmt.Errorf("snapshot database: %w", err)
+	}
+	archive, err := writer.Create(agentwire.BackupFileName(subject, at))
+	if err != nil {
+		return err
+	}
+	packErr := writeArchive(archive, recipient, []archiveFile{
+		{Name: brand.DatabaseFile, Mode: archiveFileMode, Open: func() (io.ReadCloser, int64, error) { return openStaged(writer, snapshotName) }},
+		{Name: brand.SecretKeyFile, Mode: archiveFileMode, Open: func() (io.ReadCloser, int64, error) { return openInState(s.stateDir, brand.SecretKeyFile) }},
+		{Name: brand.ServerKeyFile, Mode: archiveFileMode, Open: func() (io.ReadCloser, int64, error) { return openInState(s.stateDir, brand.ServerKeyFile) }},
+	})
+	if err := errors.Join(packErr, archive.Close()); err != nil {
+		return fmt.Errorf("pack backup: %w", err)
+	}
+	if err := writer.Remove(snapshotName); err != nil {
+		return fmt.Errorf("remove clear snapshot: %w", err)
+	}
+	return s.stageSealedKey(writer, keyring)
+}
+
+// stageSealedKey dépose la clé privée scellée à côté de la sauvegarde, sous
+// un nom par empreinte : remplacer la clé plus tard ne rend rien illisible.
+func (s *Service) stageSealedKey(writer *action.ParcelWriter, keyring Keyring) error {
+	key, err := writer.Create(agentwire.BackupKeyFileName(keyring.Fingerprint))
+	if err != nil {
+		return err
+	}
+	_, writeErr := key.Write(keyring.IdentitySealed)
+	if err := errors.Join(writeErr, key.Close()); err != nil {
+		return fmt.Errorf("write sealed key: %w", err)
+	}
+	return nil
+}
+
+func openStaged(writer *action.ParcelWriter, name string) (io.ReadCloser, int64, error) {
+	file, size, err := writer.Open(name)
+	if err != nil {
+		return nil, 0, err
+	}
+	return file, size, nil
+}
+
+func openInState(stateDir *os.Root, name string) (io.ReadCloser, int64, error) {
+	file, err := stateDir.Open(name)
+	if err != nil {
+		return nil, 0, err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, 0, err
+	}
+	return file, info.Size(), nil
+}

@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/backup"
-	"github.com/ldesfontaine/opencloud/internal/brand"
+	"github.com/ldesfontaine/opencloud/internal/domain/backup"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
 )
 
 const backupUsage = `Usage : {command} backup restore -key <clé.age> -state <dossier> <sauvegarde.tar.age>

@@ -14,12 +14,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/audit"
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/config"
-	"github.com/ldesfontaine/opencloud/internal/heartbeat"
-	"github.com/ldesfontaine/opencloud/internal/seal"
-	"github.com/ldesfontaine/opencloud/internal/store"
+	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
+	"github.com/ldesfontaine/opencloud/internal/edge/config"
+	"github.com/ldesfontaine/opencloud/internal/edge/store"
+	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/seal"
 )
 
 // #nosec G101 -- le texte d'aide de la commande, pas un secret.

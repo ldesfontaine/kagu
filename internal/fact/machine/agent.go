@@ -1,0 +1,106 @@
+package machine
+
+import (
+	"time"
+
+	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
+	"github.com/ldesfontaine/opencloud/internal/kit/ident"
+)
+
+// Agent est le logiciel installé sur une machine : sa clé, sa version, son
+// dernier signe de vie, ses droits. Ré-enrôler en installe un nouveau et
+// révoque l'ancien ; la machine, elle, reste.
+type Agent struct {
+	ID         string
+	MachineID  string
+	PublicKey  []byte
+	Version    string
+	RootDir    string
+	EnrolledAt time.Time
+	// Zéro tant qu'il n'a donné aucun signe de vie.
+	LastSeenAt time.Time
+	// Zéro tant qu'il n'est pas révoqué.
+	RevokedAt time.Time
+	// Ce que l'agent rapporte de son fichier à l'ouverture de son flux ;
+	// vide tant qu'il n'a rien rapporté (un agent d'avant les droits).
+	Capabilities []Capability
+	ReportedAt   time.Time
+	// Pourquoi un droit rapporté ne peut pas s'exercer sur la machine (une
+	// raison de UnavailableReasons, par nom de droit) ; vide quand tout est
+	// réalisable, et chez un agent qui ne sait pas le juger. À part de
+	// Capabilities : la raison n'entre pas dans la comparaison avec le jeton.
+	Unavailable map[string]string
+	// Le compte sous lequel l'agent dit tourner ; nil tant qu'il ne l'a pas
+	// dit (un agent d'avant).
+	RunAs *Account
+	// Ce que le jeton qui l'a enrôlé demandait ; vide pour un agent d'avant
+	// les droits.
+	Requested []Capability
+	// L'empreinte de la clé du serveur que l'agent dit avoir épinglée ; vide
+	// tant qu'il n'a rien dit, ou s'il n'en a pas.
+	ServerKeyFingerprint string
+	// La version du retour arrière que l'agent dit savoir faire ; 0 : aucun.
+	RollbackVersion int
+	// La version du retour arrière d'un service que l'agent dit savoir faire ;
+	// 0 : aucun.
+	ServiceRollbackVersion int
+	// Les ancres de confiance locales que l'agent dit tenir ; Reported faux
+	// tant qu'il n'a rien dit (un agent d'avant les ancres, qui ne les applique
+	// pas).
+	Anchors anchor.State
+}
+
+// CanRollBack dit si l'agent revient seul à sa version d'avant quand une
+// mise à jour n'est pas confirmée : sans cela, le serveur ne lui en envoie
+// aucune.
+func (a Agent) CanRollBack() bool {
+	return a.RollbackVersion > 0
+}
+
+// CanRollBackService dit si l'agent revient seul à la version d'avant d'un
+// service dont la montée n'est pas saine : sans cela, le serveur ne lui en
+// envoie aucune.
+func (a Agent) CanRollBackService() bool {
+	return a.ServiceRollbackVersion > 0
+}
+
+func (a Agent) Exists() bool {
+	return a.ID != ""
+}
+
+func (a Agent) IsRevoked() bool {
+	return !a.RevokedAt.IsZero()
+}
+
+// IsActive : un agent installé et pas révoqué, le seul qui peut se
+// connecter.
+func (a Agent) IsActive() bool {
+	return a.Exists() && !a.IsRevoked()
+}
+
+// UnavailableReason rend pourquoi le droit ne peut pas s'exercer, vide s'il le
+// peut ou si l'agent ne l'a pas dit.
+func (a Agent) UnavailableReason(capability string) string {
+	return a.Unavailable[capability]
+}
+
+// CapabilitiesDiffer dit si le fichier de l'agent ne dit pas ce que le jeton
+// demandait. Rien à comparer tant que l'un des deux manque.
+func (a Agent) CapabilitiesDiffer() bool {
+	if len(a.Requested) == 0 || a.ReportedAt.IsZero() {
+		return false
+	}
+	return !SameCapabilities(a.Requested, a.Capabilities)
+}
+
+// Le préfixe rend un identifiant d'agent lisible dans un journal, jamais
+// confondu avec celui d'une machine.
+const agentIDPrefix = "agt_"
+
+func NewAgentID() (string, error) {
+	id, err := ident.New()
+	if err != nil {
+		return "", err
+	}
+	return agentIDPrefix + id, nil
+}

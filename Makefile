@@ -4,7 +4,7 @@
 MODULE      := github.com/ldesfontaine/opencloud
 VERSION     ?= v0.0.1
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-LDFLAGS     := -s -w -X $(MODULE)/internal/version.number=$(VERSION) -X $(MODULE)/internal/version.commit=$(COMMIT)
+LDFLAGS     := -s -w -X $(MODULE)/internal/kit/version.number=$(VERSION) -X $(MODULE)/internal/kit/version.commit=$(COMMIT)
 
 STATICCHECK := honnef.co/go/tools/cmd/staticcheck@v0.8.1
 GOIMPORTS   := golang.org/x/tools/cmd/goimports@v0.50.0
@@ -22,7 +22,7 @@ build: front
 	go build -trimpath -ldflags '$(LDFLAGS)' -o bin/opencloud ./cmd/opencloud
 
 # Les binaires publiés : amd64 et arm64, statiques, avec leurs sommes. Le tag
-# release refuse de compiler sans clé de secours (internal/release/key_release.go).
+# release refuse de compiler sans clé de secours (internal/kit/release/key_release.go).
 release: front
 	$(MAKE) release-binaries
 
@@ -57,7 +57,7 @@ front-check: $(FRONT_DIR)/node_modules/.stamp
 # Playwright l'arrête proprement). `playwright install` ne télécharge que si
 # le navigateur manque.
 e2e: front $(FRONT_DIR)/node_modules/.stamp
-	go test -c -o $(FRONT_DIR)/e2e/.fixture.test ./internal/server
+	go test -c -o $(FRONT_DIR)/e2e/.fixture.test ./internal/edge/server
 	cd $(FRONT_DIR) && npx playwright install chromium && npm run e2e
 
 # dev/ est ton /etc et ton /var/lib locaux : créé une fois, jamais effacé.

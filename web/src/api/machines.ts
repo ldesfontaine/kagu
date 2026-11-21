@@ -117,7 +117,7 @@ export interface Agent {
 // lisent pas (refusé aussi, autrement corrigé).
 type AnchorState = "set" | "none" | "unreadable";
 
-// Un type d'ancre du registre du serveur (internal/anchor), tel qu'un agent le
+// Un type d'ancre du registre du serveur (internal/fact/anchor), tel qu'un agent le
 // tient : right est le droit dont l'ordre est borné.
 export interface AnchorKind {
   name: string;

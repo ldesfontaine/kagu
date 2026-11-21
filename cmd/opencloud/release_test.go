@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/release"
-	"github.com/ldesfontaine/opencloud/internal/release/releasetest"
+	"github.com/ldesfontaine/opencloud/internal/kit/release"
+	"github.com/ldesfontaine/opencloud/internal/kit/release/releasetest"
 )
 
 const testKeyVariable = "TEST_RELEASE_SIGNING_KEY"
@@ -253,7 +253,7 @@ func TestReleaseKeygen_RefusesAnExistingFileAndWrites0600(t *testing.T) {
 	if err := releaseCommand([]string{"keygen", "-o", otherKeyFile}, &printed, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(printed.String(), "RELEASE_SIGNING_KEY") || !strings.Contains(printed.String(), "internal/release/key.go") {
+	if !strings.Contains(printed.String(), "RELEASE_SIGNING_KEY") || !strings.Contains(printed.String(), "internal/kit/release/key.go") {
 		t.Fatalf("keygen advice: %q", printed.String())
 	}
 	written, err := os.ReadFile(otherKeyFile)

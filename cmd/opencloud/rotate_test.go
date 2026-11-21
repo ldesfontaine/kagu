@@ -9,12 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/action"
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/machine"
-	"github.com/ldesfontaine/opencloud/internal/seal"
-	"github.com/ldesfontaine/opencloud/internal/store"
-	"github.com/ldesfontaine/opencloud/internal/store/storetest"
+	"github.com/ldesfontaine/opencloud/internal/edge/store"
+	"github.com/ldesfontaine/opencloud/internal/edge/store/storetest"
+	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/opencloud/internal/gesture/action"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/seal"
 )
 
 // La rotation rescelle chaque secret avec une clé neuve : le serveur

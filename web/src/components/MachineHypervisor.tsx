@@ -140,7 +140,7 @@ function HostCard({ machine, host }: { machine: Machine; host: ProxmoxHost }) {
 }
 
 // Le jeton liste les VM mais pas les archives de certains stockages : Proxmox
-// répond alors « aucune » sans erreur (voir internal/proxmox/backup_access.go).
+// répond alors « aucune » sans erreur (voir internal/domain/proxmox/backup_access.go).
 // La carte le dit, avec les commandes exactes à coller, au lieu de laisser
 // afficher « Aucune ».
 function BackupAccessCard({ machine, host }: { machine: Machine; host: ProxmoxHost }) {

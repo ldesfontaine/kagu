@@ -25,7 +25,7 @@ Fonctionnement : `docs/projet/22-fonctionnement.md`, « La carte Réseau de la v
 
 | Choix | Ce que ça rapporte | Ce que ça coûte |
 | --- | --- | --- |
-| La déduction vit côté serveur (`internal/netmap`, fonction pure, testée) | Le front ne devine rien ; trois cas testés en Go | Une réponse plus lourde ; la carte relit tout à chaque ouverture |
+| La déduction vit côté serveur (`internal/domain/netmap`, fonction pure, testée) | Le front ne devine rien ; trois cas testés en Go | Une réponse plus lourde ; la carte relit tout à chaque ouverture |
 | Tag VLAN lu par le relevé Proxmox existant, **gardé en mémoire**, pas en base | Aucune migration | Après un redémarrage, la zone d'un invité sans adresse manque jusqu'au premier relevé |
 | Boîtes HTML + calque SVG mesuré | Texte, focus et responsive natifs | Un trait peut en croiser un autre ; sous 860 px les traits sont cachés, la liste les dit |
 | Teintes de zone dérivées de `--accent` (`oklch` relatif) | Aucun jeton ajouté, suit le thème | Navigateurs sans syntaxe de couleur relative : zones sans teinte (le nom reste écrit) |

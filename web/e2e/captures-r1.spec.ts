@@ -7,7 +7,7 @@ import type { NetworkMap } from "../src/api/network";
 // Les captures de R1 (docs/projet/refonte-ux/captures/R1-*.png) : la carte
 // Réseau de la vue d'ensemble. La carte réelle vient du serveur de données
 // fictives ; les autres (la forme d'un vrai réseau, tout à plat, quarante
-// machines) sont les réponses figées par le serveur (internal/server/testdata),
+// machines) sont les réponses figées par le serveur (internal/edge/server/testdata),
 // servies par le parcours. Hors `make ci` : `E2E_CAPTURES=1 npm run e2e`.
 test.skip(process.env.E2E_CAPTURES !== "1", "captures demandées par E2E_CAPTURES=1");
 

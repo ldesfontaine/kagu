@@ -3,13 +3,13 @@ import { readFileSync } from "node:fs";
 import type { NetworkMap } from "../../src/api/network";
 
 // Les cartes de démonstration : la réponse exacte de GET /api/network pour les
-// jeux que internal/server fige (api_network_map_demo_test.go, noms et adresses
+// jeux que internal/edge/server fige (api_network_map_demo_test.go, noms et adresses
 // génériques). Le parcours les sert à la place de la réponse du serveur pour
 // les cas que les données fictives du serveur ne montrent pas ; le serveur,
-// lui, prouve la déduction (internal/netmap). Aucune forme n'est écrite ici.
+// lui, prouve la déduction (internal/domain/netmap). Aucune forme n'est écrite ici.
 
 function golden(name: string): NetworkMap {
-  const file = new URL(`../../../internal/server/testdata/network_${name}.golden.json`, import.meta.url);
+  const file = new URL(`../../../internal/edge/server/testdata/network_${name}.golden.json`, import.meta.url);
   return JSON.parse(readFileSync(file, "utf8")) as NetworkMap;
 }
 

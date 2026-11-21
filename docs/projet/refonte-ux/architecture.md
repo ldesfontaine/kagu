@@ -40,8 +40,8 @@ Machines (esquisse, pas la cible pixel) : [`maquettes/machines-v2.html`](maquett
 | Pages | 64 composants `.tsx` sous `web/src/pages`, tests exclus (sous-dossiers `alerts`, `backups`, `settings`, `status`) | `ls web/src/pages` |
 | Hooks | `useResource` (lecture relue sur le direct), `useAction` (une écriture, `confirm` natif), `useForm` (valeurs, remplissage unique), `useLive` (un `EventSource`) | `web/src/hooks/useResource.ts:37`, `useAction.ts:36,49`, `useForm.ts:44`, `useLive.ts` |
 | Appels d'API | Chemins écrits en chaîne dans `web/src/api/*.ts`, un `call(method, path, body)` | `web/src/api/client.ts:14-30` ; ex. `web/src/api/proxmox.ts:111-113` |
-| i18n | Catalogues `internal/lang/{fr,en}.toml`, 2566 clés chacun ; servis par `GET /api/i18n/{code}`, marqueurs (`{product}`…) remplacés au chargement | `internal/lang/lang.go:79-133` ; `web/src/i18n/context.tsx:34-72` |
-| Garde des clés | Toute clé lue existe dans les deux langues ; toute clé a un lecteur | `internal/server/frontend_keys_test.go:73` ; `internal/server/catalog_readers_test.go:105` |
+| i18n | Catalogues `internal/kit/lang/{fr,en}.toml`, 2566 clés chacun ; servis par `GET /api/i18n/{code}`, marqueurs (`{product}`…) remplacés au chargement | `internal/kit/lang/lang.go:79-133` ; `web/src/i18n/context.tsx:34-72` |
+| Garde des clés | Toute clé lue existe dans les deux langues ; toute clé a un lecteur | `internal/edge/server/frontend_keys_test.go:73` ; `internal/edge/server/catalog_readers_test.go:105` |
 | Contrat d'API | Les clés des goldens Go = les clés des types TS | `web/src/api/contract.test.ts:1067-1117` |
 
 ### 1.2 Les formulaires
@@ -85,17 +85,17 @@ Sources : routes `web/src/App.tsx:72-127` ; conteneurs `web/src/components/FormP
 
 | Paquet | Rôle pour la refonte | Preuve |
 | --- | --- | --- |
-| `machine` | Machines, agents, jetons d'enrôlement, droits (`CapabilityNames()`, 10 noms), retrait (`Remove`), révocation (`Revoke`) | `internal/machine/capability.go:18-47` ; `service.go:189-385` |
-| `role` | Seul rôle détecté : `proxmox_ve` (paquet `pve-manager` + montage `/etc/pve`) | `internal/role/detect.go:13-44` ; `role.go:13` |
-| `hostinfo` | Ce que l'agent dit à l'enrôlement : nom, OS, arch, adresse, empreinte. **Ni virtualisation, ni MAC** | `internal/hostinfo/hostinfo.go:30-71` |
-| `proxmox` | Hôte déclaré, invités, stockages ; lien invité → machine **par nom d'hôte** | `internal/proxmox/reading.go:104-130` ; `client.go:179,205,282` |
-| `directory` | Services déclarés, unités, projets, écart, propositions d'adoption | `internal/directory/*.go` |
-| `status` | Pages, composants, incidents, état dérivé | `internal/status/*.go` |
-| `alert` | Alertes, canaux, silences, livraisons, acquittement | `internal/alert/*.go` |
-| `verb` | Registre des verbes ouverts aux jetons (11) | `internal/verb/{default,agent,proxmox}.go` |
-| `deletion` | Forme d'un plan de suppression ; la règle reste au domaine | `internal/deletion/plan.go` |
-| `server` | Routes (177 lignes figées), admission des jetons, goldens | `internal/server/routes.go:207-266` ; `testdata/routes.txt` |
-| `brand` | Le nom, une seule fois ; test des littéraux **Go seulement** | `internal/brand/brand.go:9` ; `literals_test.go:35-60` |
+| `machine` | Machines, agents, jetons d'enrôlement, droits (`CapabilityNames()`, 10 noms), retrait (`Remove`), révocation (`Revoke`) | `internal/fact/machine/capability.go:18-47` ; `service.go:189-385` |
+| `role` | Seul rôle détecté : `proxmox_ve` (paquet `pve-manager` + montage `/etc/pve`) | `internal/fact/role/detect.go:13-44` ; `role.go:13` |
+| `hostinfo` | Ce que l'agent dit à l'enrôlement : nom, OS, arch, adresse, empreinte. **Ni virtualisation, ni MAC** | `internal/kit/hostinfo/hostinfo.go:30-71` |
+| `proxmox` | Hôte déclaré, invités, stockages ; lien invité → machine **par nom d'hôte** | `internal/domain/proxmox/reading.go:104-130` ; `client.go:179,205,282` |
+| `directory` | Services déclarés, unités, projets, écart, propositions d'adoption | `internal/domain/directory/*.go` |
+| `status` | Pages, composants, incidents, état dérivé | `internal/view/status/*.go` |
+| `alert` | Alertes, canaux, silences, livraisons, acquittement | `internal/domain/alert/*.go` |
+| `verb` | Registre des verbes ouverts aux jetons (11) | `internal/gesture/verb/{default,agent,proxmox}.go` |
+| `deletion` | Forme d'un plan de suppression ; la règle reste au domaine | `internal/kit/deletion/plan.go` |
+| `server` | Routes (177 lignes figées), admission des jetons, goldens | `internal/edge/server/routes.go:207-266` ; `testdata/routes.txt` |
+| `brand` | Le nom, une seule fois ; test des littéraux **Go seulement** | `internal/kit/brand/brand.go:9` ; `literals_test.go:35-60` |
 
 ### 1.4 Ce qu'une machine sait faire aujourd'hui
 
@@ -120,37 +120,37 @@ par module, transmis à la main.
 
 | Fait | Preuve |
 | --- | --- |
-| Un service naît toujours par `CreateService`, `declared_by = operator` (seule valeur) | `internal/directory/service.go:134-163` ; `directory.go:64-72` |
+| Un service naît toujours par `CreateService`, `declared_by = operator` (seule valeur) | `internal/domain/directory/service.go:134-163` ; `directory.go:64-72` |
 | La colonne `declared_by` est sans `CHECK`, prévue pour « la découverte automatique, le jour où elle viendra » | `001_schema.sql:198` ; `migrations/003_needs_review.sql:1-6` |
-| « Adopter » = formulaire pré-rempli par `GET /api/directory/proposal?container=` ; rien n'est écrit avant validation | `internal/directory/propose.go:7-56` ; `web/src/pages/DeclaredServiceForm.tsx:47-81` ; `web/src/lib/gaps.ts:41-56` |
-| `ProposeAll` : un service proposé par groupe adoptable, servi dans l'export YAML | `internal/directory/propose.go:108-137` ; `internal/manifest/export.go:64-93` |
-| « Ignorer » : `ignored_keys` (projet Compose ou nom de conteneur, par machine) | `internal/directory/ignored.go:12-43` ; `001:248-255` |
-| L'**écart** : calculé à chaque lecture (5 états, 7 motifs), jamais stocké ; affiché par `GapPill` (annuaire, fiche service) ; ni alerte ni compteur | `internal/directory/gap.go:13-54,119-236` ; `web/src/components/GapPill.tsx:10-24` |
-| Le manifeste (YAML) ne porte pas `declared_by` | `internal/manifest/file.go:55-73` |
+| « Adopter » = formulaire pré-rempli par `GET /api/directory/proposal?container=` ; rien n'est écrit avant validation | `internal/domain/directory/propose.go:7-56` ; `web/src/pages/DeclaredServiceForm.tsx:47-81` ; `web/src/lib/gaps.ts:41-56` |
+| `ProposeAll` : un service proposé par groupe adoptable, servi dans l'export YAML | `internal/domain/directory/propose.go:108-137` ; `internal/view/manifest/export.go:64-93` |
+| « Ignorer » : `ignored_keys` (projet Compose ou nom de conteneur, par machine) | `internal/domain/directory/ignored.go:12-43` ; `001:248-255` |
+| L'**écart** : calculé à chaque lecture (5 états, 7 motifs), jamais stocké ; affiché par `GapPill` (annuaire, fiche service) ; ni alerte ni compteur | `internal/domain/directory/gap.go:13-54,119-236` ; `web/src/components/GapPill.tsx:10-24` |
+| Le manifeste (YAML) ne porte pas `declared_by` | `internal/view/manifest/file.go:55-73` |
 
 ### 1.6 Projets et pages de statut
 
 | Fait | Preuve |
 | --- | --- |
-| Projet = `name`, `title`, lien N-N avec les services ; rien d'autre | `001:178-186,237-246` ; `internal/directory/directory.go:185-192` |
+| Projet = `name`, `title`, lien N-N avec les services ; rien d'autre | `001:178-186,237-246` ; `internal/domain/directory/directory.go:185-192` |
 | Page = `slug`, `title`, `announcement`, `language`, `project_id` **UNIQUE nullable** | `001:533-545` |
-| `project_id` ne sert qu'à l'unicité, au blocage de suppression du projet (`project.has_status_page`) et à l'audit ; la page ne reprend **pas** les services du projet | `internal/store/status_pages.go:72-90` ; `internal/store/deletion.go:104-122` ; `internal/directory/directory.go:263-267` |
-| Composant : appartient à une page (1-N, `CASCADE`), membres N-N parmi machine, service, tâche, sonde (jamais un conteneur) | `001:547-579` ; `internal/status/status.go:118-171` |
-| Incident : vise des objets ; ses pages se calculent à la lecture | `migrations/005_incident_targets.sql:4-16` ; `internal/status/targets.go:22-96` |
-| Routes publiques `/statut/{slug}…` sans authentification ; bundle public séparé | `internal/server/public/handler.go:92-99` ; `web/statut.html`, `web/src/statut/*` |
+| `project_id` ne sert qu'à l'unicité, au blocage de suppression du projet (`project.has_status_page`) et à l'audit ; la page ne reprend **pas** les services du projet | `internal/edge/store/status_pages.go:72-90` ; `internal/edge/store/deletion.go:104-122` ; `internal/domain/directory/directory.go:263-267` |
+| Composant : appartient à une page (1-N, `CASCADE`), membres N-N parmi machine, service, tâche, sonde (jamais un conteneur) | `001:547-579` ; `internal/view/status/status.go:118-171` |
+| Incident : vise des objets ; ses pages se calculent à la lecture | `migrations/005_incident_targets.sql:4-16` ; `internal/view/status/targets.go:22-96` |
+| Routes publiques `/statut/{slug}…` sans authentification ; bundle public séparé | `internal/edge/server/public/handler.go:92-99` ; `web/statut.html`, `web/src/statut/*` |
 | Menu : « Disponibilité » (sondes) et « Pages de statut » sont deux entrées | `web/src/components/Layout.tsx:152-154` |
 
 ### 1.7 Alertes
 
 | Fait | Preuve |
 | --- | --- |
-| 12 genres, 2 gravités (`CHECK (severity IN ('attention','danger'))`), 2 statuts | `internal/alert/alert.go:13-82` ; `001:626-657` |
-| Seule notion « vue » : l'**acquittement**, « l'opérateur a vu » ; une aggravation le ré-arme | `internal/alert/acknowledge.go:7-8` ; `engine.go:223-226` |
+| 12 genres, 2 gravités (`CHECK (severity IN ('attention','danger'))`), 2 statuts | `internal/domain/alert/alert.go:13-82` ; `001:626-657` |
+| Seule notion « vue » : l'**acquittement**, « l'opérateur a vu » ; une aggravation le ré-arme | `internal/domain/alert/acknowledge.go:7-8` ; `engine.go:223-226` |
 | 5 onglets : ouvertes, acquittées, résolues, canaux, silences | `web/src/pages/Alerts.tsx:14-20` |
 | Compteur du menu : ouvertes, rouge si une n'est pas acquittée | `web/src/components/Layout.tsx:260-262` |
-| Canaux (6 formats) et silences (`mutes`) : routes sous `/api/alerts/` | `internal/server/routes.go:151-159` |
+| Canaux (6 formats) et silences (`mutes`) : routes sous `/api/alerts/` | `internal/edge/server/routes.go:151-159` |
 | Paramètres : 5 sections ancrées ; l'ancre `alertes` porte les **seuils disque** ; aucune section « Notifications » | `web/src/lib/settingsSections.ts:3-9` |
-| Le texte d'une alerte est écrit deux fois : Go pour les canaux, TS pour l'écran (assumé) | `internal/alert/text.go:10-12` ; `web/src/lib/alerts.ts:30` |
+| Le texte d'une alerte est écrit deux fois : Go pour les canaux, TS pour l'écran (assumé) | `internal/domain/alert/text.go:10-12` ; `web/src/lib/alerts.ts:30` |
 
 ### 1.8 La fiche machine
 
@@ -159,11 +159,11 @@ par module, transmis à la main.
 | Onglets | Résumé, Conteneurs (`services`), Disponibilité, Réseau, SSH, Journaux, + Hyperviseur | `web/src/lib/machineTabs.ts:8-30` |
 | Résumé | `ResourceStats` (4 tuiles), `ResourceHistory`, `DiskVolumesCard`, `SystemSupport`, `HostedCard`, `ProxmoxCard`, `AgentCard`, `ActionsCard` | `web/src/pages/Machine.tsx:81-91` |
 | En-tête | Trois boutons : Ré-enrôler, Révoquer l'agent, Retirer ; pas de `MoreMenu` | `web/src/pages/Machine.tsx:296-340` |
-| Liste | Triée par nom côté serveur, sans jauge ni hiérarchie ; hôte, invités, rôles sont dans la réponse mais inutilisés | `internal/store/machines.go:27` ; `web/src/pages/Machines.tsx:38-74` |
+| Liste | Triée par nom côté serveur, sans jauge ni hiérarchie ; hôte, invités, rôles sont dans la réponse mais inutilisés | `internal/edge/store/machines.go:27` ; `web/src/pages/Machines.tsx:38-74` |
 | Attente de l'agent | `MachineToken` n'écoute pas l'arrivée de l'agent | `web/src/pages/MachineToken.tsx:83-139` |
-| Stockage | Volumes montés par l'agent ; ni SMART, ni pool, ni LVM ; volumes Docker non affichés sur la fiche | `internal/sampler/mounts.go:13-60` ; `021_machine_volumes.sql` |
+| Stockage | Volumes montés par l'agent ; ni SMART, ni pool, ni LVM ; volumes Docker non affichés sur la fiche | `internal/kit/sampler/mounts.go:13-60` ; `021_machine_volumes.sql` |
 
-**Révoquer vs Retirer** (`internal/machine/service.go:263-385`, `internal/store/machines.go:75-92,333-355`) :
+**Révoquer vs Retirer** (`internal/fact/machine/service.go:263-385`, `internal/edge/store/machines.go:75-92,333-355`) :
 
 | | Révoquer l'agent | Retirer la machine |
 | --- | --- | --- |
@@ -177,7 +177,7 @@ par module, transmis à la main.
 
 **Changer les droits vs Ré-enrôler** : la même route
 `POST /api/machines/{id}/actions/reenroll`, avec ou sans `capabilities`
-(`internal/server/api_machines.go:563-575`). Deux boutons, un geste.
+(`internal/edge/server/api_machines.go:563-575`). Deux boutons, un geste.
 
 ---
 
@@ -196,13 +196,13 @@ Rapports bruts : [`code-mort/`](code-mort/).
 
 | Résultat | Classe | Raison |
 | --- | --- | --- |
-| `agentwire.ObservationKinds` (`internal/agentwire/command.go:69`) | **mort** | Aucun appel, même en test (`grep -rn ObservationKinds`) |
-| 37 listes fermées (`States`, `Kinds`, `Reasons`, `Statuses`, `Provenances`, `GapStates`…) | faux positif | Lues par `internal/server/composed_keys_test.go` pour vérifier les clés composées du catalogue ; la liste fermée est la règle |
+| `agentwire.ObservationKinds` (`internal/wire/agentwire/command.go:69`) | **mort** | Aucun appel, même en test (`grep -rn ObservationKinds`) |
+| 37 listes fermées (`States`, `Kinds`, `Reasons`, `Statuses`, `Provenances`, `GapStates`…) | faux positif | Lues par `internal/edge/server/composed_keys_test.go` pour vérifier les clés composées du catalogue ; la liste fermée est la règle |
 | Paquets `storetest`, `servertest`, `smtptest`, `opnsensetest`, `releasetest` (36 fonctions) | faux positif | Bancs de test ; « seuls des `_test.go` les importent » (`docs/projet/17-conventions-code.md`, table des imports) |
 | `release.PrivateKey.Format` | faux positif | Appelée par `fmt` à travers l'interface `fmt.Formatter` (masque la clé) |
-| `verb.Registry.Check` | faux positif | Le test `Default.Check()` tient la règle « chaque inverse existe » (`internal/verb/verb_test.go:65`) |
+| `verb.Registry.Check` | faux positif | Le test `Default.Check()` tient la règle « chaque inverse existe » (`internal/gesture/verb/verb_test.go:65`) |
 | `container.NeedsAttention` | faux positif | Oracle Go du SQL `containerNeedsAttention` ; « une règle écrite en Go et en SQL a son test de parité » (17-conventions) |
-| `agent.allowAll`, `alert.Verify`, `alert.Describe` | à confirmer | Aides de test placées dans un fichier de production ; `Describe` est l'enveloppe sans échappement de `describe` (`internal/alert/text.go:21`). À déplacer dans un `_test.go` ou à garder : un choix de style |
+| `agent.allowAll`, `alert.Verify`, `alert.Describe` | à confirmer | Aides de test placées dans un fichier de production ; `Describe` est l'enveloppe sans échappement de `describe` (`internal/domain/alert/text.go:21`). À déplacer dans un `_test.go` ou à garder : un choix de style |
 
 ### 2.2 Front
 
@@ -222,7 +222,7 @@ Rapports bruts : [`code-mort/`](code-mort/).
 | --- | --- | --- |
 | Révoquer / Retirer | `Machine.tsx:296-340` ; deux routes | Un geste « Supprimer la machine », option « garder l'historique » : la machine reste, « archivée » (Q9, C5b) |
 | « Changer les droits » / « Ré-enrôler » | même route `…/actions/reenroll` | Un geste « Ré-enrôler » qui ouvre l'assistant avec les droits pré-cochés (C4) |
-| Onglet Conteneurs de Services / onglet Conteneurs de la fiche | même handler `writeContainers`, même `ContainerTable` (`internal/server/api_containers.go:165-188`) | L'onglet de Services disparaît : les conteneurs se déplient sous leur service. La fiche garde le sien (C7) |
+| Onglet Conteneurs de Services / onglet Conteneurs de la fiche | même handler `writeContainers`, même `ContainerTable` (`internal/edge/server/api_containers.go:165-188`) | L'onglet de Services disparaît : les conteneurs se déplient sous leur service. La fiche garde le sien (C7) |
 | Compteur « Services » = conteneurs | `Layout.tsx:251-253` | Le compteur se dérive du module (§3.1) |
 | `FormCard` / `Wizard` / `FormBody` / `<form>` brut | §1.2 | Un composant `Modal` + `Wizard` ; Paramètres gardent `SettingRow` (§3.2) |
 | `DeletePlanDialog` / `DeployDialog` | deux `<dialog>` copiés | Construits sur `Modal` (C2) |
@@ -240,29 +240,29 @@ Chaque point : le patron, la raison tirée du code, l'alternative écartée.
 ### 3.1 Registre de modules à capacités
 
 **Le mot.** « Capacité » nomme déjà les droits d'un agent
-(`internal/machine/capability.go`, `agent_capabilities`). Pour ne pas les
+(`internal/fact/machine/capability.go`, `agent_capabilities`). Pour ne pas les
 confondre, le code dira **module** ; une machine ou l'installation **porte**
 des modules. À l'écran, « capacités » reste libre.
 
 | | Cible |
 | --- | --- |
 | Patron | **Registre déclaratif à liste fermée** + **dérivation** : les modules d'une machine se déduisent de son **rôle**, choisi à l'ajout (décision Q3), et des faits que l'agent observe (spécification par prédicat) |
-| Raison | Aujourd'hui chaque écran déduit sa condition à la main (`hostsProxmox` passé en booléen, `Machine.tsx:78` ; menu en dur, `Layout.tsx:147-164` ; onglets en dur, `machineTabs.ts:8`). La liste fermée rendue par une fonction est l'idiome du dépôt (`machine.CapabilityNames()`, `alert.Kinds()`, testées par `composed_keys_test.go`). Le registre de verbes (`internal/verb`) a déjà prouvé la forme : un identifiant stable, des clés de catalogue, un test de cohérence |
+| Raison | Aujourd'hui chaque écran déduit sa condition à la main (`hostsProxmox` passé en booléen, `Machine.tsx:78` ; menu en dur, `Layout.tsx:147-164` ; onglets en dur, `machineTabs.ts:8`). La liste fermée rendue par une fonction est l'idiome du dépôt (`machine.CapabilityNames()`, `alert.Kinds()`, testées par `composed_keys_test.go`). Le registre de verbes (`internal/gesture/verb`) a déjà prouvé la forme : un identifiant stable, des clés de catalogue, un test de cohérence |
 | Écartée : un système de greffons (chargement dynamique) | Réflexion et cadre opaque, interdits (17-conventions, « Ce qu'on ne fait pas ») |
 | Écartée : des drapeaux dans `config.toml` | Le rôle se choisit là où l'opérateur sait ce qu'il installe : l'ajout de la machine. Un drapeau global ne dit rien d'une machine, et mentirait dès qu'elle change |
-| Écartée : déduire le rôle de la seule détection (`machine_roles`) | La détection ne connaît que `proxmox_ve` (`internal/role/role.go:13`) et suit la machine sans l'opérateur ; elle **propose** un changement de rôle (bloc « À faire »), elle ne le fait jamais |
+| Écartée : déduire le rôle de la seule détection (`machine_roles`) | La détection ne connaît que `proxmox_ve` (`internal/fact/role/role.go:13`) et suit la machine sans l'opérateur ; elle **propose** un changement de rôle (bloc « À faire »), elle ne le fait jamais |
 | Écartée : garder des `if` par écran | C'est l'état actuel ; chaque module ajouté (OPNsense, Traefik…) ajouterait un booléen dans trois fichiers |
 
 **Côté serveur.**
 
 | Pièce | Rôle | Où |
 | --- | --- | --- |
-| `module.ID`, `module.Scope` (`installation`, `machine`) | Liste fermée, `module.All()` ; libellé et phrase en clés de catalogue `module.<id>`, `module.<id>_text` | nouveau paquet outil `internal/module` (aucune règle d'openCloud : la liste et sa forme) |
-| Rôle d'une machine | `machines.role`, liste fermée `machine.Roles()` : `generic`, `docker`, `proxmox` au départ. Choisi à l'étape 1 de l'ajout ; il fixe le **préréglage des droits** et les **modules du rôle**. Modifiable sur la fiche (un ré-enrôlement si les droits changent, décision 10) | `internal/machine` (la règle), `migrations/024_machine_role.sql` |
-| Règle de présence d'un module **de machine** | Modules du rôle ∪ modules d'observation que l'agent rapporte (conteneurs, clés SSH). Une requête SQL rend la liste par machine | `internal/store/modules.go` (« compter en SQL ») ; lu par `reader.Reader` |
+| `module.ID`, `module.Scope` (`installation`, `machine`) | Liste fermée, `module.All()` ; libellé et phrase en clés de catalogue `module.<id>`, `module.<id>_text` | nouveau paquet outil `internal/kit/module` (aucune règle d'openCloud : la liste et sa forme) |
+| Rôle d'une machine | `machines.role`, liste fermée `machine.Roles()` : `generic`, `docker`, `proxmox` au départ. Choisi à l'étape 1 de l'ajout ; il fixe le **préréglage des droits** et les **modules du rôle**. Modifiable sur la fiche (un ré-enrôlement si les droits changent, décision 10) | `internal/fact/machine` (la règle), `migrations/024_machine_role.sql` |
+| Règle de présence d'un module **de machine** | Modules du rôle ∪ modules d'observation que l'agent rapporte (conteneurs, clés SSH). Une requête SQL rend la liste par machine | `internal/edge/store/modules.go` (« compter en SQL ») ; lu par `reader.Reader` |
 | Règle de présence d'un module **d'installation** | « configuré » = au moins un objet du module existe (un pare-feu, un trousseau de sauvegarde, une sonde…) ; un module purement API (pare-feu OPNsense) se configure dans **Paramètres › Modules** (Q3) | idem, une requête |
 | Exposition | `GET /api/machines` et `/{id}` gagnent `modules: [...]` ; `GET /api/session` gagne `modules: [{id, configured}]` | goldens `machines`, `machine`, `session` |
-| Garde | Un test : chaque `module.ID` a ses deux clés de catalogue, chaque module de machine a sa règle SQL | `internal/server/composed_keys_test.go` (préfixe `module.`) |
+| Garde | Un test : chaque `module.ID` a ses deux clés de catalogue, chaque module de machine a sa règle SQL | `internal/edge/server/composed_keys_test.go` (préfixe `module.`) |
 
 Modules de départ :
 
@@ -374,7 +374,7 @@ deviennent des routes modales sur leur liste).
 | | Cible |
 | --- | --- |
 | Patron | **Composite** côté front (un nœud de l'arbre est une machine, un invité sans agent ou un cluster) ; côté serveur, **rapprochement par clés ordonnées** (la plus forte gagne) |
-| Raison | Le lien d'aujourd'hui se fait par nom d'hôte seul (`internal/proxmox/reading.go:104-130`) : deux VM au même nom, ou un nom changé, cassent le lien. L'API Proxmox et l'agent savent tous deux donner l'adresse MAC ; aucun des deux ne la lit aujourd'hui (`internal/proxmox/client.go` : `/version`, `/cluster/resources`, stockages seulement) |
+| Raison | Le lien d'aujourd'hui se fait par nom d'hôte seul (`internal/domain/proxmox/reading.go:104-130`) : deux VM au même nom, ou un nom changé, cassent le lien. L'API Proxmox et l'agent savent tous deux donner l'adresse MAC ; aucun des deux ne la lit aujourd'hui (`internal/domain/proxmox/client.go` : `/version`, `/cluster/resources`, stockages seulement) |
 | Écartée : une route `/api/machines/tree` | Un second chemin de lecture des mêmes lignes ; l'arbre se construit en fonction pure côté front (`lib/machineTree.ts`, testée) à partir de `GET /api/machines` enrichi |
 | Écartée : le VMID lu depuis l'invité (`/sys/class/dmi/id/product_uuid` = `smbios1`) | Lisible par root seulement ; l'agent tourne sous un compte dédié (`010_agent_account.sql`) |
 
@@ -487,7 +487,7 @@ Ce qui disparaît :
 | Couche | Supprimé |
 | --- | --- |
 | Routes | `GET/POST /api/status/pages`, `GET/PUT/DELETE /api/status/pages/{id}`, `GET …/delete-plan` (6) ; la publication s'écrit par `PUT /api/directory/projects/{id}` |
-| Go | `status.Page`, `PageDefinition`, `internal/status/page.go`, `internal/store/status_pages.go` (partie pages), refus `statuspage.project_invalid`, `statuspage.project_taken`, `project.has_status_page`, genre de plan `status_page` |
+| Go | `status.Page`, `PageDefinition`, `internal/view/status/page.go`, `internal/edge/store/status_pages.go` (partie pages), refus `statuspage.project_invalid`, `statuspage.project_taken`, `project.has_status_page`, genre de plan `status_page` |
 | Front | `StatusPageForm.tsx`, `status/PagesTab.tsx`, `StatusPagePill.tsx` (à confirmer), routes `page-statut/pages/*`, entrée de menu « Pages de statut » |
 | Catalogue | `statuspage.*` repris sous `project.publish_*` ; les autres retirés des deux langues |
 | Goldens | `status_pages`, `status_page` remplacés par `projects` / `project` enrichis |
@@ -511,7 +511,7 @@ dans Services, avec **Accepter** (il devient déclaré) ou **Ignorer**.
 | | Cible |
 | --- | --- |
 | Patron | **Lecture dérivée** (la proposition se calcule, elle ne se stocke pas) + **Commande** à deux gestes, chacun par la route qui existe déjà |
-| Raison | Tout le socle est là : l'écart calcule déjà les groupes non déclarés (`internal/directory/gap.go:267-299`), `Propose` en fait un service prêt à écrire (`propose.go:35-56`), « Ignorer » écrit `ignored_keys` (`ignored.go:12-43`). Il manque un écran qui dise « voici ce qu'on a trouvé » et un geste court |
+| Raison | Tout le socle est là : l'écart calcule déjà les groupes non déclarés (`internal/domain/directory/gap.go:267-299`), `Propose` en fait un service prêt à écrire (`propose.go:35-56`), « Ignorer » écrit `ignored_keys` (`ignored.go:12-43`). Il manque un écran qui dise « voici ce qu'on a trouvé » et un geste court |
 | Écartée : déclaration automatique avec annulation | Écartée par Lucas (Q2) : l'opérateur reste maître de ce qu'il déclare |
 | Écartée : une table `proposals` | La proposition vit et meurt avec les conteneurs observés ; la stocker ferait un second état à tenir à jour |
 | Écartée : une route `POST …/proposals/{key}/actions/accept` | Un chemin de plus pour écrire un service. Accepter = `POST /api/directory/services` avec le corps de la proposition, le chemin unique de la création |
@@ -541,7 +541,7 @@ par un test du chantier C8 :
 | Cas | Règle | Aujourd'hui |
 | --- | --- | --- |
 | Une proposition ignorée revient-elle ? | Non tant que la clé ignorée existe ; la clé suit le projet Compose ou le nom du conteneur (`ignored_keys`) | tenu par `Gaps` (`gaps.go:15-33`) |
-| `apply --prune` d'un fichier qui ne liste pas une clé ignorée | Le plan **nomme** la clé qui sera « ne plus ignorer » ; rien sans `--prune` ; le test vérifie qu'elle figure au plan avant l'application | `--prune` supprime la clé (`internal/manifest/plan_ignored.go:41-51`) : la proposition revient |
+| `apply --prune` d'un fichier qui ne liste pas une clé ignorée | Le plan **nomme** la clé qui sera « ne plus ignorer » ; rien sans `--prune` ; le test vérifie qu'elle figure au plan avant l'application | `--prune` supprime la clé (`internal/view/manifest/plan_ignored.go:41-51`) : la proposition revient |
 | `apply --prune` d'un fichier qui ne liste pas un service accepté | Le service est supprimé, nommé au plan, comme tout service ; s'il tourne encore, il **redevient une proposition**, jamais un service | `plan_services.go:201-214` |
 | Accepter deux fois (deux onglets, un double clic) | Le second reçoit le refus d'unicité (409), aucun doublon | contrôle dans la transaction du store (17-conventions, « Le store ») |
 | Accepter une proposition déjà ignorée ailleurs | Refus, la liste se relit | à écrire |
@@ -584,8 +584,8 @@ dans les clés de catalogue (`alerts.tab_*` retirées).
 | Pièce | Rôle |
 | --- | --- |
 | `web/src/api/routes.ts` | Chaque écriture du front déclare son motif, tel que dans `routes.txt` : `"POST /api/probes/{id}/actions/pause"` ; `api/*.ts` appellent par motif + paramètres (`segment()` garde ses contrôles) |
-| `verbs.golden.json` | Le registre (`id`, `route`, `reverse`) écrit par le banc Go existant (`compareGolden`, `internal/server/api_test.go:252`) |
-| Test front | Chaque motif déclaré existe dans `internal/server/testdata/routes.txt` ; **chaque verbe** du golden a un geste d'écran (son motif est déclaré) |
+| `verbs.golden.json` | Le registre (`id`, `route`, `reverse`) écrit par le banc Go existant (`compareGolden`, `internal/edge/server/api_test.go:252`) |
+| Test front | Chaque motif déclaré existe dans `internal/edge/server/testdata/routes.txt` ; **chaque verbe** du golden a un geste d'écran (son motif est déclaré) |
 | Test Go | Chaque route d'écriture de `routes.txt` est appelée par le front **ou** listée « sans écran » avec sa raison (agent, ping, statut public) : une route sans appelant est du code mort |
 | Puce `MCP` | `ActionButton` / `MoreMenu` reçoivent le motif ; puce si le motif est la route d'un verbe. Le registre arrive par `GET /api/session` (`verbs: [{id, route}]`), lu au chargement |
 
@@ -597,7 +597,7 @@ route d'API, tout verbe a son geste d'écran.
 | | Cible |
 | --- | --- |
 | Patron | **Commande différée à double contrôle** : le jeton dépose une demande, un humain la confirme dans l'interface, la route d'opérateur s'exécute alors |
-| Raison | Le registre refuse aujourd'hui tout verbe sans inverse (`internal/verb/verb.go:73`, `ErrNoReverse`) : c'est ce qui tenait les gestes destructeurs hors de portée. La confirmation remplace l'inverse comme garde-fou |
+| Raison | Le registre refuse aujourd'hui tout verbe sans inverse (`internal/gesture/verb/verb.go:73`, `ErrNoReverse`) : c'est ce qui tenait les gestes destructeurs hors de portée. La confirmation remplace l'inverse comme garde-fou |
 | Écartée : confirmer par l'élicitation MCP (mcp-maison demande à l'utilisateur) | {product} croirait mcp-maison sur parole : un jeton seul suffirait à détruire |
 | Écartée : un jeton « destructeur » sans confirmation | Contraire à la décision |
 
@@ -623,12 +623,12 @@ commit par fonctionnalité, la doc `22-fonctionnement.md` mise à jour.
 
 | Branche | Fichiers qui comptent ici | Commande |
 | --- | --- | --- |
-| `fix/redemarrage-demande` | `internal/container/*`, `internal/dockerwatch/*`, `internal/alert/source_container.go`, `internal/store/containers.go`, `internal/server/api_containers.go`, `web/src/pages/Container.tsx`, `web/src/lib/containers.ts`, `internal/lang/*.toml`, `docs/projet/22-fonctionnement.md`, **`migrations/022_container_stop_requested.sql`** | `git diff --stat origin/dev...origin/fix/redemarrage-demande` |
-| `feat/jeton-portee-machines` | `internal/apitoken/*`, **`internal/verb/*`**, **`internal/server/routes.go`**, **`testdata/routes.txt`**, `internal/server/api_tokens.go`, `web/src/pages/settings/*`, `web/src/api/apiTokens.ts`, `internal/lang/*.toml`, `docs/projet/22-fonctionnement.md`, **`migrations/023_api_token_reach.sql`** | `git diff --stat origin/dev...origin/feat/jeton-portee-machines` |
+| `fix/redemarrage-demande` | `internal/fact/container/*`, `internal/domain/dockerwatch/*`, `internal/domain/alert/source_container.go`, `internal/edge/store/containers.go`, `internal/edge/server/api_containers.go`, `web/src/pages/Container.tsx`, `web/src/lib/containers.ts`, `internal/kit/lang/*.toml`, `docs/projet/22-fonctionnement.md`, **`migrations/022_container_stop_requested.sql`** | `git diff --stat origin/dev...origin/fix/redemarrage-demande` |
+| `feat/jeton-portee-machines` | `internal/gesture/apitoken/*`, **`internal/gesture/verb/*`**, **`internal/edge/server/routes.go`**, **`testdata/routes.txt`**, `internal/edge/server/api_tokens.go`, `web/src/pages/settings/*`, `web/src/api/apiTokens.ts`, `internal/kit/lang/*.toml`, `docs/projet/22-fonctionnement.md`, **`migrations/023_api_token_reach.sql`** | `git diff --stat origin/dev...origin/feat/jeton-portee-machines` |
 | `orca/sauvegardes-inventaire` | — : déjà fusionnée dans `dev` (`git merge-base --is-ancestor`) | |
 
 **Les deux branches réservent `022`.** Les noms diffèrent : git ne verra pas
-de conflit. Le store lit le numéro (`internal/store/store.go`, `migrationVersion`) :
+de conflit. Le store lit le numéro (`internal/edge/store/store.go`, `migrationVersion`) :
 sur une base neuve, la seconde `INSERT INTO schema_migrations` échoue ; sur une
 base qui a joué l'une, l'autre est **sautée sans erreur** (déduit du code, non
 exécuté). La seconde fusionnée doit passer en `023`.
@@ -652,23 +652,23 @@ dépendance : ils ne touchent ni routes ni verbes ni catalogue de ces domaines
 Plus de migration pour les alertes (Q2) ni pour l'archive (Q9 : « archivée »
 se lit de `agents.revoked_at`).
 
-Un test d'unicité des numéros manque (`internal/store/schema_test.go` ne le
+Un test d'unicité des numéros manque (`internal/edge/store/schema_test.go` ne le
 vérifie pas) : il entre en C1.
 
 ### 4.3 La liste
 
 | # | Chantier | Fichiers possédés | Supprimé | Tests | Migr. | mcp-maison | Dépend de |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | Garde-fous et ménage | `web/src/api/routes.ts` (nouveau), `web/src/api/*.ts` (appels par motif), `web/src/api/parity.test.ts`, `internal/server/parity_test.go`, `testdata/verbs.golden.json`, `Layout.tsx` + `statut/StatusPage.tsx` (mot-symbole), `internal/store/schema_test.go` (unicité des numéros), `internal/server/api_test.go` (message `-update` faux, `./web` → `./internal/server`) | `ObservationKinds`, `hostsProxmox`, `applyStates`, `Field.Select`/`Field.EnumSelect` (`FirewallForm` passe à `components/Select`), les `export` inutiles (§2.2) | parité front (motifs ⊂ routes, verbes ⊂ motifs), route sans appelant, numéros uniques, `TestNameOnlyInBrand` étendu aux `.tsx` | — | aucun | — |
+| C1 | Garde-fous et ménage | `web/src/api/routes.ts` (nouveau), `web/src/api/*.ts` (appels par motif), `web/src/api/parity.test.ts`, `internal/edge/server/parity_test.go`, `testdata/verbs.golden.json`, `Layout.tsx` + `statut/StatusPage.tsx` (mot-symbole), `internal/edge/store/schema_test.go` (unicité des numéros), `internal/edge/server/api_test.go` (message `-update` faux, `./web` → `./internal/edge/server`) | `ObservationKinds`, `hostsProxmox`, `applyStates`, `Field.Select`/`Field.EnumSelect` (`FirewallForm` passe à `components/Select`), les `export` inutiles (§2.2) | parité front (motifs ⊂ routes, verbes ⊂ motifs), route sans appelant, numéros uniques, `TestNameOnlyInBrand` étendu aux `.tsx` | — | aucun | — |
 | C2 | `Modal`, `ActionButton`, confirmations | `components/Modal.tsx` + `.scss`, `ActionButton.tsx`, `DeletePlanDialog.tsx`, `DeployCard.tsx`, `useAction.ts`, `_tokens.scss` (`--scrim-blur`), `VisualSystem.tsx` | `confirm` de `useAction`, 9 `window.confirm`, styles de dialogue copiés | `lib/modal.ts` (règle « fermer si propre, demander si saisie »), démo dans `VisualSystem` | — | aucun | — |
-| C3 | Registre de modules, rôle de machine, menu | `internal/module/*` (nouveau), `internal/machine` (`Roles()`, préréglage des droits par rôle), `migrations/024_machine_role.sql`, `internal/store/{modules,machines}.go`, `internal/server/api_machines.go`, `api_session.go`, `web/src/lib/modules.ts`, `Layout.tsx`, `lib/machineTabs.ts`, `MachineHead.tsx`, `pages/settings/ModulesSection.tsx` (Paramètres › Modules), `Overview.tsx` (carte « à configurer »), `fr/en.toml` (`module.*`, `role.*`, `nav.*`) | `viewEntries`, `settingsEntries`, `counter()` en `if`, `visibleMachineTabs`, `hypervisorTab`, section « Administration » (`nav.section_settings`) | `composed_keys` (`module.`, `role.`), migration (rôle déduit des faits : Proxmox, Docker, générique), store (modules du rôle ∪ observés), golden `machines`, `machine`, `session`, `lib/modules.test.ts`, `machineTabs.test.ts` réécrit | 024 | `opencloud_machines` voit `role` et `modules` (champs en plus, sans casse) | D0, C1 |
+| C3 | Registre de modules, rôle de machine, menu | `internal/kit/module/*` (nouveau), `internal/fact/machine` (`Roles()`, préréglage des droits par rôle), `migrations/024_machine_role.sql`, `internal/edge/store/{modules,machines}.go`, `internal/edge/server/api_machines.go`, `api_session.go`, `web/src/lib/modules.ts`, `Layout.tsx`, `lib/machineTabs.ts`, `MachineHead.tsx`, `pages/settings/ModulesSection.tsx` (Paramètres › Modules), `Overview.tsx` (carte « à configurer »), `fr/en.toml` (`module.*`, `role.*`, `nav.*`) | `viewEntries`, `settingsEntries`, `counter()` en `if`, `visibleMachineTabs`, `hypervisorTab`, section « Administration » (`nav.section_settings`) | `composed_keys` (`module.`, `role.`), migration (rôle déduit des faits : Proxmox, Docker, générique), store (modules du rôle ∪ observés), golden `machines`, `machine`, `session`, `lib/modules.test.ts`, `machineTabs.test.ts` réécrit | 024 | `opencloud_machines` voit `role` et `modules` (champs en plus, sans casse) | D0, C1 |
 | C4 | Assistants Machines | `pages/MachineNew.tsx` → `machines/AddMachine.tsx` (étape 1 : nom + rôle de C3), `MachineToken.tsx`, `MachineRights.tsx`, `MachineProxmox.tsx`, `App.tsx`, `RightsFields.tsx`, `lib/machines.ts` | pages `machines/nouvelle`, `jeton`, `:id/droits`, `:id/proxmox` comme pages ; bouton « Changer les droits » | `lib/machines.test.ts` (rôles → droits), attente de l'agent (`lib/enrollWait.ts`) | — | aucun | C2, C3 |
-| C5a | Verbes à confirmation | `internal/verb/verb.go` (`Confirm`, méthode autre que `POST`), `internal/server/api_tokens.go` (demande au lieu d'exécution), `internal/server/api_verb_requests.go` (nouveau), `internal/store/verb_requests.go`, `migrations/025_verb_requests.sql`, `routes.go`, `routes.txt`, `web/src/api/verbRequests.ts`, carte de la vue d'ensemble, `docs/projet/25-ligne-directrice-modules.md` (amendée) | la règle « jamais exposé comme verbe » de la doc 25 | un jeton portant le verbe n'exécute **jamais** ; confirmer par jeton = 403 ; échéance refusée ; refuser n'écrit rien ; confirmer rejoue exactement les paramètres gardés ; audit des deux acteurs ; `api_token_verbs_test.go:247-262` réécrit | 025 | `opencloud_act` : lire `awaiting_confirmation` et le dire | D0 (fichiers de `feat/jeton-portee-machines`) |
-| C5b | Supprimer la machine | `internal/machine/service.go` (`Remove` avec `KeepHistory`), `internal/server/api_machines.go`, `routes.go`, `routes.txt`, `internal/verb` (`machine.delete`, à confirmation), `pages/Machine.tsx`, `pages/Machines.tsx` (état « archivée »), `DeletePlanDialog.tsx` | route `POST /api/machines/{id}/actions/revoke`, `revokeAgent` (front), boutons Révoquer et Retirer, clés `machine.revoke*`, `machine.remove*` | `machine/deletion_test.go`, `api_machines_test.go` (avec et sans historique), « archivée » = agent révoqué, machine gardée (Q9), ré-enrôler la désarchive, audit (`agent.revoke` gardé pour l'option historique) | — | `machine.delete` découvert par `opencloud_verbs` | C2, C5a |
-| C6 | Hôte > invités, type, cluster, stockage sans SMART | `internal/hostinfo` (`virt`, interfaces), `internal/agentwire` (champs optionnels), `internal/proxmox/{client,reading}.go` (config des invités, MAC), `internal/store/{machines,proxmox}.go`, `migrations/026_machine_placement.sql`, `internal/sampler` (disques physiques et pools, **sans SMART**, Q8), `web/src/lib/machineTree.ts`, `pages/Machines.tsx`, `pages/Machine.tsx` (deux colonnes, À faire, onglet Agent, stockage), `Resources.tsx` | `link` par nom seul (devient repli), `HostedCard`, `ProxmoxCard` (absorbés par l'identité), `ActionsCard` du résumé (vers l'onglet Agent) | `proxmox/reading_test.go` (ordre des clés), `hostinfo` (détection, sans root), `lib/machineTree.test.ts`, goldens `machines`, `machine`, `machine_proxmox`, `schema_test` | 026 | `opencloud_machines`, `opencloud_proxmox` voient des champs en plus | C3 ; à couper en deux PR (serveur ; écrans) |
+| C5a | Verbes à confirmation | `internal/gesture/verb/verb.go` (`Confirm`, méthode autre que `POST`), `internal/edge/server/api_tokens.go` (demande au lieu d'exécution), `internal/edge/server/api_verb_requests.go` (nouveau), `internal/edge/store/verb_requests.go`, `migrations/025_verb_requests.sql`, `routes.go`, `routes.txt`, `web/src/api/verbRequests.ts`, carte de la vue d'ensemble, `docs/projet/25-ligne-directrice-modules.md` (amendée) | la règle « jamais exposé comme verbe » de la doc 25 | un jeton portant le verbe n'exécute **jamais** ; confirmer par jeton = 403 ; échéance refusée ; refuser n'écrit rien ; confirmer rejoue exactement les paramètres gardés ; audit des deux acteurs ; `api_token_verbs_test.go:247-262` réécrit | 025 | `opencloud_act` : lire `awaiting_confirmation` et le dire | D0 (fichiers de `feat/jeton-portee-machines`) |
+| C5b | Supprimer la machine | `internal/fact/machine/service.go` (`Remove` avec `KeepHistory`), `internal/edge/server/api_machines.go`, `routes.go`, `routes.txt`, `internal/gesture/verb` (`machine.delete`, à confirmation), `pages/Machine.tsx`, `pages/Machines.tsx` (état « archivée »), `DeletePlanDialog.tsx` | route `POST /api/machines/{id}/actions/revoke`, `revokeAgent` (front), boutons Révoquer et Retirer, clés `machine.revoke*`, `machine.remove*` | `machine/deletion_test.go`, `api_machines_test.go` (avec et sans historique), « archivée » = agent révoqué, machine gardée (Q9), ré-enrôler la désarchive, audit (`agent.revoke` gardé pour l'option historique) | — | `machine.delete` découvert par `opencloud_verbs` | C2, C5a |
+| C6 | Hôte > invités, type, cluster, stockage sans SMART | `internal/kit/hostinfo` (`virt`, interfaces), `internal/wire/agentwire` (champs optionnels), `internal/domain/proxmox/{client,reading}.go` (config des invités, MAC), `internal/edge/store/{machines,proxmox}.go`, `migrations/026_machine_placement.sql`, `internal/kit/sampler` (disques physiques et pools, **sans SMART**, Q8), `web/src/lib/machineTree.ts`, `pages/Machines.tsx`, `pages/Machine.tsx` (deux colonnes, À faire, onglet Agent, stockage), `Resources.tsx` | `link` par nom seul (devient repli), `HostedCard`, `ProxmoxCard` (absorbés par l'identité), `ActionsCard` du résumé (vers l'onglet Agent) | `proxmox/reading_test.go` (ordre des clés), `hostinfo` (détection, sans root), `lib/machineTree.test.ts`, goldens `machines`, `machine`, `machine_proxmox`, `schema_test` | 026 | `opencloud_machines`, `opencloud_proxmox` voient des champs en plus | C3 ; à couper en deux PR (serveur ; écrans) |
 | C7 | Assistants Services, conteneurs dépliés | `DeclaredServiceForm.tsx`, `ProbeForm.tsx`, `JobForm.tsx`, `Services.tsx`, `ServicesTabs.tsx`, `DirectoryTab.tsx`, `ContainerTable.tsx`, `DeclaredServiceTable.tsx`, `App.tsx` | onglet `services/conteneurs` (redirigé), `ContainersTab`, `FormPage`/`FormCard` pour ces trois formulaires | `lib/directory.test.ts`, `lib/containers.test.ts` (groupage par service), golden inchangé | — | aucun (`/api/containers` reste) | C2, C3 ; après fusion de `fix/redemarrage-demande` (`ContainerTable`, `lib/containers.ts`) |
-| C8 | Propositions dans Services | `internal/directory/{gaps,propose,ignored}.go` (refus « déjà ignorée »), `internal/manifest/plan_ignored.go` (la clé dé-ignorée nommée au plan), `components/UndeclaredList.tsx` → `pages/services/Proposals.tsx`, `DirectoryCard.tsx`, `DirectoryTab.tsx`, `pages/Services.tsx`, `lib/gaps.ts` | bouton et libellés « Adopter » (`adoptPath` devient le chemin de « Modifier avant d'accepter ») | **tous les cas du tableau « Jamais recréée ni supprimée par surprise » (§3.5)**, un test chacun : ignorée qui ne revient pas, `--prune` sur clé ignorée nommée au plan, `--prune` sur service accepté qui redevient proposition, double acceptation (409), aucune écriture sans geste ; goldens `directory_gaps`, `manifest_plan` | — | aucun (`/api/directory/gaps` et `/proposal` inchangées) | C7 |
-| C9 | Projet + publication, module « Disponibilité » | `internal/directory/projects.go`, `internal/status/*`, `internal/store/{directory_projects,status_*}.go`, `migrations/027_project_publication.sql`, `internal/server/api_{directory,status}.go`, `routes.go`, `routes.txt`, `ProjectForm.tsx`, `StatusAdmin.tsx`, `pages/status/*`, `Probes.tsx`, `lib/modules.ts` | §3.4 « Ce qui disparaît » | migration (pages sans projet, avec projet, noms en collision), `status` (titre public = titre du projet ; page sans composant = un composant par service, Q5), `public/*` (adresse inchangée), goldens | 027 | **`opencloud_status` à réécrire** ; `GET /api/directory/projects` ouverte aux jetons | C3, C7 |
+| C8 | Propositions dans Services | `internal/domain/directory/{gaps,propose,ignored}.go` (refus « déjà ignorée »), `internal/view/manifest/plan_ignored.go` (la clé dé-ignorée nommée au plan), `components/UndeclaredList.tsx` → `pages/services/Proposals.tsx`, `DirectoryCard.tsx`, `DirectoryTab.tsx`, `pages/Services.tsx`, `lib/gaps.ts` | bouton et libellés « Adopter » (`adoptPath` devient le chemin de « Modifier avant d'accepter ») | **tous les cas du tableau « Jamais recréée ni supprimée par surprise » (§3.5)**, un test chacun : ignorée qui ne revient pas, `--prune` sur clé ignorée nommée au plan, `--prune` sur service accepté qui redevient proposition, double acceptation (409), aucune écriture sans geste ; goldens `directory_gaps`, `manifest_plan` | — | aucun (`/api/directory/gaps` et `/proposal` inchangées) | C7 |
+| C9 | Projet + publication, module « Disponibilité » | `internal/domain/directory/projects.go`, `internal/view/status/*`, `internal/edge/store/{directory_projects,status_*}.go`, `migrations/027_project_publication.sql`, `internal/edge/server/api_{directory,status}.go`, `routes.go`, `routes.txt`, `ProjectForm.tsx`, `StatusAdmin.tsx`, `pages/status/*`, `Probes.tsx`, `lib/modules.ts` | §3.4 « Ce qui disparaît » | migration (pages sans projet, avec projet, noms en collision), `status` (titre public = titre du projet ; page sans composant = un composant par service, Q5), `public/*` (adresse inchangée), goldens | 027 | **`opencloud_status` à réécrire** ; `GET /api/directory/projects` ouverte aux jetons | C3, C7 |
 | C10 | Alertes en boîte de réception, Paramètres › Notifications | `pages/Alerts.tsx`, `pages/alerts/*`, `pages/Settings.tsx`, `pages/settings/NotificationsSection.tsx`, `AlertChannelForm.tsx`, `AlertMuteNew.tsx`, `DiskSection.tsx`, `lib/settingsSections.ts`, `App.tsx`, `lib/alerts.ts` (`mutePathOf`, filtres) | onglets `acquittees`/`resolues`/`canaux`/`silences` d'Alertes, routes `alertes/canaux*`, `alertes/silences*` (redirigées), ancre `alertes` | `lib/alerts.test.ts` (ordre non vues / vues / résolues, filtres), `settingsSections.test.ts` | — | aucun (routes API inchangées) | C2 |
 | C11 | Derniers formulaires | `FirewallForm.tsx`, `Backups.tsx`, `backups/PlanForm.tsx`, `StatusIncident*.tsx`, `StatusComponentForm.tsx` | `FormPage.tsx`, `FormPage.scss`, `FormCard` (hors `FormBody`), `width="wizard"` | `StatusComponentForm.test.tsx` adapté ; route sans page (`parity_test.go`) | — | aucun | C2 ; Sauvegardes après #372/#373 (doc 25, « Ordre de reprise ») |
 | C12 | Accès SSH : la vue globale refaite (Q4) | maquette d'abord (`docs/projet/maquettes/`), `pages/SSHKeyMatrix.tsx` → `pages/machines/SSHAccess.tsx` (onglet de Machines), `lib/sshkeys.ts`, `Layout.tsx` (entrée retirée), `App.tsx` (`/cles-ssh` redirigée) | `SSHKeyMatrix.tsx`, entrée de menu Clés SSH, clés de catalogue de l'ancienne matrice | `lib/sshAccess.test.ts` (qui a accès à quoi : par clé, par compte, comptes à privilèges, clés faibles, clé vue sur une seule machine) | — | aucun (`/api/ssh-keys` hors liste des jetons) | C3, composant `Matrix` (#373), maquette validée |
@@ -713,11 +713,11 @@ C1, C2 peuvent partir tout de suite.
 
 | Point | Pourquoi |
 | --- | --- |
-| Le comportement réel de la double `022` (échec ou saut) | Déduit de `internal/store/store.go`, aucune fusion simulée |
+| Le comportement réel de la double `022` (échec ou saut) | Déduit de `internal/edge/store/store.go`, aucune fusion simulée |
 | La lecture de la MAC d'un invité par `/nodes/{node}/{qemu,lxc}/{vmid}/config` avec un jeton `PVEAuditor` | Non essayé contre un Proxmox ; à valider au début de C6 |
 | `/sys/class/dmi/id/product_uuid` illisible sans root | Connu des distributions courantes, non vérifié sur une machine de test |
 | `systemd-detect-virt` présent partout | Absent hors systemd (Alpine, conteneurs) : alors `unknown` |
-| La migration `026` | Esquisse non exécutée ; forme des identifiants (page : `ident.New()`, `internal/status/page.go:20` ; projet : préfixe `prj_`) et collision de noms à vérifier contre `internal/status` et `TestSchema_*` |
+| La migration `026` | Esquisse non exécutée ; forme des identifiants (page : `ident.New()`, `internal/view/status/page.go:20` ; projet : préfixe `prj_`) et collision de noms à vérifier contre `internal/view/status` et `TestSchema_*` |
 | Le rôle déduit à la migration `024` | Règle proposée, non essayée sur une base réelle |
 | Un verbe dont la route n'est pas un `POST` (`DELETE /api/machines/{id}`) | Le registre exige `POST /api/` aujourd'hui (`verb.go:67`) ; l'admission par route (`routes.go:239-246`) devrait suivre, non vérifié |
 | Les numéros de ligne marqués d'une plage | Relevés par lecture, ±5 lignes possibles pour quelques fichiers longs |

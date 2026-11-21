@@ -1,9 +1,9 @@
 import { segment } from "./client";
 
 // Les écritures que le front envoie, une ligne chacune, telles que le serveur
-// les enregistre (internal/server/testdata/routes.txt). C'est ce qui lie un
+// les enregistre (internal/edge/server/testdata/routes.txt). C'est ce qui lie un
 // geste d'écran à une route d'API, donc à un verbe quand le registre
-// internal/verb en porte un : parity.test.ts compare cette liste aux routes
+// internal/gesture/verb en porte un : parity.test.ts compare cette liste aux routes
 // du serveur et à ses verbes, parity_test.go (Go) refuse une route
 // d'écriture que ni cette liste ni sa liste « sans écran » ne nomme.
 export const writes = [

@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/heartbeat"
-	"github.com/ldesfontaine/opencloud/internal/seal"
-	"github.com/ldesfontaine/opencloud/internal/store"
+	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
+	"github.com/ldesfontaine/opencloud/internal/edge/store"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/seal"
 )
 
 // openState ouvre le répertoire d'état et sa base, comme le fait serve

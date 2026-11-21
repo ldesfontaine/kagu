@@ -29,7 +29,7 @@ import type { Incident, IncidentsResponse, PublicStatus, StatusComponent, Status
 
 // Le contrat de l'API est écrit deux fois : en Go (les balises json) et ici
 // (les types de api/*.ts). Les réponses figées par les goldens du serveur
-// (internal/server/testdata) font foi : ce test les relit et compare leurs
+// (internal/edge/server/testdata) font foi : ce test les relit et compare leurs
 // clés à la description de chaque type. tsc vérifie que la description a
 // exactement les clés du type, optionnelles comprises ; vitest, que le
 // golden a exactement les clés de la description.
@@ -1389,7 +1389,7 @@ function compareKeys(found: unknown, spec: Spec, path: string, gaps: string[]): 
 
 // Les goldens sont lus au chargement du test, hors de web/ : Vite les
 // résout depuis ce fichier.
-const goldens = import.meta.glob<unknown>("../../../internal/server/testdata/*.golden.json", { eager: true, import: "default" });
+const goldens = import.meta.glob<unknown>("../../../internal/edge/server/testdata/*.golden.json", { eager: true, import: "default" });
 
 function goldenName(path: string): string {
   return path.slice(path.lastIndexOf("/") + 1);

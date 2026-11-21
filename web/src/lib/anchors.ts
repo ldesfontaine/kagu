@@ -6,7 +6,7 @@ import type { AgentAnchors, AnchorKind, Anchors } from "../api/machines";
 // de openCloud ne peut les changer ; sans ancre, l'agent refuse l'ordre qu'elle
 // borne. Ce fichier dit comment un écran les montre et les demande.
 
-// Le registre du serveur (internal/anchor), dans son ordre : le droit dont
+// Le registre du serveur (internal/fact/anchor), dans son ordre : le droit dont
 // l'ordre est borné, et ce que l'ancre accepte. Un test relit les noms et les
 // droits dans la réponse figée de la fiche d'une machine.
 export const anchorKinds = [

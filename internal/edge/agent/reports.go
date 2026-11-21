@@ -1,0 +1,93 @@
+package agent
+
+import (
+	"sync"
+
+	"github.com/ldesfontaine/opencloud/internal/fact/container"
+)
+
+// reports garde ce que le veilleur Docker a observé entre deux signaux :
+// le dernier état du démon, le dernier inventaire complet, la dernière
+// liste des réseaux, les événements et les mesures dans l'ordre. Plein, il
+// oublie le plus ancien.
+type reports struct {
+	mu      sync.Mutex
+	pending container.Report
+}
+
+// Deliver fait de reports un Sink pour dockerwatch.
+func (r *reports) Deliver(report container.Report) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if report.Engine != nil {
+		r.pending.Engine = report.Engine
+	}
+	if report.Complete {
+		r.pending.Complete = true
+		r.pending.Inventory = report.Inventory
+	}
+	if report.NetworksComplete {
+		r.pending.NetworksComplete = true
+		r.pending.Networks = report.Networks
+	}
+	if report.VolumesComplete {
+		r.pending.VolumesComplete = true
+		r.pending.Volumes = report.Volumes
+	}
+	r.pending.Events = appendBounded(r.pending.Events, report.Events, container.MaxEventsPerReport)
+	r.pending.Stats = appendBounded(r.pending.Stats, report.Stats, container.MaxStatsPerReport)
+}
+
+func appendBounded[T any](kept, added []T, limit int) []T {
+	kept = append(kept, added...)
+	if len(kept) > limit {
+		kept = append([]T(nil), kept[len(kept)-limit:]...)
+	}
+	return kept
+}
+
+// take vide le tampon ; nil s'il n'y a rien à dire.
+func (r *reports) take() *container.Report {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.pending.IsEmpty() {
+		return nil
+	}
+	taken := r.pending
+	r.pending = container.Report{}
+	return &taken
+}
+
+// restore remet devant ce qu'un signal n'a pas pu livrer ; ce qui a été
+// observé entre-temps passe derrière.
+func (r *reports) restore(report *container.Report) {
+	if report == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.pending.Engine == nil {
+		r.pending.Engine = report.Engine
+	}
+	if !r.pending.Complete && report.Complete {
+		r.pending.Complete, r.pending.Inventory = true, report.Inventory
+	}
+	if !r.pending.NetworksComplete && report.NetworksComplete {
+		r.pending.NetworksComplete, r.pending.Networks = true, report.Networks
+	}
+	if !r.pending.VolumesComplete && report.VolumesComplete {
+		r.pending.VolumesComplete, r.pending.Volumes = true, report.Volumes
+	}
+	r.pending.Events = appendBounded(report.Events, r.pending.Events, container.MaxEventsPerReport)
+	r.pending.Stats = appendBounded(report.Stats, r.pending.Stats, container.MaxStatsPerReport)
+}
+
+// markReplayed marque ce qui a attendu une reconnexion : le serveur
+// l'écrit sans y voir du neuf.
+func (r *reports) markReplayed() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.pending.Events {
+		r.pending.Events[i].Replayed = true
+	}
+}

@@ -16,9 +16,9 @@ import {
   withKeyringRecipient,
 } from "./anchors";
 
-// La réponse figée de la fiche d'une machine (internal/server/testdata) : le
+// La réponse figée de la fiche d'une machine (internal/edge/server/testdata) : le
 // registre du serveur y est écrit, type par type.
-const goldenFile = import.meta.glob<string>("../../../internal/server/testdata/machine.golden.json", { eager: true, import: "default", query: "?raw" });
+const goldenFile = import.meta.glob<string>("../../../internal/edge/server/testdata/machine.golden.json", { eager: true, import: "default", query: "?raw" });
 
 test("les types d'ancre du front sont ceux du registre du serveur, dans son ordre", () => {
   const golden = JSON.parse(Object.values(goldenFile)[0] ?? "{}") as { agent: { anchors: AgentAnchors } };

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/brand"
-	"github.com/ldesfontaine/opencloud/internal/wait/waittest"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
 )
 
 const exportedYAML = "# Annuaire\nversion: 1\nmachines:\n  - name: opencloud\n"

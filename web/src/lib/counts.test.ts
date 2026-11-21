@@ -5,11 +5,11 @@ import type { Counts } from "../api/counts";
 import type { JobsResponse } from "../api/jobs";
 import type { ProbesResponse } from "../api/probes";
 import type { Session } from "../api/session";
-import countsGolden from "../../../internal/server/testdata/counts.golden.json";
-import jobsGolden from "../../../internal/server/testdata/jobs.golden.json";
-import probesGolden from "../../../internal/server/testdata/probes.golden.json";
-import containersGolden from "../../../internal/server/testdata/containers.golden.json";
-import sessionGolden from "../../../internal/server/testdata/session.golden.json";
+import countsGolden from "../../../internal/edge/server/testdata/counts.golden.json";
+import jobsGolden from "../../../internal/edge/server/testdata/jobs.golden.json";
+import probesGolden from "../../../internal/edge/server/testdata/probes.golden.json";
+import containersGolden from "../../../internal/edge/server/testdata/containers.golden.json";
+import sessionGolden from "../../../internal/edge/server/testdata/session.golden.json";
 import { read, soonest } from "./certificates";
 import { attentionStatuses } from "./jobs";
 import { probeNeedsAttention } from "./probes";
@@ -26,7 +26,7 @@ const containers = (containersGolden as ContainersResponse).containers;
 const probes = (probesGolden as ProbesResponse).probes;
 const jobs = (jobsGolden as JobsResponse).jobs;
 const session = sessionGolden as Session;
-// L'instant des fixtures : testNow de internal/server.
+// L'instant des fixtures : testNow de internal/edge/server.
 const now = Date.parse("2026-09-12T12:00:00Z");
 
 test("containers : ce que la pastille dit défaillant, la barre le compte", () => {

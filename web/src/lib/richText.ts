@@ -1,6 +1,6 @@
 // Un texte du catalogue peut porter des renvois de menu, que le serveur écrit
 // en lien Markdown ([Paramètres → E-mails](/parametres#e-mails), voir
-// internal/lang/links.go). Seuls les chemins de l'interface passent : une
+// internal/kit/lang/links.go). Seuls les chemins de l'interface passent : une
 // adresse extérieure reste du texte.
 export type TextPart = { kind: "text"; text: string } | { kind: "link"; label: string; to: string };
 

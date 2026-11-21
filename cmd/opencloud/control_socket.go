@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/brand"
 )
 
 // controlSocketMode : seul le compte du service, ou root, s'y connecte.

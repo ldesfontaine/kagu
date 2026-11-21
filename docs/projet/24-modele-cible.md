@@ -1087,7 +1087,7 @@ vers l'annuaire. Ce que le code a tranché en l'écrivant :
 
 ## 8. Ce que l'annuaire (4a/7) a fixé
 
-Le paquet `internal/manifest` écrit et relit le fichier de la section 3, sans
+Le paquet `internal/view/manifest` écrit et relit le fichier de la section 3, sans
 rien appliquer. Ce que le code a tranché en l'écrivant, et que la 4b lit :
 
 | Décision | Pourquoi |
@@ -1143,7 +1143,7 @@ code a tranché :
 | **Un groupe fait seulement d'orphelins n'est pas adoptable** ; `Propose` répond `ErrContainerLabelled` (409) et le représentant d'un groupe mixte est le premier conteneur sans label | L'unité qu'on créerait pour lui ne le rattacherait pas : le label continuerait de gagner |
 | **`ProposeAll` ne construit que le socle d'une découverte** : un service par groupe adoptable non ignoré, nom unique par machine, `needs_review` *(retiré le 21/10, section 17)* et `declared_by` ne sont pas construits | L'export avec propositions s'en sert aujourd'hui ; la découverte qui écrirait toute seule viendra plus tard et devra refaire le même calcul |
 | **`export -propose` est un fichier à relire, jamais une écriture** : les entrées nouvelles sont sans `id`, commentées, triées ; sans `-propose`, les octets sont ceux d'avant | `TestExport_ProposedFileGivesAnApplicablePlan` : le fichier proposé donne un plan applicable avec le vrai `BuildPlan` |
-| **Le préfixe des labels dérive de `ID`** ; le catalogue le dit par `{label_prefix}`, jamais en littéral | `TestNameOnlyInBrand` interdit le nom hors de `internal/brand` ; un renommage coûte un changement dans chaque Compose étiqueté |
+| **Le préfixe des labels dérive de `ID`** ; le catalogue le dit par `{label_prefix}`, jamais en littéral | `TestNameOnlyInBrand` interdit le nom hors de `internal/kit/brand` ; un renommage coûte un changement dans chaque Compose étiqueté |
 | **Trois colonnes, pas une table** : `containers.label_service`, `label_unit` et `label_invalid`, vides par défaut (migration `027_container_labels.sql`) | Seuls ces deux labels servent au rapprochement ; garder tous les labels stockerait ce que l'opérateur n'a pas demandé |
 
 ## 11. Ce que les plans de suppression ont fixé
@@ -1166,7 +1166,7 @@ le code a tranché :
 
 ## 12. Ce que le journal d'audit a fixé
 
-La table `audit_events` et le paquet `internal/audit` (migration
+La table `audit_events` et le paquet `internal/kit/audit` (migration
 `029_audit.sql`). Le fonctionnement est dans `22-fonctionnement.md`, « Le
 journal d'audit ». Ce que le code a tranché, et ses écarts au diagramme :
 
@@ -1256,7 +1256,7 @@ code a tranché, et ses écarts au diagramme :
 
 La migration `002_actions.sql` (`action_runs`, `run_logs`,
 `agents.server_key_fingerprint`, `agents.last_order_seq`) et le paquet
-`internal/action`. Le fonctionnement est dans `22-fonctionnement.md`,
+`internal/gesture/action`. Le fonctionnement est dans `22-fonctionnement.md`,
 « Comment un ordre part et revient ». Ce que le code a tranché, et ses
 écarts au diagramme :
 
@@ -1329,7 +1329,7 @@ a tranché, et ses écarts au diagramme :
 ## 20. Ce que la sauvegarde de la base a fixé
 
 La migration `006_backups.sql` (`backup_keyring`, `backup_destinations`,
-`backup_plans`) et le paquet `internal/backup`. Le fonctionnement est dans
+`backup_plans`) et le paquet `internal/domain/backup`. Le fonctionnement est dans
 `22-fonctionnement.md`, « Comment une sauvegarde se fait ». Ce que le code a
 tranché, et ses écarts au diagramme :
 
@@ -1351,7 +1351,7 @@ tranché, et ses écarts au diagramme :
 ## 21. Ce que le déploiement a fixé
 
 La migration `007_deploy.sql` (`service_units.data_path`,
-`action_runs.service_id`) et le paquet `internal/deploy`. Le fonctionnement est
+`action_runs.service_id`) et le paquet `internal/domain/deploy`. Le fonctionnement est
 dans `22-fonctionnement.md`, « Comment un service se déploie ». Ce que le code
 a tranché, et ses écarts au diagramme :
 
@@ -1406,7 +1406,7 @@ a tranché, et ses écarts au diagramme :
 | **Les lignes d'audit `mcp` restent** | Le journal est en ajout seul. Les acteurs et sortes d'objet d'avant se lisent (listes `Legacy…` de `audit/event.go`), avec un libellé « ancien », et ne s'écrivent plus |
 | **`mcp_url` vit dans `config.toml`, pas dans la base**, vide par défaut | C'est une adresse d'installation comme `listen`. Vide : la carte « Agent IA » dit `not_configured` et suggère l'adresse |
 | **Aucune table pour mcp-maison** | openCloud ne retient rien de lui : il interroge son `/health` à l'ouverture de la carte (3 s, sans suivre une redirection) et affiche ce qu'il a trouvé |
-| **Le préfixe des outils se compte par `brand.ID`** | Le nom du produit reste dans `internal/brand` ; le groupe d'outils absent se dit `group_missing` |
+| **Le préfixe des outils se compte par `brand.ID`** | Le nom du produit reste dans `internal/kit/brand` ; le groupe d'outils absent se dit `group_missing` |
 
 ## 24. Ce que l'état de l'agent hors du serveur a fixé
 
@@ -1449,7 +1449,7 @@ code a tranché (#146, décision 2 de `23`) :
 | **L'unité lance l'agent sous ce compte** (`User=`, `Group=`) sans `SupplementaryGroups=docker` ; `StateDirectory=` reste | systemd lit les groupes du compte au démarrage : le groupe ajouté par `usermod` suit ; un `SupplementaryGroups=` sur un groupe absent empêcherait l'unité de démarrer sur une machine sans Docker. `StateDirectory=` crée l'état au nom de `User=` et reprend le propriétaire, récursivement, de ce qu'il contient s'il diffère | Un groupe ajouté après le démarrage ne se voit qu'au redémarrage (`docker_denied` jusque-là). Le retour de root au compte dédié (ou l'inverse) repasse tout l'état d'un coup : voulu |
 | **Root reste possible, par un drop-in** `opencloud-agent.service.d/root.conf` (`User=` et `Group=` vides) | Qui y tient le garde, en connaissance de cause (l'agent a la machine) ; une unité, un drop-in, pas deux unités à tenir | La préparation du compte n'est pas faite pour lui : un état au compte `opencloud-agent` sous un agent root est refusé (`state dir is not safe`), la doc donne des commandes à part |
 | **La ligne d'installation appelle le binaire de l'état** : `sudo -u opencloud-agent /var/lib/opencloud-agent/bin/current agent -server …`, pour toutes les machines, la machine openCloud comprise (P3, *à valider par Lucas*) ; **plus de lien** `/usr/local/bin/opencloud → bin/current` | Root qui lancerait `opencloud` exécuterait ce que le compte de l'agent a posé et peut remplacer : une escalade sur une machine **sans** Docker. Le chemin vit dans `brand.AgentCurrentPath` | La commande `opencloud` n'existe plus sur la machine d'un agent : `runuser -u opencloud-agent -- /var/lib/opencloud-agent/bin/current version`, jamais en root. Le message de l'agent qui cite la ligne d'installation (`agent.token_missing`) dit la même |
-| **La préparation est une seconde ligne de commandes que le serveur fabrique** (`installPreparation`, rendue avec le jeton dans `preparation`) : le compte, l'état à lui, puis **sous le compte** (`runuser -u opencloud-agent --`) `bin/` et le binaire (`/tmp/opencloud`, ou `/usr/local/bin/opencloud` pour la machine openCloud) sous la version du serveur avec son lien `current` ; si `backup.produce` est coché, **six lignes de plus** (le dossier `produce/` sous le compte, le script de root `opencloud-vzdump`, la règle `sudoers` écrite d'abord sous un nom à point que `sudo` ignore, jugée par `visudo -cf` puis renommée, le dossier du drop-in, `produce.conf` avec `NoNewPrivileges=false`, `systemctl daemon-reload`), dont les textes sont des constantes de `internal/machine/produce.go` que la documentation cite à l'octet ; enfin un `test ! -L <dossier> && install -d` au nom du compte par dossier de droit (racine des services en `0755`, `backup.receive` en `0700`, `files.write` en `0755`), chacun une fois, et sous le compte un dossier de droit qui est sous un autre dossier du compte | Le serveur sait quels droits sont cochés : l'opérateur n'oublie pas un dossier (`path_denied` sinon), et le binaire est celui du protocole du serveur (`version.Number()`). La ligne se rejoue sur une machine déjà préparée (Changer les droits), où le compte, peut-être compromis, possède son état : `install -d` suit un lien et donne sa cible, root n'agit donc sur aucun nom que le compte contrôle (relecture de #257 : `bin/` remplacé par un lien vers `/etc/cron.d` était donné au compte). Aucune protection de shell n'est nécessaire : seuls des constantes et des chemins de droits y entrent (`ValidCapabilityPath`, revérifié en fabriquant les lignes), et des tests le vérifient, dont un `sh` réel qui lit chaque mot ; le jeton n'y paraît jamais | `useradd` échoue sur un compte qui existe : la doc dit d'ignorer cette erreur et de rejouer la ligne l'agent arrêté (un dossier de droit de premier niveau dont le parent est au compte reste exposé au court instant entre `test` et `install`) ; un dossier de droit qui est un lien n'est pas préparé ; le lien `current` n'est posé que si `install` a réussi (jamais un lien vers un fichier absent). `-root-dir` n'est pas connu du serveur : la racine est celle par défaut. **Avec `backup.produce`, root par une porte étroite** : la règle `sudo` ne nomme que le script, mais `vzdump --script` lance un crochet en root, donc un agent compromis qui peut appeler le script a root sur l'hôte (comme avec le groupe `docker`), et `NoNewPrivileges=false` est le seul desserrement de l'unité |
+| **La préparation est une seconde ligne de commandes que le serveur fabrique** (`installPreparation`, rendue avec le jeton dans `preparation`) : le compte, l'état à lui, puis **sous le compte** (`runuser -u opencloud-agent --`) `bin/` et le binaire (`/tmp/opencloud`, ou `/usr/local/bin/opencloud` pour la machine openCloud) sous la version du serveur avec son lien `current` ; si `backup.produce` est coché, **six lignes de plus** (le dossier `produce/` sous le compte, le script de root `opencloud-vzdump`, la règle `sudoers` écrite d'abord sous un nom à point que `sudo` ignore, jugée par `visudo -cf` puis renommée, le dossier du drop-in, `produce.conf` avec `NoNewPrivileges=false`, `systemctl daemon-reload`), dont les textes sont des constantes de `internal/fact/machine/produce.go` que la documentation cite à l'octet ; enfin un `test ! -L <dossier> && install -d` au nom du compte par dossier de droit (racine des services en `0755`, `backup.receive` en `0700`, `files.write` en `0755`), chacun une fois, et sous le compte un dossier de droit qui est sous un autre dossier du compte | Le serveur sait quels droits sont cochés : l'opérateur n'oublie pas un dossier (`path_denied` sinon), et le binaire est celui du protocole du serveur (`version.Number()`). La ligne se rejoue sur une machine déjà préparée (Changer les droits), où le compte, peut-être compromis, possède son état : `install -d` suit un lien et donne sa cible, root n'agit donc sur aucun nom que le compte contrôle (relecture de #257 : `bin/` remplacé par un lien vers `/etc/cron.d` était donné au compte). Aucune protection de shell n'est nécessaire : seuls des constantes et des chemins de droits y entrent (`ValidCapabilityPath`, revérifié en fabriquant les lignes), et des tests le vérifient, dont un `sh` réel qui lit chaque mot ; le jeton n'y paraît jamais | `useradd` échoue sur un compte qui existe : la doc dit d'ignorer cette erreur et de rejouer la ligne l'agent arrêté (un dossier de droit de premier niveau dont le parent est au compte reste exposé au court instant entre `test` et `install`) ; un dossier de droit qui est un lien n'est pas préparé ; le lien `current` n'est posé que si `install` a réussi (jamais un lien vers un fichier absent). `-root-dir` n'est pas connu du serveur : la racine est celle par défaut. **Avec `backup.produce`, root par une porte étroite** : la règle `sudo` ne nomme que le script, mais `vzdump --script` lance un crochet en root, donc un agent compromis qui peut appeler le script a root sur l'hôte (comme avec le groupe `docker`), et `NoNewPrivileges=false` est le seul desserrement de l'unité |
 | **Une machine en root se migre sans `chown -R` sur la racine des services** (P4, *à valider par Lucas*) : l'état et le dossier des sauvegardes se reprennent en entier (`chown -hR`), la racine, son témoin et, pour chaque service, son dossier, `compose.yml`, `.env` et `data/` seulement ; chaque dossier de `files.write` lui-même | `data/<unité>` appartient souvent à l'UID du conteneur (Postgres : 999) : le reprendre casserait le service. L'agent n'a besoin que d'écrire ce qu'il réécrit (le dossier, `compose.yml` et `.env` par renommage, `data/` pour y créer une unité) et de lire l'`.env`. `-h` : un lien trouvé dans l'arbre n'est jamais suivi ; un dossier de service, de droit ou la racine qui est un lien est sauté (`test ! -L`) : la procédure se rejoue sans rien donner de plus | Un fichier de plus que Compose lirait dans le dossier du service (`env_file:`) reste à root : à rendre lisible. Les dossiers d'un `files.write` sont repris sans leur contenu ; un droit sur un dossier système en fait le dossier de l'agent. Pas de ré-enrôlement : identité, droits et rang gardés |
 
 ## 26. Ce que le retard dans l'historique a fixé
@@ -1482,9 +1482,9 @@ se relèvent » (#152, étape 1, lecture seule). Ce que le code a tranché :
 | --- | --- | --- |
 | **Rien ne sort d'un fichier que l'empreinte, le type, la taille, un commentaire borné et des noms d'option** (décision 1, *à valider par Lucas*) | Un `authorized_keys` est un fichier d'inconnu : une option `command=` y porte parfois un secret. Ce qui n'a pas de forme fermée ne sort pas | On ne voit pas la valeur d'un `from=` : « restreinte à des adresses » se lit, pas lesquelles |
 | **Le serveur refuse un relevé hors bornes en entier** (décision 4) | Un pair peut mentir : mieux vaut garder l'ancien relevé qu'un relevé à moitié cru | Un seul champ hors borne fait perdre le relevé de ce passage ; l'agent redit son relevé quand il change ou à la prochaine ouverture du flux, la section refusée se lit dans l'en-tête |
-| **512 clés par machine, 64 par compte, 64 comptes** (décision 5) | Un signal pèse au plus 1 Mio : 64 comptes de 64 clés n'y tiennent pas. Chaque borne vit à un seul endroit (`internal/sshkeys`), lue par l'agent et par le serveur | Un compte très fourni est tronqué, et le relevé le dit ; il n'y a pas de page suivante |
+| **512 clés par machine, 64 par compte, 64 comptes** (décision 5) | Un signal pèse au plus 1 Mio : 64 comptes de 64 clés n'y tiennent pas. Chaque borne vit à un seul endroit (`internal/fact/sshkeys`), lue par l'agent et par le serveur | Un compte très fourni est tronqué, et le relevé le dit ; il n'y a pas de page suivante |
 | **Un relevé remplace l'ancien en entier** (décision 6) | Une clé retirée d'une machine doit disparaître sans règle de purge ; la clé primaire `(machine, compte, fichier, empreinte)` suffit | Pas d'historique : on ne sait pas depuis quand une clé est là, ni quand elle est partie |
-| **Les trois tables restent dans `internal/store`**, un fichier de plus (`sshkeys.go`) (décision 7) | Le store porte déjà toutes les tables, une par domaine ; un paquet de plus n'aurait rien isolé | `internal/store` compte une table de plus de l'écosystème : 52 tables (51 et `schema_migrations`) |
+| **Les trois tables restent dans `internal/edge/store`**, un fichier de plus (`sshkeys.go`) (décision 7) | Le store porte déjà toutes les tables, une par domaine ; un paquet de plus n'aurait rien isolé | `internal/edge/store` compte une table de plus de l'écosystème : 52 tables (51 et `schema_migrations`) |
 
 ## 28. Ce que plusieurs plans de sauvegarde ont fixé
 
@@ -1525,4 +1525,4 @@ hôte Proxmox se lit » (#266, étape 1 : lecture seule). Ce que le code a tranc
 | **L'empreinte juge seule quand elle est donnée** (`InsecureSkipVerify` et `VerifyConnection`) | Un Proxmox livre un certificat auto-signé : exiger le magasin du système le rendrait inutilisable sur un LAN | L'opérateur copie l'empreinte une fois ; un certificat renouvelé la change |
 | **Rapprochement par `hostname` égal au nom de la VM**, exact puis casse seulement si une seule machine convient | Le nom d'hôte est le seul fait commun que Proxmox et l'agent connaissent tous deux | Une VM dont le nom diffère du nom d'hôte n'est pas rapprochée : rien ne s'invente |
 | **Le retrait est une action** (`POST …/actions/remove-proxmox`), pas un `DELETE …/proxmox` | `DELETE /api/machines/{id}/proxmox` recoupe `DELETE /api/machines/tokens/{id}` sur `tokens/proxmox` : le multiplexeur de Go refuse deux motifs dont aucun n'est plus précis | Un verbe de plus à connaître que la symétrie `PUT`/`DELETE` |
-| **Les trois tables restent dans `internal/store`**, un fichier de plus (`proxmox.go`) | Le store porte déjà toutes les tables, une par domaine | `internal/store` compte trois tables de plus : 55 tables |
+| **Les trois tables restent dans `internal/edge/store`**, un fichier de plus (`proxmox.go`) | Le store porte déjà toutes les tables, une par domaine | `internal/edge/store` compte trois tables de plus : 55 tables |

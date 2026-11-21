@@ -1,0 +1,264 @@
+package server
+
+import (
+	"context"
+	"net/http"
+	"time"
+
+	"github.com/ldesfontaine/opencloud/internal/domain/alert"
+	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
+	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/opencloud/internal/fact/probe"
+	"github.com/ldesfontaine/opencloud/internal/gesture/verb"
+	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/opencloud/internal/kit/module"
+)
+
+// Ce que le front lit au démarrage : la version, la langue réglée et les
+// seuils du produit.
+type sessionResponse struct {
+	Version string `json:"version"`
+	// Le commit du binaire ; vide quand il n'est pas construit par make.
+	Commit    string   `json:"commit"`
+	Language  string   `json:"language"`
+	Languages []string `json:"languages"`
+	// Les jours à partir desquels un certificat se signale. Servis ici
+	// pour que le compteur de la vue d'ensemble et la couleur d'une ligne
+	// basculent sur le même chiffre, tenu à un seul endroit.
+	Certificates certificateThresholds `json:"certificate_thresholds"`
+	// Les pourcentages à partir desquels une ressource alerte, puis
+	// s'aggrave, tels que réglés sous Paramètres : les jauges basculent sur
+	// le même chiffre que l'alerte. Une machine qui porte sa surcharge la
+	// dit sur sa fiche.
+	Thresholds map[string]resourceThresholds `json:"resource_thresholds"`
+	// Les routes d'écriture que le registre des verbes ouvre aux jetons : le
+	// front y reconnaît les boutons qui portent la puce « MCP ».
+	Verbs []sessionVerb `json:"verbs"`
+	// Les rôles qu'une machine peut recevoir, avec les droits qu'ils cochent
+	// d'avance : l'ajout d'une machine les propose, le préréglage n'est écrit
+	// qu'ici (machine.RolePreset).
+	Roles []sessionRole `json:"roles"`
+}
+
+type sessionRole struct {
+	ID           string   `json:"id"`
+	Capabilities []string `json:"capabilities"`
+}
+
+type sessionVerb struct {
+	ID    string `json:"id"`
+	Route string `json:"route"`
+}
+
+type resourceThresholds struct {
+	Attention int `json:"attention"`
+	Danger    int `json:"danger"`
+}
+
+func resourceThresholdsToJSON(rules []alert.Applied) map[string]resourceThresholds {
+	thresholds := make(map[string]resourceThresholds, len(rules))
+	for _, rule := range rules {
+		thresholds[string(rule.Resource)] = resourceThresholds{Attention: rule.Attention, Danger: rule.Danger}
+	}
+	return thresholds
+}
+
+type certificateThresholds struct {
+	Warning int `json:"warning"`
+	Danger  int `json:"danger"`
+}
+
+type languageRequest struct {
+	Language string `json:"language"`
+}
+
+// Les compteurs de la barre latérale et de la vue d'ensemble.
+type countsResponse struct {
+	Machines   machineCounts   `json:"machines"`
+	Jobs       jobCounts       `json:"jobs"`
+	Containers containerCounts `json:"containers"`
+	Probes     jobCounts       `json:"probes"`
+	// Les certificats vus par les sondes actives : combien, combien
+	// approchent de leur fin, et la plus proche échéance.
+	Certificates certificateCounts `json:"certificates"`
+	// Les incidents ouverts sur la page de statut.
+	Status statusCounts `json:"status"`
+	// Les alertes ouvertes, et celles que personne n'a lues.
+	Alerts alertCountsJSON `json:"alerts"`
+	// Les modules de l'installation et s'ils sont configurés. Ici et non dans
+	// la session : la session se lit une fois, et le menu doit suivre le
+	// premier objet créé.
+	Modules []moduleStateJSON `json:"modules"`
+}
+
+type moduleStateJSON struct {
+	ID         string `json:"id"`
+	Configured bool   `json:"configured"`
+}
+
+type statusCounts struct {
+	OpenIncidents int `json:"open_incidents"`
+}
+
+type certificateCounts struct {
+	Total int `json:"total"`
+	// Deux comptes disjoints : ce qui approche de sa fin, et ce qui l'a
+	// déjà passée.
+	Expiring int `json:"expiring"`
+	Expired  int `json:"expired"`
+	// La plus proche échéance à venir ; nulle quand il n'y en a aucune.
+	SoonestExpiresAt *time.Time `json:"soonest_expires_at"`
+}
+
+type machineCounts struct {
+	Total  int `json:"total"`
+	Online int `json:"online"`
+}
+
+type jobCounts struct {
+	Total     int `json:"total"`
+	Attention int `json:"attention"`
+}
+
+// Les conteneurs : ceux qui vont mal, et ceux qui ont une image plus
+// récente à tirer, hors épinglés.
+type containerCounts struct {
+	Total     int `json:"total"`
+	Attention int `json:"attention"`
+	// Ceux dont la machine ne signale plus (machine.Observed) : ni actifs ni
+	// à traiter, la vue d'ensemble ne dit pas « tous actifs » d'eux.
+	Unknown int `json:"unknown"`
+	Updates int `json:"updates"`
+}
+
+func (s *Server) session(w http.ResponseWriter, r *http.Request) {
+	language, err := s.language(r.Context())
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	rules, err := s.alerts.Rules(r.Context(), "")
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	languages := httpx.ConvertAll(lang.Codes(), func(code lang.Code) string { return string(code) })
+	s.writeAPI(w, http.StatusOK, sessionResponse{
+		Version:      s.version,
+		Commit:       s.commit,
+		Language:     string(language),
+		Languages:    languages,
+		Certificates: certificateThresholds{Warning: probe.CertificateWarning, Danger: probe.CertificateDanger},
+		Thresholds:   resourceThresholdsToJSON(rules),
+		Verbs: httpx.ConvertAll(verb.Default.All(), func(offered verb.Verb) sessionVerb {
+			return sessionVerb{ID: offered.ID, Route: offered.Route}
+		}),
+		Roles: httpx.ConvertAll(machine.Roles(), func(offered machine.Role) sessionRole {
+			return sessionRole{
+				ID:           string(offered),
+				Capabilities: httpx.ConvertAll(machine.RolePreset(offered), func(right machine.Capability) string { return right.Name }),
+			}
+		}),
+	})
+}
+
+// Le commutateur de langue : mémorise le choix ; le front recharge son
+// catalogue sans recharger la page.
+func (s *Server) setLanguage(w http.ResponseWriter, r *http.Request) {
+	var request languageRequest
+	if !s.readAPI(w, r, &request) {
+		return
+	}
+	// Le 400 reste ici ; le refus du composant n'est qu'un filet.
+	code, ok := lang.Parse(request.Language)
+	if !ok {
+		s.apiRefuse(w, http.StatusBadRequest, "error.unknown_language")
+		return
+	}
+	err := s.settings.SetLanguage(r.Context(), code)
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Le catalogue d'une langue, tel quel : les clés pointées et leurs chaînes.
+// Les formats %s et %d restent au front, qui les remplit dans l'ordre.
+func (s *Server) catalogAPI(w http.ResponseWriter, r *http.Request) {
+	code, ok := lang.Parse(r.PathValue("code"))
+	if !ok {
+		s.apiNotFound(w)
+		return
+	}
+	catalog := s.catalogs.For(code)
+	strings := make(map[string]string, len(catalog.Keys()))
+	for _, key := range catalog.Keys() {
+		strings[key] = catalog.Get(key)
+	}
+	s.writeAPI(w, http.StatusOK, strings)
+}
+
+func (s *Server) counts(w http.ResponseWriter, r *http.Request) {
+	response, err := s.countsOf(r.Context())
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	s.writeAPI(w, http.StatusOK, response)
+}
+
+// countsOf assemble les compteurs ; l'API les rend tels quels.
+func (s *Server) countsOf(ctx context.Context) (countsResponse, error) {
+	total, online, err := s.machines.Count(ctx)
+	if err != nil {
+		return countsResponse{}, err
+	}
+	jobs, attention, err := s.reader.CountHeartbeats(ctx)
+	if err != nil {
+		return countsResponse{}, err
+	}
+	containers, failing, unknown, err := s.reader.CountContainers(ctx, machine.ObservedSince(s.now()))
+	if err != nil {
+		return countsResponse{}, err
+	}
+	probes, down, err := s.reader.CountProbes(ctx)
+	if err != nil {
+		return countsResponse{}, err
+	}
+	certificates, err := s.probes.Certificates(ctx)
+	if err != nil {
+		return countsResponse{}, err
+	}
+	updates, err := s.reader.CountContainerUpdates(ctx)
+	if err != nil {
+		return countsResponse{}, err
+	}
+	openIncidents, err := s.status.CountOpenIncidents(ctx)
+	if err != nil {
+		return countsResponse{}, err
+	}
+	alerts, err := s.reader.CountAlerts(ctx)
+	if err != nil {
+		return countsResponse{}, err
+	}
+	modules, err := s.reader.InstallationModules(ctx)
+	if err != nil {
+		return countsResponse{}, err
+	}
+	return countsResponse{
+		Machines:     machineCounts{Total: total, Online: online},
+		Jobs:         jobCounts{Total: jobs, Attention: attention},
+		Containers:   containerCounts{Total: containers, Attention: failing, Unknown: unknown, Updates: updates},
+		Probes:       jobCounts{Total: probes, Attention: down},
+		Certificates: certificatesToJSON(certificates),
+		Status:       statusCounts{OpenIncidents: openIncidents},
+		Alerts:       alertCountsJSON{Open: alerts.Open, Unacknowledged: alerts.Unacknowledged},
+		Modules: httpx.ConvertAll(modules, func(state module.State) moduleStateJSON {
+			return moduleStateJSON{ID: string(state.ID), Configured: state.Configured}
+		}),
+	}, nil
+}
+
+func certificatesToJSON(counted probe.Certificates) certificateCounts {
+	return certificateCounts{
+		Total: counted.Total, Expiring: counted.Expiring, Expired: counted.Expired,
+		SoonestExpiresAt: httpx.TimeOrNil(counted.Soonest),
+	}
+}
