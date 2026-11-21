@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/ldesfontaine/opencloud/internal/kit/brand"
 	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
 )
@@ -874,6 +875,26 @@ func TestEnvSecrets_RefusedEnvIsReadCautiously(t *testing.T) {
 	for _, leaked := range []string{"bonne-valeur", "jamais", "secret-apres"} {
 		if strings.Contains(logs.String(), leaked) {
 			t.Errorf("the log carries a value %q: %q", leaked, logs.String())
+		}
+	}
+}
+
+// Compose cite la ligne refusée avec %q (compose-go, dotenv/parser.go) : un
+// secret avec « \ » ou « " » sur une ligne sans « = » sort sous sa forme
+// citée. Elle se masque comme la valeur brute.
+func TestEnvSecrets_MasksTheQuotedFormComposeWrites(t *testing.T) {
+	const secondHalf = `mZ9\vT4"wR8nLq`
+	env := "DB_HOST=db\nDB_PASSWORD=Kx7pQ2aa\n" + secondHalf + "\n"
+	noEnvironment := func(string) (string, bool) { return "", false }
+	_, err := dotenv.UnmarshalBytesWithLookup([]byte(env), noEnvironment)
+	if err == nil {
+		t.Fatal("dotenv doit refuser ce fichier, sinon le test ne prouve rien")
+	}
+	composeLine := "failed to read /srv/app/.env: " + err.Error()
+	got := redactText(composeLine, envSecrets(env, discardLogger), redactedText)
+	for _, fragment := range []string{"mZ9", "vT4", "wR8nLq"} {
+		if strings.Contains(got, fragment) {
+			t.Errorf("le fragment %q de la ligne secrète sort en clair : %s", fragment, got)
 		}
 	}
 }

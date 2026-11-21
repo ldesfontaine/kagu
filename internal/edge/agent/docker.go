@@ -576,7 +576,7 @@ func envOf(dir *os.Root, job dockerJob) string {
 // Compose voit (commentaire coupé, guillemets ôtés, ${A} interpolé). Une valeur
 // sur plusieurs lignes compte entière et ligne par ligne, car la sortie de
 // Compose les cite séparément. Chaque valeur d'au moins minSecretBytes se
-// masque aussi en URL et en base64.
+// masque aussi en URL, en base64 et citée comme Compose la cite (%q).
 //
 // Si dotenv refuse le fichier, Compose le refusera aussi en citant ses lignes :
 // la lecture prudente masque tout ce qui suit le « = » de chaque ligne.
@@ -592,6 +592,7 @@ func envSecrets(env string, logger *slog.Logger) []string {
 			url.PathEscape(value),
 			base64.StdEncoding.EncodeToString([]byte(value)),
 			base64.URLEncoding.EncodeToString([]byte(value)),
+			quotedWithoutQuotes(value),
 		} {
 			if !slices.Contains(secrets, form) {
 				secrets = append(secrets, form)
@@ -619,6 +620,13 @@ func envSecrets(env string, logger *slog.Logger) []string {
 	}
 	slices.SortFunc(secrets, func(a, b string) int { return len(b) - len(a) })
 	return secrets
+}
+
+// quotedWithoutQuotes rend la valeur comme Compose la cite dans ses erreurs
+// (%q), sans les guillemets extérieurs.
+func quotedWithoutQuotes(value string) string {
+	quoted := strconv.Quote(value)
+	return quoted[1 : len(quoted)-1]
 }
 
 // cautiousEnvValues lit un .env que dotenv refuse : tout ce qui suit le
