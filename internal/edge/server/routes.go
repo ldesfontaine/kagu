@@ -352,12 +352,12 @@ func (s *Server) mux() *http.ServeMux {
 		}
 		switch {
 		case isStreamRoute(route.method, route.pattern):
-			handler = liftWriteDeadline(handler)
+			handler = liftDeadlines(handler)
 		case isTransferRoute(route.method, route.pattern):
-			handler = liftWriteDeadline(cutIfIdle(transferIdleTimeout, handler))
+			handler = liftDeadlines(cutIfIdle(transferIdleTimeout, handler))
 		}
 		if bound, ok := ownBoundRoutes[route.method+" "+route.pattern]; ok {
-			handler = boundWriteTo(bound, handler)
+			handler = boundTo(bound, handler)
 		}
 		pattern := route.pattern
 		if route.method != anyMethod {

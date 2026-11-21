@@ -153,8 +153,8 @@ func (s *Server) requireOperator(next http.HandlerFunc, firstSetup bool, access 
 // état dans son contexte : les écritures qui accordent une autorité et les
 // flux s'y comparent à l'état du moment.
 //
-// Sans ReadTimeout, un client peut retenir le corps d'une écriture aussi
-// longtemps qu'il veut : un jugement rendu à l'arrivée des en-têtes vaudrait
+// Un client peut retenir le corps d'une écriture jusqu'à l'échéance de
+// lecture (boundRequestRead) : un jugement rendu à l'arrivée des en-têtes vaudrait
 // encore une fois l'authentification activée. Le corps est donc lu en entier,
 // puis l'état relu ; s'il a changé entre-temps, 409. La lecture vient après
 // le jugement, et non avant, pour qu'un anonyme face à une interface gardée

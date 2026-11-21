@@ -216,6 +216,7 @@ func runServe(args []string) error {
 	options.PublicLive = publicBus
 	options.ForwardSecret = forwardSecret
 	options.ResponseWriteTimeout = cfg.WriteTimeout()
+	options.RequestReadTimeout = cfg.WriteTimeout()
 	options.ConnectionsPerSource = cfg.MaxConnectionsPerSource
 	server, err := server.New(options)
 	if err != nil {
@@ -315,14 +316,14 @@ func openStateDir(path string) (*os.Root, error) {
 // cours au même instant voit aussi son contexte annulé : sa transaction
 // est annulée, l'agent ou le navigateur la rejoue.
 //
-// Ni ReadTimeout ni WriteTimeout : celui d'écriture couperait aussi les
-// flux. La durée d'écriture se pose route par route (server/limits.go), et
+// Ni ReadTimeout ni WriteTimeout : ils couperaient aussi les flux. Les
+// durées de lecture et d'écriture se posent route par route (server/limits.go), et
 // les connexions se comptent à l'acceptation (server.LimitConnections).
 //
 // Pas de ReadTimeout : net/http annule le contexte d'une requête dont la
 // lecture expire, même une fois le corps lu, ce qui couperait tous les
-// flux. Un corps lent reste borné en taille (1 Mio) et Traefik, devant,
-// tient ses propres délais de lecture.
+// flux. Un corps lent est borné en taille (1 Mio) et, par route, en durée
+// (boundRequestRead).
 func newHTTPServer(addr string, handler http.Handler) *http.Server {
 	base, cancelBase := context.WithCancel(context.Background())
 	httpServer := &http.Server{

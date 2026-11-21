@@ -4814,6 +4814,7 @@ Le serveur HTTP borne ce qu'un client garde ouvert (R-A2-18).
 | Connexions par source | 64 | `max_connections_per_source` | Pair direct : la connexion est fermée à l'acceptation, avant un octet lu. Derrière un mandataire de confiance : `429` sur la requête |
 | Connexions en tout | 1 024 | `max_connections` | La connexion est fermée à l'acceptation |
 | Durée d'écriture d'une réponse hors flux | 30 s | `write_timeout_seconds` | La connexion est coupée si la réponse n'a pas fini de partir |
+| Durée de lecture d'une requête hors flux | 30 s (la même clé) | `write_timeout_seconds` | La connexion est coupée si le corps n'a pas fini d'arriver |
 
 - **La source** se lit selon le pair TCP, avec la liste `trusted_proxies` que
   le mode `forward` et les limiteurs d'adresse utilisent déjà.
@@ -4827,9 +4828,14 @@ Le serveur HTTP borne ce qu'un client garde ouvert (R-A2-18).
   - *Sans `trusted_proxies`* derrière Traefik : tous les clients ont pour
     source l'adresse de Traefik et se partagent les 64 connexions. *Coût :*
     à déclarer dès qu'on met un mandataire devant.
-- **Pas de `WriteTimeout`** sur le serveur : il couperait aussi les flux. La
-  durée se pose en tête de toute route (`boundResponseWrite`) ; trois
-  familles y échappent (`routes.go`) :
+- **Ni `ReadTimeout` ni `WriteTimeout`** sur le serveur : ils couperaient
+  aussi les flux. Les durées se posent en tête de toute route
+  (`boundRequestRead`, `boundResponseWrite`) ; trois familles y échappent
+  (`routes.go`). La lecture est bornée aussi parce que net/http draine le
+  corps que le handler n'a pas lu, après avoir rendu la place du client : un
+  corps au compte-gouttes tiendrait la connexion, hors de toute borne.
+  *Coût :* un corps légitime plus lent que 30 s est coupé ; seuls les
+  transferts en reçoivent de gros, et ils sont à part :
   - *les flux* (`/api/events`, le flux des journaux, le direct de `/statut`,
     `/agent/stream`) : pas de durée, un ping régulier montre un client parti ;
   - *les transferts* (colis, relais restic) : pas de durée, mais coupés quand
@@ -4837,14 +4843,17 @@ Le serveur HTTP borne ce qu'un client garde ouvert (R-A2-18).
     (`transferIdleTimeout`, plus que les 2 minutes où le relais attend la tête
     de la réponse de la cible). Un transfert lent mais vivant, dont chaque
     morceau relance le compte, n'est pas coupé ;
-  - *browse* (`POST …/actions/browse`) : sa propre borne, l'attente de la
-    cible (45 s) plus 15 s de marge pour que sa réponse, un `504` au besoin,
-    parte.
+  - *browse* (`POST …/actions/browse`) : sa propre borne, en lecture comme en
+    écriture, l'attente de la cible (45 s) plus 15 s de marge pour que sa
+    réponse, un `504` au besoin, parte.
 
   *Coût :* une route ajoutée est bornée sans qu'on y pense ; un flux oublié
   dans la liste est coupé à 30 s.
 - **Le journal** de `serve` dit une connexion refusée une fois par minute et
-  par source (`WARN connection refused`, avec la borne atteinte).
+  par source (`WARN connection refused`, avec la borne atteinte), et un
+  `X-Forwarded-For` venu d'un pair absent de `trusted_proxies` une fois par
+  minute et par pair (`WARN X-Forwarded-For ignored`) : l'en-tête est ignoré
+  et tous les clients de ce mandataire se partagent une source.
 - **Pas encore posé** : le plafond de 4 attentes longues `?wait=` par jeton
   vient avec D8 (`GET /api/actions/{id}`).
 
