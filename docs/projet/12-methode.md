@@ -25,6 +25,10 @@
   lisibles dans l'historique.
 - **Rebase sur `dev` avant la PR** si la branche a vieilli, plutôt que des
   commits de fusion dans la branche.
+- **Après un déplacement de fichiers**, `.git-blame-ignore-revs` liste le
+  commit à sauter ; chaque clone le déclare une fois :
+  `git config blame.ignoreRevsFile .git-blame-ignore-revs`. `git blame` ne
+  s'arrête plus sur le déplacement.
 - Deux travaux en parallèle ne se gênent pas : chacun sa branche, le conflit
   se règle dans la PR.
 - Le dépôt est public, mais aucune règle de protection n'est posée sur

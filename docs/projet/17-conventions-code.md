@@ -239,9 +239,9 @@ autre : chacun a sa règle d'import.
    `goldentest`, `testkit`…) n'est importé que par des `_test.go`.
 6. Un paquet vit dans l'un des sept dossiers, nulle part ailleurs.
 
-Le rang se lit **dans le chemin**, sans table à tenir. Aucun test ne tient
-encore ces règles : il viendra à côté de `onedefinition_test.go`, avec une
-table d'exceptions déclarées avec leur raison, vide au départ.
+Le rang se lit **dans le chemin**, sans table à tenir. Les `TestLayers_*`
+(`internal/edge/server/layers_test.go`) tiennent ces règles ; une exception
+s'y déclare avec sa raison, et il n'y en a aucune.
 
 ### Ce que porte un paquet
 
