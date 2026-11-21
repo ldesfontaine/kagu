@@ -467,7 +467,7 @@ func (t dockerTools) restoreAndUp(ctx context.Context, dir *os.Root, root string
 	if err := restoreFiles(dir, marker); err != nil {
 		return nil, err
 	}
-	secrets := envSecrets(envOf(dir, dockerJob{}))
+	secrets := envSecrets(envOf(dir, dockerJob{}), t.logger)
 	lines, err := t.compose.Up(ctx, path.Join(root, marker.Project), marker.Project)
 	tail := redactLines(lines[max(len(lines)-agentSummaryLines*2, 0):], secrets, redactedText)
 	if err != nil {
@@ -515,7 +515,7 @@ func (t dockerTools) journalOf(ctx context.Context, project string, faulty []doc
 	for _, container := range faulty {
 		lines = append(lines, t.containerJournal(ctx, container)...)
 	}
-	secrets := envSecrets(envOf(dir, dockerJob{}))
+	secrets := envSecrets(envOf(dir, dockerJob{}), t.logger)
 	redacted := make([]string, 0, len(lines))
 	for _, line := range lines {
 		redacted = append(redacted, redactText(line, secrets, redactedText))
@@ -573,7 +573,7 @@ func (t dockerTools) safeUpdate(ctx context.Context, base *os.Root, job dockerJo
 		return summary, errors.Join(err, t.removeMarker(marker.Project))
 	}
 	lines, upErr := t.compose.Up(ctx, path.Join(job.root, job.params.Project), job.params.Project)
-	lines = redactLines(lines, envSecrets(envOf(dir, job)), redactedText)
+	lines = redactLines(lines, envSecrets(envOf(dir, job), t.logger), redactedText)
 	output := append(summary, lines[max(len(lines)-(agentwire.MaxOutputLines-len(summary)), 0):]...)
 	return t.settleUpdate(ctx, dir, job.root, marker, upErr != nil, output)
 }

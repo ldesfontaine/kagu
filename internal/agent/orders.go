@@ -77,7 +77,7 @@ func newOrderRunner(stateDir *os.Root, identity Identity, version, dockerSocket 
 	}
 	runner := &orderRunner{
 		stateDir: stateDir, identity: identity, version: version, results: results, logger: logger, now: time.Now,
-		worker: newOrderWorker(), fetch: &fetcher{}, updater: updater, docker: newDockerTools(checks, stateDir, dockerSocket), checks: checks,
+		worker: newOrderWorker(), fetch: &fetcher{}, updater: updater, docker: newDockerTools(checks, stateDir, dockerSocket, logger), checks: checks,
 		produce: newProduceTools(stateDir), proxmox: newProxmoxTools(stateDir), restic: newResticTools(stateDir, logger),
 	}
 	runner.journal = newOrderJournal(func() *slog.Logger { return runner.logger })

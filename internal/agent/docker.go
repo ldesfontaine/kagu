@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/exec"
@@ -20,6 +22,9 @@ import (
 	"syscall"
 	"time"
 	"unicode/utf8"
+
+	"github.com/compose-spec/compose-go/v2/dotenv"
+	"github.com/sirupsen/logrus"
 
 	"github.com/ldesfontaine/opencloud/internal/agentwire"
 	"github.com/ldesfontaine/opencloud/internal/brand"
@@ -116,10 +121,16 @@ type dockerTools struct {
 	watches  *updateWatches
 	now      func() time.Time
 	pause    func(ctx context.Context, duration time.Duration) error
+	// logger note le .env que dotenv refuse, sans aucune valeur.
+	logger *slog.Logger
 }
 
-func newDockerTools(checks hostChecks, stateDir *os.Root, dockerSocket string) dockerTools {
-	return dockerTools{
+// dotenv journalise par logrus (un WARN par variable non définie, sur stderr) :
+// l'agent n'a rien à en dire, la sortie reste la sienne.
+func init() { logrus.SetOutput(io.Discard) }
+
+func newDockerTools(checks hostChecks, stateDir *os.Root, dockerSocket string, logger *slog.Logger) dockerTools {
+	return dockerTools{logger: logger,
 		compose: execCompose{path: dockerBinary, environment: composeEnvironment(homeDir(), os.Getenv("DOCKER_CONFIG"))},
 		checks:  checks, freeBytes: freeBytesUnder, writeFiles: writeServiceFiles,
 		engine: engineClient{dockerapi.New(dockerSocket)}, stateDir: stateDir, watches: &updateWatches{}, now: time.Now, pause: sleepContext,
@@ -452,7 +463,7 @@ func (t dockerTools) writeAndUp(ctx context.Context, base *os.Root, job dockerJo
 	lines, upErr := t.compose.Up(ctx, path.Join(job.root, project), project)
 	// Compose cite parfois une ligne de l'.env (une erreur de syntaxe) : ses
 	// valeurs sont masquées avant de partir au serveur.
-	lines = redactLines(lines, envSecrets(envOf(dir, job)), redactedText)
+	lines = redactLines(lines, envSecrets(envOf(dir, job), t.logger), redactedText)
 	output = append(summary, lines[max(len(lines)-(agentwire.MaxOutputLines-len(summary)), 0):]...)
 	if upErr != nil {
 		return output, failWith(agentwire.ReasonComposeFailed, upErr)
@@ -560,57 +571,73 @@ func envOf(dir *os.Root, job dockerJob) string {
 	return string(content)
 }
 
-// envSecrets rend les valeurs d'un .env, les plus longues d'abord : la valeur
-// lue comme Compose la lit (coupée au premier « # » hors guillemets), avec ses
-// formes encodées pour une URL et en base64. Une ligne sans « = » compte en
-// entier (Compose la citerait dans son erreur).
-func envSecrets(env string) []string {
+// envSecrets rend les valeurs d'un .env, les plus longues d'abord. Compose les
+// lit avec la bibliothèque dotenv, l'agent aussi : la valeur est celle que
+// Compose voit (commentaire coupé, guillemets ôtés, ${A} interpolé). Une valeur
+// sur plusieurs lignes compte entière et ligne par ligne, car la sortie de
+// Compose les cite séparément. Chaque valeur d'au moins minSecretBytes se
+// masque aussi en URL et en base64.
+//
+// Si dotenv refuse le fichier, Compose le refusera aussi en citant ses lignes :
+// la lecture prudente masque tout ce qui suit le « = » de chaque ligne.
+func envSecrets(env string, logger *slog.Logger) []string {
 	var secrets []string
-	add := func(candidate string) {
-		if !slices.Contains(secrets, candidate) {
-			secrets = append(secrets, candidate)
+	add := func(value string) {
+		if len(value) < minSecretBytes {
+			return
+		}
+		for _, form := range []string{
+			value,
+			url.QueryEscape(value),
+			url.PathEscape(value),
+			base64.StdEncoding.EncodeToString([]byte(value)),
+			base64.URLEncoding.EncodeToString([]byte(value)),
+		} {
+			if !slices.Contains(secrets, form) {
+				secrets = append(secrets, form)
+			}
 		}
 	}
-	for line := range strings.Lines(env) {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		value := line
-		if _, after, found := strings.Cut(line, "="); found {
-			value = cutEnvComment(strings.TrimSpace(after))
-		}
-		bare := strings.Trim(value, `"'`)
-		if len(bare) >= minSecretBytes {
-			add(bare)
-			add(url.QueryEscape(bare))
-			add(url.PathEscape(bare))
-			add(base64.StdEncoding.EncodeToString([]byte(bare)))
-			add(base64.URLEncoding.EncodeToString([]byte(bare)))
-		}
-		if len(value) >= minSecretBytes {
-			add(value)
+	// L'agent n'a pas l'environnement de l'opérateur : rien n'en sort.
+	noEnvironment := func(string) (string, bool) { return "", false }
+	var values []string
+	parsed, err := dotenv.UnmarshalBytesWithLookup([]byte(env), noEnvironment)
+	if err != nil {
+		logger.Warn("env file refused by the dotenv reader, masking every value on a cautious read")
+		values = cautiousEnvValues(env)
+	}
+	for _, value := range parsed {
+		values = append(values, value)
+	}
+	for _, value := range values {
+		add(value)
+		if strings.Contains(value, "\n") {
+			for line := range strings.Lines(value) {
+				add(strings.TrimRight(line, "\r\n"))
+			}
 		}
 	}
 	slices.SortFunc(secrets, func(a, b string) int { return len(b) - len(a) })
 	return secrets
 }
 
-// cutEnvComment coupe une valeur au premier « # » précédé d'une espace et hors
-// guillemets : c'est où Compose cesse de la lire.
-func cutEnvComment(value string) string {
-	var open rune
-	for i, char := range value {
-		switch {
-		case open != 0 && char == open:
-			open = 0
-		case open == 0 && (char == '"' || char == '\''):
-			open = char
-		case open == 0 && char == '#' && i > 0 && (value[i-1] == ' ' || value[i-1] == '\t'):
-			return strings.TrimSpace(value[:i])
+// cautiousEnvValues lit un .env que dotenv refuse : tout ce qui suit le
+// premier « = » de chaque ligne, brut (rien n'est coupé comme commentaire), avec
+// et sans guillemets. Une ligne sans « = » compte entière, Compose la cite
+// dans son erreur.
+func cautiousEnvValues(env string) []string {
+	var values []string
+	for line := range strings.Lines(env) {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
 		}
+		if _, after, found := strings.Cut(line, "="); found {
+			line = strings.TrimSpace(after)
+		}
+		values = append(values, line, strings.Trim(line, `"'`))
 	}
-	return value
+	return values
 }
 
 // redactText remplace chaque secret par marker dans une ligne de texte : la

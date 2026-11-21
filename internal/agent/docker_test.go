@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/ldesfontaine/opencloud/internal/agentwire"
@@ -68,6 +70,8 @@ type dockerBench struct {
 	free    uint64
 }
 
+var discardLogger = slog.New(slog.DiscardHandler)
+
 func newDockerBench(t *testing.T) *dockerBench {
 	t.Helper()
 	b := &dockerBench{
@@ -80,6 +84,7 @@ func newDockerBench(t *testing.T) *dockerBench {
 		checks:     allowAll(),
 		freeBytes:  func(string) (uint64, error) { return b.free, nil },
 		writeFiles: writeServiceFiles,
+		logger:     discardLogger,
 	}
 	return b
 }
@@ -725,10 +730,10 @@ func TestDeployService_MasksTheEnvInComposeOutput(t *testing.T) {
 }
 
 func TestEnvSecrets_ReadsTheValuesOfAnEnv(t *testing.T) {
-	got := envSecrets("# commentaire ignoré\nA=1\nLONGUE=une valeur longue\n  export CLE = 'quotée ici'  \nLIGNE SANS EGAL\n\n")
+	got := envSecrets("# commentaire ignoré\nA=1\nLONGUE=une valeur longue\n  export CLE = 'quotée ici'  \nLIGNE SANS EGAL\n\n", discardLogger)
 	// Les plus longues d'abord : une valeur qui en contient une autre se
 	// masque en entier.
-	want := []string{"une valeur longue", "LIGNE SANS EGAL", "'quotée ici'", "quotée ici"}
+	want := []string{"une valeur longue", "LIGNE SANS EGAL", "quotée ici"}
 	for _, value := range want {
 		if !slices.Contains(got, value) {
 			t.Fatalf("secrets %q miss %q", got, value)
@@ -747,7 +752,7 @@ func TestR_D3_9(t *testing.T) {
 		"url":    url.QueryEscape(secret + " é/+"),
 		"base64": base64.StdEncoding.EncodeToString([]byte(secret)),
 	}
-	secrets := envSecrets("A=" + secret + " # c\nB=\"" + secret + " é/+\" # c\n")
+	secrets := envSecrets("A="+secret+" # c\nB=\""+secret+" é/+\" # c\n", discardLogger)
 	for name, form := range forms {
 		got := redactText("journal "+form+" fin", secrets, redactedText)
 		if strings.Contains(got, form) {
@@ -760,19 +765,144 @@ func TestR_D3_9(t *testing.T) {
 
 	// Négatifs : sous 6 octets rien ne se masque, ni sa forme encodée ;
 	// un « # » collé à la valeur ou entre guillemets en fait partie.
-	if short := envSecrets("A=abc12 # c\nB=true\n"); len(short) != 0 {
+	if short := envSecrets("A=abc12 # c\nB=true\n", discardLogger); len(short) != 0 {
 		t.Errorf("short values must not be masked: %q", short)
 	}
 	for env, want := range map[string]string{
 		"A=ab#cdefgh # c":  "ab#cdefgh",
 		`A="ab # cdef" #c`: "ab # cdef",
 	} {
-		if got := envSecrets(env); !slices.Contains(got, want) {
+		if got := envSecrets(env, discardLogger); !slices.Contains(got, want) {
 			t.Errorf("%q: %q missing from %q", env, want, got)
 		}
 	}
-	if got := envSecrets("A=" + secret + " # c\n"); slices.Contains(got, secret+" # c") {
+	if got := envSecrets("A="+secret+" # c\n", discardLogger); slices.Contains(got, secret+" # c") {
 		t.Errorf("the comment is part of the secret: %q", got)
+	}
+
+	// Les deux fuites de l'ancien lecteur : un guillemet échappé, et un
+	// « # » après une tabulation (Compose garde tout, commentaire compris).
+	// Une valeur sur plusieurs lignes : entière et ligne par ligne. Une valeur
+	// interpolée : telle que Compose la lit.
+	env := "K=\"echap \\\" guillemet\" # c\n" +
+		"E=tabsecret1\t# commentaire apres tab\n" +
+		"H=\"multi\nligne-secrete\"\n" +
+		"A=" + secret + "\nM=pre${A}post\n"
+	got := envSecrets(env, discardLogger)
+	for _, want := range []string{
+		"echap \" guillemet", "tabsecret1\t# commentaire apres tab",
+		"multi\nligne-secrete", "ligne-secrete", "prevaleur-secretepost",
+	} {
+		if !slices.Contains(got, want) {
+			t.Errorf("%q missing from %q", want, got)
+		}
+	}
+	if slices.Contains(got, "tabsecret1") {
+		t.Errorf("Compose keeps the tab comment, the secret is not cut: %q", got)
+	}
+
+	// Un .env que dotenv refuse ne donne jamais « rien à masquer ».
+	if refused := envSecrets("A=\"jamais fermee\n", discardLogger); !slices.Contains(refused, "jamais fermee") {
+		t.Errorf("a refused .env is read cautiously: %q", refused)
+	}
+}
+
+// Les 15 lignes de l'essai, avec la lecture réelle de « docker compose config »
+// (Compose v5.8.0) : une ligne, la valeur que Compose lit.
+func TestEnvSecrets_ReadsLikeCompose(t *testing.T) {
+	env := "A=valeur-secrete # c\n" +
+		"B=\"valeur-secrete é/+\" # c\n" +
+		"C=ab#cdefgh # c\n" +
+		"D=\"ab # cdef\" #c\n" +
+		"E=tabsecret1\t# commentaire apres tab\n" +
+		"F='simple # entre quotes' # c\n" +
+		"G=   espaces-autour   # c\n" +
+		"H=\"multi\nligne-secrete\"\n" +
+		"I=valeur#collee\n" +
+		"J=quote\"dedans\"valeur\n" +
+		"K=\"echap \\\" guillemet\" # c\n" +
+		"L='dollar $PAS_INTERPOLE'\n" +
+		"M=pre${A}post\n" +
+		"export N=valeur-exportee\n" +
+		"O=valeur-sans-commentaire\n"
+	secrets := envSecrets(env, discardLogger)
+	for line, want := range map[string]string{
+		"A": "valeur-secrete",
+		"B": "valeur-secrete é/+",
+		"C": "ab#cdefgh",
+		"D": "ab # cdef",
+		"E": "tabsecret1\t# commentaire apres tab",
+		"F": "simple # entre quotes",
+		"G": "espaces-autour",
+		"H": "multi\nligne-secrete",
+		"I": "valeur#collee",
+		"J": "quote\"dedans\"valeur",
+		"K": "echap \" guillemet",
+		"L": "dollar $PAS_INTERPOLE",
+		"M": "prevaleur-secretepost",
+		"N": "valeur-exportee",
+		"O": "valeur-sans-commentaire",
+	} {
+		if !slices.Contains(secrets, want) {
+			t.Errorf("%s: %q missing from %q", line, want, secrets)
+		}
+		if got := redactText("sortie "+want+" fin", secrets, redactedText); strings.Contains(got, want) {
+			t.Errorf("%s: value not masked: %q", line, got)
+		}
+	}
+	// Une valeur sur plusieurs lignes se masque aussi ligne par ligne.
+	if !slices.Contains(secrets, "ligne-secrete") {
+		t.Errorf("each line of a multi-line value is a secret: %q", secrets)
+	}
+}
+
+// Un .env que dotenv refuse ne donne jamais « rien à masquer » : lecture
+// prudente de ce qui suit le premier « = », et un WARN sans aucune valeur.
+func TestEnvSecrets_RefusedEnvIsReadCautiously(t *testing.T) {
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	env := "BON=bonne-valeur\nMAL=\"jamais fermee # secret-apres\nCASSE ligne\n"
+	secrets := envSecrets(env, logger)
+	for _, want := range []string{"bonne-valeur", "\"jamais fermee # secret-apres", "jamais fermee # secret-apres", "CASSE ligne"} {
+		if !slices.Contains(secrets, want) {
+			t.Errorf("%q missing from %q", want, secrets)
+		}
+	}
+	if !strings.Contains(logs.String(), "level=WARN") {
+		t.Errorf("the refused .env must be noted at WARN: %q", logs.String())
+	}
+	for _, leaked := range []string{"bonne-valeur", "jamais", "secret-apres"} {
+		if strings.Contains(logs.String(), leaked) {
+			t.Errorf("the log carries a value %q: %q", leaked, logs.String())
+		}
+	}
+}
+
+// dotenv journalise par logrus : une variable non définie, un .env refusé ou
+// une lecture normale n'écrivent rien sur la sortie de l'agent.
+func TestEnvSecrets_WritesNothingOnStderr(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// logrus garde le descripteur 2 : on le détourne vers le tube.
+	saved, err := syscall.Dup(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Dup3(int(writer.Fd()), 2, 0); err != nil {
+		t.Fatal(err)
+	}
+	envSecrets("A=${ABSENTE}-valeur-secrete\nB=\"x\n", discardLogger)
+	envSecrets("C=${ABSENTE}-valeur-secrete\n", discardLogger)
+	if err := syscall.Dup3(saved, 2, 0); err != nil {
+		t.Fatal(err)
+	}
+	_ = syscall.Close(saved)
+	_ = writer.Close()
+	written, _ := io.ReadAll(reader)
+	if len(written) != 0 {
+		t.Errorf("stderr: %q", written)
 	}
 }
 
@@ -795,7 +925,7 @@ func TestR_SEC_6(t *testing.T) {
 		t.Fatalf("func envSecrets defined %d times, want 1", defs)
 	}
 
-	secrets := envSecrets("MDP=s3cret-long # prod\n")
+	secrets := envSecrets("MDP=s3cret-long # prod\n", discardLogger)
 	lines := []agentwire.OutputLine{{Line: "pull s3cret-long failed"}, {Line: "auth " + base64.StdEncoding.EncodeToString([]byte("s3cret-long"))}}
 	for _, line := range redactLines(lines, secrets, redactedText) {
 		if strings.Contains(line.Line, "s3cret-long") || strings.Contains(line.Line, "czNjcmV0LWxvbmc=") {
