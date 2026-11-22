@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
@@ -32,7 +33,6 @@ const (
 // Les bornes du fil restic : ce qu'un pair peut dire au plus.
 const (
 	maxResticHosts        = 4
-	maxResticHostBytes    = 253
 	maxResticUsers        = 256
 	maxResticLinks        = 64
 	maxResticVersionBytes = 64
@@ -166,23 +166,10 @@ func IsResticPassword(password string) bool {
 	return resticPasswordPattern.MatchString(password)
 }
 
-var hostLabelPattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
-
 // isResticHost accepte une adresse IP ou un nom DNS, jamais un port ni un
 // chemin : il finit dans un certificat et dans une URL.
 func isResticHost(host string) bool {
-	if host == "" || len(host) > maxResticHostBytes {
-		return false
-	}
-	if net.ParseIP(host) != nil {
-		return true
-	}
-	for label := range strings.SplitSeq(host, ".") {
-		if !hostLabelPattern.MatchString(label) {
-			return false
-		}
-	}
-	return true
+	return net.ParseIP(host) != nil || machine.IsHostname(host)
 }
 
 func isPort(port int) bool {

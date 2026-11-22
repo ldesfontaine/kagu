@@ -115,7 +115,7 @@ var errNoActions = errors.New("no action component")
 
 func (h *Handler) writeEnrollError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, machine.ErrBadID), errors.Is(err, machine.ErrBadKey):
+	case errors.Is(err, machine.ErrBadID), errors.Is(err, machine.ErrBadKey), errors.Is(err, machine.ErrBadField):
 		h.writeError(w, http.StatusBadRequest, "bad_request")
 	case errors.Is(err, machine.ErrTokenNotFound):
 		h.writeError(w, http.StatusNotFound, "token_not_found")

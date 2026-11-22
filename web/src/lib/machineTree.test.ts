@@ -13,6 +13,7 @@ function machine(id: string, over: Partial<Machine> = {}): Machine {
     os: "Debian 12",
     arch: "amd64",
     online: true,
+    report_rejected: [],
     update_last: false,
     last_seen_at: null,
     agent: null,

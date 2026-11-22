@@ -83,3 +83,27 @@ func TestR_E3_16(t *testing.T) {
 		t.Fatal("the result of the target did not reach the screen")
 	}
 }
+
+// R-A1-13 : un nom avec un saut de ligne n'arrive pas à l'écran ; les autres
+// noms sont rendus et le rejeté est compté, le parcours n'échoue pas.
+func TestR_A1_13_ABrowseNameWithANewlineNeverReachesTheScreen(t *testing.T) {
+	report := agentwire.ResticBrowseReport{Entries: []agentwire.BrowseEntry{
+		{Name: "a.txt", Kind: "file", Size: 1},
+		{Name: "evil\nname", Kind: "file", Size: 2},
+		{Name: "esc\x1b[2J", Kind: "dir"},
+		{Name: "b.txt", Kind: "file", Size: 3},
+	}}
+	got, err := browseOutcome(agentwire.ActionResult{State: agentwire.ActionSucceeded, Browse: &report})
+	if err != nil {
+		t.Fatalf("one bad name must not fail the whole browse: %v", err)
+	}
+	if len(got.Entries) != 2 || got.Entries[0].Name != "a.txt" || got.Entries[1].Name != "b.txt" || got.Rejected != 2 {
+		t.Fatalf("entries %+v, rejected %d", got.Entries, got.Rejected)
+	}
+	if len(report.Entries) != 4 {
+		t.Fatal("the received report was modified")
+	}
+	if agentwire.IsBrowsePath("/dir\nname") || agentwire.IsBrowseName("a\nb") {
+		t.Fatal("a newline passed the name judge")
+	}
+}

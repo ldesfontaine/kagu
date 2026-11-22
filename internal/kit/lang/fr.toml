@@ -245,6 +245,7 @@ agent_rights_differ = "Le fichier de l'agent ne dit pas ce que la commande d'ins
 agent_rights_note = "Appliqués par l'agent : un ordre hors de ces droits est refusé, et le refus se lit dans les ordres. Les changer, c'est ré-enrôler avec d'autres droits. Sous un compte du groupe docker, l'agent a, par Docker, les droits de root."
 agent_account = "Compte"
 agent_account_unreported = "Pas encore rapporté : l'agent le dit à l'ouverture de son flux."
+report_rejected = "Le serveur a refusé une valeur que l'agent dit de lui (système ou version) : il garde celle d'avant."
 agent_account_root_note = "Cet agent tourne sous root : il a tous les droits de la machine."
 agent_rights_unavailable = "Droits cochés mais pas exerçables par ce compte"
 agent_update = "Mettre à jour l'agent vers %s"

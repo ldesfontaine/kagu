@@ -29,6 +29,9 @@ type machineJSON struct {
 	OS       string `json:"os"`
 	Arch     string `json:"arch"`
 	Online   bool   `json:"online"`
+	// Les champs que l'agent a dits à l'ouverture du flux et que le serveur a
+	// refusés (system, version) ; la valeur affichée est celle d'avant.
+	ReportRejected []string `json:"report_rejected"`
 	// À mettre à jour en dernier : la machine porte le chemin des ordres.
 	UpdateLast bool       `json:"update_last"`
 	LastSeenAt *time.Time `json:"last_seen_at"`
@@ -209,17 +212,18 @@ type installStepJSON struct {
 
 func machineToJSON(machineStatus machine.Status) machineJSON {
 	return machineJSON{
-		ID:         machineStatus.ID,
-		Name:       machineStatus.Name,
-		Hostname:   machineStatus.Hostname,
-		Address:    machineStatus.Address,
-		OS:         machineStatus.OS,
-		Arch:       machineStatus.Arch,
-		Online:     machineStatus.Online,
-		UpdateLast: machineStatus.UpdateLast,
-		Role:       string(machineStatus.Role),
-		LastSeenAt: httpx.TimeOrNil(machineStatus.LastSeenAt),
-		Agent:      agentToJSON(machineStatus.Agent),
+		ID:             machineStatus.ID,
+		Name:           machineStatus.Name,
+		Hostname:       machineStatus.Hostname,
+		Address:        machineStatus.Address,
+		OS:             machineStatus.OS,
+		Arch:           machineStatus.Arch,
+		Online:         machineStatus.Online,
+		ReportRejected: orEmpty(machineStatus.ReportRejected),
+		UpdateLast:     machineStatus.UpdateLast,
+		Role:           string(machineStatus.Role),
+		LastSeenAt:     httpx.TimeOrNil(machineStatus.LastSeenAt),
+		Agent:          agentToJSON(machineStatus.Agent),
 	}
 }
 

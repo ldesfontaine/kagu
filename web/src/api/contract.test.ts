@@ -115,6 +115,7 @@ const machine = shape<Machine>("Machine", {
   os: value,
   arch: value,
   online: value,
+  report_rejected: value,
   update_last: value,
   last_seen_at: value,
   agent: shape<Agent>("Agent", {

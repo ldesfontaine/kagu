@@ -19,6 +19,9 @@ export interface Machine {
   os: string;
   arch: string;
   online: boolean;
+  // Ce que l'agent a dit à l'ouverture du flux et que le serveur a refusé
+  // (system, version) ; la valeur affichée est celle d'avant.
+  report_rejected: string[];
   // À mettre à jour en dernier : la machine porte le chemin des ordres
   // (proxy, VPN…). Réglé par l'opérateur seul.
   update_last: boolean;

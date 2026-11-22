@@ -499,3 +499,32 @@ func TestAgentStream_StoresTheServiceRollbackVersionAndDropsForgedOnes(t *testin
 		})
 	}
 }
+
+// R-A1-13 : un champ refusé refuse l'enrôlement, avant le jeton. Un nom d'hôte
+// avec un caractère de contrôle ou de 300 octets ne brûle pas la ligne de
+// l'opérateur : le même jeton enrôle ensuite.
+func TestR_A1_13_ARefusedEnrollmentKeepsTheToken(t *testing.T) {
+	server := newBench(t)
+	cleartext, _, err := server.machines.CreateToken(context.Background(), "vps-paris-1", machine.RoleGeneric, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, _, _ := ed25519.GenerateKey(nil)
+	request := agentwire.EnrollRequest{MachineID: remoteID, PublicKey: base64.StdEncoding.EncodeToString(public), Token: cleartext, Hostname: "vps", OS: "Debian 12", Arch: "amd64", AgentVersion: "v0.0.1"}
+
+	for name, hostname := range map[string]string{"escape": "vps\x1b[2J", "300 bytes": strings.Repeat("a", 300)} {
+		refused := request
+		refused.Hostname = hostname
+		recorder := server.postJSON("/agent/enroll", refused)
+		if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "bad_request") {
+			t.Fatalf("%s: status %d: %s", name, recorder.Code, recorder.Body.String())
+		}
+		// Les jetons en attente sont ceux dont consumed_at est vide.
+		if pending, err := server.machines.PendingTokens(context.Background()); err != nil || len(pending) != 1 {
+			t.Fatalf("%s: the token must stay pending: %+v %v", name, pending, err)
+		}
+	}
+	if recorder := server.postJSON("/agent/enroll", request); recorder.Code != http.StatusCreated {
+		t.Fatalf("the same token must enroll: status %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
