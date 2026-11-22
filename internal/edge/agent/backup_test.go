@@ -738,16 +738,17 @@ func TestOrderWorker_RefusesWhenItsQueueIsFull(t *testing.T) {
 	}
 }
 
-// Le secret signé avec un ordre passe le juge, intact, et ne s'écrit nulle
-// part : ni dans le journal de l'agent, ni dans l'identité sur disque, ni
-// dans le résultat rapporté.
+// Le secret signé avec un ordre qui en porte passe le juge, intact ; sur un
+// genre qui n'en porte pas, il fait refuser l'ordre (R-A1-4). Dans les deux
+// cas il ne s'écrit nulle part : ni dans le journal de l'agent, ni dans
+// l'identité sur disque, ni dans le résultat rapporté.
 func TestJudge_KeepsTheSecretAndNeverLogsIt(t *testing.T) {
 	var logs bytes.Buffer
-	b := newOrderBench(t)
+	b := newOrderBenchWithRights(t, []string{"observe", "docker.deploy"})
 	b.runner.logger = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	const value = "PHRASE=une valeur de test qui ne doit jamais sortir" // gitleaks:allow
-	body := order(1)
-	body.Secret, _ = json.Marshal(map[string]string{"env": value})
+	body := longOrder(1, agentwire.KindDockerDeploy, agentwire.DockerParams{ServiceID: "svc_1", Project: "wiki", Compose: "x", EnvSent: true})
+	body.Secret, _ = json.Marshal(agentwire.DockerSecret{Env: value})
 
 	judged, reason := b.runner.judge(b.signedOrder(t, body))
 	if reason != "" || string(judged.Secret) != string(body.Secret) {
@@ -760,7 +761,7 @@ func TestJudge_KeepsTheSecretAndNeverLogsIt(t *testing.T) {
 	b.runner.receive(b.signed(t, withSecret))
 	report := b.results.take()
 	reported, _ := json.Marshal(report)
-	if report == nil || report.Results[0].State != agentwire.ActionSucceeded || strings.Contains(string(reported), "PHRASE") {
+	if report == nil || report.Results[0].Reason != agentwire.ReasonBadOrder || strings.Contains(string(reported), "PHRASE") {
 		t.Fatalf("report %s", reported)
 	}
 	if strings.Contains(logs.String(), "PHRASE") || strings.Contains(logs.String(), "valeur de test") {

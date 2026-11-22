@@ -1,9 +1,7 @@
 package agent
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -56,9 +54,7 @@ type proxmoxJob struct {
 // suppression, et un jeton local utilisable. Un refus ici n'a rien appelé.
 func (t proxmoxTools) readProxmoxOrder(body agentwire.OrderBody) (proxmoxJob, *agentwire.ActionResult) {
 	var params agentwire.ProxmoxGuestParams
-	decoder := json.NewDecoder(bytes.NewReader(body.Params))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&params); err != nil {
+	if err := agentwire.StrictDecode(body.Params, &params); err != nil {
 		return proxmoxJob{}, &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
 	if err := params.Validate(body.Kind); err != nil {

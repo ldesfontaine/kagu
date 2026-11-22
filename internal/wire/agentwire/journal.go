@@ -7,46 +7,16 @@ import (
 	"unicode/utf8"
 )
 
-// Ce que le journal local de l'agent (journald) retient des paramètres d'un
-// ordre : une liste blanche de champs par genre, déclarée ici avec le genre.
-// Jamais le secret de l'ordre (OrderBody.Secret), jamais un champ qui porte un
-// contenu (compose, certificat, clés) : un champ absent de la liste ne se
-// journalise pas. Un test exige une entrée, même vide, pour chaque genre.
-var journalFields = map[string][]string{
-	"agent.ping":                 {},
-	"agent.update":               {"version", "parcel"},
-	"agent.rollback":             {},
-	"agent.server_key":           {"public_key"},
-	"backup.receive":             {"parcel", "path"},
-	"backup.prune":               {"path", "prefix", "keep"},
-	"backup.produce":             {"producer", "target", "prefix", "recipient", "parcel"},
-	"docker.deploy":              {"service_id", "project"},
-	"docker.update":              {"service_id", "project"},
-	"docker.rollback":            {"project"},
-	"proxmox.vm.start":           {"vmid", "type"},
-	"proxmox.vm.shutdown":        {"vmid", "type"},
-	"proxmox.vm.snapshot":        {"vmid", "type", "snapshot"},
-	"proxmox.vm.snapshot_delete": {"vmid", "type", "snapshot"},
-	"restic.target.setup":        {"listen", "port"},
-	"restic.user.add":            {"user"},
-	"restic.user.remove":         {"user"},
-	"restic.provision":           {"target", "host", "port", "user"},
-	"restic.backup":              {"target", "scope", "vmid", "guest_type", "service", "force_relay"},
-	"restic.retain":              {"user", "keep_last", "keep_daily", "keep_weekly", "keep_monthly", "keep_yearly"},
-	"restic.verify":              {"user"},
-	"restic.browse":              {"user", "snapshot", "path"},
-	"restic.restore":             {"target", "snapshot", "path", "stamp"},
-}
-
 // Une valeur journalisée tient en une ligne courte : au-delà, ce n'est plus un
 // identifiant mais un contenu.
 const maxJournalValueRunes = 200
 
-// JournalFields rend les champs que le journal retient pour ce genre ; ok est
-// faux pour un genre sans entrée, dont rien ne se journalise.
+// JournalFields rend les champs que le journal local retient pour ce genre
+// (Spec.Journal) ; ok est faux pour un genre hors du registre, dont rien ne se
+// journalise.
 func JournalFields(kind Kind) ([]string, bool) {
-	fields, ok := journalFields[string(kind)]
-	return fields, ok
+	spec, ok := SpecOf(kind)
+	return spec.Journal, ok
 }
 
 // JournalParams rend, des paramètres d'un ordre, les seuls champs de la liste

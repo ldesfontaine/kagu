@@ -3,36 +3,23 @@ package agentwire
 import (
 	"encoding/json"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 )
 
-func TestJournalFields_EveryOrderKindDeclaresItsList(t *testing.T) {
-	for _, kind := range OrderKinds() {
-		if _, ok := JournalFields(kind); !ok {
-			t.Errorf("%s: no journal list declared (an empty list is a choice, a missing one is not)", kind)
-		}
-	}
-	for name := range journalFields {
-		if !Kind(name).IsOrder() {
-			t.Errorf("%s: a journal list for something that is not an order kind", name)
-		}
-	}
-}
-
 // Un champ qui peut porter un secret ou un contenu n'entre jamais dans une
 // liste blanche, quel que soit le genre.
 func TestJournalFields_NeverNameASecretOrAContent(t *testing.T) {
 	forbidden := []string{"secret", "password", "passphrase", "token", "private", "env", "compose", "certificate", "files", "key"}
-	for name, fields := range journalFields {
+	for _, kind := range OrderKinds() {
+		fields, _ := JournalFields(kind)
 		for _, field := range fields {
 			for _, word := range forbidden {
 				// public_key est la clé publique de l'agent.server_key : publique.
 				if strings.Contains(field, word) && field != "public_key" {
-					t.Errorf("%s: field %q looks like a secret or a content", name, field)
+					t.Errorf("%s: field %q looks like a secret or a content", kind, field)
 				}
 			}
 		}
@@ -55,33 +42,6 @@ func TestJournalParams_KeepsOnlyTheListedPlainFields(t *testing.T) {
 	}
 	if got := JournalParams(KindResticProvision, json.RawMessage(`not json`)); got != nil {
 		t.Fatalf("unreadable parameters: %v", got)
-	}
-}
-
-// Le registre des ancres nomme des ordres et des champs : ils existent.
-func TestAnchorKinds_BoundRealOrderFields(t *testing.T) {
-	structs := map[string]reflect.Type{
-		string(KindBackupProduce):   reflect.TypeFor[BackupProduceParams](),
-		string(KindResticProvision): reflect.TypeFor[ResticProvisionParams](),
-	}
-	for _, kind := range anchor.Kinds() {
-		for _, bound := range kind.Bound {
-			if !Kind(bound.Order).IsOrder() {
-				t.Errorf("%s bounds %q, which is not an order kind", kind.Name, bound.Order)
-			}
-			params, known := structs[bound.Order]
-			if !known {
-				t.Errorf("%s: no parameters struct known for %s: add it to this test", kind.Name, bound.Order)
-				continue
-			}
-			var tags []string
-			for index := range params.NumField() {
-				tags = append(tags, strings.Split(params.Field(index).Tag.Get("json"), ",")[0])
-			}
-			if !slices.Contains(tags, bound.Field) {
-				t.Errorf("%s bounds %s.%s, which is not a JSON field of %s", kind.Name, bound.Order, bound.Field, params.Name())
-			}
-		}
 	}
 }
 

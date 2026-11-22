@@ -473,7 +473,7 @@ func TestOrderRunner_AgentUpdateIsRefusedAcceptedOrMalformed(t *testing.T) {
 		return body
 	}
 	// Ce binaire de test ne tourne pas depuis le bin/ de l'état.
-	result := b.send(t, updateOrder(1, nil), b.private)
+	result := b.send(t, updateOrder(1, agentwire.AgentUpdateParams{Version: "v0.0.2", Parcel: "colis1"}), b.private)
 	if result.State != agentwire.ActionRefused || result.Reason != agentwire.ReasonNotSelfUpdatable {
 		t.Fatalf("outside bin: %+v", result)
 	}
@@ -481,9 +481,12 @@ func TestOrderRunner_AgentUpdateIsRefusedAcceptedOrMalformed(t *testing.T) {
 	update := newUpdateBench(t, "v0.0.1")
 	b.runner.updater = update.updater
 	published := update.publish(t, "v0.0.2", "v0.0.2", update.private)
+	// Sans paramètres, l'ordre ne se lit pas : refusé par le juge, avant l'exécuteur.
+	if result := b.send(t, updateOrder(2, nil), b.private); result.State != agentwire.ActionRefused || result.Reason != agentwire.ReasonBadOrder {
+		t.Errorf("no params: %+v", result)
+	}
 	seq := int64(10)
 	for name, params := range map[string]any{
-		"no params":       nil,
 		"a bad version":   agentwire.AgentUpdateParams{Version: "2", Parcel: "colis1", Binary: archBinary, Files: published.params.Files},
 		"no parcel":       agentwire.AgentUpdateParams{Version: "v0.0.2", Binary: archBinary, Files: published.params.Files},
 		"a path as name":  agentwire.AgentUpdateParams{Version: "v0.0.2", Parcel: "colis1", Binary: "../" + archBinary, Files: published.params.Files},

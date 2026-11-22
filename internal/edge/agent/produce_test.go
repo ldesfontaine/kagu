@@ -404,7 +404,7 @@ func TestBackupProduce_TheJudgeRefusesBeforeRunningAnything(t *testing.T) {
 		// aucune ancre : le juge des ancres la refuse avant même la forme, et la
 		// forme (readBackupProduce) la refuserait encore, vérifié plus bas.
 		case strings.Contains(name, "target") || strings.Contains(name, "recipient") || strings.Contains(name, "private key"):
-			finding := anchor.Judge(b.storedAnchors(t), "backup.produce", testkit.MustJSON(t, params))
+			finding := anchor.Judge(b.storedAnchors(t), agentwire.PresentedOf(agentwire.KindBackupProduce, testkit.MustJSON(t, params)))
 			if finding == nil {
 				t.Fatalf("%s: the anchors let it through", name)
 			}

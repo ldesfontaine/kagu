@@ -159,7 +159,7 @@ func (t *resticTarget) setup(params agentwire.ResticTargetSetupParams, dir strin
 		return nil, failWith(agentwire.ReasonPathUnwritable, err)
 	}
 	output := []agentwire.OutputLine{
-		resticOutput("certificate sha256 " + fingerprintOf(certificatePEM)),
+		resticOutput("certificate sha256 " + agentwire.PEMFingerprint(certificatePEM)),
 		resticOutput("listening " + net.JoinHostPort(config.Listen, strconv.Itoa(config.Port))),
 		resticOutput(fmt.Sprintf("retention floor daily %d weekly %d monthly %d", floor.KeepDaily, floor.KeepWeekly, floor.KeepMonthly)),
 	}
@@ -522,14 +522,6 @@ func (t *resticTarget) publicCertificate() (string, string) {
 		return "", ""
 	}
 	return string(content), agentwire.CertificateFingerprint(certificate.Raw)
-}
-
-func fingerprintOf(certificatePEM string) string {
-	certificate, err := agentwire.ParsePublicCertificate(certificatePEM)
-	if err != nil {
-		return ""
-	}
-	return agentwire.CertificateFingerprint(certificate.Raw)
 }
 
 // users rend les noms du fichier htpasswd, sans leurs empreintes.

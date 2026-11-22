@@ -7,18 +7,12 @@
 // et sans ancre posée il l'est aussi (refus par défaut).
 //
 // Chaque type d'ancre se déclare une fois, dans kinds : son nom, ce qu'il
-// accepte, combien de valeurs, quels paramètres de quels ordres il borne. Le
-// jugement d'un ordre (Judge) ne lit que ce registre.
+// accepte, combien de valeurs. Ce qu'il borne se déclare avec le genre d'ordre
+// (agentwire.Spec.Anchors), qui tire la valeur de ses paramètres décodés.
 package anchor
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"encoding/pem"
 	"errors"
-	"io"
 	"regexp"
 	"slices"
 	"strings"
@@ -37,18 +31,6 @@ const (
 	ResticTargetCert = "restic.target-cert"
 )
 
-// Bound dit quel paramètre de quel ordre un type d'ancre borne. Les ordres sont
-// nommés par leur genre (agentwire.Kind) : agentwire importe ce paquet, pas
-// l'inverse ; un test relit la correspondance.
-type Bound struct {
-	Order string
-	// Le champ JSON des paramètres de l'ordre.
-	Field string
-	// Derive rend la valeur à comparer aux ancres quand ce n'est pas le champ
-	// tel quel (l'empreinte d'un certificat). nil : le champ est comparé.
-	Derive func(raw string) (string, bool)
-}
-
 // Kind est un type d'ancre.
 type Kind struct {
 	Name string
@@ -61,7 +43,6 @@ type Kind struct {
 	Flag  string
 	Max   int
 	Valid func(value string) bool
-	Bound []Bound
 	// Les trois refus d'un ordre, chacun avec sa clé qui nomme l'ancre.
 	Missing    *refusal.Error
 	Outside    *refusal.Error
@@ -79,7 +60,6 @@ var (
 var kinds = []Kind{
 	{
 		Name: BackupRecipient, Right: "backup.produce", Flag: "backup-recipient", Max: 2, Valid: isAgeRecipient,
-		Bound: []Bound{{Order: "backup.produce", Field: "recipient"}},
 		Missing: refusal.Conflict("anchor.backup_recipient_missing",
 			"no age recipient is trusted on this machine: backup.produce would refuse every order"),
 		Outside: refusal.Conflict("anchor.backup_recipient_outside",
@@ -89,7 +69,6 @@ var kinds = []Kind{
 	},
 	{
 		Name: BackupGuest, Right: "backup.produce", Flag: "backup-guest", Max: 32, Valid: guestPattern.MatchString,
-		Bound: []Bound{{Order: "backup.produce", Field: "target"}},
 		Missing: refusal.Conflict("anchor.backup_guest_missing",
 			"no guest is trusted on this machine: backup.produce would refuse every order"),
 		Outside: refusal.Conflict("anchor.backup_guest_outside",
@@ -99,7 +78,6 @@ var kinds = []Kind{
 	},
 	{
 		Name: ResticTargetCert, Right: "restic.produce", Flag: "restic-target-cert", Max: 4, Valid: fingerprintPattern.MatchString,
-		Bound: []Bound{{Order: "restic.provision", Field: "certificate", Derive: fingerprintOf}},
 		Missing: refusal.Conflict("anchor.restic_target_cert_missing",
 			"no restic target certificate is trusted on this machine: restic.provision would refuse every order"),
 		Outside: refusal.Conflict("anchor.restic_target_cert_outside",
@@ -133,31 +111,9 @@ func Lookup(name string) (Kind, bool) {
 	return Kind{}, false
 }
 
-// Governed rend les types d'ancre qui bornent cet ordre.
-func Governed(order string) []Kind {
-	var governing []Kind
-	for _, kind := range kinds {
-		if slices.ContainsFunc(kind.Bound, func(bound Bound) bool { return bound.Order == order }) {
-			governing = append(governing, kind)
-		}
-	}
-	return governing
-}
-
 func isAgeRecipient(value string) bool {
 	_, err := age.ParseX25519Recipient(value)
 	return err == nil
-}
-
-// fingerprintOf rend le SHA-256 du DER d'un certificat PEM, en hexadécimal :
-// l'empreinte que la fiche d'une cible affiche.
-func fingerprintOf(certificatePEM string) (string, bool) {
-	block, _ := pem.Decode([]byte(certificatePEM))
-	if block == nil || block.Type != "CERTIFICATE" {
-		return "", false
-	}
-	sum := sha256.Sum256(block.Bytes)
-	return hex.EncodeToString(sum[:]), true
 }
 
 // State est ce qu'une machine tient : par type d'ancre, ses valeurs, ou la
@@ -246,28 +202,37 @@ func (f Finding) Command() string {
 	return TrustCommand("add", f.Kind.Name, f.Value)
 }
 
+// Presented est la valeur qu'un ordre présente à un type d'ancre qui borne son
+// genre, tirée de ses paramètres décodés (agentwire.Spec.Anchors). Vide quand
+// l'ordre n'en donne pas de lisible.
+type Presented struct {
+	Name  string
+	Value string
+}
+
 // CommandFor rend la commande qui poserait l'ancre du type que cet ordre a fait
-// refuser, avec la valeur de ses paramètres ; vide si le type est inconnu ou si
+// refuser, avec la valeur qu'il lui présente ; vide si le type est inconnu ou si
 // la valeur n'a pas la forme du type. Le serveur la montre à côté d'un run
 // refusé par une ancre.
-func CommandFor(kindName, order string, params json.RawMessage) string {
+func CommandFor(kindName string, presented []Presented) string {
 	kind, known := Lookup(kindName)
 	if !known {
 		return ""
 	}
-	value, ok := valueOf(kind, order, params)
-	if !ok {
-		return ""
+	for _, offer := range presented {
+		if offer.Name == kind.Name && kind.Valid(offer.Value) {
+			return TrustCommand("add", kind.Name, offer.Value)
+		}
 	}
-	return TrustCommand("add", kind.Name, value)
+	return ""
 }
 
 // FixFor rend la commande à lancer en root pour lever le refus d'un type
-// d'ancre : exacte (« add <type> <valeur> ») quand les paramètres de l'ordre
-// donnent la valeur, sinon « trust list », qui montre ce que l'agent tient, et
-// exact est faux : l'écran ajoute alors un lien vers la fiche de la machine.
-func FixFor(kindName, order string, params json.RawMessage) (command string, exact bool) {
-	if command := CommandFor(kindName, order, params); command != "" {
+// d'ancre : exacte (« add <type> <valeur> ») quand l'ordre présente la valeur,
+// sinon « trust list », qui montre ce que l'agent tient, et exact est faux :
+// l'écran ajoute alors un lien vers la fiche de la machine.
+func FixFor(kindName string, presented []Presented) (command string, exact bool) {
+	if command := CommandFor(kindName, presented); command != "" {
 		return command, true
 	}
 	return TrustCommand("list", "", ""), false
@@ -279,22 +244,30 @@ func TrustCommand(verb, kind, value string) string {
 	return strings.TrimSpace(brand.AgentCurrentPath + " agent trust " + verb + " " + kind + " " + value)
 }
 
-// Judge juge un ordre contre les ancres : le premier type qui le borne et qu'il
-// ne satisfait pas le refuse. nil : l'ordre passe, ou aucun type ne le borne.
-// Des paramètres illisibles ne passent pas : ils sortent de toute ancre.
-func Judge(state State, order string, params json.RawMessage) *Finding {
-	for _, kind := range Governed(order) {
-		if finding := judgeKind(state, kind, order, params); finding != nil {
+// Judge juge un ordre contre les ancres, sur les valeurs qu'il présente : le
+// premier type qui le borne et qu'il ne satisfait pas le refuse. nil : l'ordre
+// passe, ou aucun type ne le borne. Une valeur vide ou hors de la forme du type
+// ne passe pas : elle sort de toute ancre.
+func Judge(state State, presented []Presented) *Finding {
+	for _, offer := range presented {
+		kind, known := Lookup(offer.Name)
+		if !known {
+			// Le registre des genres ne nomme que des types connus (un test le
+			// tient) : un autre nom est une faute de code, qui arrête l'ordre
+			// plutôt que de le laisser passer.
+			panic("anchor: unknown kind " + offer.Name)
+		}
+		if finding := judgeKind(state, kind, offer.Value); finding != nil {
 			return finding
 		}
 	}
 	return nil
 }
 
-func judgeKind(state State, kind Kind, order string, params json.RawMessage) *Finding {
-	value, ok := valueOf(kind, order, params)
+func judgeKind(state State, kind Kind, value string) *Finding {
+	readable := kind.Valid(value)
 	// Une valeur qui n'a pas la forme du type ne se pose pas : pas de commande.
-	if !ok {
+	if !readable {
 		value = ""
 	}
 	switch {
@@ -302,80 +275,19 @@ func judgeKind(state State, kind Kind, order string, params json.RawMessage) *Fi
 		return &Finding{Kind: kind, Why: WhyUnreadable, Value: value}
 	case len(state.Values[kind.Name]) == 0:
 		return &Finding{Kind: kind, Why: WhyMissing, Value: value}
-	case !ok || !slices.Contains(state.Values[kind.Name], value):
+	case !readable || !slices.Contains(state.Values[kind.Name], value):
 		return &Finding{Kind: kind, Why: WhyOutside, Value: value}
 	}
 	return nil
 }
 
-// valueOf lit dans les paramètres la valeur que le type compare à ses ancres.
-func valueOf(kind Kind, order string, params json.RawMessage) (string, bool) {
-	fields, ok := readFields(params)
-	if !ok {
-		return "", false
-	}
-	for _, bound := range kind.Bound {
-		if bound.Order != order {
-			continue
-		}
-		var raw string
-		if err := json.Unmarshal(fields[bound.Field], &raw); err != nil {
-			return "", false
-		}
-		if bound.Derive == nil {
-			return raw, kind.Valid(raw)
-		}
-		return bound.Derive(raw)
-	}
-	return "", false
-}
-
-// readFields lit les clés du premier niveau des paramètres. Une clé répétée ou
-// égale à une autre à la casse près n'a pas de lecture sûre : l'ancre lit par
-// clé exacte, l'exécuteur relit par json.Unmarshal, qui ignore la casse. Elle
-// ne se lit pas, pour tous les genres et toutes les ancres (B-H1).
-func readFields(params json.RawMessage) (map[string]json.RawMessage, bool) {
-	decoder := json.NewDecoder(bytes.NewReader(params))
-	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
-		return nil, false
-	}
-	fields := map[string]json.RawMessage{}
-	for decoder.More() {
-		token, err := decoder.Token()
-		if err != nil {
-			return nil, false
-		}
-		name, isString := token.(string)
-		if !isString {
-			return nil, false
-		}
-		for seen := range fields {
-			if strings.EqualFold(seen, name) {
-				return nil, false
-			}
-		}
-		var value json.RawMessage
-		if err := decoder.Decode(&value); err != nil {
-			return nil, false
-		}
-		fields[name] = value
-	}
-	if token, err := decoder.Token(); err != nil || token != json.Delim('}') {
-		return nil, false
-	}
-	if _, err := decoder.Token(); err != io.EOF {
-		return nil, false
-	}
-	return fields, true
-}
-
 // JudgeReported juge pour le serveur : il ne refuse que ce que l'agent a dit
 // refuser. Un agent qui n'a rien rapporté de ses ancres les ignore (v0.6.0).
-func JudgeReported(state State, order string, params json.RawMessage) *Finding {
+func JudgeReported(state State, presented []Presented) *Finding {
 	if !state.Reported {
 		return nil
 	}
-	return Judge(state, order, params)
+	return Judge(state, presented)
 }
 
 // L'en-tête et le drapeau écrivent une liste de valeurs avec « : », les types

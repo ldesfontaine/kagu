@@ -16,14 +16,14 @@ import (
 // restic.retain), ce test échoue et c'est à Lucas de trancher.
 //
 // Un chemin vers la purge est une mention de restic.retain dans du code
-// hors test. Seuls y ont droit : la définition du genre et sa liste
-// (agentwire), son exécution (agent), son suivi (action), et son envoi, ici,
+// hors test. Seuls y ont droit : la définition du genre et sa ligne au
+// registre des genres (agentwire), son exécution (agent), et son envoi, ici,
 // par la nuit du serveur.
 
 var retainMentions = []string{"KindResticRetain", "sendRetain", "retainRepo", "retainAfterNight", "RunIfDue"}
 
 var retainAllowed = map[string][]string{
-	"KindResticRetain": {"internal/wire/agentwire/restic.go", "internal/wire/agentwire/command.go", "internal/gesture/action/action.go", "internal/edge/agent/orders.go", "internal/domain/restic/retain.go"},
+	"KindResticRetain": {"internal/wire/agentwire/restic.go", "internal/wire/agentwire/registry.go", "internal/edge/agent/orders.go", "internal/domain/restic/retain.go"},
 	"sendRetain":       {"internal/domain/restic/retain.go"},
 	"retainRepo":       {"internal/domain/restic/retain.go"},
 	"retainAfterNight": {"internal/domain/restic/retain.go", "internal/domain/restic/watch.go"},
