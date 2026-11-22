@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"os"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 )
 
 const (

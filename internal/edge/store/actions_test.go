@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/gesture/action"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/gesture/action"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 func pendingRun(id string, found machine.Machine, at time.Time) action.Run {

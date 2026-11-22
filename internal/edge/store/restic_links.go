@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/restic"
-	"github.com/ldesfontaine/opencloud/internal/kit/seal"
+	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/kit/seal"
 )
 
 // Les mots de passe d'un lien restic, scellés chacun pour sa colonne et sa

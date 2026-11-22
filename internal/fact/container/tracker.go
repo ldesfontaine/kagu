@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/link"
+	"github.com/ldesfontaine/kagu/internal/fact/link"
 )
 
 // Ce que le conteneur attend de la base ; le package store le fournit.

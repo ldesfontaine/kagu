@@ -3,8 +3,8 @@ package machine
 import (
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // Agent est le logiciel installé sur une machine : sa clé, sa version, son

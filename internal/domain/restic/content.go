@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // La borne de l'ordre (agentwire) : au plus ce nombre de volumes, et de

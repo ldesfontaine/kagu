@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/link"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/link"
 )
 
 // Observer dit ce que les agents ont vu joindre les ports de leur hôte

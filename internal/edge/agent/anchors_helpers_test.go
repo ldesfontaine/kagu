@@ -6,7 +6,7 @@ import (
 	"encoding/pem"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 )
 
 // trust pose des ancres dans le fichier d'identité du banc, comme le fait

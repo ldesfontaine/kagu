@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
 )
 
 var probeTestNow = time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)

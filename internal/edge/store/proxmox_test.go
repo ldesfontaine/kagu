@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/proxmox"
-	"github.com/ldesfontaine/opencloud/internal/kit/deletion"
-	"github.com/ldesfontaine/opencloud/internal/kit/seal"
+	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/kit/deletion"
+	"github.com/ldesfontaine/kagu/internal/kit/seal"
 )
 
 var proxmoxAt = time.Unix(1_800_000_000, 0)

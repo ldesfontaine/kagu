@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/systemdunits"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/systemdunits"
 )
 
 // Les unités systemd d'une machine, telles que son agent les a relevées :

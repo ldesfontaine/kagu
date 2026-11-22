@@ -6,8 +6,8 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
-	"github.com/ldesfontaine/opencloud/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 )
 
 // « agent trust » : la seule voie qui change les ancres de confiance locales

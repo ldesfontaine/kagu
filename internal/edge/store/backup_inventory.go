@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/backup"
-	"github.com/ldesfontaine/opencloud/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
 )
 
 // ListObservedGuests rend les VM et conteneurs que les hôtes Proxmox ont

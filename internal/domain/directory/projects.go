@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/kit/deletion"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 )
 
 func (d *Directory) CreateProject(ctx context.Context, definition ProjectDefinition) (Project, error) {

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
 )
 
 // baseBefore037 monte une base à jour de la 036, comme une installation

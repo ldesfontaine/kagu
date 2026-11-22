@@ -1,6 +1,6 @@
 package probe
 
-import "github.com/ldesfontaine/opencloud/internal/kit/audit"
+import "github.com/ldesfontaine/kagu/internal/kit/audit"
 
 // SetAuditor branche le journal d'audit ; nil est toléré.
 func (s *Service) SetAuditor(auditor *audit.Recorder) {

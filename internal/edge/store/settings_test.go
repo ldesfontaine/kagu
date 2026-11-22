@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/settings"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/domain/settings"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
 func TestLoadSettings_FreshDatabase_GivesEmptySettings(t *testing.T) {

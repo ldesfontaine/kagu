@@ -4,11 +4,11 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
-	"github.com/ldesfontaine/opencloud/internal/view/manifest"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/view/manifest"
 )
 
 // errInjected est un refus : l'échec au milieu se journalise sous sa clé,

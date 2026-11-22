@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/live"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/kit/live"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
 // Ouvre le direct d'un onglet et rend un lecteur d'événements nommés.

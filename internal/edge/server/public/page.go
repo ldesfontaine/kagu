@@ -3,7 +3,7 @@ package public
 import (
 	"net/http"
 
-	"github.com/ldesfontaine/opencloud/internal/view/status"
+	"github.com/ldesfontaine/kagu/internal/view/status"
 )
 
 // GET /statut : la seule page s'il n'y en a qu'une, l'adresse d'avant les

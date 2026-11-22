@@ -10,8 +10,8 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 )
 
 const (

@@ -146,7 +146,7 @@ Coût franc : même avec ces règles, les valeurs transitent par la mémoire d'u
 
 | Cas | Ce que l'agent peut lire sans root | Limite |
 | --- | --- | --- |
-| Podman via l'**API compatible Docker** | La socket existe (`podman system service`), « Docker v1.40 API » ; `-docker-socket` est déjà un paramètre de l'agent (`cmd/opencloud/agent.go:58`) | **Rootless : la socket est par utilisateur** (`$XDG_RUNTIME_DIR/podman/podman.sock`) ; l'agent ne voit que les conteneurs de **son** compte. Compatibilité des champs réseau **non essayée** |
+| Podman via l'**API compatible Docker** | La socket existe (`podman system service`), « Docker v1.40 API » ; `-docker-socket` est déjà un paramètre de l'agent (`cmd/kagu/agent.go:58`) | **Rootless : la socket est par utilisateur** (`$XDG_RUNTIME_DIR/podman/podman.sock`) ; l'agent ne voit que les conteneurs de **son** compte. Compatibilité des champs réseau **non essayée** |
 | Labels Podman | `io.podman.compose.project`, `io.podman.compose.service`, `PODMAN_SYSTEMD_UNIT`, plus `com.docker.compose.*` posés par podman-compose | Le **pod** n'a pas de label établi dans les sources lues ; son nom vient de `podman ps` (`PodName`) |
 | Quadlets | Fichiers `.container` / `.pod` : par utilisateur ou `/etc/containers/systemd/` | Le contenu généré (`Requires=` écrits) n'est pas montré par la doc ; les unités d'un autre utilisateur ne s'interrogent pas sans lui |
 | Conteneur lancé à la main | Un conteneur sans label Compose : l'identité est son **nom** | Instable à la recréation si le nom change |

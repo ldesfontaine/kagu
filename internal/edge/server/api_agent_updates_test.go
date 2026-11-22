@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/servertest"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/kit/goldentest"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 const proxyID = "22222222-3333-4444-8555-666666666666"

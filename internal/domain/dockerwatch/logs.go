@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/kit/dockerapi"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
 )
 
 // Les codes que l'agent rend quand il ne peut pas servir un journal ; le

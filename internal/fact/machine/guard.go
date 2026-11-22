@@ -3,7 +3,7 @@ package machine
 import (
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // Le lanceur stable de l'agent : une copie du binaire que root pose une fois

@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/fact/auth"
 )
 
 func TestAuthBasic_AttemptBudget_IsSharedByAnIPv6SixtyFour(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/firewall"
+	"github.com/ldesfontaine/kagu/internal/fact/firewall"
 )
 
 var _ firewall.Store = (*DB)(nil)

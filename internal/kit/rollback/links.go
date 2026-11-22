@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/fsx"
-	"github.com/ldesfontaine/opencloud/internal/kit/release"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/release"
 )
 
 // BinaryName est le nom du binaire d'une version dans bin/.

@@ -3,7 +3,7 @@ package agent
 import (
 	"sync"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
 )
 
 // Une heure d'essais pour un jeu plein de sondes à la cadence la plus

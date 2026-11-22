@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/backup"
-	"github.com/ldesfontaine/opencloud/internal/kit/goldentest"
+	"github.com/ldesfontaine/kagu/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
 )
 
 // runsBench déclare un hôte Proxmox par l'API, comme l'opérateur : son

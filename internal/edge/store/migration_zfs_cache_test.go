@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/kit/sampler"
 )
 
 // La 038 sur une base existante : l'échantillon déjà là reste, sans cache

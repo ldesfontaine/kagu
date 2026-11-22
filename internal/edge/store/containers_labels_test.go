@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // Les deux labels que l'agent a lus font l'aller-retour, et un conteneur

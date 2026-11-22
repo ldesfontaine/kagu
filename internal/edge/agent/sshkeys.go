@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/sshkeys"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait"
+	"github.com/ldesfontaine/kagu/internal/fact/sshkeys"
+	"github.com/ldesfontaine/kagu/internal/kit/wait"
 )
 
 // Le relevé des clés SSH autorisées se refait toutes les dix minutes : une clé

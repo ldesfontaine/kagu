@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
-	"github.com/ldesfontaine/opencloud/internal/view/status"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/view/status"
 )
 
 // Un service dont la machine ne signale plus depuis plus de deux minutes est

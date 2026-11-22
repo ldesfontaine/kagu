@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // OpenIncident écrit l'incident, ses cibles et la première entrée de son

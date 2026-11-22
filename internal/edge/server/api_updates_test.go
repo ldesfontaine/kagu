@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/update"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/update"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // unitIDOf rend l'unité d'un service déclaré par son nom.

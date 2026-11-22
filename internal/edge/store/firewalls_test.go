@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/firewall"
-	"github.com/ldesfontaine/opencloud/internal/kit/seal"
+	"github.com/ldesfontaine/kagu/internal/fact/firewall"
+	"github.com/ldesfontaine/kagu/internal/kit/seal"
 )
 
 var firewallAt = time.Unix(1_800_000_000, 0)

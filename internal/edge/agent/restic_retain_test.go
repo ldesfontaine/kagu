@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // fakeResticBinary écrit un faux restic qui note ce qu'il a reçu dans dir :

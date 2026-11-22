@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Le code de première configuration (R-A2-5) : tant qu'aucun compte n'existe,

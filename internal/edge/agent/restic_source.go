@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/restic"
-	"github.com/ldesfontaine/opencloud/internal/kit/fsx"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // La source restic (droit restic.produce) : par cible liée, un dossier

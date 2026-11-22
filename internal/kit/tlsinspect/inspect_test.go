@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 func TestInspect_ASelfSignedCertificateIsUntrustedAndGivesItsFingerprint(t *testing.T) {

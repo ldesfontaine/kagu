@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/backup"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Chaque cible d'un passage laisse sa ligne : reçue avec la taille de son

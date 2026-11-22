@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/firewall"
+	"github.com/ldesfontaine/kagu/internal/fact/firewall"
 )
 
 func validDefinition() firewall.Definition {

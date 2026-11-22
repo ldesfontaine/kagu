@@ -3,7 +3,7 @@ package machine
 import (
 	"slices"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Role dit ce que l'opérateur fait de la machine. Il se choisit à l'ajout, là

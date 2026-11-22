@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // ToneCount est le nombre de teintes de zone ; la feuille de style en dessine

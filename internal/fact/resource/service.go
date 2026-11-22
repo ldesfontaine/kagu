@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/kit/sampler"
 )
 
 const (

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/settings"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/domain/settings"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
 const settingsSelect = `SELECT language,

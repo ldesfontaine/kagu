@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/view/manifest"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/view/manifest"
 )
 
 func auditEvent(objectKind audit.ObjectKind, action audit.Action, objectID string, at time.Time) audit.Event {

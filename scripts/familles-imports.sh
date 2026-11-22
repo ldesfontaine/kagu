@@ -3,7 +3,7 @@
 # Le motif garde les guillemets : internal/machine ne touche pas internal/machinex.
 # Les chemins les plus longs passent d'abord.
 set -eu
-module="github.com/ldesfontaine/opencloud"
+module="github.com/ldesfontaine/kagu"
 table="$(dirname "$0")/familles.tsv"
 
 awk -F '\t' '{ print length($1) "\t" $0 }' "$table" | sort -rn | cut -f2- |

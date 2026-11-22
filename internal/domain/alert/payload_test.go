@@ -5,8 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
 // Un nom que choisit un agent : un lien masqué qui se ferait passer pour le
@@ -72,7 +73,7 @@ func TestRender_DiscordEscapesWhatAnAgentReports(t *testing.T) {
 		if bare := bareSpecials(lines[0], "*_~`|<>#[]()@"); len(bare) > 0 {
 			t.Errorf("%s: unescaped %q in %q", name, string(bare), lines[0])
 		}
-		if want := "[Ouvrir dans openCloud](" + alertLink + ")"; lines[2] != want {
+		if want := "[Ouvrir dans " + brand.ProductName + "](" + alertLink + ")"; lines[2] != want {
 			t.Errorf("%s: link line %q, want %q", name, lines[2], want)
 		}
 	}

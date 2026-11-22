@@ -4,8 +4,8 @@ import (
 	"context"
 	"sort"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
 // Publications rend les projets publiés par slug, chacun avec sa langue

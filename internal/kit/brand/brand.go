@@ -3,10 +3,10 @@ package brand
 // A. Affichage.
 
 // ProductName est le nom que voit l'opérateur. Renommer le produit
-// n'abîme rien d'installé : seuls les textes changent. Les élisions
-// françaises des catalogues (« d'{product} ») supposent un nom qui commence
-// par une voyelle ; un nom à consonne initiale demande de les relire.
-const ProductName = "openCloud"
+// n'abîme rien d'installé : seuls les textes changent. Les catalogues
+// écrivent « de {product} », « que {product} » : un nom à voyelle initiale
+// demanderait de relire les élisions.
+const ProductName = "Kagu"
 
 // B. Identifiant technique.
 
@@ -21,7 +21,7 @@ const (
 	ConfigPath = ConfigDir + "/config.toml"
 	StateDir   = "/var/lib/" + ID
 	// L'état de l'agent (au compte de l'agent, root si on le lui demande,
-	// 0700). Hors de StateDir : sur la machine openCloud, StateDir appartient
+	// 0700). Hors de StateDir : sur la machine Kagu, StateDir appartient
 	// au compte du serveur, qui pourrait renommer un dossier dessous et en
 	// poser un autre.
 	AgentStateDir = "/var/lib/" + ID + "-agent"
@@ -105,7 +105,7 @@ const (
 
 // Les fichiers d'une version publiée, et le commentaire de sa signature.
 const (
-	ReleaseBaseURL          = "https://github.com/ldesfontaine/opencloud/releases/download"
+	ReleaseBaseURL          = "https://github.com/ldesfontaine/kagu/releases/download"
 	ReleaseBinaryPrefix     = ID + "-linux-"
 	ReleaseSumsFile         = "SHA256SUMS"
 	ReleaseSignatureFile    = ReleaseSumsFile + ".minisig"
@@ -124,7 +124,7 @@ const SecretKeyIDDomain = ID + "-key-id\x00"
 const LabelPrefix = ID + "."
 
 // InstallDocURL est la page d'installation, que l'unité de l'agent cite.
-const InstallDocURL = "https://github.com/ldesfontaine/opencloud/blob/dev/docs/installation.md"
+const InstallDocURL = "https://github.com/ldesfontaine/kagu/blob/dev/docs/installation.md"
 
 // AgentUnit est l'unité de l'agent : la page d'un droit qui écrit hors de
 // l'état dit à l'opérateur laquelle compléter (ReadWritePaths).
@@ -140,16 +140,16 @@ const ServerUnit = ID + ".service"
 
 // WorkspaceMarker est le fichier témoin que l'agent pose à la création de la
 // racine des services : une racine qui existe, n'est pas vide et n'en porte
-// pas n'est pas à openCloud, l'agent n'y écrit rien.
+// pas n'est pas à Kagu, l'agent n'y écrit rien.
 const WorkspaceMarker = "." + ID
 
 // Command est le nom du binaire. Littéral et non dérivé de ID : il suit le
-// répertoire cmd/opencloud et le Makefile, qu'un changement de ID ne
-// renomme pas.
+// Makefile (-o bin/…), qu'un changement de ID ne renomme pas ; le répertoire
+// cmd/kagu ne le nomme pas.
 const Command = "opencloud"
 
-// Les User-Agent envoyés aux services externes. Valeurs d'aujourd'hui,
-// gardées telles quelles : un tiers peut s'en servir pour filtrer.
+// Les User-Agent envoyés aux services externes. Ils suivent le nom affiché :
+// un tiers qui filtrait sur l'ancien nom voit le nouveau.
 const (
 	UserAgent          = ProductName
 	RegistryUserAgent  = ProductName + "-agent"

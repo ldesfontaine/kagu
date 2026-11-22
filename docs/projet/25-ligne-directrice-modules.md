@@ -55,11 +55,11 @@ Qui a appris un module sait lire les autres.
 ## Les états
 
 Les quatre tons de la direction artistique, et rien d'autre : réussi, à
-surveiller, en échec, inconnu. Deux états en plus, propres à openCloud :
+surveiller, en échec, inconnu. Deux états en plus, propres à Kagu :
 
 | État | Dessin | Sens |
 | --- | --- | --- |
-| **Observé** | point creux | openCloud le voit mais ne le pilote pas (une tâche vzdump de l'hôte, un service lancé à la main) |
+| **Observé** | point creux | Kagu le voit mais ne le pilote pas (une tâche vzdump de l'hôte, un service lancé à la main) |
 | **À venir** | point gris, texte « à venir » | déclaré, pas encore en service (une cible VPS prévue) |
 
 Un état « observé » n'est ni vert ni rouge : il dit seulement qui tient la

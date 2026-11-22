@@ -16,8 +16,8 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/auth"
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 const (

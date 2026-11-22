@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // TLSMode dit comment la connexion au relais est chiffrée : STARTTLS sur

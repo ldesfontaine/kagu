@@ -12,8 +12,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
 // Un faux serveur d'accueil Matrix : il note chaque envoi, répond d'abord

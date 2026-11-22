@@ -14,12 +14,12 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/store/storetest"
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/view/status"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/view/status"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Le contrat avec mcp-maison (main @ 0b55aac, src/tools/opencloud) : ses

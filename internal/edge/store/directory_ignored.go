@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // ListIgnoredKeys rend les clés ignorées d'une machine, de toutes si

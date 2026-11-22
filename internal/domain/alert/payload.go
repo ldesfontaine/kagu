@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
 // Body est ce qu'un canal reçoit : le corps, son type, le titre et le

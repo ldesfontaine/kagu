@@ -1,7 +1,7 @@
-# /etc/systemd/system/opencloud.service — le serveur openCloud.
+# /etc/systemd/system/opencloud.service — le serveur Kagu.
 [Unit]
-Description=openCloud (serveur)
-Documentation=https://github.com/ldesfontaine/opencloud/blob/dev/docs/installation.md
+Description=Kagu (serveur)
+Documentation=https://github.com/ldesfontaine/kagu/blob/dev/docs/installation.md
 # Docker d'abord : si `listen` vise l'IP du pont docker0, elle doit exister.
 After=network-online.target docker.service
 Wants=network-online.target

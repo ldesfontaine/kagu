@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
 )
 
 // guestIDSeparator sépare les numéros d'invités d'une tâche dans sa colonne.

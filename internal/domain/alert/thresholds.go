@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
 // Rules rend la règle en vigueur de chaque ressource, et d'où elle vient.

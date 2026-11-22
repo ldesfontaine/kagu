@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/sampler"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 func (ts *testServer) agentPost(session, path string, payload any) *httptest.ResponseRecorder {

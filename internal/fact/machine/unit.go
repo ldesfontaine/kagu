@@ -3,7 +3,7 @@ package machine
 import (
 	"path"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // UnitFile est l'unité de l'agent, telle que la migration la modifie.

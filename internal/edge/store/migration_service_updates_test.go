@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
-	"github.com/ldesfontaine/opencloud/internal/domain/deploy"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/domain/deploy"
 )
 
 const (

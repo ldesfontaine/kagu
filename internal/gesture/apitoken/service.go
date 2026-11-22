@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // Ce que le service attend du store.

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/settings"
-	"github.com/ldesfontaine/opencloud/internal/kit/mail"
-	"github.com/ldesfontaine/opencloud/internal/kit/mail/smtptest"
+	"github.com/ldesfontaine/kagu/internal/domain/settings"
+	"github.com/ldesfontaine/kagu/internal/kit/mail"
+	"github.com/ldesfontaine/kagu/internal/kit/mail/smtptest"
 )
 
 // Le relais s'enregistre sans toucher la langue, le mot de passe ne

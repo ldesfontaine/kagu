@@ -14,14 +14,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
-	"github.com/ldesfontaine/opencloud/internal/fact/update"
-	"github.com/ldesfontaine/opencloud/internal/kit/goldentest"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
-	"github.com/ldesfontaine/opencloud/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/fact/update"
+	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/sampler"
 )
 
 // callAPI joue une requête JSON comme le front la fait : même origine,

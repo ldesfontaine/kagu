@@ -3,7 +3,7 @@ package heartbeat_test
 import (
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
 )
 
 func TestHashToken_IsStableHexAndDiffersPerToken(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // fakeDocker écrit un exécutable de test à la place de /usr/bin/docker : il

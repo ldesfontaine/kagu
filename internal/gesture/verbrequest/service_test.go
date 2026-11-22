@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/store/storetest"
-	"github.com/ldesfontaine/opencloud/internal/gesture/apitoken"
-	"github.com/ldesfontaine/opencloud/internal/gesture/verbrequest"
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
+	"github.com/ldesfontaine/kagu/internal/gesture/apitoken"
+	"github.com/ldesfontaine/kagu/internal/gesture/verbrequest"
 )
 
 var start = time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)

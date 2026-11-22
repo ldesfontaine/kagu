@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
-	"github.com/ldesfontaine/opencloud/internal/edge/store"
-	"github.com/ldesfontaine/opencloud/internal/edge/store/storetest"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/seal"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/edge/store"
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/seal"
 )
 
 var testNow = time.Date(2026, 9, 13, 10, 0, 0, 0, time.UTC)

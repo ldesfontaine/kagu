@@ -25,8 +25,8 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Les types d'ancre, par leur nom. Le nom est aussi celui que l'opérateur

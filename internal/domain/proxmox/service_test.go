@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/credential"
+	"github.com/ldesfontaine/kagu/internal/kit/credential"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
 // memoryStore tient un seul hôte par machine, comme la base.

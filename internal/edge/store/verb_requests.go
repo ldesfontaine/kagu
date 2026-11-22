@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/gesture/verbrequest"
+	"github.com/ldesfontaine/kagu/internal/gesture/verbrequest"
 )
 
 var _ verbrequest.Store = (*DB)(nil)

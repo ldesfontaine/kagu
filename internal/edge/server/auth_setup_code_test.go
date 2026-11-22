@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/store/storetest"
-	"github.com/ldesfontaine/opencloud/internal/fact/auth"
-	"github.com/ldesfontaine/opencloud/internal/fact/auth/authtest"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
+	"github.com/ldesfontaine/kagu/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/fact/auth/authtest"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"golang.org/x/crypto/bcrypt"
 )
 

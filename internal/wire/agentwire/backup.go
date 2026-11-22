@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // BackupReceiveParams sont les paramètres de backup.receive : le colis à

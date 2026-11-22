@@ -8,12 +8,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
-	"github.com/ldesfontaine/opencloud/internal/edge/server/sse"
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/update"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/edge/server/sse"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/update"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 const (

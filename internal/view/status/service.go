@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/kit/deletion"
-	"github.com/ldesfontaine/opencloud/internal/kit/live"
-	"github.com/ldesfontaine/opencloud/internal/view/reader"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/deletion"
+	"github.com/ldesfontaine/kagu/internal/kit/live"
+	"github.com/ldesfontaine/kagu/internal/view/reader"
 )
 
 // Ce que le service attend de la base pour ses propres objets, composants et

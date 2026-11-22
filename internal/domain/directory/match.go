@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
 )
 
 // Match rattache les conteneurs vivants aux unités déclarées. La règle est

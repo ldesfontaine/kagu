@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/settings"
-	"github.com/ldesfontaine/opencloud/internal/kit/mail"
+	"github.com/ldesfontaine/kagu/internal/domain/settings"
+	"github.com/ldesfontaine/kagu/internal/kit/mail"
 )
 
 // Le relais SMTP du canal e-mail, réglé sous Paramètres. Le mot de passe

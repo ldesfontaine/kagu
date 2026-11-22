@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/testkit"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/testkit"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // selfSigned tire un certificat auto-signé ECDSA P-256 pour 127.0.0.1, comme

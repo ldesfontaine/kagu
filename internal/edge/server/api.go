@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
-	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
-	"github.com/ldesfontaine/opencloud/internal/kit/deletion"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/kit/deletion"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Ce que le navigateur peut envoyer d'un coup : un formulaire, jamais plus.

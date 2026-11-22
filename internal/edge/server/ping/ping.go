@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
 )
 
 // Les bornes du débit sur /ping : par IP source résolue, pour freiner

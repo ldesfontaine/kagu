@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/hostconn"
+	"github.com/ldesfontaine/kagu/internal/fact/hostconn"
 )
 
 func connectionReport(port int) hostconn.Report {

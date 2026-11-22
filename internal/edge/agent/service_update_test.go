@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/kit/dockerapi"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // newerCompose est le compose de la montée : celui du serveur, avec une image

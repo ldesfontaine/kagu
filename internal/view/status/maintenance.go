@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
 )
 
 // maintenanceOf montre un silence annoncé comme une maintenance : planifiée

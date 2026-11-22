@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/view/manifest"
+	"github.com/ldesfontaine/kagu/internal/view/manifest"
 )
 
 var appliesNow = time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)

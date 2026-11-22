@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
-	"github.com/ldesfontaine/opencloud/internal/domain/settings"
-	"github.com/ldesfontaine/opencloud/internal/edge/store"
-	"github.com/ldesfontaine/opencloud/internal/edge/store/storetest"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
-	"github.com/ldesfontaine/opencloud/internal/kit/mail"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/domain/settings"
+	"github.com/ldesfontaine/kagu/internal/edge/store"
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/mail"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 func newService(t *testing.T) (*settings.Service, *store.DB) {

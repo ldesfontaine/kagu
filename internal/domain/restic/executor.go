@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Une requête relayée ne tient pas rest-server plus longtemps que ceci : un

@@ -9,7 +9,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 //go:embed *.toml

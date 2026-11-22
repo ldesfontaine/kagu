@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
-	"github.com/ldesfontaine/opencloud/internal/fact/sshkeys"
-	"github.com/ldesfontaine/opencloud/internal/fact/systemdunits"
-	"github.com/ldesfontaine/opencloud/internal/fact/update"
-	"github.com/ldesfontaine/opencloud/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/fact/sshkeys"
+	"github.com/ldesfontaine/kagu/internal/fact/systemdunits"
+	"github.com/ldesfontaine/kagu/internal/fact/update"
+	"github.com/ldesfontaine/kagu/internal/kit/sampler"
 )
 
 // Les agents installés lisent et écrivent ces étiquettes : le moindre

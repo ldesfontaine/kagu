@@ -17,7 +17,7 @@ export async function mockFirstSetup(page: Page, address: { local: boolean; sugg
         steps: [
           { id: "prepare", command: "useradd --system --home-dir /var/lib/opencloud-agent --shell /usr/sbin/nologin opencloud-agent\ninstall -d -m 0700 -o opencloud-agent -g opencloud-agent /var/lib/opencloud-agent" },
           { id: "enroll", command: "printf '%s\\n' 'oc_exemple_de_jeton_inventé_0000' | sudo -u opencloud-agent /var/lib/opencloud-agent/bin/current agent -server https://opencloud.exemple.fr" },
-          { id: "unit", command: "cat > /etc/systemd/system/opencloud-agent.service <<'EOF'\n[Unit]\nDescription=openCloud (agent)\n[Service]\nUser=opencloud-agent\nEOF\nsystemctl daemon-reload\nsystemctl enable --now opencloud-agent.service" },
+          { id: "unit", command: "cat > /etc/systemd/system/opencloud-agent.service <<'EOF'\n[Unit]\nDescription=Kagu (agent)\n[Service]\nUser=opencloud-agent\nEOF\nsystemctl daemon-reload\nsystemctl enable --now opencloud-agent.service" },
         ],
         proxmox_commands: "",
         expires_at: new Date(Date.now() + 3_600_000).toISOString(),

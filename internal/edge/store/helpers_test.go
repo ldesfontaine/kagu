@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/seal"
+	"github.com/ldesfontaine/kagu/internal/kit/seal"
 )
 
 // openEmpty ouvre une base neuve sans y jouer aucune migration : le test

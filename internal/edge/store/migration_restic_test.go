@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/proxmox"
-	"github.com/ldesfontaine/opencloud/internal/domain/restic"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // La 032 sur une base existante, à jour de la 030 (les liens) et de la 035

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/dockerapi"
-	"github.com/ldesfontaine/opencloud/internal/kit/registry"
+	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
+	"github.com/ldesfontaine/kagu/internal/kit/registry"
 )
 
 // ImageInspector est ce que le vérificateur demande à Docker : l'image

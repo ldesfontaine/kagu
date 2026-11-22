@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Les commandes du parcours d'un dépôt local de la cible, sur le même patron

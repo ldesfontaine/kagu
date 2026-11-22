@@ -11,9 +11,9 @@ import (
 	"slices"
 	"syscall"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Upload est un colis pour la machine de destination que l'agent d'une autre

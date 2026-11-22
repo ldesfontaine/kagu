@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/deploy"
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
-	"github.com/ldesfontaine/opencloud/internal/gesture/action"
+	"github.com/ldesfontaine/kagu/internal/domain/deploy"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/gesture/action"
 )
 
 // Le .env tient jusqu'à 64 KiB de texte ; écrit en JSON (retours à la ligne,

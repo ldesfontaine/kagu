@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/egress"
+	"github.com/ldesfontaine/kagu/internal/kit/egress"
 )
 
 // Les refus du relais, que l'appelant traduit en motif lisible. Une

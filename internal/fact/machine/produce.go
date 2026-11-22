@@ -4,8 +4,8 @@ import (
 	"regexp"
 	"slices"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Le droit backup.produce : l'agent sait produire une sauvegarde avec ce

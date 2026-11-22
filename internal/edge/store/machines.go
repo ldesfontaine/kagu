@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // Une machine se lit avec son agent courant : l'actif, sinon le dernier

@@ -22,10 +22,10 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/testkit"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/testkit"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Les ancres de confiance locales : un ordre dont un paramètre sort de ce que

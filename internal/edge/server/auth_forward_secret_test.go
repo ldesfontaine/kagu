@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/servertest"
-	"github.com/ldesfontaine/opencloud/internal/fact/auth"
-	"github.com/ldesfontaine/opencloud/internal/fact/auth/authtest"
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
+	"github.com/ldesfontaine/kagu/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/fact/auth/authtest"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 const (

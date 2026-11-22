@@ -509,7 +509,7 @@ var (
 		"internal/kit/registry/client.go":           1,
 	}
 	handBoundedReadInventory = map[string]int{
-		"cmd/opencloud/backup.go":                   1,
+		"cmd/kagu/backup.go":                        1,
 		"internal/domain/proxmox/client.go":         1,
 		"internal/edge/agent/proxmox_api.go":        1,
 		"internal/edge/agent/proxmox_token.go":      1,
@@ -528,7 +528,7 @@ var (
 
 // Les maisons des gestes : seuls ces chemins (relatifs au module) les écrivent.
 var (
-	transportHomes  = []string{"internal/kit/egress/", "internal/kit/dockerapi/", "cmd/opencloud/control.go"}
+	transportHomes  = []string{"internal/kit/egress/", "internal/kit/dockerapi/", "cmd/kagu/control.go"}
 	boundedReadHome = "internal/kit/fsx/"
 	identifierHome  = "internal/kit/ident/"
 )

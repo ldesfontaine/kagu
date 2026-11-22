@@ -17,10 +17,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/proxmox"
-	"github.com/ldesfontaine/opencloud/internal/gesture/action"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/kit/goldentest"
+	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/gesture/action"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
 )
 
 const (

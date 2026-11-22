@@ -3,7 +3,7 @@ package policy_test
 import (
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/policy"
+	"github.com/ldesfontaine/kagu/internal/fact/policy"
 )
 
 func model() policy.Model {

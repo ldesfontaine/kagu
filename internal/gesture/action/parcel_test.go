@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/gesture/action"
-	"github.com/ldesfontaine/opencloud/internal/kit/testkit"
+	"github.com/ldesfontaine/kagu/internal/gesture/action"
+	"github.com/ldesfontaine/kagu/internal/kit/testkit"
 )
 
 func newOutbox(t *testing.T) (*action.Outbox, *os.Root, *time.Time) {

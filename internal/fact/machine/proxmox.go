@@ -1,7 +1,7 @@
 package machine
 
 import (
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // Les droits proxmox.power et proxmox.snapshot ne se proposent que sur une

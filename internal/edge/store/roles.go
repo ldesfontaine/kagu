@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/role"
+	"github.com/ldesfontaine/kagu/internal/fact/role"
 )
 
 var _ role.Store = (*DB)(nil)

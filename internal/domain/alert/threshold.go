@@ -4,7 +4,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Resource est ce qu'un seuil juge : une des trois mesures d'une machine.

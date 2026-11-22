@@ -9,9 +9,9 @@ go.dev) : un point d'entrée sous `cmd/`, tout le reste sous `internal/`, que
 le compilateur interdit d'importer d'ailleurs. Pas de `src/`, pas de `pkg/`.
 
 ```
-cmd/opencloud/                     # le seul main : il aiguille vers la commande
+cmd/kagu/                     # le seul main : il aiguille vers la commande
 internal/<famille>/<paquet>/       # un paquet par concept, rangé dans sa famille (« Les familles »)
-internal/kit/                      # rang 0 : les outils sans règle d'openCloud
+internal/kit/                      # rang 0 : les outils sans règle de Kagu
 internal/fact/                     # rang 1 : ce qu'on sait d'un objet
 internal/wire/agentwire/           # rang 2 : le protocole agent ↔ serveur entier : en-têtes, corps JSON, sections du signal, liste fermée de ce que le serveur pousse, enveloppe signée des ordres
 internal/gesture/                  # rang 3 : les gestes : runs, verbes, demandes, jetons
@@ -69,10 +69,10 @@ l'opérateur en français** — interface, refus, notifications, documentation.
 Un fichier de chaînes par langue dès le départ, même s'il n'y en a qu'une.
 
 **Le nom du produit ne s'écrit qu'à un seul endroit** : aucun littéral
-« openCloud », « opencloud » ni préfixe de jeton en dehors de `internal/kit/brand`
+« Kagu », « openCloud », « opencloud » ni préfixe de jeton en dehors de `internal/kit/brand`
 (`brand.ProductName`, `brand.Command`…). Les catalogues posent `{product}`,
 `{command}` ou `{signature_header}`, les pages HTML `{{product}}`. Un test
-(`TestNameOnlyInBrand`) l'impose ; les commentaires et les identifiants Go ne
+(`TestProductNameIsNotALiteral`) l'impose ; les commentaires et les identifiants Go ne
 comptent pas.
 
 ## Lisible par un humain, avant d'être court
@@ -155,7 +155,7 @@ Une seule bibliothèque de chiffrement hors de la bibliothèque standard :
 `filippo.io/hpke`, `nistec`, `edwards25519`, `x/crypto`, `x/sys`, `x/term`).
 Elle chiffre la sauvegarde de la base (« Comment une sauvegarde se fait »,
 `22-fonctionnement.md`). Choisie parce que le format est celui de l'outil
-`age` courant : on restaure sans openCloud. L'écrire à la main (X25519, scrypt,
+`age` courant : on restaure sans Kagu. L'écrire à la main (X25519, scrypt,
 STREAM ChaCha20-Poly1305, en-tête HMAC) coûterait environ 500 lignes de
 cryptographie à maintenir et à éprouver contre les vecteurs de test.
 
@@ -193,7 +193,7 @@ autre : chacun a sa règle d'import.
 
 | Dossier | Rang | Ce qu'il porte | N'importe que |
 | --- | --- | --- | --- |
-| `internal/kit/` | 0 | Les outils sans règle d'openCloud : refus, identifiants, fichiers, langue, sortie réseau, clients bruts (Docker, registre, SMTP) | la bibliothèque standard, `kit` |
+| `internal/kit/` | 0 | Les outils sans règle de Kagu : refus, identifiants, fichiers, langue, sortie réseau, clients bruts (Docker, registre, SMTP) | la bibliothèque standard, `kit` |
 | `internal/fact/` | 1 | Ce qu'on sait d'un objet : machine, conteneur, sonde, lien, droits | `kit` |
 | `internal/wire/` | 2 | Le protocole agent ↔ serveur | `kit`, `fact` |
 | `internal/gesture/` | 3 | Les gestes : runs, verbes, demandes, jetons | `kit`, `fact`, `wire` |
@@ -201,7 +201,7 @@ autre : chacun a sa règle d'import.
 | `internal/view/` | 5 | Les lectures croisées : `reader`, page de statut, fichier de l'annuaire | les rangs 0 à 4, `view` |
 | `internal/edge/` | 6 | Le bord : HTTP, base, agent, configuration | tout le dessous |
 
-`cmd/opencloud` importe tout.
+`cmd/kagu` importe tout.
 
 | Famille | Paquets |
 | --- | --- |
@@ -247,7 +247,7 @@ s'y déclare avec sa raison, et il n'y en a aucune.
 
 | Paquet | Ce qu'il fait | Jamais |
 | --- | --- | --- |
-| `cmd/opencloud` | Aiguille vers la commande, ouvre la base, construit les composants et les branche : une fois, dans `components.go`, pour `serve` et les commandes qui en ont besoin | Une règle métier |
+| `cmd/kagu` | Aiguille vers la commande, ouvre la base, construit les composants et les branche : une fois, dans `components.go`, pour `serve` et les commandes qui en ont besoin | Une règle métier |
 | `edge/server` (racine) | Le montage des routes, la chaîne de middlewares, les gardes (hôte, même-origine, opérateur), l'API JSON, le front servi | Du SQL, une règle métier |
 | `server/agentapi`, `server/ping`, `server/public`, `server/sse` | Les routes d'un seul consommateur, avec ses dépendances, son format de réponse et ses limiteurs (« Le dépôt ») | Importer `server` |
 | `server/httpx` | Les gestes de réponse de la racine et des sous-paquets : `WriteJSON`, `WriteEvent`, `WriteTooMany`, `PeerHost`, `ConvertAll`, `TimeOrNil` | Une route, un composant |
@@ -255,7 +255,7 @@ s'y déclare avec sa raison, et il n'y en a aucune.
 | `view/reader` | L'interface `Reader` : les lectures de la base sans règle (`List*`, `Get*`, `Count*`) que le serveur, la page de statut et le fichier de l'annuaire partagent ; `*store.DB` la satisfait (`var _ reader.Reader = (*DB)(nil)`) | Une requête, une règle, une écriture ; rendre les types d'un paquet qui l'importe (`status`, `manifest`) |
 | `edge/store` | Tout le SQL : requêtes, transactions, migrations, les comptes (`CountContainers`, `CountContainerUpdates`), et les contrôles qui doivent tenir dans la transaction de l'écriture (unicité de l'annuaire) | Une règle qu'un composant peut porter |
 | `wire/agentwire` | Le protocole entier, figé par les agents installés : en-têtes, corps, sections du signal ; la liste fermée de ce que le serveur pousse (`Kind`, `Command` typée, plus d'`any` sur le fil) et l'enveloppe des ordres (`OrderBody`, `SignedOrder`) ; les octets que les deux côtés signent ou comparent (`OrderSigningBytes`, `KeyFingerprint`) ; sa version (`ProtocolVersion`, l'en-tête `OpenCloud-Agent-Protocol`) et ses bornes (`MaxEventBytes`, `MaxEventLineBytes`, `EventDataLine`). Un changement que les agents installés ne liraient pas passe la version : le serveur refuse l'autre (`426`), jamais en silence. La preuve de l'agent (`machine.SignedPayload`) reste dans `machine`, que `agentwire` importe. Un domaine ne nomme jamais un événement : il déclare son commandeur typé (`container.Commander.RequestLogs`), le serveur l'encode | Une règle, un appel |
-| Les outils (`kit`) | Un concept chacun, sans règle d'openCloud. `deletion` : la forme du plan d'une suppression et le refus qui le porte, la règle restant au domaine (`machine.RefuseDeletion`) ; `ratelimit` : un limiteur par clé (`New`) ou par source (`BySource`, le /64 calculé dedans), balayé au passage ; `ident.New` : les identifiants de seize hexadécimaux (`machine.NewID`, un UUID, reste à part) ; `wait.For` : une pause qui s'arrête à l'annulation ; `audit` : l'acteur dans le contexte et le `Recorder` du journal d'audit, que tous les composants, `server`, `store` et `reader` importent ; `release` : la signature minisign des versions et la vérification d'un fichier contre elle ; la clé publique embarquée ; `rollback` : le marqueur d'une mise à jour d'agent en attente de confirmation, les liens `current` et `previous`, et le lanceur stable (`Guard`) qui rebascule seul à l'échéance | Importer un composant |
+| Les outils (`kit`) | Un concept chacun, sans règle de Kagu. `deletion` : la forme du plan d'une suppression et le refus qui le porte, la règle restant au domaine (`machine.RefuseDeletion`) ; `ratelimit` : un limiteur par clé (`New`) ou par source (`BySource`, le /64 calculé dedans), balayé au passage ; `ident.New` : les identifiants de seize hexadécimaux (`machine.NewID`, un UUID, reste à part) ; `wait.For` : une pause qui s'arrête à l'annulation ; `audit` : l'acteur dans le contexte et le `Recorder` du journal d'audit, que tous les composants, `server`, `store` et `reader` importent ; `release` : la signature minisign des versions et la vérification d'un fichier contre elle ; la clé publique embarquée ; `rollback` : le marqueur d'une mise à jour d'agent en attente de confirmation, les liens `current` et `previous`, et le lanceur stable (`Guard`) qui rebascule seul à l'échéance | Importer un composant |
 | `edge/agent`, `domain/dockerwatch` | Ce qui tourne sur une machine gérée | Importer `server` ou `store` |
 
 Deux composants qui ont besoin l'un de l'autre ne s'importent pas tous les
@@ -410,7 +410,7 @@ jamais d'état à moitié appliqué. Clé inconnue = avertissement au démarrage
 
 ### Pourquoi des migrations
 
-Le schéma de la base d'openCloud changera : une colonne ajoutée, une table
+Le schéma de la base de Kagu changera : une colonne ajoutée, une table
 nouvelle. Une installation existante doit **suivre sans perdre ses données**.
 **Une migration = un fichier SQL numéroté** sous `migrations/`, embarqué dans
 le binaire, appliqué **dans l'ordre au démarrage**, noté dans une table
@@ -438,7 +438,7 @@ migrate`, sans commande à lancer : le binaire se met à niveau tout seul.
   pas encore n'entre pas dans le schéma : elle vient avec le code qui la lit.
 
 Rien à voir avec les migrations d'un **service** déployé (celles de son
-application, jouées par `make update`) : ici il s'agit de la base d'openCloud
+application, jouées par `make update`) : ici il s'agit de la base de Kagu
 lui-même.
 
 ## À venir : les actions
@@ -589,7 +589,7 @@ direction artistique. Les mêmes règles qu'en Go, transposées :
 
 `log/slog`, JSON vers journald. Un champ `run_id` sur tout ce qui touche un
 ordre, chez le serveur comme chez l'agent : le modèle nomme l'exécution un
-run. Un marqueur interne pour distinguer les lignes d'openCloud de celles des
+run. Un marqueur interne pour distinguer les lignes de Kagu de celles des
 scripts relus.
 
 ## Les tests
@@ -612,7 +612,7 @@ scripts relus.
   `servertest` (`NewNonce`, `SignedStreamRequest`, `OpenStream`, l'horloge figée `Now`).
   Un faux seulement pour ce qui est lent ou externe : Docker, un registre,
   un relais SMTP (`mail/smtptest`), un tiers sur Internet.
-- **Les gardes de règle** lisent le source : `TestNameOnlyInBrand`, et le
+- **Les gardes de règle** lisent le source : `TestProductNameIsNotALiteral`, et le
   test des refus (`22-fonctionnement.md`, « Les refus »).
 - **Un test instable se corrige par sa cause** : attendre un signal (un
   canal, une condition relue), fixer l'ordre de ce qui se croise. Jamais un

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/domain/backup"
 )
 
 func runRecord(subject string, number int, result backup.Result) backup.RunRecord {

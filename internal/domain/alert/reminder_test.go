@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // openDanger ouvre une alerte de danger sur un volume et rend son identifiant.

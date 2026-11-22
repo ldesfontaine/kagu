@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
-	"github.com/ldesfontaine/opencloud/internal/fact/auth"
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
 // L'accès de l'opérateur à l'interface. En mode basic, HTTP Basic garde

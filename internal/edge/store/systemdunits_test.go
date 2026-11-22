@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/systemdunits"
-	"github.com/ldesfontaine/opencloud/internal/kit/deletion"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/systemdunits"
+	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 )
 
 func aUnit(name string, active systemdunits.Active, sub systemdunits.Sub) systemdunits.Unit {

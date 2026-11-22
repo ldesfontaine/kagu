@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/gesture/verb"
-	"github.com/ldesfontaine/opencloud/internal/kit/goldentest"
+	"github.com/ldesfontaine/kagu/internal/gesture/verb"
+	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
 )
 
 // La parité UI / MCP a deux versants. Celui du front est

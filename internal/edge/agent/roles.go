@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/role"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait"
+	"github.com/ldesfontaine/kagu/internal/fact/role"
+	"github.com/ldesfontaine/kagu/internal/kit/wait"
 )
 
 // Ce que la machine est (un hôte Proxmox VE) se relit toutes les dix minutes :

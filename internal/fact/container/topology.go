@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/link"
+	"github.com/ldesfontaine/kagu/internal/fact/link"
 )
 
 // InternetNode est l'identifiant du nœud « Internet » dans la topologie :

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/link"
+	"github.com/ldesfontaine/kagu/internal/fact/link"
 )
 
 func observedNamed(id, group, name string, targets ...EnvTarget) Observed {

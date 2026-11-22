@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
 )
 
 const containerColumns = `id, machine_id, name, group_name, container_id, image, image_id, state, exit_code,

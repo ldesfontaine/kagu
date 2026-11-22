@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/policy"
+	"github.com/ldesfontaine/kagu/internal/fact/policy"
 )
 
 // Connector lit un pare-feu, en lecture seule. Il n'a aucune méthode qui

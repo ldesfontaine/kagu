@@ -3,7 +3,7 @@ package update
 import (
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
 )
 
 // Command fabrique ce que l'opérateur tapera pour appliquer la mise à

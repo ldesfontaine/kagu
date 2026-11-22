@@ -5,7 +5,7 @@
 # le démarrage.
 
 # Adresse d'écoute, hôte:port. Par défaut 127.0.0.1:8080 : seuls les
-# processus de la même machine peuvent joindre openCloud, Traefik en mode host
+# processus de la même machine peuvent joindre Kagu, Traefik en mode host
 # comme tout autre. Un voisin qui atteint ce port en direct n'est pas arrêté
 # par l'adresse ; en mode forward, voir forward_secret_file plus bas.
 # Traefik en conteneur : l'IP du pont Docker, par exemple 172.17.0.1:8080.
@@ -16,7 +16,7 @@ listen = "127.0.0.1:8080"
 # en 0700 s'il manque. Par défaut /var/lib/opencloud.
 state_dir = "/var/lib/opencloud"
 
-# Adresse publique d'openCloud, telle que les machines et le navigateur
+# Adresse publique de Kagu, telle que les machines et le navigateur
 # l'appellent. Elle sert à :
 #  - écrire la commande d'installation d'une machine et l'URL de ping d'une
 #    tâche ;
@@ -28,9 +28,9 @@ state_dir = "/var/lib/opencloud"
 # que localhost est refusé sur l'API. Derrière un domaine, renseignez-la.
 public_url = "https://opencloud.example.org"
 
-# Adresse de mcp-maison, le serveur MCP installé à côté d'openCloud
+# Adresse de mcp-maison, le serveur MCP installé à côté de Kagu
 # (installation.md, « Brancher un agent IA »). Paramètres → Agent IA lit son
-# /health pour dire s'il répond. Vide (défaut) : openCloud ne le cherche pas
+# /health pour dire s'il répond. Vide (défaut) : Kagu ne le cherche pas
 # et marche sans lui. L'hôte est celui de MCP_HOST, le port 3000.
 # mcp_url = "http://127.0.0.1:3000"
 
@@ -42,7 +42,7 @@ public_url = "https://opencloud.example.org"
 # /32 (docker inspect <conteneur>), jamais le sous-réseau.
 trusted_proxies = ["127.0.0.1/32", "::1/128"]
 
-# Mode forward (SSO devant openCloud) : fichier d'une ligne qui porte le
+# Mode forward (SSO devant Kagu) : fichier d'une ligne qui porte le
 # secret partagé avec le mandataire, 32 caractères au moins. Le mandataire le
 # pose dans l'en-tête X-OpenCloud-Proxy-Secret (Traefik : headers.
 # customRequestHeaders, qui remplace la valeur du client) ; une requête qui ne
@@ -56,7 +56,7 @@ trusted_proxies = ["127.0.0.1/32", "::1/128"]
 # forward_secret_file = "/etc/opencloud/forward.secret"
 
 # Mode forward : les identités que le SSO peut transmettre et
-# qu'openCloud admet, une seconde serrure derrière le SSO. Une autre identité
+# que Kagu admet, une seconde serrure derrière le SSO. Une autre identité
 # répond 403 (et un WARN qui la nomme). Vide ou absent (défaut) : toute
 # identité transmise est admise. Comparaison exacte, majuscules comprises :
 # "Lucas" n'est pas "lucas". Relu au démarrage seulement.

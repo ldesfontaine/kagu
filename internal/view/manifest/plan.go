@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/deletion"
+	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 )
 
 // Action est ce qu'un changement fait à son objet.

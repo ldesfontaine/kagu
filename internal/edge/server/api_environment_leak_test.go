@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/servertest"
-	"github.com/ldesfontaine/opencloud/internal/fact/link"
+	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
+	"github.com/ldesfontaine/kagu/internal/fact/link"
 )
 
 // Le banc de non-fuite de l'environnement, côté serveur (étude

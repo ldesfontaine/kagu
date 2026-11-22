@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
 )
 
 func TestPing_ThreeFormsInGetAndPost_MoveTheJob(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/fact/auth"
 )
 
 const authStateSelect = `SELECT mode, username, password_hash, forward_header, enabled_at FROM auth_settings WHERE id = 1`

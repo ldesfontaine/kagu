@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/proxmox"
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
-	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/role"
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
-	"github.com/ldesfontaine/opencloud/internal/kit/module"
-	"github.com/ldesfontaine/opencloud/internal/kit/version"
+	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/role"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/module"
+	"github.com/ldesfontaine/kagu/internal/kit/version"
 )
 
 // Une machine telle que le front la lit : des faits et des instants, pas

@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/testkit"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/testkit"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 const (

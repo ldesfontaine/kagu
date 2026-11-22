@@ -8,7 +8,7 @@
    fois la CI verte.
 3. **Les fonctionnalités existantes s'intègrent une par une.** Lucas donne un
    module venu d'un autre projet ; on l'analyse, on le découpe, on l'adapte au
-   besoin d'openCloud, puis on l'intègre proprement. Rien ne se reprend tel
+   besoin de Kagu, puis on l'intègre proprement. Rien ne se reprend tel
    quel.
 
 ## Les branches
@@ -113,7 +113,7 @@ note l'ancienne courante comme retirée et refuse ensuite ce qu'elle signe
 | Construire sur son poste | `git checkout vX.Y.Z` (tag poussé ; dans GitHub, `sign` attend : *Reject*), puis `make release VERSION=vX.Y.Z` |
 | Signer hors ligne | `minisign -S -s opencloud-secours.key -m dist-release/SHA256SUMS -x dist-release/SHA256SUMS.minisig -t "$(printf 'timestamp:%s\tfile:SHA256SUMS\tversion:vX.Y.Z' "$(date +%s)")"` |
 | Vérifier | avec un binaire **déjà installé** (il embarque l'ancienne secours) : `opencloud release verify dist-release/opencloud-linux-amd64`, idem `arm64` |
-| Distribuer | `release import dist-release` sur la machine openCloud, puis mettre à jour les agents ; publier les quatre fichiers sur la page de la version à la main |
+| Distribuer | `release import dist-release` sur la machine Kagu, puis mettre à jour les agents ; publier les quatre fichiers sur la page de la version à la main |
 | Reprendre | `RELEASE_SIGNING_KEY` = contenu de `release-2.key` dans l'environnement `release`. La secours qui a servi est usée : les versions suivantes ne l'embarquent plus |
 
 ## La CI

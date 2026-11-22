@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
 )
 
 // Les liens ne gardent que des clés d'instance (projet, service, nom) : un

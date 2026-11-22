@@ -8,10 +8,10 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/proxmox"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Le fichier du jeton tient en trois lignes de JSON : au-delà, ce n'est pas

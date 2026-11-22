@@ -4,8 +4,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/restic"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
 // Text est ce qu'une alerte dit, dans la langue de l'interface : le fait,

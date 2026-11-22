@@ -4,10 +4,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/kit/deletion"
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/kit/deletion"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Nature dit si le service est ce que l'on déploie pour ses utilisateurs ou

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/testkit"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/testkit"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // La clé naît au premier démarrage, en 0600, et se relit la même ensuite.

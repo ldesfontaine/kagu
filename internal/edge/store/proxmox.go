@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/backup"
-	"github.com/ldesfontaine/opencloud/internal/domain/proxmox"
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 var (

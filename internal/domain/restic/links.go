@@ -11,10 +11,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // passwordBytes : 32 octets de crypto/rand, 43 caractères en base64url sans

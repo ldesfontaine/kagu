@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/hostinfo"
+	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 )
 
 func TestKindOfVirt(t *testing.T) {

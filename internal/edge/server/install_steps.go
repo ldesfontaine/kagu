@@ -4,10 +4,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
-	"github.com/ldesfontaine/opencloud/internal/kit/version"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/version"
 )
 
 // Les étapes de l'installation d'un agent, dans l'ordre où on les colle sur la

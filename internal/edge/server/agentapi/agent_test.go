@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/servertest"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/sampler"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Une lecture plausible, dans les bornes de ce qu'un agent mesure.

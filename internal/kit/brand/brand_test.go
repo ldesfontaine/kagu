@@ -9,7 +9,7 @@ import (
 // test, pour que l'auteur voie ce qui bouge avec lui (chemins, protocole).
 func TestValues_AreFrozen(t *testing.T) {
 	for name, pair := range map[string][2]string{
-		"ProductName":             {ProductName, "openCloud"},
+		"ProductName":             {ProductName, "Kagu"},
 		"ID":                      {ID, "opencloud"},
 		"ConfigDir":               {ConfigDir, "/etc/opencloud"},
 		"ConfigPath":              {ConfigPath, "/etc/opencloud/config.toml"},
@@ -31,12 +31,12 @@ func TestValues_AreFrozen(t *testing.T) {
 		"WorkspaceMarker":         {WorkspaceMarker, ".opencloud"},
 		"ServerUnit":              {ServerUnit, "opencloud.service"},
 		"AgentUnit":               {AgentUnit, "opencloud-agent.service"},
-		"InstallDocURL":           {InstallDocURL, "https://github.com/ldesfontaine/opencloud/blob/dev/docs/installation.md"},
-		"ReleaseBaseURL":          {ReleaseBaseURL, "https://github.com/ldesfontaine/opencloud/releases/download"},
+		"InstallDocURL":           {InstallDocURL, "https://github.com/ldesfontaine/kagu/blob/dev/docs/installation.md"},
+		"ReleaseBaseURL":          {ReleaseBaseURL, "https://github.com/ldesfontaine/kagu/releases/download"},
 		"AgentIdentityFile":       {AgentIdentityFile, "identity.json"},
 		"Command":                 {Command, "opencloud"},
-		"UserAgent":               {UserAgent, "openCloud"},
-		"RegistryUserAgent":       {RegistryUserAgent, "openCloud-agent"},
+		"UserAgent":               {UserAgent, "Kagu"},
+		"RegistryUserAgent":       {RegistryUserAgent, "Kagu-agent"},
 		"LifecycleUserAgent":      {LifecycleUserAgent, "opencloud"},
 		"HeaderPrefix":            {HeaderPrefix, "OpenCloud-"},
 		"WebhookEventHeader":      {WebhookEventHeader, "OpenCloud-Event"},

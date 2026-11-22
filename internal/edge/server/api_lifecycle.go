@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
-	"github.com/ldesfontaine/opencloud/internal/fact/lifecycle"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/lifecycle"
 )
 
 // La source de la fin de support, telle que Paramètres la nomme.

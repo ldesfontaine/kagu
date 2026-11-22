@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/sshkeys"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/sshkeys"
 )
 
 // optionSeparator sépare les noms d'option d'une clé dans la colonne ; aucun

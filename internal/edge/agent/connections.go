@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/hostconn"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait"
+	"github.com/ldesfontaine/kagu/internal/fact/hostconn"
+	"github.com/ldesfontaine/kagu/internal/kit/wait"
 )
 
 // La table des connexions de l'hôte se relit toutes les quinze secondes : un

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/gesture/apitoken"
+	"github.com/ldesfontaine/kagu/internal/gesture/apitoken"
 )
 
 var _ apitoken.Store = (*DB)(nil)

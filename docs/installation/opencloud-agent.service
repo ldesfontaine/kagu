@@ -1,11 +1,11 @@
 # /etc/systemd/system/opencloud-agent.service — l'agent d'une machine, la
-# machine openCloud comprise : une seule disposition pour toutes.
+# machine Kagu comprise : une seule disposition pour toutes.
 # À activer APRÈS le premier lancement (enrôlement : -server, jeton sur l'entrée
 # standard), et après la préparation que l'interface donne (le compte
 # opencloud-agent, son dossier, son binaire).
 [Unit]
-Description=openCloud (agent)
-Documentation=https://github.com/ldesfontaine/opencloud/blob/dev/docs/installation.md
+Description=Kagu (agent)
+Documentation=https://github.com/ldesfontaine/kagu/blob/dev/docs/installation.md
 After=network-online.target docker.service
 Wants=network-online.target
 
@@ -34,16 +34,16 @@ Group=opencloud-agent
 # inutile de les redonner.
 # L'unité lance le lanceur stable (opencloud-guard), une copie du binaire que
 # root a posée hors de bin/ et que l'agent ne remplace jamais ; lui lance
-# bin/current, le lien que l'agent bascule quand openCloud lui envoie une mise
+# bin/current, le lien que l'agent bascule quand Kagu lui envoie une mise
 # à jour (agent.update). Si la nouvelle version ne confirme pas en trois
-# minutes (elle ne démarre pas, plante en boucle, ne rejoint plus openCloud), le
+# minutes (elle ne démarre pas, plante en boucle, ne rejoint plus Kagu), le
 # lanceur rebascule seul sur la précédente (bin/previous) : un agent cassé ne
-# peut pas se réparer lui-même. Sans lui, openCloud n'envoie aucune mise à jour
-# à l'agent (« Migrer l'agent » dans installation.md). Sur la machine openCloud
+# peut pas se réparer lui-même. Sans lui, Kagu n'envoie aucune mise à jour
+# à l'agent (« Migrer l'agent » dans installation.md). Sur la machine Kagu
 # comme ailleurs.
 ExecStart=/usr/local/lib/opencloud-agent/opencloud-guard guard -state /var/lib/opencloud-agent agent -state /var/lib/opencloud-agent
 # L'état est à l'utilisateur de l'unité (0700), hors de /var/lib/opencloud, dont
-# le compte du serveur est propriétaire sur la machine openCloud. systemd le
+# le compte du serveur est propriétaire sur la machine Kagu. systemd le
 # crée au nom de User=, le rend inscriptible sous ProtectSystem=strict, et
 # reprend le propriétaire de tout ce qu'il contient s'il diffère : c'est voulu,
 # un retour de root au compte dédié (ou l'inverse) repasse tout d'un coup.

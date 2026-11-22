@@ -7,7 +7,7 @@
 //   - l'empreinte du protocole, des littéraux figés : en-têtes, préfixes
 //     de jetons, identifiants échangés avec les agents et les récepteurs.
 //
-// Un test (TestNameOnlyInBrand) échoue si le nom ou l'un des préfixes de
-// jeton réapparaît en littéral ailleurs dans le code Go : pour l'écrire, on
-// passe par ce paquet.
+// Un test (TestProductNameIsNotALiteral) échoue si le nom, l'ancien ou le
+// nouveau, ou l'un des préfixes de jeton réapparaît en littéral ailleurs dans
+// le code Go ou les composants du front : pour l'écrire, on passe par ce paquet.
 package brand

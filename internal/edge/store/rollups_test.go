@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/resource"
-	"github.com/ldesfontaine/opencloud/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/resource"
+	"github.com/ldesfontaine/kagu/internal/kit/sampler"
 )
 
 // Les heures et les jours partagent machine_rollups sans se mêler : chaque

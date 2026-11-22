@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // checkServiceWrite lit tout ce qui peut refuser l'écriture, du plus

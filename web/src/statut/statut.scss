@@ -25,43 +25,29 @@ body {
   justify-content: space-between;
   gap: 16px;
 
-  // L'écart sépare le signe du mot, jamais « open » de « Cloud ».
+  // Le mot-symbole de branding/LISEZ-MOI.md, comme dans l'administration.
   .brand {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.22em;
+    font-size: 15px;
     color: var(--ink);
 
     .mark {
       display: inline-flex;
-      color: var(--ink);
     }
 
-    // Le signe est un trait ouvert, dans la couleur du texte.
     .mark svg {
-      width: 20px;
-      height: 20px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 2.2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
+      width: 0.875em;
+      height: 0.875em;
     }
   }
 
   .wordmark {
-    display: inline-flex;
     font-size: 15px;
+    font-weight: 600;
     letter-spacing: -0.02em;
-
-    span {
-      font-weight: 500;
-      color: var(--ink-2);
-    }
-
-    b {
-      font-weight: 600;
-    }
+    text-transform: lowercase;
   }
 }
 

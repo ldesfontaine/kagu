@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/kit/dockerapi"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
 )
 
 // La liste blanche de l'environnement (étude services-modèle §2.4, « liste

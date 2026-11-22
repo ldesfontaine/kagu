@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/view/status"
+	"github.com/ldesfontaine/kagu/internal/view/status"
 )
 
 var incidentNow = time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)

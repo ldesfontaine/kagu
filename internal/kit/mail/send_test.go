@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/mail"
-	"github.com/ldesfontaine/opencloud/internal/kit/mail/smtptest"
+	"github.com/ldesfontaine/kagu/internal/kit/mail"
+	"github.com/ldesfontaine/kagu/internal/kit/mail/smtptest"
 )
 
 func relayFor(server *smtptest.Server, mode mail.TLSMode) mail.Relay {

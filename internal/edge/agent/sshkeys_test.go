@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/sshkeys"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/sshkeys"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
 func oneAccountReport(name string, keys ...sshkeys.Key) sshkeys.Report {

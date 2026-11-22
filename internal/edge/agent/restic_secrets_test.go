@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Le banc de non-fuite : le mot de passe REST et le mot de passe du dépôt,

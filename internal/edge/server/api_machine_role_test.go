@@ -8,8 +8,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
 // Le rôle se choisit à l'ajout : la route le porte jusqu'au jeton, l'enrôlement

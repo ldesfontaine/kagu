@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // Read fait un relevé complet : la version, les VM, les stockages, puis, pour

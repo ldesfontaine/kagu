@@ -190,11 +190,19 @@ export function Icon({ name }: { name: IconName }) {
   );
 }
 
-// Le signe de la marque : le nuage ouvert, trait 2,2, posé nu à côté du mot.
+// Le signe de la marque, tracé de branding/kagu-signe.svg : on ne le redessine
+// pas. Il prend la couleur du texte et se pose nu à gauche du mot.
 export function Mark() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M9 19a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9H14" />
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <path
+        d="M21 9V55M21 35L42 55M21 35L29.3 9.3M21 35L45.1 12.5M21 35L49.1 28.0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

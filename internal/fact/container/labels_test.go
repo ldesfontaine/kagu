@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
 )
 
 func labelled(id, name string, labels map[string]string) container.Observed {

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // L'environnement de restic : remplacé, jamais hérité. Les secrets passent

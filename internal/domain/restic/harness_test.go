@@ -19,8 +19,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Le banc du relais : un faux rest-server en écriture seule, le courtier

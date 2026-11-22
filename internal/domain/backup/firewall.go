@@ -10,11 +10,11 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/firewall"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/gesture/action"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/fact/firewall"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/gesture/action"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Le producteur « export de la configuration d'un pare-feu » : c'est le

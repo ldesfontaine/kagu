@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/registry"
+	"github.com/ldesfontaine/kagu/internal/kit/registry"
 )
 
 const (

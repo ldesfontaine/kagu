@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
-	"github.com/ldesfontaine/opencloud/internal/kit/ratelimit"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/kit/ratelimit"
 )
 
 // Ce que les pings attendent du composant heartbeat : recevoir un ping.

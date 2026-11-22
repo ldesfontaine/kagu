@@ -30,12 +30,13 @@ var exceptions = map[exception]string{
 // « oc_ » hors de ce paquet est un schéma de jeton copié.
 var tokenSchemes = []string{"oc_", "ock_"}
 
-// Le nom du produit s'écrit dans ce paquet et nulle part ailleurs : aucun
-// littéral du code Go de production ne le contient, ni ne vaut un schéma de
-// jeton. Les commentaires et les identifiants Go ne sont pas des littéraux.
-// Le front est tenu de même : les chaînes et le texte des composants .tsx ne
-// nomment pas le produit, le mot-symbole se lit dans la page (Wordmark).
-func TestNameOnlyInBrand(t *testing.T) {
+// Le nom du produit, l'ancien comme le nouveau, s'écrit dans ce paquet et
+// nulle part ailleurs : aucun littéral du code Go de production ne le
+// contient, ni ne vaut un schéma de jeton. Les commentaires et les
+// identifiants Go ne sont pas des littéraux. Le front est tenu de même : les
+// chaînes et le texte des composants .tsx ne nomment pas le produit, le
+// mot-symbole se lit dans la page (Wordmark).
+func TestProductNameIsNotALiteral(t *testing.T) {
 	root := moduleRoot(t)
 	used := make(map[exception]bool)
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
@@ -126,11 +127,13 @@ func checkFrontFile(t *testing.T, root, path, relative string, used map[exceptio
 // excerpt garde l'entourage du nom : le texte des balises est mis bout à bout
 // et peut être long.
 func excerpt(value string) string {
-	at := strings.Index(strings.ToLower(value), "opencloud")
-	if at < 0 {
-		return value
+	lower := strings.ToLower(value)
+	for _, name := range productNames {
+		if at := strings.Index(lower, name); at >= 0 {
+			return value[max(0, at-20):min(len(value), at+len(name)+20)]
+		}
 	}
-	return value[max(0, at-20):min(len(value), at+29)]
+	return value
 }
 
 var jsxText = regexp.MustCompile(`>([^<>{}]*)<`)
@@ -185,9 +188,16 @@ func frontLiterals(source string) []string {
 	return append(literals, strings.Join(texts, ""))
 }
 
+// Les noms du produit, en minuscules : l'ancien reste interdit, pour qu'il ne
+// revienne pas par une copie.
+var productNames = []string{"opencloud", "kagu"}
+
 func namesTheProduct(value string) bool {
-	if strings.Contains(strings.ToLower(value), "opencloud") {
-		return true
+	lower := strings.ToLower(value)
+	for _, name := range productNames {
+		if strings.Contains(lower, name) {
+			return true
+		}
 	}
 	for _, scheme := range tokenSchemes {
 		if value == scheme {

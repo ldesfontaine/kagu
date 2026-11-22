@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
-	"github.com/ldesfontaine/opencloud/internal/kit/live"
-	"github.com/ldesfontaine/opencloud/internal/kit/ratelimit"
-	"github.com/ldesfontaine/opencloud/internal/view/status"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/live"
+	"github.com/ldesfontaine/kagu/internal/kit/ratelimit"
+	"github.com/ldesfontaine/kagu/internal/view/status"
 )
 
 // La méthode « * » du montage de la racine : toutes, pour un fourre-tout.

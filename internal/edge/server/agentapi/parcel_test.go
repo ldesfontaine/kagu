@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/gesture/action"
-	"github.com/ldesfontaine/opencloud/internal/kit/testkit"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/gesture/action"
+	"github.com/ldesfontaine/kagu/internal/kit/testkit"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Un colis ne se sert qu'à la machine pour laquelle il a été écrit, sous le

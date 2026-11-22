@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/hostinfo"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
 func aHostReport(virt string) hostinfo.Report {

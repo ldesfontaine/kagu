@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/hostinfo"
+	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 )
 
 // maxMACReads borne les lectures de configuration d'un relevé : une par invité,

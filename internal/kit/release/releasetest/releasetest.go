@@ -10,8 +10,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/release"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/release"
 )
 
 // Binaries rend, pour chaque architecture, un contenu de binaire qui dit sa

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/servertest"
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Les routes de l'agent se testent dans agentapi ; ici, de bout en bout,

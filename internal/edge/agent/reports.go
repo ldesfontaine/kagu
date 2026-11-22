@@ -3,7 +3,7 @@ package agent
 import (
 	"sync"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
 )
 
 // reports garde ce que le veilleur Docker a observé entre deux signaux :

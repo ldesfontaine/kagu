@@ -5,8 +5,8 @@ import (
 	"errors"
 	"slices"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/kit/dockerapi"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
 )
 
 // deliverInventory livre les conteneurs et les réseaux de la machine, les

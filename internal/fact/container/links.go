@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/link"
+	"github.com/ldesfontaine/kagu/internal/fact/link"
 )
 
 // Links est ce que les conteneurs échangent avec le composant des liens : ils

@@ -17,7 +17,7 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Un type d'ancre ajouté ou retiré du registre sans mettre à jour cette liste

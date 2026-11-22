@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
 )
 
 const heartbeatColumns = `h.id, h.token_sealed, h.name, h.machine_id, COALESCE(m.name, ''), h.status,

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/ratelimit"
+	"github.com/ldesfontaine/kagu/internal/kit/ratelimit"
 )
 
 // TU-21 : derrière un mandataire déclaré, la place du client se rend quand le

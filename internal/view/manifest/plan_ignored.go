@@ -1,7 +1,7 @@
 package manifest
 
 import (
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
 )
 
 func ignoredName(machine string, kind directory.IgnoreKind, value string) string {

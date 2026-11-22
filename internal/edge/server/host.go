@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // requireKnownHost ferme la porte au DNS rebinding : une page d'un autre

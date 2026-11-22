@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
 )
 
 // Snapshot est ce que le public voit d'un projet publié : ses composants, et

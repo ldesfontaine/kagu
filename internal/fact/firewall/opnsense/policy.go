@@ -4,8 +4,8 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/firewall"
-	"github.com/ldesfontaine/opencloud/internal/fact/policy"
+	"github.com/ldesfontaine/kagu/internal/fact/firewall"
+	"github.com/ldesfontaine/kagu/internal/fact/policy"
 )
 
 // Les identifiants des zones que le connecteur ajoute aux interfaces.

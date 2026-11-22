@@ -3,9 +3,9 @@ package directory
 import (
 	"context"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/update"
-	"github.com/ldesfontaine/opencloud/internal/kit/registry"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/update"
+	"github.com/ldesfontaine/kagu/internal/kit/registry"
 )
 
 // OfferedVersion rend le tag plus récent que le dernier constat de l'agent

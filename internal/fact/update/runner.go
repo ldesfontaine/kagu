@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/dockerapi"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait"
+	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
+	"github.com/ldesfontaine/kagu/internal/kit/wait"
 )
 
 const (

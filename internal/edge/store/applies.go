@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/view/manifest"
+	"github.com/ldesfontaine/kagu/internal/view/manifest"
 )
 
 // storedChange fige en base le format d'un changement du plan : le renommer

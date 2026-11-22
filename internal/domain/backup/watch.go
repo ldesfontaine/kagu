@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Watch est la boucle de fond : toutes les quinze minutes, un plan est-il

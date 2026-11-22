@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
 )
 
 // ListServiceLinks rend les sondes et les composants de statut qui visent le

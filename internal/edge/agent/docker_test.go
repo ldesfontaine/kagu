@@ -19,8 +19,8 @@ import (
 	"testing"
 
 	"github.com/compose-spec/compose-go/v2/dotenv"
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // testCompose est celui que le serveur rendrait : l'agent refuse tout autre

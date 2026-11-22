@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
 )
 
 // Ce que le composant conteneur constate après chaque rapport écrit : la

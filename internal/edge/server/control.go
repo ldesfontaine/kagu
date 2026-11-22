@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
 // controlPrefix : les routes du fichier de l'annuaire, que la socket sert

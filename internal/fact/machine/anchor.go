@@ -1,8 +1,8 @@
 package machine
 
 import (
-	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // ErrAnchorInvalid : une ancre demandée à l'installation n'est pas de la forme

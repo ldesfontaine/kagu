@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/sshkeys"
-	"github.com/ldesfontaine/opencloud/internal/kit/deletion"
+	"github.com/ldesfontaine/kagu/internal/fact/sshkeys"
+	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 )
 
 const sshFingerprint = "SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8"

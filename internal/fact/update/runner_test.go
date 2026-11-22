@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/dockerapi"
-	"github.com/ldesfontaine/opencloud/internal/kit/registry"
+	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
+	"github.com/ldesfontaine/kagu/internal/kit/registry"
 )
 
 type fakeDocker struct {

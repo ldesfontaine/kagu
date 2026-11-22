@@ -16,8 +16,8 @@ import (
 
 	"golang.org/x/crypto/ocsp"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/egress"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/egress"
 )
 
 // Ce que la cible lit de nous dans ses journaux.

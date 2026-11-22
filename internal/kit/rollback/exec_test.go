@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
 // Le vrai lanceur de processus, avec de petits scripts de test : rien en

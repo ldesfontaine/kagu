@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
 // Coût bcrypt : environ 100 ms par vérification sur une machine modeste.

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/firewall"
+	"github.com/ldesfontaine/kagu/internal/fact/firewall"
 )
 
 // Les points d'accès lus, tous en GET, tirés de la documentation d'OPNsense

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/gesture/apitoken"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/gesture/apitoken"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
 // callResticVerb appelle un verbe restic sous la machine source, avec un

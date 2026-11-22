@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/deploy"
+	"github.com/ldesfontaine/kagu/internal/domain/deploy"
 )
 
 // --- Montées de version ---

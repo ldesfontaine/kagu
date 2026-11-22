@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/credential"
+	"github.com/ldesfontaine/kagu/internal/kit/credential"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
-	"github.com/ldesfontaine/opencloud/internal/fact/firewall"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/firewall"
 )
 
 // Un pare-feu déclaré, tel que la liste et la fiche le lisent : ce que son API

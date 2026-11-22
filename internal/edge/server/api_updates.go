@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // checkUpdates demande à une machine de vérifier ses images maintenant ;

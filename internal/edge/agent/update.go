@@ -16,11 +16,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/fsx"
-	"github.com/ldesfontaine/opencloud/internal/kit/release"
-	"github.com/ldesfontaine/opencloud/internal/kit/rollback"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/release"
+	"github.com/ldesfontaine/kagu/internal/kit/rollback"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // ErrUpdated : l'agent a installé une version plus récente et bascule son lien

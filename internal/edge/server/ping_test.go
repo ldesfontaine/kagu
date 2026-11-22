@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
 )
 
 func (ts *testServer) createJob(t *testing.T, name string) heartbeat.Heartbeat {

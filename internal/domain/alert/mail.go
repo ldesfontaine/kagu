@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/mail"
+	"github.com/ldesfontaine/kagu/internal/kit/mail"
 )
 
 // Ce que le notifieur attend de l'envoi d'e-mails : livrer un message par

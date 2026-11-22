@@ -3,7 +3,7 @@ package manifest
 import (
 	"sort"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Les clés du catalogue des refus de lecture. Le front et la commande les

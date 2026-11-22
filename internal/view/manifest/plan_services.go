@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
 )
 
 func serviceRef(machine, name string) string {

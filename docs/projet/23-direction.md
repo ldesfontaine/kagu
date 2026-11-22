@@ -11,28 +11,28 @@
 
 ## La vision, dite par Lucas le 24/10/2026
 
-« openCloud pour superviser et gérer au besoin : simple, rapide, visuel. Les
+« Kagu pour superviser et gérer au besoin : simple, rapide, visuel. Les
 **actions sont déléguées aux agents** des machines, qui ont des droits et des
 commandes autorisés : on utilise pleinement ce qu'on a créé, on ne recrée pas
 un outil à côté. Objectif final : qu'un MCP (mcp-maison, dans le harness de son
 choix) puisse lui aussi utiliser ces agents bridés, chaque action
 journalisée. » Le MCP lit (jeton d'API en lecture) et, depuis le 28 octobre 2026,
 peut déclencher des verbes réversibles choisis jeton par jeton (décision 19) ;
-les agents restent à openCloud. Tout ce qui suit s'y conforme : l'agent produit
+les agents restent à Kagu. Tout ce qui suit s'y conforme : l'agent produit
 ou reçoit, `serve` ordonne et journalise.
 
 ## Ce qui change, ce qui ne change pas
 
 | | Aujourd'hui | Cible |
 | --- | --- | --- |
-| Rôle | openCloud **observe**, n'agit jamais sur une machine (README, « Fait / Ne fait pas ») | openCloud **déclare** ce qui doit exister, **compare** au réel, puis **agit** par gestes simples, un par un, chacun décidé à part |
-| But | — | L'opérateur crée une VM ou un LXC, installe l'agent par une ligne générée par openCloud, et gère tout ou presque depuis openCloud |
+| Rôle | Kagu **observe**, n'agit jamais sur une machine (README, « Fait / Ne fait pas ») | Kagu **déclare** ce qui doit exister, **compare** au réel, puis **agit** par gestes simples, un par un, chacun décidé à part |
+| But | — | L'opérateur crée une VM ou un LXC, installe l'agent par une ligne générée par Kagu, et gère tout ou presque depuis Kagu |
 | Ce qu'il n'est pas | — | Ni Coolify ni Portainer ; il ne remplace pas le SSH ; pas d'ordonnanceur ; pas de haute disponibilité. Raisonné comme un outil générique, jamais pour une infra particulière |
-| Ce qui reste | Un binaire, SQLite, front embarqué ; agent sortant, clé Ed25519 ; Docker lu, jamais écrit par la lecture ; mode `forward` derrière un SSO ; un jeton d'API pour un agent IA | Tout cela reste ; le MCP sort d'openCloud (mcp-maison, à part) et le jeton d'API lit, ou déclenche les seuls verbes cochés. L'écriture arrive **à côté** de la lecture, dans des actions typées, jamais en ouvrant la lecture |
+| Ce qui reste | Un binaire, SQLite, front embarqué ; agent sortant, clé Ed25519 ; Docker lu, jamais écrit par la lecture ; mode `forward` derrière un SSO ; un jeton d'API pour un agent IA | Tout cela reste ; le MCP sort de Kagu (mcp-maison, à part) et le jeton d'API lit, ou déclenche les seuls verbes cochés. L'écriture arrive **à côté** de la lecture, dans des actions typées, jamais en ouvrant la lecture |
 | Ce qui se revoit | — | Les fonctionnalités existantes ne sont pas sacrées : le [tri](#décisions-du-tri-des-fonctionnalités) dit ce qui change |
-| Principe nouveau | — | **openCloud tombé = on ne voit plus, on n'agit plus, rien ne s'arrête.** Ce sont Docker et systemd qui gardent les services vivants, jamais openCloud |
+| Principe nouveau | — | **Kagu tombé = on ne voit plus, on n'agit plus, rien ne s'arrête.** Ce sont Docker et systemd qui gardent les services vivants, jamais Kagu |
 
-## 1. Installation d'openCloud et arborescence
+## 1. Installation de Kagu et arborescence
 
 **Aujourd'hui** ([`installation.md`](../installation.md)) : binaire statique dans
 `/usr/local/bin`, config dans `/etc/opencloud/config.toml`, état dans
@@ -41,13 +41,13 @@ ou reçoit, `serve` ordonne et journalise.
 montés, socket Docker par le groupe `docker`), root sur demande. Les
 réglages vivent à quatre endroits : `config.toml`, `settings.toml`,
 `lifecycle.json`, la base ([« Ce qui est stocké »](22-fonctionnement.md#ce-qui-est-stocké-et-où)).
-La machine openCloud reçoit un agent comme les autres, installé dès la
+La machine Kagu reçoit un agent comme les autres, installé dès la
 première configuration ; `serve` n'observe plus rien d'elle (**fait**,
 21 octobre 2026). Aucune mise à jour automatique, ni du serveur ni des
 agents.
 
 **Cible** : un contrat d'installation écrit, identique sur toute machine, la
-machine openCloud comprise : elle reçoit un agent comme les autres.
+machine Kagu comprise : elle reçoit un agent comme les autres.
 
 | Chemin | Contenu | Aujourd'hui |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ machine openCloud comprise : elle reçoit un agent comme les autres.
 | `/etc/opencloud/config.toml` | ce que l'admin pose avant le démarrage ; **lecture seule** pour le serveur | `settings.toml` disparaît, vers la base ; `lifecycle.json` reste un cache, hors export |
 | `/var/lib/opencloud/` | la base, `secret.key`, `server.key` | pareil |
 | `/var/lib/opencloud-agent/` | l'état de l'agent, au compte de l'agent (`opencloud-agent`, ou root s'il y tient) `0700` : l'identité, `bin/`, sa rétention locale | `identity.json` et `bin/` (**fait**, 22 octobre 2026, #235) ; la rétention n'existe pas |
-| `/srv/workspace/<service>/` | `compose.yml`, `.env`, conf ; `data/` : un service déployé par openCloud. Racine réglable dans le fichier de l'agent à l'installation ; fichier témoin `.opencloud` | n'existe pas |
+| `/srv/workspace/<service>/` | `compose.yml`, `.env`, conf ; `data/` : un service déployé par Kagu. Racine réglable dans le fichier de l'agent à l'installation ; fichier témoin `.opencloud` | n'existe pas |
 
 Le nom du produit n'est pas définitif : les chemins, labels, préfixe de jeton
 et en-têtes qui le portent passent par un seul paquet de constantes
@@ -69,7 +69,7 @@ et en-têtes qui le portent passent par un seul paquet de constantes
 | Nom à un seul endroit | constante d'affichage + catalogues `internal/kit/lang` ; paquet de constantes techniques | Changer de nom sans chasser chaque occurrence | Faible à moyen : relever les occurrences une fois |
 | Agent installé par une **ligne générée** dans l'interface | serveur, script d'installation | `curl … \| sh`, aussi en cloud-init ; jeton à usage unique lu sur stdin ou dans un fichier, jamais en argv. Le serveur n'a jamais d'accès SSH | Moyen : le script, la page qui le génère |
 | Racine déjà occupée | script d'installation | Si le dossier existe et n'est pas vide, l'installation s'arrête et demande un autre chemin | Faible |
-| Machine openCloud avec un agent | `serve`, migration | Un seul mécanisme : le chemin intégré disparaît | Faible ; la machine garde son id et son historique, mais ne se voit plus tant que l'agent n'est pas installé. **Fait** (migration `030_agents.sql`) : l'agent s'installe dès la première configuration, l'empreinte du serveur le rattache à l'identifiant `local` |
+| Machine Kagu avec un agent | `serve`, migration | Un seul mécanisme : le chemin intégré disparaît | Faible ; la machine garde son id et son historique, mais ne se voit plus tant que l'agent n'est pas installé. **Fait** (migration `030_agents.sql`) : l'agent s'installe dès la première configuration, l'empreinte du serveur le rattache à l'identifiant `local` |
 | Mise à jour d'un **agent** depuis le serveur | agent, nouvelle action | Le geste le plus utile et le moins dangereux : premier geste (décision 14) | Moyen : télécharger, vérifier la somme, remplacer, redémarrer. Prérequis **fait** (21/10) : versions immuables, signées, vérifiées par le binaire (`22-fonctionnement.md`, « Comment une version est publiée et vérifiée »). **Fait** (22/10) : l'ordre `agent.update`, la bibliothèque des versions importées, le bouton de la fiche (« Comment un agent se met à jour ») |
 | Le **serveur** ne se met jamais à jour seul | doc | Il porte la base ; une montée ratée casse tout | Nul |
 | Agent root ou non | `opencloud-agent.service` | Lire `/proc` et Docker en root est accepté aujourd'hui ; écrire dans `/srv/workspace` en root l'est moins | Décision 2, prise le 22 octobre 2026 : compte dédié par défaut, root sur demande |
@@ -111,9 +111,9 @@ statut. Le **service déclaré** en est l'objet central.
 | Éditer sur place sondes et tâches | `internal/fact/probe`, `internal/domain/heartbeat`, API | Sans ça, chaque `apply` efface 90 jours d'historique ou change un jeton | Faible, prérequis de tout le reste. **Fait** (PR « édition sur place ») |
 | Annuaire : services, unités, projets, nature | migration, `internal/…` | Le composant de statut est public ; il ne peut pas porter l'image, la version, les chemins | Moyen ; un rapprochement conteneur → unité à chaque inventaire |
 | Suppressions en `restrict` + plan | migration, chaque suppression | La base refuse toute perte silencieuse | Moyen : chaque suppression écrit son plan |
-| `export` / `apply` | `cmd/opencloud`, API | Reproductibilité de l'annuaire | Moyen à fort : le diff et sa confirmation sont le vrai travail |
+| `export` / `apply` | `cmd/kagu`, API | Reproductibilité de l'annuaire | Moyen à fort : le diff et sa confirmation sont le vrai travail |
 | Pages de statut par projet | `internal/view/status`, front | La page globale ne sert à rien | Moyen ; la page actuelle devient une page. **Fait** (PR « une page de statut par projet », migration `034`) : plusieurs pages, chacune à `/statut/<slug>`, rangée dans un projet ou non ; la page d'avant devient la page `statut`, sans projet |
-| Labels `<préfixe>.*` lus par l'agent | `internal/kit/dockerapi`, `dockerwatch` | Rattacher ce qu'openCloud déploie sans ambiguïté ; préfixe tiré du paquet de constantes | Faible, **après** le fichier. **Fait** : annuaire 7/7 (lus, pas encore posés par un déploiement) |
+| Labels `<préfixe>.*` lus par l'agent | `internal/kit/dockerapi`, `dockerwatch` | Rattacher ce que Kagu déploie sans ambiguïté ; préfixe tiré du paquet de constantes | Faible, **après** le fichier. **Fait** : annuaire 7/7 (lus, pas encore posés par un déploiement) |
 
 Uptime Kuma a retiré son import/export en v2 et dit de son API interne
 « breaking changes may occur » : c'est le piège exact d'une config qui ne vit
@@ -133,12 +133,12 @@ cette machine, dans l'arborescence fixe.*
 
 | Question | Position | Pourquoi | Contrepartie |
 | --- | --- | --- | --- |
-| Version | **épinglée** ; choisir « dernière version » écrit le numéro du jour. openCloud **propose** la montée, ne l'applique jamais seul | `latest` = mise à jour subie au redémarrage d'un conteneur | Il faut valider à la main ; c'est voulu |
-| Docker seulement ? | **Oui pour ce qu'openCloud déploie**, dans un premier temps. Il continue de superviser des binaires (lui-même, ses agents, Forgejo…) | Un seul mécanisme de déploiement à maintenir | Un binaire ne se déploie pas par openCloud |
-| Volumes | **bind mounts** sous `/srv/workspace/<service>/data/`, jamais de volume nommé | Lisible, sauvegardable par `tar`, retrouvable en SSH sans openCloud | Droits de fichiers à gérer (UID du conteneur) |
-| Secrets | le `.env` sur la machine fait foi ; openCloud ne le recopie pas en base | Une seule source de vérité | Restaurer un service passe par sa sauvegarde : `data/` + `.env`, chiffrés |
+| Version | **épinglée** ; choisir « dernière version » écrit le numéro du jour. Kagu **propose** la montée, ne l'applique jamais seul | `latest` = mise à jour subie au redémarrage d'un conteneur | Il faut valider à la main ; c'est voulu |
+| Docker seulement ? | **Oui pour ce que Kagu déploie**, dans un premier temps. Il continue de superviser des binaires (lui-même, ses agents, Forgejo…) | Un seul mécanisme de déploiement à maintenir | Un binaire ne se déploie pas par Kagu |
+| Volumes | **bind mounts** sous `/srv/workspace/<service>/data/`, jamais de volume nommé | Lisible, sauvegardable par `tar`, retrouvable en SSH sans Kagu | Droits de fichiers à gérer (UID du conteneur) |
+| Secrets | le `.env` sur la machine fait foi ; Kagu ne le recopie pas en base | Une seule source de vérité | Restaurer un service passe par sa sauvegarde : `data/` + `.env`, chiffrés |
 | Protection | tout protégé par défaut : forward-auth au proxy, OIDC optionnel par modèle ; chemins ouverts listés et affichés comme publics | Rien d'exposé par oubli | Une liste de chemins à tenir par service |
-| Choix de la machine | **à la main** | Un ordonnanceur, c'est Nomad, pas openCloud | Aucune répartition automatique, jamais |
+| Choix de la machine | **à la main** | Un ordonnanceur, c'est Nomad, pas Kagu | Aucune répartition automatique, jamais |
 | Prérequis vérifiés | agent présent avec le droit de déployer, Docker installé, espace disque suffisant | Rien d'autre : CPU et RAM ne se réservent pas | — |
 | Icônes | label `org.opencontainers.image.*` si présent, sinon icône générique, sinon dépôt par l'opérateur. Pas de récupération de logos sur le web | Droits, réseau, dette pour rien | À faire en dernier |
 
@@ -164,7 +164,7 @@ machine ; il dépend des thèmes 5 (agent) et 7 (journal), qui passent avant.
 | `hooks` | des branchements déclaratifs : « si `sso` existe, ajouter ces labels » |
 
 La nature et ce que fournit un outil d'infra entrent dans l'annuaire dès
-l'étape 1 : c'est sur quoi les modules se branchent. openCloud déduit l'ordre
+l'étape 1 : c'est sur quoi les modules se branchent. Kagu déduit l'ordre
 possible et **propose** les branchements dans les deux sens : installer un
 coffre d'abord et le mettre derrière le SSO plus tard, ou l'inverse. Règle :
 **jamais de code Go par application** ; sinon chaque app est une dette. Le
@@ -210,14 +210,14 @@ dédié `opencloud-agent`, root sur demande. Machine et agent sont deux tables (
 
 **Ce qu'on ne fait pas** : Coolify et Dokploy agissent par **SSH avec shell
 libre et clé privée root stockée sur le serveur**. Pas de typage, audit
-difficile, secrets dans les commandes. openCloud n'a jamais d'accès SSH.
+difficile, secrets dans les commandes. Kagu n'a jamais d'accès SSH.
 
 **Coût** : moyen pour les droits et la vérification réciproque ; c'est
 #146, à fermer **avant** le premier geste.
 
 ## 6. Les données
 
-**Aujourd'hui** : tout vit sur la machine openCloud, dans `opencloud.db` :
+**Aujourd'hui** : tout vit sur la machine Kagu, dans `opencloud.db` :
 brut toutes les 10 s, moyennes horaires, journalières, avec leurs purges
 ([« Ce qui est stocké »](22-fonctionnement.md#ce-qui-est-stocké-et-où)).
 L'agent **ne garde rien** : flux coupé, mesures perdues. **Fait** (21/10) : la
@@ -274,7 +274,7 @@ maintenances.
 
 ## 8. Quand le serveur tombe
 
-**Aujourd'hui** : rien ne s'arrête (openCloud n'agit pas) ; l'interface, les
+**Aujourd'hui** : rien ne s'arrête (Kagu n'agit pas) ; l'interface, les
 alertes et la page de statut sont mortes ; les agents reviennent seuls avec un
 délai croissant ; les mesures de la coupure sont perdues.
 
@@ -345,7 +345,7 @@ donné avant la décision.
 | 3 | Édition des sondes avant tout ? | oui ; non, on recrée | oui | Oui : un `apply` modifie sur place, ne recrée jamais ; sondes, tâches, composants gardent historique et jeton |
 | 4 | Format du fichier déclaratif | YAML ; TOML | YAML, plus courant chez ceux qui écrivent des compose | YAML |
 | 5 | `apply` supprime ce qui n'est pas déclaré ? | jamais ; option explicite ; toujours | option explicite, jamais par défaut | Sur option explicite seulement, en affichant ce que la suppression emporte |
-| 6 | Version `latest` autorisée au déploiement ? | jamais ; avec avertissement | jamais | Jamais écrite : « dernière version » écrit le numéro du jour, épinglé. openCloud propose les montées, ne les applique jamais seul |
+| 6 | Version `latest` autorisée au déploiement ? | jamais ; avec avertissement | jamais | Jamais écrite : « dernière version » écrit le numéro du jour, épinglé. Kagu propose les montées, ne les applique jamais seul |
 | 7 | Volumes | bind mounts ; volumes nommés ; au choix | bind mounts seulement | Bind mounts seulement, un dossier par service : `compose.yml`, `.env`, conf ; `data/` = données. Sauvegarde d'un service : `data/` + `.env`, chiffrés |
 | 8 | Docker seulement pour déployer ? | oui ; aussi des binaires | oui | Oui, dans un premier temps ; les binaires restent supervisés |
 | 9 | Liste de droits de départ | la liste du thème 5 ; autre | la liste du thème 5 | **Prise le 21 octobre 2026** : `observe` (implicite, toujours), `agent.update`, `docker.deploy`, `docker.update`, `backup.receive` (un chemin), `files.write` (des chemins). **Ajouté** (#266, proposé par Claude, validé par Lucas le 24/10/2026) : `backup.produce` (un ou plusieurs producteurs, aujourd'hui `proxmox-vzdump`) : produire une sauvegarde sur la machine. Contrepartie : il vaut root pour un agent compromis, comme le groupe `docker` (règle `sudo` sur un script de root, `NoNewPrivileges=false` dans l'unité). `ssh.keys` attend #152 : **étape 1 faite (22/10)**, relevé en lecture seule ; l'écriture (`ssh.keys`) reste à décider. Stockés et affichés (migration `030_agents.sql`). **Faite** : appliqués par l'agent (#146, `action.RightOf`) |
@@ -354,12 +354,12 @@ donné avant la décision.
 | 12 | Sauvegarde de la base | copie locale ; copie + poussée vers un agent ; rien | copie locale d'abord, poussée ensuite | Pas de copie locale : envoi vers une destination choisie (machine avec agent, plus tard stockage externe). Sans destination, l'interface le dit |
 | 12 bis | Que contient la sauvegarde, comment se protège-t-elle ? | — | — | Elle contient la clé du serveur et est chiffrée par une paire de clés ; seule une phrase de passe est à garder de côté ([points techniques](#points-techniques-tranchés)) |
 | 13 | Jetons de ping | rester en clair ; hacher et ne plus réafficher | à voir, bas dans la liste | Réaffichés en clair dans l'interface, stockés chiffrés en base, régénérables |
-| 14 | Premier geste | mise à jour d'un agent ; mise à jour d'image ; déploiement | mise à jour d'un agent | Mise à jour d'un agent, proposée ; à terme tout se met à jour depuis openCloud. **Fait** (22/10) |
+| 14 | Premier geste | mise à jour d'un agent ; mise à jour d'image ; déploiement | mise à jour d'un agent | Mise à jour d'un agent, proposée ; à terme tout se met à jour depuis Kagu. **Fait** (22/10) |
 | 15 | Agents entre eux | jamais ; plus tard | jamais | Jamais ; chaque agent garde sa part de l'annuaire, rien de plus. Agent relais pour un site distant : possible plus tard, pas construit |
 | 16 | Serveur de secours | non ; plus tard ; maintenant | non, l'architecture ne l'interdit pas | Non ; l'architecture ne l'interdit pas |
 | 17 | Icônes | OCI + générique + dépôt ; bibliothèque embarquée ; logos récupérés | OCI + générique + dépôt, en dernier | OCI + générique + dépôt, en dernier |
 | 18 | Droit d'écrire sur Proxmox | sudo sur `qm`/`pct` ; jeton local à l'hôte aux droits étroits ; jeton d'écriture sur le serveur | jeton local à l'hôte | **Prise par Lucas le 28 octobre 2026** : l'agent de l'hôte appelle l'API locale de Proxmox avec un jeton local aux droits étroits (`VM.PowerMgmt`, `VM.Snapshot`), jamais une règle `sudo` sur `qm`/`pct`, jamais un jeton d'écriture sur le serveur. Pourquoi : même schéma que le reste (ordre typé, droit coché à l'installation, agent bridé), et plus étroit que root. **Faite** (28/10) : gestes de l'opérateur et verbes d'un jeton d'API |
-| 19 | Garde-fou des agents IA par jeton d'API | validation humaine avant chaque action ; liste de verbes par jeton + débit + audit | liste de verbes par jeton | **Prise par Lucas le 28 octobre 2026** : une liste de verbes autorisés choisie jeton par jeton, une limite de débit, et l'audit « pour qui » ; **aucune validation humaine avant chaque action** (l'opérateur fait confiance à l'agent qu'il a chargé de la tâche). Seuls des verbes **réversibles** (qui déclarent leur inverse) peuvent être offerts à un jeton. **Faite** : registre `internal/gesture/verb`, jeton `write`, migration `016`, « Comment un agent IA lit openCloud » ; ouverte aux gestes Proxmox (28/10). Contrepartie : un agent trompé par un texte de tiers peut faire, très vite, tout ce que l'opérateur a coché ; le débit borne la vitesse, pas l'intention, et l'inverse d'un verbe peut échouer |
+| 19 | Garde-fou des agents IA par jeton d'API | validation humaine avant chaque action ; liste de verbes par jeton + débit + audit | liste de verbes par jeton | **Prise par Lucas le 28 octobre 2026** : une liste de verbes autorisés choisie jeton par jeton, une limite de débit, et l'audit « pour qui » ; **aucune validation humaine avant chaque action** (l'opérateur fait confiance à l'agent qu'il a chargé de la tâche). Seuls des verbes **réversibles** (qui déclarent leur inverse) peuvent être offerts à un jeton. **Faite** : registre `internal/gesture/verb`, jeton `write`, migration `016`, « Comment un agent IA lit Kagu » ; ouverte aux gestes Proxmox (28/10). Contrepartie : un agent trompé par un texte de tiers peut faire, très vite, tout ce que l'opérateur a coché ; le débit borne la vitesse, pas l'intention, et l'inverse d'un verbe peut échouer |
 | 20 | OPNsense en écriture | maintenant ; après validation réelle des deux premiers chantiers | après validation | **Prise par Lucas le 28 octobre 2026** : pas dans cette phase (phase 2c), après validation réelle des deux premiers chantiers |
 | 21 | Mettre à jour un agent sans filet | mise à jour sans retour arrière ; retour arrière automatique obligatoire | retour arrière obligatoire | **Prise par Lucas le 28 octobre 2026** : **jamais de mise à jour d'agent sans retour arrière automatique**. Après la bascule, l'agent a trois minutes pour être acquitté par le serveur ; sinon la machine revient **seule**, côté agent et sans le serveur, même si le nouveau binaire est mort-né. Une seule remise en état par mise à jour, jamais de boucle. Le serveur refuse `agent.update` à un agent qui ne rapporte pas ce filet, sans option pour l'imposer. Le moyen : un lanceur stable (copie du binaire posée par root, hors de `bin/`, lancée sous le compte de l'agent), de préférence à `OnFailure=` ou à une minuterie qui demanderaient un privilège pour redémarrer l'agent et ne verraient pas un agent qui tourne sans se connecter (« Comment un agent se met à jour »). Coût : un second processus par agent, une copie figée à reposer à la main si elle change, et une migration manuelle par agent déjà installé |
 | 22 | Mettre à jour plusieurs agents | en parallèle ; une file côté serveur ; une machine à la fois, décidée par l'opérateur ou l'agent IA | une à la fois, rien d'automatique | **Prise par Lucas le 28 octobre 2026** : **une seule mise à jour d'agent en vol à la fois**, tous agents confondus (`409 action.update_in_progress`), pour l'opérateur comme pour un jeton. **Le serveur ne met jamais plusieurs agents à jour d'un coup** : il lit un plan (`GET /api/agent-updates`) et recommande un ordre (les machines `update_last` à la fin : celles qui portent le chemin des ordres), l'enchaînement est fait par l'opérateur ou un agent IA, une machine à la fois, en s'arrêtant au premier échec. Coût : une série de dix machines demande dix gestes |
@@ -373,9 +373,9 @@ donné avant la décision.
 | Racine | Racine des services par défaut `/srv/workspace`, réglable dans le fichier de l'agent à l'installation. Dossier existant et non vide : l'installation s'arrête et demande un autre chemin. Fichier témoin `.opencloud` |
 | Droits | Pas de « modes » : un seul agent, une liste de droits cochée dans l'interface à l'installation, écrite par la ligne générée dans le fichier local de l'agent. L'agent fait ce qu'il a le droit de faire, rien d'autre |
 | Nom | Le nom du produit n'est pas définitif : tout ce qui le porte passe par un seul endroit. Affichage : une constante + les catalogues ; technique : un paquet de constantes (chemins, labels, préfixe de jeton, en-têtes) |
-| Identité de service | Le service déclaré a sa propre identité stable ; les conteneurs s'y rattachent : label posé par openCloud pour ce qu'il déploie, sinon machine + projet + service Compose, sinon nom du conteneur (signalé comme faible). Recréer un conteneur ne casse aucun lien |
+| Identité de service | Le service déclaré a sa propre identité stable ; les conteneurs s'y rattachent : label posé par Kagu pour ce qu'il déploie, sinon machine + projet + service Compose, sinon nom du conteneur (signalé comme faible). Recréer un conteneur ne casse aucun lien |
 | Statut | La page de statut globale disparaît : plusieurs pages, une par projet, créées à la main, avec le choix de ce qui est montré. **Fait** (migration `034`, voir `24-modele-cible.md` section 14) |
-| Sauvegardes de VM Proxmox (24/10/2026, #266) | **Pas de nouveau mécanisme de sauvegarde** : le module Sauvegardes se généralise (une source produite par un agent, même chiffrement `age`, même réception `backup.receive`, même rétention `backup.prune`, restauration sans openCloud). **Le colis transite par `serve`** (store-and-forward, pas d'agent à agent : rien de nouveau côté réseau), une VM à la fois, donc une seule archive à la fois sur la machine openCloud. **Un plan par source, un sujet libre** : les fichiers d'un plan portent son sujet, l'élagage ne touche que son préfixe. Proposé par Claude, validé par Lucas le 24/10/2026 |
+| Sauvegardes de VM Proxmox (24/10/2026, #266) | **Pas de nouveau mécanisme de sauvegarde** : le module Sauvegardes se généralise (une source produite par un agent, même chiffrement `age`, même réception `backup.receive`, même rétention `backup.prune`, restauration sans Kagu). **Le colis transite par `serve`** (store-and-forward, pas d'agent à agent : rien de nouveau côté réseau), une VM à la fois, donc une seule archive à la fois sur la machine Kagu. **Un plan par source, un sujet libre** : les fichiers d'un plan portent son sujet, l'élagage ne touche que son préfixe. Proposé par Claude, validé par Lucas le 24/10/2026 |
 | Deux dessins du réseau (6/11/2026, #498 lot 7) | Ce n'est pas un doublon : la **fiche machine** dessine les conteneurs d'une machine et leurs réseaux Docker (`NetworkGraph`, `/api/machines/{id}/network`) ; l'**accueil** dessine les machines et les services de tout le réseau (`netmap`, `/api/network`). Deux questions, deux dessins ; aucune fusion. Décision de Raph, sur délégation de Lucas |
 | Contrôles | Pour après l'étape 2 : contrôles sur le modèle NRPE (commandes dans le fichier local de l'agent, le serveur ne demande qu'un nom, code de sortie 0/1/2/3). Webhooks entrants génériques à côté des pings de cron |
 
@@ -385,8 +385,8 @@ Tri de l'existant fait par Lucas le 17 octobre 2026.
 
 | Fonctionnalité | Décision |
 | --- | --- |
-| Paramètres | Secrets saisis dans l'interface chiffrés en base par la clé du serveur. Paramètres = openCloud lui-même : Général, Accès, Intégrations (agent IA, relais e-mail, fin de support). Les seuils vont dans la page Alertes ; la sauvegarde de la base est une sauvegarde parmi d'autres, dans la page Sauvegardes. Machine › Réglages montre ce que l'agent déclare, en lecture |
-| Authentification | Compte local créé au premier démarrage, avant tout. SSO branchable ensuite, jamais figé sur un fournisseur : forward-auth (existe) et OIDC dans openCloud (à ajouter). Journal des gestes dès le premier geste ; page de connexion avec déconnexion à la place du Basic ; comptes multiples et rôles plus tard |
+| Paramètres | Secrets saisis dans l'interface chiffrés en base par la clé du serveur. Paramètres = Kagu lui-même : Général, Accès, Intégrations (agent IA, relais e-mail, fin de support). Les seuils vont dans la page Alertes ; la sauvegarde de la base est une sauvegarde parmi d'autres, dans la page Sauvegardes. Machine › Réglages montre ce que l'agent déclare, en lecture |
+| Authentification | Compte local créé au premier démarrage, avant tout. SSO branchable ensuite, jamais figé sur un fournisseur : forward-auth (existe) et OIDC dans Kagu (à ajouter). Journal des gestes dès le premier geste ; page de connexion avec déconnexion à la place du Basic ; comptes multiples et rôles plus tard |
 | SSO des services | Forward-auth au proxy (générique) + OIDC optionnel par modèle. Par service : tout protégé par défaut, liste de chemins ouverts pré-remplie par le modèle et modifiable, chaque chemin ouvert affiché comme public |
 | Tâches | Jeton réaffiché en clair dans l'interface, stocké chiffré en base, régénérable. Intervalle + marge, pas d'horaire cron. Édition sur place, pause qui tient, webhooks entrants comme genre de tâche |
 | Sondes | Édition sur place ; rattachement au service de l'annuaire depuis n'importe quelle machine (dedans ou dehors). Contrôles NRPE = un genre de sonde, quatrième état « avertissement » |
@@ -397,7 +397,7 @@ Tri de l'existant fait par Lucas le 17 octobre 2026.
 | Terme | « Outil d'infra » est provisoire. Le libellé vit dans les catalogues, il se change sans toucher au code |
 | Canaux | Globaux par défaut ; limitables à un ou plusieurs projets. Essais espacés jusqu'à une heure, rejoués par la boucle de fond ; code mort retiré |
 | Conteneur non couvert | Fiche « non déclaré », adoptable d'un clic dans l'annuaire (vue « écart », migration de l'existant) |
-| Images non déployées par openCloud | La commande à copier reste, tant que tout n'est pas migré |
+| Images non déployées par Kagu | La commande à copier reste, tant que tout n'est pas migré |
 | Réseau | Le dessin interactif est remplacé par une liste par service : publié, dépend de, constats. Le dessin global de l'accueil disparaît |
 | Fin de support | Fiche + alerte de faible gravité quand une branche est morte ; produit choisi à la main sur chaque unité (image) du service déclaré ; interrupteur en base |
 | Accueil | Devient « ce qui est à traiter » : écarts, alertes, gestes proposés. Les cartes machines vont sur la page Machines |
@@ -410,18 +410,18 @@ Il peut revoir chacun.
 
 | Sujet | Décision | Pourquoi |
 | --- | --- | --- |
-| Machine openCloud | Reçoit un agent comme les autres ; le chemin intégré à `serve` disparaît. **Fait** le 21 octobre 2026, décision de Lucas : l'agent s'installe dès la première étape, la ligne s'affiche à la première configuration | Trois bouts de code recopiés en moins, un seul mécanisme |
+| Machine Kagu | Reçoit un agent comme les autres ; le chemin intégré à `serve` disparaît. **Fait** le 21 octobre 2026, décision de Lucas : l'agent s'installe dès la première étape, la ligne s'affiche à la première configuration | Trois bouts de code recopiés en moins, un seul mécanisme |
 | Direct | `machines` publié seulement sur un vrai changement (en ligne, hors ligne, système) ; l'événement porte l'identifiant ; une seule liste de sujets ; un sujet « exécutions » | Aujourd'hui 10 machines = relecture complète toutes les 3 s par onglet |
 | Mesures | Gardées ; rétention 24 h chez l'agent (décision 11) ; interfaces virtuelles (veth, ponts) écartées ; agrégat horaire par volume ; historique long par service sur l'identité stable | Trafic compté deux fois, volume plein noyé dans la somme |
 | E-mail | Gardé, relais migré en base, mot de passe chiffré | Isolé, facultatif, c'est le canal que tout opérateur a déjà |
 | Matrix | Gardé tel quel ; le champ « secret » à double sens sera renommé avec la revue des canaux | 82 lignes, rien à gagner |
-| Jeton d'API | Lecture seule, sur une liste fermée de routes ; le MCP est un projet à part (mcp-maison) qui lit l'API. Quand l'écriture viendra, des actions typées passeront par la même couche de gestes que l'interface et `apply` | Un seul chemin par geste, pas deux à garder alignés ; openCloud ne parle plus MCP |
+| Jeton d'API | Lecture seule, sur une liste fermée de routes ; le MCP est un projet à part (mcp-maison) qui lit l'API. Quand l'écriture viendra, des actions typées passeront par la même couche de gestes que l'interface et `apply` | Un seul chemin par geste, pas deux à garder alignés ; Kagu ne parle plus MCP |
 | Paramètres (front) | `Settings.tsx` découpé en sous-pages | 727 lignes, cinq sujets |
 | Service déclaré | Un service = un dossier (projet Compose) avec ses unités (service Compose, conteneur, binaire) ; identifiant jamais tiré de Docker | Colle à la décision 7 : une sauvegarde, une adresse, une version épinglée par image |
 | Suppressions | `restrict` entre objets déclarés + un plan qui liste ce que la suppression emporte, puis supprime dans l'ordre ; l'historique propre part avec son objet ; alertes, exécutions et audit survivent (`set null` + nom recopié) | La base refuse toute perte silencieuse, même par un chemin oublié |
 | Incidents et « taire » | Visent les objets de l'annuaire ; chaque page de statut montre ceux de ses composants ; le moteur d'alertes ne lit plus les pages. **Fait** (21/10, `005`) ; l'impact `maintenance` des incidents reste, à retirer sur décision de Lucas | Cohérent avec « taire » et les pages multiples |
 | Chiffrement de la sauvegarde | Paire de clés : la publique chiffre chaque nuit (sur le serveur pour la base, sur l'hôte producteur pour une VM) ; la privée est chiffrée par la phrase de passe et déposée avec les sauvegardes. Seule la phrase est à garder | Sauvegarde automatique sans secret en clair sur le serveur, une seule chose à retenir |
-| Secrets des services | Le `.env` sur la machine fait foi ; openCloud ne le recopie pas en base. La sauvegarde d'un service = `data/` + `.env`, chiffrés | Une seule source de vérité ; une restauration sans les secrets serait inutilisable |
+| Secrets des services | Le `.env` sur la machine fait foi ; Kagu ne le recopie pas en base. La sauvegarde d'un service = `data/` + `.env`, chiffrés | Une seule source de vérité ; une restauration sans les secrets serait inutilisable |
 | Export | Ne contient jamais de secrets (marqueur « conservé ») ; peut aller dans Git | Restaurer sur base vide passe par la sauvegarde, pas par l'export |
 | Identité dans le YAML | `id` écrit par l'export + `name` ; un `id` dupliqué par copier-coller est refusé | Renommer ne recrée rien (décision 3) |
 | Migration de l'existant | Un service déclaré n'est créé d'office que pour un conteneur qui porte déjà un lien (sonde, composant de statut, politique de mise à jour) ; le reste paraît « non déclaré », adoptable d'un clic | Rien ne se crée sans raison, rien ne se perd |

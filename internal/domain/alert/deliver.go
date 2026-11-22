@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
 // Job est tout ce qu'il faut pour livrer : la ligne réservée, l'alerte

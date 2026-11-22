@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Severity : deux gravités, pas trois. Un ton de plus ne dirait rien de

@@ -83,7 +83,7 @@ test("la page : verdict, cartes, chemin du relais à copier, cible et filtres", 
   await page.keyboard.press("Escape");
 
   // La base d'openCloud est une ligne de plus : sa clé et ses destinations sont sur sa carte.
-  const database = card(page, label("backup.source_database").replace("{product}", "openCloud"));
+  const database = card(page, label("backup.source_database").replace("{product}", "Kagu"));
   await expect(database).toContainText(label("backup.keyring_title"));
   await expect(database).toContainText(label("backup.destination_title"));
   await expect(page.locator("#archives")).toHaveCount(0);

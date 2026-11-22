@@ -3,9 +3,9 @@ package server
 import (
 	"net/http"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
-	"github.com/ldesfontaine/opencloud/internal/fact/firewall"
-	"github.com/ldesfontaine/opencloud/internal/fact/policy"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/firewall"
+	"github.com/ldesfontaine/kagu/internal/fact/policy"
 )
 
 // La vue « qui parle à qui » d'un pare-feu : les zones, les objets que les

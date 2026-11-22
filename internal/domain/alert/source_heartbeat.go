@@ -3,7 +3,7 @@ package alert
 import (
 	"context"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
 )
 
 // Ce que le composant heartbeat constate : une tâche en retard, en échec,

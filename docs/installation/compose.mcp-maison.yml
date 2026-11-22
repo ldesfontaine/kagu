@@ -1,4 +1,4 @@
-# mcp-maison, le serveur MCP qui lit openCloud par son API avec un jeton
+# mcp-maison, le serveur MCP qui lit Kagu par son API avec un jeton
 # d'API en lecture. À poser en /srv/workspace/mcp-maison/compose.yml, à côté
 # de son .env et de data/mcp/ (installation.md, « Brancher un agent IA »).
 # La version est épinglée par son tag et son empreinte (voir image) : changer
@@ -14,9 +14,9 @@ services:
     restart: unless-stopped
     # Réseau bridge, jamais `network_mode: host` : un conteneur exposé à
     # Internet ne partage pas la pile réseau de l'hôte. Le port n'est publié
-    # que sur MCP_HOST (le Traefik de la machine le joint là) ; openCloud se
+    # que sur MCP_HOST (le Traefik de la machine le joint là) ; Kagu se
     # joint par host-gateway, l'IP du pont docker0, qui est celle de `listen`
-    # (OPENCLOUD_URL en IP : openCloud refuse le nom host.docker.internal).
+    # (OPENCLOUD_URL en IP : Kagu refuse le nom host.docker.internal).
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

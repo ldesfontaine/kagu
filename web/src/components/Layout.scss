@@ -33,28 +33,23 @@
   background: var(--bg);
 }
 
+// Le mot-symbole de branding/LISEZ-MOI.md : le signe vaut 0,875 fois la taille
+// du mot, l'écart 0,22 fois ; d'où les em, sur la taille du mot.
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.22em;
   height: 36px;
   padding: 0 8px;
+  font-size: 15px;
   color: var(--ink);
 
   .mark {
-    width: 24px;
-    height: 24px;
-    display: grid;
-    place-items: center;
+    display: inline-flex;
 
     svg {
-      width: 22px;
-      height: 22px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 2.2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
+      width: 0.875em;
+      height: 0.875em;
     }
   }
 }
@@ -64,21 +59,14 @@
   margin-bottom: 24px;
 }
 
+// Le mot-symbole s'écrit tout en minuscules, d'un seul poids.
 .wordmark {
-  display: inline-flex;
   font-size: 15px;
+  font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1;
-
-  span {
-    font-weight: 500;
-    color: var(--ink-2);
-  }
-
-  b {
-    font-weight: 600;
-    color: var(--ink);
-  }
+  text-transform: lowercase;
+  color: var(--ink);
 }
 
 .side-label {

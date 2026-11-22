@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
 )
 
 func TestAPI_CreateJob_ReturnsItAndRefusesBadDefinitionsWithTheirKey(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Le contenu d'un service : son dossier Compose, les volumes qu'un de ses

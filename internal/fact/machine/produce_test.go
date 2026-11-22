@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // Les textes que la préparation écrit en root se collent entre apostrophes,
@@ -31,7 +33,7 @@ func TestProduceTexts_AreSafeInsideSingleQuotes(t *testing.T) {
 func TestProduceTexts_SayExactlyWhatTheDocumentationSays(t *testing.T) {
 	wantWrapper := []string{
 		"#!/bin/sh",
-		"# openCloud : vzdump hors du bac à sable de l agent, sur ordre de l agent.",
+		"# " + brand.ProductName + " : vzdump hors du bac à sable de l agent, sur ordre de l agent.",
 		`exec /usr/bin/systemd-run --pipe --wait --collect --quiet /usr/bin/vzdump "$@"`,
 	}
 	if got := VzdumpWrapperLines(); !slices.Equal(got, wantWrapper) {

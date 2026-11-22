@@ -3,7 +3,7 @@ package alert
 import (
 	"context"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/domain/restic"
 )
 
 // Ce que le module Sauvegardes constate : les constats de sa supervision, à

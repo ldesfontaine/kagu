@@ -3,8 +3,8 @@ package server
 import (
 	"net/http"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/restic"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Ce que l'opérateur saisit pour faire d'une machine une cible restic.

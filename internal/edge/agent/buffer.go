@@ -3,7 +3,7 @@ package agent
 import (
 	"sync"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/kit/sampler"
 )
 
 // Une heure de lectures à 10 s : ce qu'une coupure peut retenir avant que

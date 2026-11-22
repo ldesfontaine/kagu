@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/fact/systemdunits"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/systemdunits"
 )
 
 // ReplaceSystemdUnits remplace tout ce que la machine avait par son dernier
