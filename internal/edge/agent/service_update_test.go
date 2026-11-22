@@ -487,7 +487,7 @@ func TestMarker_JudgesWhatItReads(t *testing.T) {
 func TestReadDockerOrder_JudgesTheSafetyNet(t *testing.T) {
 	read := func(update bool, rollback *agentwire.ServiceRollback) bool {
 		params, _ := json.Marshal(agentwire.DockerParams{ServiceID: "svc_1", Project: "nextcloud", Compose: testCompose, DataDirs: []string{"app"}, Rollback: rollback})
-		_, refused := readDockerOrder(agentwire.OrderBody{RunID: "run_1", Params: params}, "/srv/workspace", update)
+		_, refused := readDockerOrder(judgedOf(t, agentwire.OrderBody{RunID: "run_1", Kind: agentwire.KindDockerUpdate, Params: params}), "/srv/workspace", update)
 		return refused == nil
 	}
 	valid := agentwire.DefaultServiceRollback()

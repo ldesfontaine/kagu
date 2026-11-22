@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"os/exec"
@@ -15,7 +14,7 @@ import (
 // de la source écrivent quelques fichiers de l'état : ils se font tout de
 // suite, sous le verrou du juge. La sauvegarde et la rétention sont des
 // ordres longs, faits par le worker. Les mots de passe arrivent dans le
-// secret signé de l'ordre (body.Secret) ; aucun n'est journalisé ni rendu.
+// secret signé de l'ordre, décodé par le juge ; aucun n'est journalisé ni rendu.
 
 // useResticBinaries pose les chemins que l'opérateur a déclarés (-restic,
 // -rest-server) ; vides, les binaires se cherchent dans le PATH.
@@ -47,70 +46,70 @@ func resticTargetDir(capabilities []machine.Capability) (string, bool) {
 	return "", false
 }
 
-func (r *orderRunner) resticTargetSetup(body agentwire.OrderBody) agentwire.ActionResult {
-	var params agentwire.ResticTargetSetupParams
-	if err := json.Unmarshal(body.Params, &params); err != nil {
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+func (r *orderRunner) resticTargetSetup(order judgedOrder) agentwire.ActionResult {
+	params, ok := order.Params.(agentwire.ResticTargetSetupParams)
+	if !ok {
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
 	if err := params.Validate(); err != nil {
 		if errors.Is(err, agentwire.ErrResticRetentionInvalid) {
-			return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonRetentionInvalid}
+			return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonRetentionInvalid}
 		}
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
 	dir, _ := resticTargetDir(r.identity.Capabilities())
 	output, err := r.restic.target.setup(params, dir, r.checks)
-	return r.finishRestic(body, output, err)
+	return r.finishRestic(order, output, err)
 }
 
 // resticUser fait restic.user.add (le mot de passe REST dans le secret de
 // l'ordre) et restic.user.remove (sans secret).
-func (r *orderRunner) resticUser(body agentwire.OrderBody) agentwire.ActionResult {
-	bad := agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
-	if body.Kind == agentwire.KindResticUserRemove {
-		var params agentwire.ResticUserRemoveParams
-		if err := json.Unmarshal(body.Params, &params); err != nil || params.Validate() != nil || len(body.Secret) != 0 {
+func (r *orderRunner) resticUser(order judgedOrder) agentwire.ActionResult {
+	bad := agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+	if order.Kind == agentwire.KindResticUserRemove {
+		params, ok := order.Params.(agentwire.ResticUserRemoveParams)
+		if !ok || params.Validate() != nil || order.Secret != nil {
 			return bad
 		}
 		output, err := r.restic.target.setUser(params.User, "")
-		return r.finishRestic(body, output, err)
+		return r.finishRestic(order, output, err)
 	}
-	var params agentwire.ResticUserAddParams
-	if err := json.Unmarshal(body.Params, &params); err != nil || params.Validate() != nil {
+	params, ok := order.Params.(agentwire.ResticUserAddParams)
+	if !ok || params.Validate() != nil {
 		return bad
 	}
-	var secret agentwire.ResticUserSecret
-	if err := json.Unmarshal(body.Secret, &secret); err != nil || secret.Validate() != nil {
+	secret, ok := order.Secret.(agentwire.ResticUserSecret)
+	if !ok || secret.Validate() != nil {
 		return bad
 	}
 	output, err := r.restic.target.setUser(params.User, secret.RESTPassword)
-	return r.finishRestic(body, output, err)
+	return r.finishRestic(order, output, err)
 }
 
-func (r *orderRunner) resticProvision(body agentwire.OrderBody) agentwire.ActionResult {
-	bad := agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
-	var params agentwire.ResticProvisionParams
-	if err := json.Unmarshal(body.Params, &params); err != nil || params.Validate() != nil {
+func (r *orderRunner) resticProvision(order judgedOrder) agentwire.ActionResult {
+	bad := agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+	params, ok := order.Params.(agentwire.ResticProvisionParams)
+	if !ok || params.Validate() != nil {
 		return bad
 	}
-	var secret agentwire.ResticProvisionSecret
-	if err := json.Unmarshal(body.Secret, &secret); err != nil || secret.Validate() != nil {
+	secret, ok := order.Secret.(agentwire.ResticProvisionSecret)
+	if !ok || secret.Validate() != nil {
 		return bad
 	}
 	output, err := r.restic.source.provision(params, secret)
-	return r.finishRestic(body, output, err)
+	return r.finishRestic(order, output, err)
 }
 
 // finishRestic rapporte un ordre restic fait tout de suite, et réveille le
 // rapport : la fiche voit le changement sans attendre la période.
-func (r *orderRunner) finishRestic(body agentwire.OrderBody, output []agentwire.OutputLine, err error) agentwire.ActionResult {
+func (r *orderRunner) finishRestic(order judgedOrder, output []agentwire.OutputLine, err error) agentwire.ActionResult {
 	if err != nil {
-		r.journal.failed(body, err)
+		r.journal.failed(order, err)
 	} else {
-		r.journal.executed(body)
+		r.journal.executed(order)
 	}
 	r.restic.nudge()
-	result := resultOf(body.RunID, output, err)
+	result := resultOf(order.RunID, output, err)
 	if result.State == agentwire.ActionFailed && isUntouched(err) {
 		result.State = agentwire.ActionRefused
 	}
@@ -120,19 +119,19 @@ func (r *orderRunner) finishRestic(body agentwire.OrderBody, output []agentwire.
 // acceptResticBackup juge la sauvegarde vite, puis l'accepte : sonder la
 // cible et lancer restic est le travail du worker. Droits, racine et
 // vérifications sont lus ici, sous le verrou.
-func (r *orderRunner) acceptResticBackup(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
+func (r *orderRunner) acceptResticBackup(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
 	checks := r.checks
-	job, refused := readResticBackup(body, r.identity.Capabilities(), r.identity.Root(), checks)
+	job, refused := readResticBackup(order, r.identity.Capabilities(), r.identity.Root(), checks)
 	if refused == nil && !r.restic.source.isProvisioned(job.params.Target) {
-		refused = &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonResticNotProvisioned}
+		refused = &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonResticNotProvisioned}
 	}
 	if refused != nil {
-		r.journal.notAccepted(body, refused.Reason)
+		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil
 	}
-	return accepted(body), func(ctx context.Context) {
+	return accepted(order), func(ctx context.Context) {
 		report, output, err := r.restic.source.backup(ctx, job, checks)
-		result := r.finishRestic(body, output, err)
+		result := r.finishRestic(order, output, err)
 		if report.Path != "" {
 			result.Restic = &report
 		}

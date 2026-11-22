@@ -49,26 +49,26 @@ type proxmoxJob struct {
 	token  proxmoxToken
 }
 
-// readProxmoxOrder juge l'ordre avant de l'accepter : des paramètres stricts
-// (un champ inconnu ne passe pas), un instantané de ce produit pour la
+// readProxmoxOrder juge l'ordre avant de l'accepter : les paramètres décodés
+// par le juge (un champ inconnu n'y est pas arrivé), un instantané de ce produit pour la
 // suppression, et un jeton local utilisable. Un refus ici n'a rien appelé.
-func (t proxmoxTools) readProxmoxOrder(body agentwire.OrderBody) (proxmoxJob, *agentwire.ActionResult) {
-	var params agentwire.ProxmoxGuestParams
-	if err := agentwire.StrictDecode(body.Params, &params); err != nil {
-		return proxmoxJob{}, &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+func (t proxmoxTools) readProxmoxOrder(order judgedOrder) (proxmoxJob, *agentwire.ActionResult) {
+	params, ok := order.Params.(agentwire.ProxmoxGuestParams)
+	if !ok {
+		return proxmoxJob{}, &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
-	if err := params.Validate(body.Kind); err != nil {
+	if err := params.Validate(order.Kind); err != nil {
 		reason := agentwire.ReasonBadOrder
 		if agentwire.IsSnapshotNotOurs(err) {
 			reason = agentwire.ReasonProxmoxSnapshotNotOurs
 		}
-		return proxmoxJob{}, &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: reason}
+		return proxmoxJob{}, &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: reason}
 	}
 	token, reason := readProxmoxToken(t.stateDir)
 	if reason != "" {
-		return proxmoxJob{}, &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: reason}
+		return proxmoxJob{}, &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: reason}
 	}
-	return proxmoxJob{kind: body.Kind, params: params, token: token}, nil
+	return proxmoxJob{kind: order.Kind, params: params, token: token}, nil
 }
 
 // run fait le geste : retrouver l'invité, vérifier qu'il peut le recevoir,

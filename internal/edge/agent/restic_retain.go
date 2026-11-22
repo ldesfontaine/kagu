@@ -44,26 +44,26 @@ type resticRetainJob struct {
 
 // acceptResticRetain juge la rétention vite (forme, secret, restic présent,
 // plancher, dépôt libre), puis l'accepte : la purge est le travail du worker.
-func (r *orderRunner) acceptResticRetain(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
+func (r *orderRunner) acceptResticRetain(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
 	dir, _ := resticTargetDir(r.identity.Capabilities())
-	job, refused := r.restic.target.judgeRetain(body, dir, r.checks)
+	job, refused := r.restic.target.judgeRetain(order, dir, r.checks)
 	if refused != nil {
-		r.journal.notAccepted(body, refused.Reason)
+		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil
 	}
-	return accepted(body), func(ctx context.Context) {
+	return accepted(order), func(ctx context.Context) {
 		output, err := r.restic.target.retain(ctx, job)
-		r.results.push(r.finishRestic(body, output, err))
+		r.results.push(r.finishRestic(order, output, err))
 	}
 }
 
 // judgeRetain lit l'ordre et le refuse sans rien lancer s'il ne passe pas.
-func (t *resticTarget) judgeRetain(body agentwire.OrderBody, dir string, checks hostChecks) (resticRetainJob, *agentwire.ActionResult) {
+func (t *resticTarget) judgeRetain(order judgedOrder, dir string, checks hostChecks) (resticRetainJob, *agentwire.ActionResult) {
 	refused := func(state agentwire.ActionState, reason string) *agentwire.ActionResult {
-		return &agentwire.ActionResult{RunID: body.RunID, State: state, Reason: reason}
+		return &agentwire.ActionResult{RunID: order.RunID, State: state, Reason: reason}
 	}
-	var params agentwire.ResticRetainParams
-	if err := json.Unmarshal(body.Params, &params); err != nil {
+	params, ok := order.Params.(agentwire.ResticRetainParams)
+	if !ok {
 		return resticRetainJob{}, refused(agentwire.ActionFailed, agentwire.ReasonBadOrder)
 	}
 	if err := params.Validate(); err != nil {
@@ -72,8 +72,8 @@ func (t *resticTarget) judgeRetain(body agentwire.OrderBody, dir string, checks 
 		}
 		return resticRetainJob{}, refused(agentwire.ActionFailed, agentwire.ReasonBadOrder)
 	}
-	var secret agentwire.ResticRetainSecret
-	if err := json.Unmarshal(body.Secret, &secret); err != nil || secret.Validate() != nil {
+	secret, ok := order.Secret.(agentwire.ResticRetainSecret)
+	if !ok || secret.Validate() != nil {
 		return resticRetainJob{}, refused(agentwire.ActionFailed, agentwire.ReasonBadOrder)
 	}
 	binary, err := checks.findRestic()

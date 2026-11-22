@@ -29,7 +29,7 @@ type Spec struct {
 	decodeParams func(raw []byte) (any, error)
 	// decodeSecret lit le champ secret dans son type ; nil : le genre n'en
 	// porte pas.
-	decodeSecret func(raw []byte) error
+	decodeSecret func(raw []byte) (any, error)
 }
 
 // AnchorCheck dit quelle valeur de l'ordre décodé un type d'ancre juge.
@@ -82,9 +82,12 @@ func AnchoredWhen[P any](name string, applies func(P) bool, value func(P) string
 // WithSecret dit que le genre porte un champ secret, du type S.
 func WithSecret[S any]() Option {
 	return func(spec *Spec) {
-		spec.decodeSecret = func(raw []byte) error {
+		spec.decodeSecret = func(raw []byte) (any, error) {
 			var secret S
-			return StrictDecode(raw, &secret)
+			if err := StrictDecode(raw, &secret); err != nil {
+				return nil, err
+			}
+			return secret, nil
 		}
 	}
 }
@@ -198,10 +201,14 @@ func StrictDecode(raw []byte, into any) error {
 // ErrNotAnOrder : le genre n'est pas dans le registre.
 var ErrNotAnOrder = errors.New("not an order kind")
 
-// Order est un ordre lu : son genre et ses paramètres décodés dans leur type.
+// Order est un ordre lu : son genre, ses paramètres et son secret décodés
+// dans leur type. Le juge, les ancres, le journal et l'exécuteur lisent cet
+// objet-là, jamais les octets (R-A1-5).
 type Order struct {
 	Kind   Kind
 	Params any
+	// Nil quand l'ordre n'en porte pas.
+	Secret any
 	spec   Spec
 }
 
@@ -218,23 +225,24 @@ func Decode(kind Kind, params json.RawMessage) (Order, error) {
 	return Order{Kind: kind, Params: decoded, spec: spec}, nil
 }
 
-// CheckSecret lit le champ secret d'un ordre de ce genre, strictement (R-A1-4).
-// Absent, il passe : l'exécuteur dit s'il le lui faut. Présent sur un genre
-// qui n'en porte pas, il est refusé.
-func CheckSecret(kind Kind, secret json.RawMessage) error {
+// DecodeSecret lit le champ secret d'un ordre de ce genre, strictement
+// (R-A1-4). Absent, il rend nil : l'exécuteur dit s'il le lui faut. Présent
+// sur un genre qui n'en porte pas, il est refusé.
+func DecodeSecret(kind Kind, secret json.RawMessage) (any, error) {
 	spec, known := SpecOf(kind)
 	switch {
 	case !known:
-		return fmt.Errorf("%q: %w", kind, ErrNotAnOrder)
+		return nil, fmt.Errorf("%q: %w", kind, ErrNotAnOrder)
 	case len(secret) == 0:
-		return nil
+		return nil, nil
 	case spec.decodeSecret == nil:
-		return fmt.Errorf("%s carries no secret: %w", kind, ErrNotCanonical)
+		return nil, fmt.Errorf("%s carries no secret: %w", kind, ErrNotCanonical)
 	}
-	if err := spec.decodeSecret(secret); err != nil {
-		return fmt.Errorf("%s secret: %w", kind, err)
+	decoded, err := spec.decodeSecret(secret)
+	if err != nil {
+		return nil, fmt.Errorf("%s secret: %w", kind, err)
 	}
-	return nil
+	return decoded, nil
 }
 
 // Presented rend, pour chaque ancre qui borne l'ordre, la valeur qu'il lui

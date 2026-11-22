@@ -13,9 +13,10 @@ import (
 // Le journal local des ordres (journald) : pour chaque ordre reçu, de quoi
 // retrouver exactement ce que le serveur a signé, sans le serveur. Le run, le
 // genre, le rang, le SHA-256 du corps signé, l'empreinte de la clé qui l'a
-// signé, et les paramètres non secrets de la liste blanche du genre
-// (agentwire.JournalParams). Jamais le secret de l'ordre, ni un champ hors de
-// la liste blanche : le journal ne reçoit que ce que cette liste nomme.
+// signé, et les paramètres non secrets de la liste blanche du genre, lus sur
+// l'ordre décodé par le juge (agentwire.Order.JournalValues). Jamais le secret
+// de l'ordre, ni un champ hors de la liste blanche, ni les octets d'un ordre qui
+// ne s'est pas décodé : de celui-là, le journal garde les empreintes.
 
 // Un agent garde au plus ce nombre d'ordres en vol ; au-delà, la mémoire des
 // empreintes repart de zéro plutôt que de grandir.
@@ -71,18 +72,18 @@ func (j *orderJournal) forget(runID string) {
 }
 
 // attributes compose ce que toute ligne d'ordre porte.
-func (j *orderJournal) attributes(body agentwire.OrderBody) []any {
+func (j *orderJournal) attributes(order judgedOrder) []any {
 	j.mu.Lock()
-	facts := j.facts[body.RunID]
+	facts := j.facts[order.RunID]
 	j.mu.Unlock()
-	attributes := []any{"run_id", body.RunID, "kind", string(body.Kind), "seq", body.Seq}
+	attributes := []any{"run_id", order.RunID, "kind", string(order.Kind), "seq", order.Seq}
 	if facts.bodySHA256 != "" {
 		attributes = append(attributes, "body_sha256", facts.bodySHA256)
 	}
 	if facts.signingKey != "" {
 		attributes = append(attributes, "signing_key", facts.signingKey)
 	}
-	if params := agentwire.JournalParams(body.Kind, body.Params); len(params) > 0 {
+	if params := order.JournalValues(); len(params) > 0 {
 		group := make([]any, 0, 2*len(params))
 		for name, value := range params {
 			group = append(group, name, value)
@@ -95,34 +96,34 @@ func (j *orderJournal) attributes(body agentwire.OrderBody) []any {
 // received écrit la ligne de réception d'un ordre jugé : accepté, ou refusé
 // avec sa raison. Un refus est sa dernière ligne ; un ordre accepté a encore sa
 // fin à dire.
-func (j *orderJournal) received(body agentwire.OrderBody, reason string) {
+func (j *orderJournal) received(order judgedOrder, reason string) {
 	if reason != "" {
-		j.refused(body, reason)
+		j.refused(order, reason)
 		return
 	}
-	j.logger().Info("order received", j.attributes(body)...)
+	j.logger().Info("order received", j.attributes(order)...)
 }
 
-func (j *orderJournal) refused(body agentwire.OrderBody, reason string) {
-	j.final(slog.LevelWarn, "order refused", body, "reason", reason)
+func (j *orderJournal) refused(order judgedOrder, reason string) {
+	j.final(slog.LevelWarn, "order refused", order, "reason", reason)
 }
 
 // notAccepted : l'ordre a passé le juge mais l'exécuteur de son genre le refuse.
-func (j *orderJournal) notAccepted(body agentwire.OrderBody, reason string) {
-	j.final(slog.LevelWarn, "order not accepted", body, "reason", reason)
+func (j *orderJournal) notAccepted(order judgedOrder, reason string) {
+	j.final(slog.LevelWarn, "order not accepted", order, "reason", reason)
 }
 
-func (j *orderJournal) executed(body agentwire.OrderBody) {
-	j.final(slog.LevelInfo, "order executed", body)
+func (j *orderJournal) executed(order judgedOrder) {
+	j.final(slog.LevelInfo, "order executed", order)
 }
 
-func (j *orderJournal) failed(body agentwire.OrderBody, err error) {
-	j.final(slog.LevelWarn, "order failed", body, "error", err)
+func (j *orderJournal) failed(order judgedOrder, err error) {
+	j.final(slog.LevelWarn, "order failed", order, "error", err)
 }
 
 // final écrit la dernière ligne d'un ordre (exécuté, échoué, non accepté,
 // refusé) puis en oublie les empreintes. extra : des couples nom, valeur.
-func (j *orderJournal) final(level slog.Level, message string, body agentwire.OrderBody, extra ...any) {
-	j.logger().Log(context.Background(), level, message, append(j.attributes(body), extra...)...)
-	j.forget(body.RunID)
+func (j *orderJournal) final(level slog.Level, message string, order judgedOrder, extra ...any) {
+	j.logger().Log(context.Background(), level, message, append(j.attributes(order), extra...)...)
+	j.forget(order.RunID)
 }

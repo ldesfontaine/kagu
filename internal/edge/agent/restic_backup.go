@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -48,13 +47,13 @@ type resticBackupJob struct {
 // backup.produce pour un invité, restic.docker pour des volumes ou des bases,
 // restic présent, et pour un service son dossier sous la racine. Un refus ne
 // lance rien.
-func readResticBackup(body agentwire.OrderBody, capabilities []machine.Capability, root string, checks hostChecks) (resticBackupJob, *agentwire.ActionResult) {
+func readResticBackup(order judgedOrder, capabilities []machine.Capability, root string, checks hostChecks) (resticBackupJob, *agentwire.ActionResult) {
 	refused := func(reason string) *agentwire.ActionResult {
-		return &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: reason}
+		return &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: reason}
 	}
-	var params agentwire.ResticBackupParams
-	if err := json.Unmarshal(body.Params, &params); err != nil || params.Validate() != nil {
-		return resticBackupJob{}, &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+	params, ok := order.Params.(agentwire.ResticBackupParams)
+	if !ok || params.Validate() != nil {
+		return resticBackupJob{}, &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
 	if params.Scope == agentwire.ResticScopeVM && !machine.CoversProducer(capabilities, machine.ProducerProxmoxVzdump) {
 		return resticBackupJob{}, refused(agentwire.RightMissing(machine.CapabilityBackupProduce))

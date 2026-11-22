@@ -409,7 +409,7 @@ func TestBackupProduce_TheJudgeRefusesBeforeRunningAnything(t *testing.T) {
 				t.Fatalf("%s: the anchors let it through", name)
 			}
 			wantReason, wantState = agentwire.AnchorRefusal(*finding), agentwire.ActionRefused
-			if _, bad := readBackupProduce(longOrder(seq+1, agentwire.KindBackupProduce, params), b.runner.identity.Capabilities(), b.runner.produce.producers); bad == nil || bad.Reason != agentwire.ReasonBadOrder {
+			if _, bad := readBackupProduce(judgedOf(t, longOrder(seq+1, agentwire.KindBackupProduce, params)), b.runner.identity.Capabilities(), b.runner.produce.producers); bad == nil || bad.Reason != agentwire.ReasonBadOrder {
 				t.Errorf("%s: the shape check must still refuse it: %+v", name, bad)
 			}
 		}
@@ -624,7 +624,7 @@ func TestBackupProduce_OnlyTheFinalArchiveIsThereWhileUploading(t *testing.T) {
 	tools.producers[machine.ProducerProxmoxVzdump] = echoProducer([]byte("une archive"), nil, nil)
 	tools.freeBytes = b.runner.produce.freeBytes
 	sink := &recordingSink{dir: filepath.Join(state.Name(), "produce")}
-	job, refused := readBackupProduce(longOrder(1, agentwire.KindBackupProduce, produceParams(b.identity)), b.runner.identity.Capabilities(), tools.producers)
+	job, refused := readBackupProduce(judgedOf(t, longOrder(1, agentwire.KindBackupProduce, produceParams(b.identity))), b.runner.identity.Capabilities(), tools.producers)
 	if refused != nil {
 		t.Fatalf("refused: %+v", refused)
 	}
@@ -831,7 +831,7 @@ func TestVzdumpProducer_ACancelledOrderStopsTheProducer(t *testing.T) {
 	b := newProduceRig(t)
 	tools := b.runner.produce
 	tools.producers = map[string]producer{machine.ProducerProxmoxVzdump: fake.producer()}
-	job, refused := readBackupProduce(longOrder(1, agentwire.KindBackupProduce, produceParams(b.identity)), b.runner.identity.Capabilities(), tools.producers)
+	job, refused := readBackupProduce(judgedOf(t, longOrder(1, agentwire.KindBackupProduce, produceParams(b.identity))), b.runner.identity.Capabilities(), tools.producers)
 	if refused != nil {
 		t.Fatalf("refused: %+v", refused)
 	}

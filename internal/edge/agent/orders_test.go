@@ -1,11 +1,15 @@
 package agent
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"log/slog"
 	"os"
 	"strings"
@@ -87,6 +91,17 @@ func order(seq int64) agentwire.OrderBody {
 		RunID: fmt.Sprintf("run-%d", seq), MachineID: orderMachineID, AgentID: orderAgentID, Kind: agentwire.KindAgentPing,
 		NotAfter: orderNow.Add(time.Minute).Unix(), Seq: seq,
 	}
+}
+
+// judgedOf décode un ordre comme le juge : ce que reçoit l'exécuteur de son
+// genre.
+func judgedOf(t *testing.T, body agentwire.OrderBody) judgedOrder {
+	t.Helper()
+	judged, err := decodeOrder(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return judged
 }
 
 func (b *orderBench) send(t *testing.T, body agentwire.OrderBody, signer ed25519.PrivateKey) agentwire.ActionResult {
@@ -404,4 +419,138 @@ func TestR_A1_6_AKindOutsideTheRegistryIsUnknownEvenSigned(t *testing.T) {
 	if saved, _ := LoadIdentity(b.stateDir); saved.LastOrderSeq != 0 {
 		t.Fatalf("a refused order moved the seq to %d", saved.LastOrderSeq)
 	}
+}
+
+// Chaque genre du registre a son exécuteur, et la table n'en a pas d'autre :
+// un genre ajouté sans exécuteur, ou un exécuteur sans genre, se voit ici.
+func TestExecutors_EveryDeclaredKindHasItsExecutor(t *testing.T) {
+	declared := map[agentwire.Kind]bool{}
+	for _, kind := range agentwire.OrderKinds() {
+		declared[kind] = true
+		if executors[kind] == nil {
+			t.Errorf("%s is declared but has no executor", kind)
+		}
+	}
+	for kind := range executors {
+		if !declared[kind] {
+			t.Errorf("%s has an executor but is not a declared kind", kind)
+		}
+	}
+}
+
+// countExecutors remplace chaque exécuteur par un compteur, le temps du test.
+func countExecutors(t *testing.T) map[agentwire.Kind]int {
+	t.Helper()
+	called := map[agentwire.Kind]int{}
+	saved := executors
+	executors = map[agentwire.Kind]executor{}
+	for kind := range saved {
+		executors[kind] = func(r *orderRunner, order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
+			called[order.Kind]++
+			return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionSucceeded}, nil
+		}
+	}
+	t.Cleanup(func() { executors = saved })
+	return called
+}
+
+// Pour chaque genre, un ordre dont les paramètres ou le secret ne se décodent
+// pas est refusé bad_order par le juge : l'exécuteur n'est jamais appelé. Un
+// ordre qui se décode, lui, l'atteint (le compteur compte bien).
+func TestExecutors_NeverSeeAnOrderThatDoesNotDecode(t *testing.T) {
+	b := newOrderBenchWithRights(t, everyRight)
+	called := countExecutors(t)
+	seq := int64(0)
+	for _, kind := range agentwire.OrderKinds() {
+		for name, change := range map[string]func(*agentwire.OrderBody){
+			"an unknown field":          func(o *agentwire.OrderBody) { o.Params = json.RawMessage(`{"unknown":1}`) },
+			"not an object":             func(o *agentwire.OrderBody) { o.Params = json.RawMessage(`"text"`) },
+			"an unreadable secret":      func(o *agentwire.OrderBody) { o.Secret = json.RawMessage(`{"Env":"A=1","env":"B=2"}`) },
+			"a key in another case too": func(o *agentwire.OrderBody) { o.Params = json.RawMessage(`{"Kind":"x","kind":"y"}`) },
+		} {
+			seq++
+			body := order(seq)
+			body.Kind = kind
+			change(&body)
+			if result := b.send(t, body, b.private); result.State != agentwire.ActionRefused || result.Reason != agentwire.ReasonBadOrder {
+				t.Errorf("%s, %s: %+v", kind, name, result)
+			}
+		}
+	}
+	if len(called) != 0 {
+		t.Fatalf("an executor saw an order that does not decode: %v", called)
+	}
+	seq++
+	if result := b.send(t, order(seq), b.private); result.State != agentwire.ActionSucceeded || called[agentwire.KindAgentPing] != 1 {
+		t.Fatalf("a decoded ping must reach its executor: %+v %v", result, called)
+	}
+}
+
+// R-A1-5 : le juge, les ancres, le journal et l'exécuteur lisent le même objet
+// décodé. Dans le source de l'agent, aucun appel ne reçoit les octets d'un
+// champ Params ou Secret, hors decodeOrder, la seule lecture : ni
+// json.Unmarshal, ni un décodeur, ni agentwire.StrictDecode, quel que soit le
+// nom de la variable.
+func TestR_A1_5_NoExecutorRereadsTheParams(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		source, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, found := range rawFieldReads(t, name, source) {
+			t.Errorf("%s: the executor must take the decoded order, not reread its bytes", found)
+		}
+	}
+
+	// Le témoin : chaque forme de relecture est vue, et decodeOrder seul passe.
+	witness := `package agent
+func decodeOrder(body agentwire.OrderBody) { agentwire.Decode(body.Kind, body.Params); agentwire.DecodeSecret(body.Kind, body.Secret) }
+func a(body agentwire.OrderBody) { json.Unmarshal(body.Params, &p) }
+func b(body agentwire.OrderBody) { json.Unmarshal(body.Secret, &s) }
+func c(body agentwire.OrderBody) { json.NewDecoder(bytes.NewReader(body.Params)).Decode(&p) }
+func d(body agentwire.OrderBody) { agentwire.StrictDecode(body.Params, &p) }
+func e(order agentwire.OrderBody) { agentwire.StrictDecode(order.Secret, &s) }
+`
+	if found := rawFieldReads(t, "witness.go", []byte(witness)); len(found) != 5 {
+		t.Fatalf("the witness has five rereads, the search sees %d: %v", len(found), found)
+	}
+}
+
+// rawFieldReads rend chaque appel d'un source qui reçoit un champ Params ou
+// Secret, hors de decodeOrder.
+func rawFieldReads(t *testing.T, name string, source []byte) []string {
+	t.Helper()
+	fileSet := token.NewFileSet()
+	parsed, err := parser.ParseFile(fileSet, name, source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found []string
+	for _, declaration := range parsed.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name == "decodeOrder" {
+			continue
+		}
+		ast.Inspect(function, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			for _, argument := range call.Args {
+				if field, ok := argument.(*ast.SelectorExpr); ok && (field.Sel.Name == "Params" || field.Sel.Name == "Secret") {
+					found = append(found, fileSet.Position(call.Pos()).String())
+				}
+			}
+			return true
+		})
+	}
+	return found
 }

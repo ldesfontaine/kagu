@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"strings"
@@ -92,7 +93,10 @@ func TestOrderRunner_WithoutTheGuard_NeitherUpdateNorRollbackIsAccepted(t *testi
 	for _, kind := range []agentwire.Kind{agentwire.KindAgentUpdate, agentwire.KindAgentRollback} {
 		body := order(int64(len(kind)))
 		body.Kind = kind
-		result, job := b.runner.execute(body)
+		if kind == agentwire.KindAgentUpdate {
+			body.Params, _ = json.Marshal(agentwire.AgentUpdateParams{Version: "v0.0.2", Parcel: "colis1"})
+		}
+		result, job := b.runner.execute(judgedOf(t, body))
 		if result.State != agentwire.ActionRefused || result.Reason != agentwire.ReasonGuardMissing || job != nil {
 			t.Errorf("%s: %+v", kind, result)
 		}

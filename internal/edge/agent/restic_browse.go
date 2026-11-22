@@ -3,7 +3,6 @@ package agent
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -39,20 +38,20 @@ type resticBrowseJob struct {
 // acceptResticBrowse juge l'ordre vite (forme, secret, droit restic.browse,
 // restic présent), puis l'accepte : la lecture est le travail du worker. Un
 // dépôt occupé par une rétention ou une vérification n'empêche pas de lire.
-func (r *orderRunner) acceptResticBrowse(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
+func (r *orderRunner) acceptResticBrowse(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
 	dir, isTarget := resticTargetDir(r.identity.Capabilities())
 	if !isTarget {
-		r.journal.notAccepted(body, agentwire.RightMissing(machine.CapabilityResticTarget))
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.RightMissing(machine.CapabilityResticTarget)}, nil
+		r.journal.notAccepted(order, agentwire.RightMissing(machine.CapabilityResticTarget))
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.RightMissing(machine.CapabilityResticTarget)}, nil
 	}
-	job, refused := judgeBrowse(body, dir, r.checks)
+	job, refused := judgeBrowse(order, dir, r.checks)
 	if refused != nil {
-		r.journal.notAccepted(body, refused.Reason)
+		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil
 	}
-	return accepted(body), func(ctx context.Context) {
+	return accepted(order), func(ctx context.Context) {
 		report, err := r.restic.target.browse(ctx, job)
-		result := r.finishRestic(body, nil, err)
+		result := r.finishRestic(order, nil, err)
 		if err == nil {
 			result.Browse = &report
 		}
@@ -60,16 +59,16 @@ func (r *orderRunner) acceptResticBrowse(body agentwire.OrderBody) (agentwire.Ac
 	}
 }
 
-func judgeBrowse(body agentwire.OrderBody, dir string, checks hostChecks) (resticBrowseJob, *agentwire.ActionResult) {
+func judgeBrowse(order judgedOrder, dir string, checks hostChecks) (resticBrowseJob, *agentwire.ActionResult) {
 	refused := func(state agentwire.ActionState, reason string) *agentwire.ActionResult {
-		return &agentwire.ActionResult{RunID: body.RunID, State: state, Reason: reason}
+		return &agentwire.ActionResult{RunID: order.RunID, State: state, Reason: reason}
 	}
-	var params agentwire.ResticBrowseParams
-	if err := json.Unmarshal(body.Params, &params); err != nil || params.Validate() != nil {
+	params, ok := order.Params.(agentwire.ResticBrowseParams)
+	if !ok || params.Validate() != nil {
 		return resticBrowseJob{}, refused(agentwire.ActionFailed, agentwire.ReasonBadOrder)
 	}
-	var secret agentwire.ResticBrowseSecret
-	if err := json.Unmarshal(body.Secret, &secret); err != nil || secret.Validate() != nil {
+	secret, ok := order.Secret.(agentwire.ResticBrowseSecret)
+	if !ok || secret.Validate() != nil {
 		return resticBrowseJob{}, refused(agentwire.ActionFailed, agentwire.ReasonBadOrder)
 	}
 	binary, err := checks.findRestic()

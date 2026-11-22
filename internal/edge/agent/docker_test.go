@@ -550,11 +550,19 @@ func TestReadDockerOrder_JudgesWhatTheOrderCarries(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			body := agentwire.OrderBody{RunID: "run1", Params: c.params}
+			body := agentwire.OrderBody{RunID: "run1", Kind: agentwire.KindDockerDeploy, Params: c.params}
 			if c.secret != "" {
 				body.Secret = json.RawMessage(c.secret)
 			}
-			job, refused := readDockerOrder(body, "/srv/workspace", false)
+			judged, err := decodeOrder(body)
+			if err != nil {
+				// Ce qui ne se lit pas, le juge le refuse bad_order : l'exécuteur ne le voit pas.
+				if c.ok {
+					t.Fatalf("a valid order does not decode: %v", err)
+				}
+				return
+			}
+			job, refused := readDockerOrder(judged, "/srv/workspace", false)
 			if c.ok != (refused == nil) {
 				t.Fatalf("job %+v refused %+v", job, refused)
 			}

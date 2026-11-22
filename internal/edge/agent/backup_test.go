@@ -751,7 +751,7 @@ func TestJudge_KeepsTheSecretAndNeverLogsIt(t *testing.T) {
 	body.Secret, _ = json.Marshal(agentwire.DockerSecret{Env: value})
 
 	judged, reason := b.runner.judge(b.signedOrder(t, body))
-	if reason != "" || string(judged.Secret) != string(body.Secret) {
+	if reason != "" || judged.Secret != (agentwire.DockerSecret{Env: value}) {
 		t.Fatalf("judged %+v %q", judged, reason)
 	}
 	b.runner.receive(b.signed(t, order(2)))
@@ -856,7 +856,7 @@ func TestR_E3_17_TheCapFollowsTheSignedArchiveKind(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, _, refused := readBackupReceive(agentwire.OrderBody{RunID: "run", Params: raw}, cover, writable, plenty)
+			_, _, refused := readBackupReceive(judgedOf(t, agentwire.OrderBody{RunID: "run", Kind: agentwire.KindBackupReceive, Params: raw}), cover, writable, plenty)
 			got := ""
 			if refused != nil {
 				got = refused.Reason

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -107,34 +106,34 @@ type freeSpace func(path string) (uint64, error)
 // qui ne tient pas dans la place libre, avant d'accepter l'ordre : un refus
 // immédiat, aucun colis téléchargé, pas un échec plus tard. Il rend aussi le
 // chemin du droit, où l'écriture ouvrira sa racine.
-func readBackupReceive(body agentwire.OrderBody, cover coveringPath, writable writableCheck, free freeSpace) (agentwire.BackupReceiveParams, string, *agentwire.ActionResult) {
-	var params agentwire.BackupReceiveParams
-	if err := json.Unmarshal(body.Params, &params); err != nil || !isReceivable(params) {
-		return params, "", &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+func readBackupReceive(order judgedOrder, cover coveringPath, writable writableCheck, free freeSpace) (agentwire.BackupReceiveParams, string, *agentwire.ActionResult) {
+	params, ok := order.Params.(agentwire.BackupReceiveParams)
+	if !ok || !isReceivable(params) {
+		return params, "", &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
 	if exceedsSizeCap(params) {
-		return params, "", &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonArchiveTooLarge}
+		return params, "", &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonArchiveTooLarge}
 	}
-	granted, refused := judgeGranted(body, params.Path, cover, writable)
+	granted, refused := judgeGranted(order, params.Path, cover, writable)
 	if refused != nil {
 		return params, granted, refused
 	}
-	return params, granted, judgeRoom(body, params, granted, free)
+	return params, granted, judgeRoom(order, params, granted, free)
 }
 
 // judgeRoom : la somme des tailles annoncées, la clé scellée avec l'archive,
 // tient dans la place libre du dossier de réception, mesurée sous le chemin du
 // droit (le même système de fichiers que l'écriture). Une place qu'on ne peut
 // pas lire refuse : jamais d'acceptation par défaut.
-func judgeRoom(body agentwire.OrderBody, params agentwire.BackupReceiveParams, granted string, free freeSpace) *agentwire.ActionResult {
+func judgeRoom(order judgedOrder, params agentwire.BackupReceiveParams, granted string, free freeSpace) *agentwire.ActionResult {
 	available, err := free(granted)
 	if err != nil {
-		return &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonPathUnwritable}
+		return &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonPathUnwritable}
 	}
 	// On retranche fichier par fichier : la somme ne déborde jamais.
 	for _, file := range params.Files {
 		if uint64(file.Size) > available { // #nosec G115 -- isReceivable a refusé les tailles négatives.
-			return &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonDiskFull}
+			return &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonDiskFull}
 		}
 		available -= uint64(file.Size) // #nosec G115 -- idem.
 	}
@@ -156,24 +155,24 @@ func exceedsSizeCap(params agentwire.BackupReceiveParams) bool {
 	return false
 }
 
-func readBackupPrune(body agentwire.OrderBody, cover coveringPath, writable writableCheck) (agentwire.BackupPruneParams, string, *agentwire.ActionResult) {
-	var params agentwire.BackupPruneParams
-	if err := json.Unmarshal(body.Params, &params); err != nil || params.Keep < 1 || params.Keep > 365 || !agentwire.IsBackupPrefix(params.Prefix) {
-		return params, "", &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+func readBackupPrune(order judgedOrder, cover coveringPath, writable writableCheck) (agentwire.BackupPruneParams, string, *agentwire.ActionResult) {
+	params, ok := order.Params.(agentwire.BackupPruneParams)
+	if !ok || params.Keep < 1 || params.Keep > 365 || !agentwire.IsBackupPrefix(params.Prefix) {
+		return params, "", &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
-	granted, refused := judgeGranted(body, params.Path, cover, writable)
+	granted, refused := judgeGranted(order, params.Path, cover, writable)
 	return params, granted, refused
 }
 
 // judgeGranted : le dossier est sous le droit de l'agent, puis son compte peut
 // l'écrire (ou le créer), dans cet ordre.
-func judgeGranted(body agentwire.OrderBody, path string, cover coveringPath, writable writableCheck) (string, *agentwire.ActionResult) {
+func judgeGranted(order judgedOrder, path string, cover coveringPath, writable writableCheck) (string, *agentwire.ActionResult) {
 	granted, covered := cover(path)
 	if !covered {
-		return "", &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonPathOutsideRight}
+		return "", &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonPathOutsideRight}
 	}
 	if reason := writable(granted); reason != "" {
-		return "", &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: reason}
+		return "", &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: reason}
 	}
 	return granted, nil
 }
