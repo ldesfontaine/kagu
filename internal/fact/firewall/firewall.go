@@ -6,8 +6,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
@@ -209,12 +210,7 @@ func isValidName(name string) bool {
 	if name == "" || utf8.RuneCountInString(name) > maxNameRunes {
 		return false
 	}
-	for _, character := range name {
-		if unicode.IsControl(character) {
-			return false
-		}
-	}
-	return true
+	return !untrusted.HasControl(name)
 }
 
 func isValidCredential(value string) bool {

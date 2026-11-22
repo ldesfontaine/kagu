@@ -10,8 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
@@ -225,10 +226,8 @@ func validateForwardUser(user string) error {
 	if strings.TrimSpace(user) != user {
 		return errors.New("leading or trailing space")
 	}
-	for _, character := range user {
-		if unicode.IsControl(character) {
-			return errors.New("control character")
-		}
+	if untrusted.HasControl(user) {
+		return errors.New("control or bidi character")
 	}
 	return nil
 }

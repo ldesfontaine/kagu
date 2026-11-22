@@ -5,8 +5,8 @@ import (
 	"math"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 
 	"github.com/ldesfontaine/kagu/internal/kit/sampler"
 )
@@ -132,7 +132,7 @@ func validateDisks(disks []sampler.Disk) error {
 			return ErrReadingInvalid
 		}
 		// Le point de montage entre dans les messages d'alerte : pas de saut de ligne.
-		if hasControlOrBadUTF8(disk.MountPoint) || hasControlOrBadUTF8(disk.Device) {
+		if untrusted.HasControl(disk.MountPoint) || untrusted.HasControl(disk.Device) {
 			return ErrReadingInvalid
 		}
 		if disk.Used < 0 || disk.Total < 0 || seen[disk.MountPoint] {
@@ -141,10 +141,6 @@ func validateDisks(disks []sampler.Disk) error {
 		seen[disk.MountPoint] = true
 	}
 	return nil
-}
-
-func hasControlOrBadUTF8(text string) bool {
-	return !utf8.ValidString(text) || strings.ContainsFunc(text, unicode.IsControl)
 }
 
 func isFinite(value float64) bool {

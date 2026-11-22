@@ -404,6 +404,73 @@ func TestOneDefinition_IdentifiersAreDrawnByIdent(t *testing.T) {
 	}
 }
 
+// untrustedDir : la seule maison du jugement d'un texte venu d'ailleurs.
+const untrustedDir = "internal/kit/untrusted/"
+
+// controlCheckExceptions : les fonctions qui appellent encore
+// unicode.IsControl, avec la raison : elles jugent autrement que
+// untrusted.HasControl. Clé : « fichier fonction », fichier relatif au module.
+var controlCheckExceptions = map[string]string{
+	"internal/domain/alert/payload.go flatten":       "remplace par une espace, sans refuser, et traite aussi U+2028 et U+2029 : le nom reste lisible dans le message",
+	"internal/kit/audit/actor.go cleanLabel":         "nettoie et coupe un libellé : retire aussi U+FFFD, il ne refuse pas",
+	"internal/edge/server/api_manifest.go printable": "nettoie et coupe un nom indicatif : retire aussi U+FFFD, il ne refuse pas",
+	"internal/kit/hostinfo/detect.go readText":       "rogne les espaces et les contrôles aux deux bouts d'un fichier du noyau : il coupe, il ne juge pas",
+}
+
+// controlChecks relève les fonctions qui nomment unicode.IsControl, appelé
+// ou passé en valeur (strings.ContainsFunc(texte, unicode.IsControl)) :
+// « position: fonction ».
+func controlChecks(fileSet *token.FileSet, file *ast.File) []string {
+	var found []string
+	for _, declaration := range file.Decls {
+		name := "(niveau du paquet)"
+		if function, ok := declaration.(*ast.FuncDecl); ok {
+			name = function.Name.Name
+		}
+		ast.Inspect(declaration, func(node ast.Node) bool {
+			selector, ok := node.(*ast.SelectorExpr)
+			if ok && selector.Sel.Name == "IsControl" && isIdent(selector.X, "unicode") {
+				found = append(found, fileSet.Position(selector.Pos()).String()+": "+name)
+			}
+			return true
+		})
+	}
+	return found
+}
+
+// Un texte venu d'ailleurs se juge par untrusted.HasControl, jamais par un
+// unicode.IsControl écrit à la main : l'UTF-8 cassé et les caractères bidi
+// ne passeraient pas. Une fonction qui juge autrement se déclare dans
+// controlCheckExceptions, avec sa raison.
+func TestOneDefinition_UntrustedText(t *testing.T) {
+	checked := 0
+	seenExceptions := map[string]bool{}
+	forEachGoFile(t, moduleRoot(), true, func(path string, fileSet *token.FileSet, file *ast.File) {
+		relative := relativeToModule(path)
+		if strings.HasPrefix(relative, untrustedDir) {
+			return
+		}
+		checked++
+		for _, at := range controlChecks(fileSet, file) {
+			name := at[strings.LastIndex(at, ": ")+2:]
+			key := relative + " " + name
+			if _, excepted := controlCheckExceptions[key]; excepted {
+				seenExceptions[key] = true
+				continue
+			}
+			t.Errorf("%s : utiliser untrusted.HasControl ; un autre sens se déclare dans controlCheckExceptions", at)
+		}
+	})
+	if checked == 0 {
+		t.Fatal("no source file seen: the guard no longer sees the code")
+	}
+	for key := range controlCheckExceptions {
+		if !seenExceptions[key] {
+			t.Errorf("exception %q : plus d'appel à unicode.IsControl, la retirer", key)
+		}
+	}
+}
+
 // Les gardes ne valent que si elles échouent sur la faute : on leur donne
 // un source fautif.
 func TestOneDefinition_GuardsCatchTheirFault(t *testing.T) {
@@ -412,6 +479,7 @@ func TestOneDefinition_GuardsCatchTheirFault(t *testing.T) {
 import (
 	"flag"
 	"time"
+	"unicode"
 )
 
 var update = flag.Bool("update", false, "")
@@ -429,6 +497,10 @@ func waitFor(t *testing.T, condition func() bool) {
 }
 
 var ErrOffline = refusal.Conflict("backup.machine_offline", "offline")
+
+func hasControl(text string) bool {
+	return strings.ContainsFunc(text, unicode.IsControl)
+}
 
 func newID() string {
 	raw := make([]byte, 8)
@@ -458,6 +530,9 @@ func newID() string {
 	}
 	if got := handWrittenIdentifierDraws(fileSet, file); len(got) != 1 {
 		t.Errorf("hand-drawn identifier not caught: %v", got)
+	}
+	if got := controlChecks(fileSet, file); len(got) != 1 {
+		t.Errorf("hand-written control check not caught: %v", got)
 	}
 }
 

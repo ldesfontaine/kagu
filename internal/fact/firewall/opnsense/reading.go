@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
+
 	"github.com/ldesfontaine/kagu/internal/fact/firewall"
 )
 
@@ -64,7 +66,7 @@ func (t *text) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-func (t text) bounded() string { return boundedText(strings.TrimSpace(string(t))) }
+func (t text) bounded() string { return untrusted.Bound(strings.TrimSpace(string(t)), maxTextBytes) }
 
 // grid est la forme de toute liste « search » d'OPNsense.
 type grid[Row any] struct {

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"regexp"
 	"slices"
-	"strings"
-	"unicode"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 )
 
 // Report est ce que l'agent sait de l'endroit où tourne sa machine et de ses
@@ -158,5 +158,5 @@ func (s Storage) validate() error {
 
 // isShortText : un texte venu d'un pair, qui finit dans l'interface.
 func isShortText(text string, limit int) bool {
-	return len(text) <= limit && !strings.ContainsFunc(text, unicode.IsControl)
+	return len(text) <= limit && !untrusted.HasControl(text)
 }

@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
-	"unicode/utf8"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
@@ -77,7 +77,7 @@ func ownLabels(labels map[string]string) map[string]string {
 		if !ours {
 			continue
 		}
-		if suffix == container.LabelInvalid || !labelSuffix.MatchString(suffix) || value == "" || len(value) > container.MaxNameLength || hasControl(value) || key != brand.LabelPrefix+suffix {
+		if suffix == container.LabelInvalid || !labelSuffix.MatchString(suffix) || value == "" || len(value) > container.MaxNameLength || untrusted.HasControl(value) || key != brand.LabelPrefix+suffix {
 			discarded++
 			continue
 		}
@@ -120,10 +120,6 @@ func cutLabelPrefix(key string) (string, bool) {
 		return "", false
 	}
 	return key[len(brand.LabelPrefix):], true
-}
-
-func hasControl(text string) bool {
-	return !utf8.ValidString(text) || strings.ContainsFunc(text, unicode.IsControl)
 }
 
 func isReadLabel(suffix string) bool {

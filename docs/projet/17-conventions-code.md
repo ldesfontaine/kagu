@@ -370,6 +370,7 @@ raison. Une garde a son test en négatif : elle échoue sur un source fautif.
 | Racine vide, port fermé, empreinte SHA-256, JSON d'un test | `testkit` | aucune copie (`closedPort`, `sumOf`, `mustJSON`, `openRoot`…) hors `testkit` |
 | Pointeur vers une valeur | `new(valeur)` (Go 1.26) | aucune fonction `ptr` |
 | Un identifiant (hexadécimaux en minuscules) | `ident.New` (16), `ident.NewSized` (autre taille) | aucun `rand.Read` suivi de `hex.EncodeToString` hors `ident` ; un secret (jeton, mot de passe) garde son tirage et sa raison dans `secretDrawExceptions` |
+| Un texte venu d'ailleurs (pair, API, matériel) : refus et coupe | `untrusted.HasControl` (UTF-8 invalide, contrôle, bidi), `untrusted.Bound` (coupe sur une frontière de caractère), `untrusted.Strip` | aucun `unicode.IsControl` hors `untrusted` ; une fonction qui juge autrement (nettoie, remplace, rogne) se déclare dans `controlCheckExceptions`, avec sa raison |
 | La liste des ordres de l'agent | `agentwire.OrderKinds` | `22-fonctionnement.md` ne les compte pas |
 
 Chaque lot de factorisation ajoute ses lignes au tableau avec sa garde : un

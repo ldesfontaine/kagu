@@ -7,7 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"unicode"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 )
 
 // Disk est un volume réel de la machine : un système de fichiers de
@@ -109,7 +110,7 @@ func isDiskMount(entry mount) bool {
 	// `\012` se lit comme un saut de ligne : le serveur refuse en bloc une
 	// lecture qui en porte un. Le volume est laissé de côté, pas toute la
 	// mesure de la machine.
-	if strings.ContainsFunc(entry.mountPoint, unicode.IsControl) || strings.ContainsFunc(entry.device, unicode.IsControl) {
+	if untrusted.HasControl(entry.mountPoint) || untrusted.HasControl(entry.device) {
 		return false
 	}
 	for _, prefix := range hiddenMountPrefixes {

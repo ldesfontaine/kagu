@@ -4,8 +4,9 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"unicode"
 	"unicode/utf8"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
@@ -86,7 +87,7 @@ func isPlainName(name string) bool {
 	if utf8.RuneCountInString(name) > MaxName {
 		return false
 	}
-	return !strings.ContainsFunc(name, unicode.IsControl)
+	return !untrusted.HasControl(name)
 }
 
 // sameSource dit si deux plans prennent la même chose, au même endroit : le

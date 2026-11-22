@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
+
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 )
 
@@ -67,7 +69,7 @@ func nicOf(nic string) NIC {
 		switch {
 		case !hasValue:
 		case name == "bridge":
-			found.Bridge = boundedText(value)
+			found.Bridge = untrusted.Bound(value, maxTextBytes)
 		case name == "tag":
 			if tag, err := strconv.Atoi(value); err == nil && tag > 0 && tag < 4095 {
 				found.VLAN = tag
@@ -124,7 +126,7 @@ func (c *Client) ClusterName(ctx context.Context) (string, error) {
 	}
 	for _, member := range members {
 		if member.Type == "cluster" {
-			return boundedText(member.Name), nil
+			return untrusted.Bound(member.Name, maxTextBytes), nil
 		}
 	}
 	return "", nil

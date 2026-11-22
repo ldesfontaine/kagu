@@ -3,8 +3,9 @@ package auth
 import (
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
@@ -84,10 +85,8 @@ func ValidateUsername(username string) error {
 	if strings.TrimSpace(username) != username || strings.Contains(username, ":") {
 		return ErrUsernameInvalid
 	}
-	for _, character := range username {
-		if unicode.IsControl(character) {
-			return ErrUsernameInvalid
-		}
+	if untrusted.HasControl(username) {
+		return ErrUsernameInvalid
 	}
 	return nil
 }

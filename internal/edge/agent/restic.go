@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
+
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -101,17 +103,14 @@ func readBinaryVersion(ctx context.Context, binary, argument string) string {
 }
 
 // boundedText coupe un texte ASCII à limit octets ; un texte qui ne l'est
-// pas est rendu vide, plutôt que coupé au milieu d'un caractère.
+// pas est rendu vide : la version d'un outil n'a pas à porter autre chose.
 func boundedText(text string, limit int) string {
 	for _, char := range text {
 		if char > 0x7e {
 			return ""
 		}
 	}
-	if len(text) > limit {
-		return text[:limit]
-	}
-	return text
+	return untrusted.Bound(text, limit)
 }
 
 // openResticDir ouvre le dossier restic de l'état, et le crée s'il manque. Un

@@ -16,7 +16,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"unicode/utf8"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 
 	"github.com/ldesfontaine/kagu/internal/kit/egress"
 )
@@ -232,9 +233,9 @@ func (c *Client) Guests(ctx context.Context) ([]Guest, error) {
 		}
 		seen[entry.VMID] = true
 		guests = append(guests, Guest{
-			VMID: entry.VMID, Kind: entry.Type, Name: boundedText(entry.Name), Status: boundedText(entry.Status),
+			VMID: entry.VMID, Kind: entry.Type, Name: untrusted.Bound(entry.Name, maxTextBytes), Status: untrusted.Bound(entry.Status, maxTextBytes),
 			Template: entry.Template == 1, CPUs: entry.MaxCPU, MaxMem: entry.MaxMem, MaxDisk: entry.MaxDisk,
-			Node: boundedText(entry.Node),
+			Node: untrusted.Bound(entry.Node, maxTextBytes),
 		})
 	}
 	return guests, nil
@@ -253,14 +254,14 @@ func (c *Client) Storages(ctx context.Context) ([]Storage, error) {
 	storages := make([]Storage, 0, len(listed))
 	seen := map[string]bool{}
 	for _, entry := range listed {
-		node, name := boundedText(entry.Node), boundedText(entry.Storage)
+		node, name := untrusted.Bound(entry.Node, maxTextBytes), untrusted.Bound(entry.Storage, maxTextBytes)
 		key := node + "/" + name
 		if entry.Type != "storage" || name == "" || seen[key] {
 			continue
 		}
 		seen[key] = true
 		storages = append(storages, Storage{
-			Node: node, Name: name, Type: boundedText(entry.PluginType),
+			Node: node, Name: name, Type: untrusted.Bound(entry.PluginType, maxTextBytes),
 			Total: entry.MaxDisk, Used: entry.Disk, Avail: max(entry.MaxDisk-entry.Disk, 0),
 			Content: splitContent(entry.Content), Active: entry.Status == "available",
 		})
@@ -307,20 +308,7 @@ func splitContent(content string) []string {
 		if len(contents) == maxContents {
 			break
 		}
-		contents = append(contents, boundedText(item))
+		contents = append(contents, untrusted.Bound(item, maxTextBytes))
 	}
 	return contents
-}
-
-// boundedText coupe un texte de l'API à maxTextBytes, sans couper un caractère
-// en deux.
-func boundedText(text string) string {
-	if len(text) <= maxTextBytes {
-		return text
-	}
-	cut := maxTextBytes
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return text[:cut]
 }
