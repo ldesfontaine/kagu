@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -129,6 +130,12 @@ func TestNotifier_Matrix_EachTestIsANewTransaction(t *testing.T) {
 	sends := server.all()
 	if len(sends) != 2 || sends[0].path == sends[1].path || !strings.Contains(sends[0].path, "/opencloud-test-") {
 		t.Fatalf("sends %+v", sends)
+	}
+	// L'aléa reste de trente-deux hexadécimaux en minuscules.
+	for _, send := range sends {
+		if !regexp.MustCompile(`/opencloud-test-[0-9a-f]{32}$`).MatchString(send.path) {
+			t.Fatalf("transaction id shape: %s", send.path)
+		}
 	}
 }
 

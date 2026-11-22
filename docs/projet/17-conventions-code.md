@@ -369,6 +369,7 @@ raison. Une garde a son test en négatif : elle échoue sur un source fautif.
 | Comparaison à un golden, drapeau `-update` | `goldentest.Compare` | aucun `flag.Bool("update", …)` ni `compareGolden` hors `goldentest` |
 | Racine vide, port fermé, empreinte SHA-256, JSON d'un test | `testkit` | aucune copie (`closedPort`, `sumOf`, `mustJSON`, `openRoot`…) hors `testkit` |
 | Pointeur vers une valeur | `new(valeur)` (Go 1.26) | aucune fonction `ptr` |
+| Un identifiant (hexadécimaux en minuscules) | `ident.New` (16), `ident.NewSized` (autre taille) | aucun `rand.Read` suivi de `hex.EncodeToString` hors `ident` ; un secret (jeton, mot de passe) garde son tirage et sa raison dans `secretDrawExceptions` |
 | La liste des ordres de l'agent | `agentwire.OrderKinds` | `22-fonctionnement.md` ne les compte pas |
 
 Chaque lot de factorisation ajoute ses lignes au tableau avec sa garde : un

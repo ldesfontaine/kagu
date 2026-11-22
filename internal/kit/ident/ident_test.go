@@ -24,3 +24,37 @@ func TestNew_IsSixteenLowercaseHexAndDrawnAgainEachTime(t *testing.T) {
 		t.Fatal("two draws gave the same identifier")
 	}
 }
+
+// Une taille choisie donne deux hexadécimaux en minuscules par octet.
+func TestNewSized_IsTwoLowercaseHexPerByte(t *testing.T) {
+	for _, bytes := range []int{8, 12, 16} {
+		got, err := NewSized(bytes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !regexp.MustCompile(`^[0-9a-f]+$`).MatchString(got) || len(got) != 2*bytes {
+			t.Fatalf("%d bytes: %q", bytes, got)
+		}
+	}
+	if len(mustNew(t)) != len(mustSized(t, randomBytes)) {
+		t.Fatal("New is no longer NewSized(randomBytes)")
+	}
+}
+
+func mustNew(t *testing.T) string {
+	t.Helper()
+	id, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func mustSized(t *testing.T, bytes int) string {
+	t.Helper()
+	id, err := NewSized(bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
