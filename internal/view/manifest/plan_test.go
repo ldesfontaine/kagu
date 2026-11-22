@@ -298,3 +298,31 @@ func TestPlan_UnknownReferencesAreRefused(t *testing.T) {
 		})
 	}
 }
+
+func TestR_A1_12_AControlNameIsRefusedByThePlan(t *testing.T) {
+	b, data := seeded(t)
+	for name, entry := range map[string]struct{ section, text string }{
+		"probe":     {"probes:\n", "probes:\n  - name: \"a\\x1bb\"\n    runner: app-1\n    kind: tcp\n    target: db:5433\n"},
+		"heartbeat": {"heartbeats:\n", "heartbeats:\n  - name: \"a\\x1bb\"\n    every: 1h\n    grace: 0s\n"},
+	} {
+		changed := replaceOnce(t, data, entry.section, entry.text)
+		before := b.snapshot(t)
+		plan := b.plan(t, changed, false)
+		if plan.Applicable() || len(plan.Problems) == 0 {
+			t.Fatalf("%s: a control name must refuse the plan: %v", name, changeLabels(plan))
+		}
+		named := false
+		for _, problem := range plan.Problems {
+			named = named || strings.Contains(problem.Path, "a\x1bb") || strings.Contains(problem.Value, "a\x1bb")
+		}
+		if !named {
+			t.Errorf("%s: no problem carries the refused name: %+v", name, plan.Problems)
+		}
+		if _, _, err := b.tryApply(changed, false); err != manifest.ErrNotApplicable {
+			t.Errorf("%s: apply of a refused plan: %v", name, err)
+		}
+		if after := b.snapshot(t); !reflect.DeepEqual(before, after) {
+			t.Errorf("%s: a refused plan wrote", name)
+		}
+	}
+}

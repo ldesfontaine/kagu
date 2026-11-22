@@ -360,9 +360,9 @@ func (r *applyRun) refuseFile(plan planView) error {
 // aucun, la ligne et l'entrée le précèdent.
 func problemText(catalog lang.Catalog, problem manifest.Problem) string {
 	if !problem.IsDomainRefusal() {
-		return catalog.Format(problem.Key, problem.Arguments()...)
+		return catalog.Format(catalogKey(problem.Key), problem.Arguments()...)
 	}
-	text := catalog.Get(problem.Key)
+	text := catalog.Get(catalogKey(problem.Key))
 	switch {
 	case problem.Line > 0 && problem.Path != "":
 		return fmt.Sprintf("Ligne %d (%s) : %s", problem.Line, problem.Path, text)
@@ -394,7 +394,7 @@ func (r *applyRun) text(code, key string) string {
 	if key == "" {
 		key = manifest.KeyApplyFailed
 	}
-	return r.catalogs.For(planLanguage(code)).Get(key)
+	return r.catalogs.For(planLanguage(code)).Get(catalogKey(key))
 }
 
 // objectText écrit « genre/nom » comme « sonde wiki-http ».
@@ -407,7 +407,7 @@ func (r *applyRun) objectText(code, object string) string {
 }
 
 func (r *applyRun) kindText(code, kind string) string {
-	text := r.catalogs.For(planLanguage(code)).Get("manifest.kind_" + kind)
+	text := r.catalogs.For(planLanguage(code)).Get(catalogKey("manifest.kind_" + kind))
 	runes := []rune(text)
 	if len(runes) > 0 {
 		runes[0] = unicode.ToLower(runes[0])
@@ -448,7 +448,7 @@ func (r *applyRun) showChange(catalog lang.Catalog, code string, change changeVi
 		}
 		var carries []string
 		for _, carry := range change.Carries {
-			carries = append(carries, catalog.Counted("manifest.carries_"+carry.What, carry.Count))
+			carries = append(carries, catalog.Counted(catalogKey("manifest.carries_"+carry.What), carry.Count))
 		}
 		if len(carries) > 0 {
 			line += " — emporte " + strings.Join(carries, ", ")
@@ -470,7 +470,7 @@ func (r *applyRun) showChange(catalog lang.Catalog, code string, change changeVi
 		}
 	}
 	for _, note := range change.Notes {
-		fmt.Fprintf(r.out, "      ! %s\n", catalog.Get("manifest.note_"+note))
+		fmt.Fprintf(r.out, "      ! %s\n", catalog.Get(catalogKey("manifest.note_"+note)))
 	}
 }
 
@@ -485,6 +485,13 @@ func valueText(value string) string {
 		return "∅"
 	}
 	return printable(value)
+}
+
+// catalogKey filtre une clé de catalogue dont une part vient du serveur : le
+// repli « [clé] » de lang.Catalog.Get rend la clé inconnue à l'écran. Toute
+// recherche de catalogue sur du texte serveur passe par elle.
+func catalogKey(key string) string {
+	return printable(key)
 }
 
 // printable est la seule porte des textes du serveur vers le terminal : un

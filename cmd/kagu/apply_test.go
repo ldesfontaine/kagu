@@ -443,3 +443,43 @@ func TestR_A1_12_ARefusedValueIsPrintedStripped(t *testing.T) {
 		t.Errorf("a refused value must be printed stripped: %q", out)
 	}
 }
+
+func TestR_A1_12_CatalogFallbackIsPrintedStripped(t *testing.T) {
+	plan := `{"language": "fr", "file_hash": "sha256:x", "prune": false, "plan_hash": "sha256:p", "applicable": true,
+	  "summary": {"create": 1, "update": 0, "delete": 1, "unchanged": 0, "unmanaged": 0},
+	  "changes": [{"action": "create", "kind": "k\u001b[31m\nx", "id": "", "name": "a",
+	    "fields": [], "notes": ["n\u001b[31m\ny"], "carries": []},
+	    {"action": "delete", "kind": "probe", "id": "a1b2c3d4e5f60718", "name": "b", "fields": [], "notes": [],
+	     "carries": [{"what": "w\u001b[31m\nz", "count": 2}]}],
+	  "unmanaged": [], "problems": []}`
+	failed := `{"id": "apl_0123456789abcdef", "state": "failed", "done": 0, "error": "e\u001b[31m\nr", "error_object": "probe/p\u001b[31m",
+	  "summary": {"create": 1, "update": 0, "delete": 1, "unchanged": 0}}`
+	refusedFile := `{"language": "fr", "file_hash": "sha256:x", "prune": false, "plan_hash": "sha256:y", "applicable": false,
+	  "summary": {"create": 0, "update": 0, "delete": 0, "unchanged": 0, "unmanaged": 0}, "changes": [], "unmanaged": [],
+	  "problems": [{"key": "domain.k\u001b[31m\nx", "line": 3, "column": 0, "path": "", "value": ""}]}`
+	for name, run := range map[string]func() (string, error){
+		"plan and failed apply": func() (string, error) {
+			fake := &fakeServer{plans: []string{plan}, applies: []fakeAnswer{{http.StatusCreated, failed}}}
+			return runApplyCommand(t, fake, "o\n", true)
+		},
+		"refused file": func() (string, error) {
+			fake := &fakeServer{plans: []string{refusedFile}, applies: []fakeAnswer{{http.StatusCreated, appliedAnswer}}}
+			return runApplyCommand(t, fake, "o\n", true)
+		},
+	} {
+		out, err := run()
+		if err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+		text := out
+		if err != nil {
+			text += err.Error()
+		}
+		if strings.ContainsRune(text, '\x1b') {
+			t.Errorf("%s: an escape reached the terminal: %q", name, text)
+		}
+		if !strings.Contains(text, "\ufffd") {
+			t.Errorf("%s: nothing was stripped, the case proves nothing: %q", name, text)
+		}
+	}
+}
