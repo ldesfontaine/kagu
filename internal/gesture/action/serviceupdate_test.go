@@ -143,9 +143,9 @@ func TestRecord_RejectsAJournalBeyondTheProtocolLimits(t *testing.T) {
 	}
 }
 
-func TestRightOf_ADockerRollbackNeedsTheUpdateRight(t *testing.T) {
-	if right, known := action.RightOf(agentwire.KindDockerRollback); !known || right != machine.CapabilityDockerUpdate {
-		t.Fatalf("right %q %v", right, known)
+func TestRegistryRight_ADockerRollbackNeedsTheUpdateRight(t *testing.T) {
+	if spec, known := agentwire.SpecOf(agentwire.KindDockerRollback); !known || spec.Right != machine.CapabilityDockerUpdate {
+		t.Fatalf("right %q %v", spec.Right, known)
 	}
 	if !agentwire.KindDockerRollback.IsOrder() {
 		t.Fatal("docker.rollback is not a signed order")

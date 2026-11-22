@@ -340,8 +340,8 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
 
 Liste de départ prise par Lucas le 21 octobre 2026 (décision 9). **Appliqués
 par l'agent** (#146) : chaque genre de la liste fermée déclare le droit qu'il
-exige (`Spec.Right`, au registre des genres d'`agentwire`, lu par
-`action.RightOf`), et l'agent refuse un ordre dont le droit n'est pas
+exige (`Spec.Right`, au registre des genres d'`agentwire`, que le serveur
+et l'agent lisent tous deux), et l'agent refuse un ordre dont le droit n'est pas
 dans son fichier. Les changer, c'est ré-enrôler (décision 10, plus bas).
 
 | Droit | Portée | Ce qu'il permet |
@@ -1426,8 +1426,10 @@ genre d'ordre s'y déclare **une fois**, par une ligne `Define[P]` : le type
 de ses paramètres, son droit (une constante de `machine`, jamais une chaîne
 tapée ; `agentpolicy` la reprendra), le type de son secret s'il en porte un,
 les ancres qui le bornent et ses champs de journal. `OrderKinds`,
-`action.RightOf`, le journal local et les ancres le lisent ; le serveur et
-l'agent aussi. Les observations (`logs`, `logs_stop`, `probes`,
+le journal local et les ancres le lisent ; le serveur (`action.Service`,
+avant l'envoi) et l'agent (à la réception) y lisent le droit du genre, et
+aucune autre table ne le dit (`TestR_A1_1_NoOtherTableSaysTheRightOfAKind`).
+L'agent n'importe pas `action` (`TestLayers_AgentStaysOffTheServer`). Les observations (`logs`, `logs_stop`, `probes`,
 `image_checks`, `restic_relay`) n'y sont pas : elles ne sont pas signées.
 
 | Lu strictement | Comment | Refus |
@@ -1530,8 +1532,10 @@ du serveur ne vaut pas pour cette seule route.
 l'identifiant de l'invité), `prefix` (le préfixe du nom de l'archive), `recipient`
 (la clé publique `age1…` de sauvegarde) et `parcel` (le colis où téléverser).
 Rien ici n'est un secret. Le droit est `backup.produce=<producteur>` ; le
-serveur refuse d'envoyer l'ordre à un agent qui a rapporté ses droits sans ce
-producteur (`409 action.right_missing`), et l'agent le juge à son tour. Il
+serveur refuse d'envoyer l'ordre à un agent qui a rapporté ses droits sans
+`backup.produce` (`409 action.right_missing`) ; le producteur, `backup` le juge
+avant le premier ordre (`409 backup.source_right_missing`), et l'agent le juge à
+son tour. Il
 refuse tout de suite, sans rien lancer : `right_missing:backup.produce` (le
 droit ne nomme pas ce producteur), `producer_unknown` (le droit le nomme, cet
 agent ne sait pas le lancer), `bad_order` (cible, préfixe, clé ou colis mal
@@ -6682,7 +6686,7 @@ modifier, reste lancée à la place de ce qu'il a pu casser.
 
 **L'ordre `agent.rollback`** (son échec : décision 12) :
 signé, sans paramètre (liste fermée `agentwire.OrderKinds`), même droit que
-`agent.update` (`action.RightOf`, pas de droit nouveau), mêmes refus d'agent
+`agent.update` (`Spec.Right`, pas de droit nouveau), mêmes refus d'agent
 (`not_self_updatable`, `guard_missing`). L'agent lit `previous` ; il refuse
 sans rien toucher s'il n'y en a pas (`no_previous`) ou s'il est la version qui
 tourne (`previous_identical`) ; il **éprouve** la version d'avant comme une
@@ -6979,7 +6983,7 @@ d'équivalence (`internal/edge/store/testdata/legacy_migrations/`).
 | Derniers formulaires (refonte UX, C11) | Aucune migration, aucune route d'API ni verbe changés. `ModalForm` (une fenêtre à une étape, action liée par `form=`), le pare-feu, le plan de sauvegarde, la clé, la destination, le composant et l'incident en fenêtres à leur adresse ; `FormPage` et `FormCard` disparaissent (`FormBody` reste pour la première configuration et le fil d'un incident, dans `FormBody.tsx`) ; `Wizard` n'existe plus qu'en fenêtre ; le projet d'un composant vient de l'adresse (plus de menu Projet) | Une saisie en cours se perd d'un rechargement ; les anciennes adresses de composant avec `?project=` sont perdues, `/disponibilite/composants/{id}` redirige |
 | Schéma unique | Les 33 migrations écrasées en `migrations/001_schema.sql`, écrit à la main et groupé par domaine ; le test d'équivalence (`internal/edge/store/schema_test.go`) le compare, colonne par colonne et index par index, aux anciennes migrations rejouées suivies de l'élagage (`testdata/legacy_trim.sql`) ; deux garde-fous : chaque clé étrangère vise une clé, chaque table et chaque colonne sert au store. Élagage : `probe_certificates` (les huit `cert_*` de `probes`), `machine_rollups` (`machine_samples_hourly` et `_daily`), `heartbeats.token_sealed` et `token_lookup` (`token` et `token_hash`), `containers.kind` et trois colonnes mortes d'`agents` retirés. Une base qui note une migration que le binaire n'embarque pas est refusée au démarrage (`store.ErrUnknownSchema`). Retirés : l'étape Go de la 024 (`store/migrate_024.go`, `directory/migrate.go`) et les tests de montée |
 | Ordres signés (#146, 1/3) | La migration `002_actions.sql` (`action_runs`, `run_logs`, `agents.server_key_fingerprint` et `last_order_seq`), le paquet `internal/gesture/action` (clé `server.key` et sa signature, `Service.Ping`, `Record`, la boucle d'expiration et de purge), le protocole entier dans `internal/wire/agentwire` (`Kind` et `Command` typés à la place de `machine.Command{Name, Payload any}` et des quatre noms de `container`, `probe`, `update` ; `OrderBody`, `SignedOrder`, `KeyFingerprint`, la section `actions` du signal, l'en-tête `OpenCloud-Server-Key`, `agent_id` et `server_key` à l'enrôlement), les commandeurs typés par domaine (`RequestLogs`, `AssignProbes`, `AssignImages`) servis par `server/commands.go`, le juge d'ordres de l'agent (`internal/edge/agent/orders.go`) et `identity.json` (`agent_id`, `server_key`, `last_order_seq`), `fsx.ReadPrivate`, les routes `POST /api/machines/{id}/actions/ping`, `GET /api/actions`, `GET /api/agents/server-key`, l'outil MCP `list_actions` (vingt et une lectures), l'audit `action.order`, le sujet du direct `actions`, la carte « Ordres » de la fiche, les goldens `actions.golden.json` et `mcp_list_actions.golden.json` |
-| Droits appliqués (#146, 2/3) | `action.RightOf` (le droit de chaque genre ; `observe` pour l'observation et `agent.ping`), `machine.HasCapability`, le refus de l'agent `right_missing:<droit>` (`internal/edge/agent/orders.go`, sans prendre le rang) et `not_implemented`, l'ordre déclaré `agent.update`, `action.Service.Send` et son refus `409 action.right_missing` quand l'agent a rapporté ses droits sans celui-là, l'audit `action.refused` sous l'agent, `CreateReenrollToken` qui reçoit les droits (corps `{capabilities}` de `POST /api/machines/{id}/actions/reenroll`), la page « Changer les droits » (`/machines/{id}/droits`, `RightsFields` partagé avec l'ajout d'une machine) |
+| Droits appliqués (#146, 2/3) | `agentwire.Spec.Right` (le droit de chaque genre, au registre ; `observe` pour l'observation et `agent.ping`), `machine.HasCapability`, le refus de l'agent `right_missing:<droit>` (`internal/edge/agent/orders.go`, sans prendre le rang) et `not_implemented`, l'ordre déclaré `agent.update`, `action.Service.Send` et son refus `409 action.right_missing` quand l'agent a rapporté ses droits sans celui-là, l'audit `action.refused` sous l'agent, `CreateReenrollToken` qui reçoit les droits (corps `{capabilities}` de `POST /api/machines/{id}/actions/reenroll`), la page « Changer les droits » (`/machines/{id}/droits`, `RightsFields` partagé avec l'ajout d'une machine) |
 | Protocole v2, agent durci, rotation des clés (#146, 3/3) | La preuve de l'agent sans défi (`machine.SignedPayload` : étiquette `opencloud-agent-proof/v2`, aléa tiré par l'agent, identifiant préfixé de sa longueur, heure ; `machine.NewNonce`, l'ensemble des aléas vus dix minutes, `ErrReplayed`, `401 replayed`), `/agent/challenge` et `machine.Service.Challenge` retirés, l'en-tête `OpenCloud-Agent-Protocol: 2` et le refus `426 protocol_unsupported` (une route `/agent/` attrape le reste), le seau par source partagé par l'enrôlement et l'ouverture du flux (`agentapi/source_limits.go`), l'événement découpé en lignes `data:` de 32 Kio et borné à 1 Mio (`agentwire.EventDataLine`, `MaxEventLineBytes`, `MaxEventBytes`), l'agent qui ne suit pas les redirections et lit le flux borné (`readEvent`, `ErrEventTooLarge`), le plancher de l'intervalle des sondes côté agent, `secret.key` à plusieurs lignes (`seal.Keyring`, `WithNewKey`, `Current`, `Retired`), `store.ResealSecrets`, `server.key` à deux lignes (`action.Key.Rotated`, `Finished`, `SaveKey`, la signature par la clé épinglée), l'ordre `agent.server_key` et `action.Service.Rekey`, `previous_fingerprint` de `GET /api/agents/server-key`, les commandes `opencloud secrets rotate`, `rotate-server-key` et `finish-server-key`, les audits `secrets.rotate`, `secrets.rotate_server_key` et `secrets.finish_server_key` |
 | Annuaire, retrait de « à vérifier » | La migration `003_needs_review.sql` (`declared_services.needs_review` supprimée, `declared_by = 'migration'` réécrit en `operator`), `directory.Review`, `MarkServiceReviewed`, la route `POST /api/directory/services/{id}/actions/review`, l'action d'audit `service.review`, `manifest.Annotations.NeedsReview` (le commentaire « à vérifier » de l'export), `logServicesToReview`, la bannière et la pastille « À vérifier » de la fiche et du tableau ; `declared_by` reste, avec la seule valeur `operator` |
 | Journal vers les canaux | La migration `004_audit_deliveries.sql` (`alert_channels.receives_audit`, la table `audit_deliveries` en `cascade` vers l'événement et le canal), `audit.Forwarder` et `Recorder.SetForwarder`, `InsertAuditEvent` qui réserve les livraisons dans la transaction de l'événement, `alert.EventAudit` (hors de `alert.Events()`), `Engine.ForwardAuditEvent`, `Requeue` et `retryDue` qui rejouent aussi le journal, le notifieur (un essai dans l'ouvrier, `UpdateAuditDelivery`), `RenderAudit` et `JournalLink` (`forward_render.go`), l'identifiant de transaction Matrix `audit-`, `reader.CountAuditForwarding` et `GET /api/audit/forwarding`, la case « Recevoir le journal » du formulaire de canal et sa pastille, l'avertissement de la page Journal, les clés `audit.notify_*`, `audit.forwarding_*`, `channel.receives_audit_*` et `alert.notify_audit`, les goldens `audit_forwarding.golden.json` et (`receives_audit`) `alert_channels`, `mcp_list_alert_channels` |

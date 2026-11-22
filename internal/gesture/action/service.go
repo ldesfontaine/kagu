@@ -256,7 +256,8 @@ func (s *Service) send(ctx context.Context, order ServiceOrder) (Run, error) {
 	if s.key == nil {
 		return Run{}, ErrNoServerKey
 	}
-	if !kind.IsOrder() {
+	spec, known := agentwire.SpecOf(kind)
+	if !known {
 		return Run{}, fmt.Errorf("%q: %w", kind, ErrUnknownKind)
 	}
 	if len(secret) > agentwire.MaxSecretBytes {
@@ -269,7 +270,10 @@ func (s *Service) send(ctx context.Context, order ServiceOrder) (Run, error) {
 	if !target.Agent.IsActive() {
 		return Run{}, machine.ErrNoAgent
 	}
-	if !target.Agent.ReportedAt.IsZero() && !coversOrder(target.Agent.Capabilities, kind, params) {
+	// Le droit que le registre déclare pour le genre, et lui seul (R-A1-1).
+	// Le producteur de backup.produce n'est pas jugé ici : backup le juge
+	// avant d'envoyer (judgeSource), l'agent à la réception.
+	if !target.Agent.ReportedAt.IsZero() && !machine.HasCapability(target.Agent.Capabilities, spec.Right) {
 		return Run{}, ErrRightMissing
 	}
 	// Une ancre que l'agent a dit tenir et que l'ordre ne satisfait pas : il le

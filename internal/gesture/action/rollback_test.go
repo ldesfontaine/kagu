@@ -247,8 +247,8 @@ func TestRollbackAgent_SendsAnOrderWithoutParamsUnderTheUpdateRight(t *testing.T
 	if body.Kind != agentwire.KindAgentRollback || len(body.Params) != 0 && string(body.Params) != "null" && string(body.Params) != "{}" {
 		t.Fatalf("body %+v", body)
 	}
-	if right, known := action.RightOf(agentwire.KindAgentRollback); !known || right != machine.CapabilityAgentUpdate {
-		t.Fatalf("right %q %v", right, known)
+	if spec, known := agentwire.SpecOf(agentwire.KindAgentRollback); !known || spec.Right != machine.CapabilityAgentUpdate {
+		t.Fatalf("right %q %v", spec.Right, known)
 	}
 	events, _ := b.db.ListAuditEvents(context.Background(), audit.Query{Limit: 10, ObjectKind: audit.ObjectAction})
 	if len(events) != 1 || events[0].Details["from"] != "v0.0.1" {

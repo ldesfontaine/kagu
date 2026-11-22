@@ -123,35 +123,6 @@ func (o Order) encode() ([]byte, error) {
 	return json.Marshal(body) // #nosec G117 -- le corps signé porte le secret jusqu'à l'agent, rien d'autre ne le garde.
 }
 
-// RightOf rend le droit qu'un genre d'ordre exige de l'agent (décision 9) :
-// celui que le registre déclare (agentwire.Spec.Right). Le serveur s'en sert
-// pour ne pas envoyer un ordre qu'il sait refusé, l'agent pour refuser. Un
-// genre hors du registre n'en a aucun : rien ne le permet. T01-06 le retire au
-// profit de Spec.Right lu directement.
-func RightOf(kind agentwire.Kind) (string, bool) {
-	spec, known := agentwire.SpecOf(kind)
-	return spec.Right, known
-}
-
-// coversOrder dit si les droits rapportés par l'agent couvrent cet ordre : le
-// droit de son genre, et pour backup.produce le producteur qu'il nomme (le
-// droit porte la liste des producteurs, pas un chemin). Des paramètres
-// illisibles ne sont pas jugés ici : l'agent les refuse (bad_order).
-func coversOrder(capabilities []machine.Capability, kind agentwire.Kind, params json.RawMessage) bool {
-	right, known := RightOf(kind)
-	if !known || !machine.HasCapability(capabilities, right) {
-		return false
-	}
-	if kind != agentwire.KindBackupProduce {
-		return true
-	}
-	var produce agentwire.BackupProduceParams
-	if err := json.Unmarshal(params, &produce); err != nil {
-		return true
-	}
-	return machine.CoversProducer(capabilities, produce.Producer)
-}
-
 // Query choisit les runs d'une liste, du plus récent au plus ancien.
 type Query struct {
 	MachineID string
