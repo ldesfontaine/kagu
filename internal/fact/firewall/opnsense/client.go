@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/url"
 	"time"
-	"unicode/utf8"
 
 	"github.com/ldesfontaine/kagu/internal/fact/firewall"
 	"github.com/ldesfontaine/kagu/internal/kit/egress"
@@ -179,17 +178,4 @@ func transportRefusal(err error) error {
 		return fmt.Errorf("%w: %w", firewall.ErrCertificate, err)
 	}
 	return fmt.Errorf("%w: %w", firewall.ErrUnreachable, err)
-}
-
-// boundedText coupe un texte de l'API à maxTextBytes, sans couper un caractère
-// en deux.
-func boundedText(text string) string {
-	if len(text) <= maxTextBytes {
-		return text
-	}
-	cut := maxTextBytes
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return text[:cut]
 }

@@ -6586,6 +6586,17 @@ droit, ancre de confiance, en ligne. Une file de commandes pleine
 `TestOneDefinition_MachineFacts` refuse une clé `*.machine_offline`,
 `*.machine_unknown`, `*.machine_invalid` ou `*.no_agent` hors de `machine`.
 
+**Un texte venu d'ailleurs se juge une fois, dans `internal/kit/untrusted`** :
+`HasControl` refuse l'UTF-8 invalide, tout caractère de contrôle et tout
+caractère de sens d'écriture (marques et isolats bidi, dont U+202E) ; `Bound`
+coupe à un nombre d'octets sans couper un caractère ; `Strip` rend le texte
+avec U+FFFD à la place de ce que `HasControl` refuse. Le refus est entier, le
+texte n'est pas réparé. Un rapport de machine dont un modèle de disque porte
+de l'UTF-8 invalide est donc refusé en bloc.
+`TestOneDefinition_UntrustedText` refuse un `unicode.IsControl` hors
+`untrusted`, sauf les quatre fonctions de `controlCheckExceptions` (elles
+nettoient ou rognent, elles ne refusent pas).
+
 Aucun handler ne choisit la clé d'un refus de domaine par `errors.Is`. Deux
 cas gardent `s.apiRefuse` :
 

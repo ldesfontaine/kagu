@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 )
 
 // discard dit un élément écarté d'un rapport, et pourquoi : une ligne de
@@ -94,17 +94,17 @@ func validate(report Report, now time.Time) (Report, []discard, error) {
 }
 
 func validateVolume(volume VolumeReport) error {
-	if volume.Name == "" || len(volume.Name) > MaxNameLength || hasControlOrBadUTF8(volume.Name) {
+	if volume.Name == "" || len(volume.Name) > MaxNameLength || untrusted.HasControl(volume.Name) {
 		return invalid("nom du volume")
 	}
-	if volume.Driver == "" || len(volume.Driver) > MaxNameLength || hasControlOrBadUTF8(volume.Driver) {
+	if volume.Driver == "" || len(volume.Driver) > MaxNameLength || untrusted.HasControl(volume.Driver) {
 		return invalid("pilote du volume")
 	}
 	if len(volume.UsedBy) > MaxVolumeUsers {
 		return invalid("conteneurs du volume")
 	}
 	for _, user := range volume.UsedBy {
-		if user == "" || len(user) > MaxNameLength || hasControlOrBadUTF8(user) {
+		if user == "" || len(user) > MaxNameLength || untrusted.HasControl(user) {
 			return invalid("nom d'un conteneur du volume")
 		}
 	}
@@ -142,7 +142,7 @@ func checkContainer(container Observed, now time.Time) error {
 	}
 	// Le nom entre dans les messages d'alerte : un saut de ligne y ferait une
 	// ligne de plus, signée openCloud. Docker n'en laisse passer aucun.
-	if hasControlOrBadUTF8(container.Name) {
+	if untrusted.HasControl(container.Name) {
 		return invalid("caractère de contrôle ou UTF-8 invalide dans le nom")
 	}
 	if len(container.Group) > MaxNameLength || len(container.Image) > MaxImageLength || len(container.ImageID) > MaxImageLength {
@@ -195,7 +195,7 @@ func keepEnvTargets(container Observed) ([]EnvTarget, []discard) {
 		case len(kept) >= MaxEnvTargets:
 			discards = append(discards, discard{"environment targets of container " + container.Name, "trop d'instances désignées"})
 		case target.Name == "" || len(target.Name) > MaxNameLength || len(target.Group) > MaxNameLength ||
-			hasControlOrBadUTF8(target.Name) || hasControlOrBadUTF8(target.Group) || target.Port < 0 || target.Port > 65535:
+			untrusted.HasControl(target.Name) || untrusted.HasControl(target.Group) || target.Port < 0 || target.Port > 65535:
 			discards = append(discards, discard{"environment target of container " + container.Name, "nom, projet ou port illisible"})
 		default:
 			kept = append(kept, target)
@@ -231,7 +231,7 @@ func keepLabels(container Observed) (map[string]string, []discard) {
 		return refuse("trop de labels")
 	}
 	for key, value := range container.Labels {
-		if key == "" || len(key) > MaxLabelKeyLength || len(value) > MaxNameLength || hasControlOrBadUTF8(key) || hasControlOrBadUTF8(value) {
+		if key == "" || len(key) > MaxLabelKeyLength || len(value) > MaxNameLength || untrusted.HasControl(key) || untrusted.HasControl(value) {
 			return refuse("clé ou valeur de label hors limites")
 		}
 	}
@@ -242,10 +242,6 @@ func keepLabels(container Observed) (map[string]string, []discard) {
 		return refuse("nom d'unité illisible")
 	}
 	return container.Labels, nil
-}
-
-func hasControlOrBadUTF8(text string) bool {
-	return !utf8.ValidString(text) || strings.ContainsFunc(text, unicode.IsControl)
 }
 
 func checkAttachment(attachment Attachment) error {

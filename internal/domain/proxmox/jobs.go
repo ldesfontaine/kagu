@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 )
 
 // Au-delà, ce n'est plus la configuration d'une infra qu'on lit.
@@ -141,10 +143,10 @@ func jobOf(entry jobEntry) BackupJob {
 		schedule = entry.Starttime
 	}
 	job := BackupJob{
-		ID: boundedText(entry.ID), Schedule: boundedText(schedule), Storage: boundedText(entry.Storage),
-		Enabled: entry.Enabled == nil || entry.Enabled.value != 0, Node: boundedText(entry.Node),
+		ID: untrusted.Bound(entry.ID, maxTextBytes), Schedule: untrusted.Bound(schedule, maxTextBytes), Storage: untrusted.Bound(entry.Storage, maxTextBytes),
+		Enabled: entry.Enabled == nil || entry.Enabled.value != 0, Node: untrusted.Bound(entry.Node, maxTextBytes),
 		AllGuests: entry.All.value == 1, VMIDs: guestIDList(entry.VMID), Excluded: guestIDList(entry.Exclude),
-		Retention: retentionOf(entry.PruneBackups), Comment: boundedText(entry.Comment),
+		Retention: retentionOf(entry.PruneBackups), Comment: untrusted.Bound(entry.Comment, maxTextBytes),
 	}
 	if entry.NextRun.value > 0 {
 		job.NextRun = time.Unix(entry.NextRun.value, 0).UTC()

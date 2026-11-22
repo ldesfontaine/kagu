@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
+
 	"github.com/ldesfontaine/kagu/internal/fact/firewall"
 	"github.com/ldesfontaine/kagu/internal/fact/firewall/opnsense/opnsensetest"
 )
@@ -290,7 +292,7 @@ func TestLeases_AServerThatIsAbsentOrForbiddenIsSkippedUnlessNoneAnswers(t *test
 
 func TestBoundedText_NeverCutsACharacterInHalf(t *testing.T) {
 	long := strings.Repeat("é", maxTextBytes)
-	cut := boundedText(long)
+	cut := untrusted.Bound(long, maxTextBytes)
 	if len(cut) > maxTextBytes || !strings.HasSuffix(long, cut[len(cut)-2:]) {
 		t.Fatalf("%d bytes", len(cut))
 	}
