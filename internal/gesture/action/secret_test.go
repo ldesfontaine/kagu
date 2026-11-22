@@ -150,40 +150,25 @@ func TestSend_BackupOrdersNeedTheBackupRight(t *testing.T) {
 			t.Errorf("%s: %v", kind, err)
 		}
 	}
-	if right, ok := action.RightOf(agentwire.KindBackupReceive); !ok || right != "backup.receive" {
-		t.Errorf("right %q %t", right, ok)
-	}
 }
 
-// backup.produce exige son droit, et le producteur que l'ordre nomme : un agent
-// qui n'a pas le droit, ou qui l'a pour un autre producteur, ne reçoit pas
-// l'ordre. Des paramètres illisibles passent : l'agent les refusera (bad_order).
-func TestSend_ProduceNeedsTheRightAndItsProducer(t *testing.T) {
-	if right, ok := action.RightOf(agentwire.KindBackupProduce); !ok || right != "backup.produce" {
-		t.Fatalf("right %q %t", right, ok)
-	}
-	produce := func(producer string) []byte {
-		params, err := json.Marshal(agentwire.BackupProduceParams{Producer: producer, Target: "5012", Prefix: "pve-vm-5012", Recipient: "age1x", Parcel: "colis"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return params
+// backup.produce exige son droit : un agent qui ne l'a pas ne reçoit pas
+// l'ordre. Le producteur que l'ordre nomme n'est pas jugé ici : backup le juge
+// avant d'envoyer (TestRunNow_RefusesBeforeAnyOrderWhenTheTwoMachinesAreNotReady),
+// l'agent à la réception. Des paramètres illisibles passent : l'agent les
+// refusera (bad_order).
+func TestSend_ProduceNeedsItsRight(t *testing.T) {
+	produce, err := json.Marshal(agentwire.BackupProduceParams{Producer: "proxmox-vzdump", Target: "5012", Prefix: "pve-vm-5012", Recipient: "age1x", Parcel: "colis"})
+	if err != nil {
+		t.Fatal(err)
 	}
 	without := newBenchReporting(t, "observe")
-	if _, err := without.service.Send(operator(), machineID, agentwire.KindBackupProduce, produce("proxmox-vzdump")); !errors.Is(err, action.ErrRightMissing) {
+	if _, err := without.service.Send(operator(), machineID, agentwire.KindBackupProduce, produce); !errors.Is(err, action.ErrRightMissing) {
 		t.Errorf("without the right: %v", err)
 	}
 	with := newBenchReporting(t, "observe,backup.produce=proxmox-vzdump")
-	if _, err := with.service.Send(operator(), machineID, agentwire.KindBackupProduce, produce("proxmox-vzdump")); err != nil {
+	if _, err := with.service.Send(operator(), machineID, agentwire.KindBackupProduce, produce); err != nil {
 		t.Errorf("with the right: %v", err)
-	}
-	for name, params := range map[string][]byte{"another producer": produce("test-echo"), "no producer": produce("")} {
-		if _, err := with.service.Send(operator(), machineID, agentwire.KindBackupProduce, params); !errors.Is(err, action.ErrRightMissing) {
-			t.Errorf("%s: %v", name, err)
-		}
-	}
-	if len(with.pusher.sent) != 1 {
-		t.Errorf("%d orders left, want only the covered one", len(with.pusher.sent))
 	}
 	if _, err := with.service.Send(operator(), machineID, agentwire.KindBackupProduce, []byte("pas du json")); err != nil {
 		t.Errorf("unreadable params are the agent's to refuse: %v", err)

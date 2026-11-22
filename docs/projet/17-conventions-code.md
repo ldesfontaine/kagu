@@ -230,8 +230,10 @@ autre : chacun a sa règle d'import.
 
 1. Un paquet n'importe que son dossier ou un dossier de rang plus bas.
 2. `kit` n'importe que la bibliothèque standard et `kit`.
-3. `edge/agent` n'importe ni `edge/server`, ni `edge/store`. `edge/server`
-   n'importe pas `edge/store` : il lit par `view/reader`.
+3. `edge/agent` n'importe ni `edge/server`, ni `edge/store`, ni
+   `gesture/action` hors de ses tests : il juge un ordre avec
+   `agentwire.Spec`. `edge/server` n'importe pas `edge/store` : il lit par
+   `view/reader`.
 4. Un sous-paquet de `edge/server` n'importe pas `edge/server`, ni un autre
    sous-paquet (`public` importe `sse`) ; ce qu'il partage avec la racine vit
    dans `server/httpx`, qui n'importe que la bibliothèque standard.
@@ -256,7 +258,7 @@ s'y déclare avec sa raison, et il n'y en a aucune.
 | `edge/store` | Tout le SQL : requêtes, transactions, migrations, les comptes (`CountContainers`, `CountContainerUpdates`), et les contrôles qui doivent tenir dans la transaction de l'écriture (unicité de l'annuaire) | Une règle qu'un composant peut porter |
 | `wire/agentwire` | Le protocole entier, figé par les agents installés : en-têtes, corps, sections du signal ; la liste fermée de ce que le serveur pousse (`Kind`, `Command` typée, plus d'`any` sur le fil) et l'enveloppe des ordres (`OrderBody`, `SignedOrder`) ; les octets que les deux côtés signent ou comparent (`OrderSigningBytes`, `KeyFingerprint`) ; sa version (`ProtocolVersion`, l'en-tête `OpenCloud-Agent-Protocol`) et ses bornes (`MaxEventBytes`, `MaxEventLineBytes`, `EventDataLine`). Un changement que les agents installés ne liraient pas passe la version : le serveur refuse l'autre (`426`), jamais en silence. La preuve de l'agent (`machine.SignedPayload`) reste dans `machine`, que `agentwire` importe. Un domaine ne nomme jamais un événement : il déclare son commandeur typé (`container.Commander.RequestLogs`), le serveur l'encode | Une règle, un appel |
 | Les outils (`kit`) | Un concept chacun, sans règle de Kagu. `deletion` : la forme du plan d'une suppression et le refus qui le porte, la règle restant au domaine (`machine.RefuseDeletion`) ; `ratelimit` : un limiteur par clé (`New`) ou par source (`BySource`, le /64 calculé dedans), balayé au passage ; `ident.New` : les identifiants de seize hexadécimaux (`machine.NewID`, un UUID, reste à part) ; `wait.For` : une pause qui s'arrête à l'annulation ; `audit` : l'acteur dans le contexte et le `Recorder` du journal d'audit, que tous les composants, `server`, `store` et `reader` importent ; `release` : la signature minisign des versions et la vérification d'un fichier contre elle ; la clé publique embarquée ; `rollback` : le marqueur d'une mise à jour d'agent en attente de confirmation, les liens `current` et `previous`, et le lanceur stable (`Guard`) qui rebascule seul à l'échéance | Importer un composant |
-| `edge/agent`, `domain/dockerwatch` | Ce qui tourne sur une machine gérée | Importer `server` ou `store` |
+| `edge/agent`, `domain/dockerwatch` | Ce qui tourne sur une machine gérée | Importer `server` ou `store` ; pour l'agent, `action` |
 
 Deux composants qui ont besoin l'un de l'autre ne s'importent pas tous les
 deux (Go le refuse) : l'un déclare une interface et reçoit l'autre par un

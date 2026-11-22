@@ -128,37 +128,37 @@ func TestKey_RotationSignsWithTheKeyTheAgentPinned(t *testing.T) {
 	}
 }
 
-func TestRightOf_GuestOrdersNeedTheirOwnRight(t *testing.T) {
+func TestRegistryRight_GuestOrdersNeedTheirOwnRight(t *testing.T) {
 	want := map[agentwire.Kind]string{
 		agentwire.KindProxmoxStart: "proxmox.power", agentwire.KindProxmoxShutdown: "proxmox.power",
 		agentwire.KindProxmoxSnapshot: "proxmox.snapshot", agentwire.KindProxmoxSnapshotDelete: "proxmox.snapshot",
 	}
 	for kind, right := range want {
-		if got, ok := RightOf(kind); !ok || got != right {
-			t.Errorf("%s: %q %v", kind, got, ok)
+		if spec, ok := agentwire.SpecOf(kind); !ok || spec.Right != right {
+			t.Errorf("%s: %q %v", kind, spec.Right, ok)
 		}
 	}
 }
 
-func TestRightOf_ResticOrdersNeedTheTargetOrTheSourceRight(t *testing.T) {
+func TestRegistryRight_ResticOrdersNeedTheTargetOrTheSourceRight(t *testing.T) {
 	want := map[agentwire.Kind]string{
 		agentwire.KindResticTargetSetup: "restic.target", agentwire.KindResticUserAdd: "restic.target",
 		agentwire.KindResticUserRemove: "restic.target", agentwire.KindResticRetain: "restic.target",
 		agentwire.KindResticProvision: "restic.produce", agentwire.KindResticBackup: "restic.produce",
 	}
 	for kind, right := range want {
-		if got, ok := RightOf(kind); !ok || got != right {
-			t.Errorf("%s: %q %v", kind, got, ok)
+		if spec, ok := agentwire.SpecOf(kind); !ok || spec.Right != right {
+			t.Errorf("%s: %q %v", kind, spec.Right, ok)
 		}
 	}
 	for _, kind := range agentwire.OrderKinds() {
-		if _, known := RightOf(kind); !known {
+		if _, known := agentwire.SpecOf(kind); !known {
 			t.Errorf("order %s has no right", kind)
 		}
 	}
 	// Le relais n'est pas un ordre : il est hors du registre, la cible le
 	// rejuge elle-même (restic.Allow).
-	if _, known := RightOf(agentwire.KindResticRelay); known {
+	if _, known := agentwire.SpecOf(agentwire.KindResticRelay); known {
 		t.Error("restic_relay is an observation, not an order")
 	}
 }

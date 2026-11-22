@@ -12,7 +12,6 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
-	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -26,7 +25,7 @@ import (
 // signature est de cette clé ; le corps se lit strictement ; il vise cette
 // machine et cet agent ; il n'est pas périmé ; son rang dépasse le dernier
 // exécuté ; son genre est au registre (agentwire.Spec) ; le fichier de
-// l'agent porte le droit qu'il exige (action.RightOf) ; ses paramètres et son
+// l'agent porte le droit qu'il exige (Spec.Right) ; ses paramètres et son
 // secret se lisent strictement dans leur type ; les valeurs décodées qu'il
 // présente sont dans les ancres de confiance locales. Sinon il est refusé, et le
 // refus est rapporté. Les
@@ -142,12 +141,13 @@ func (r *orderRunner) judge(signed agentwire.SignedOrder) (agentwire.OrderBody, 
 		return body, agentwire.ReasonExpired
 	case body.Seq <= r.identity.LastOrderSeq:
 		return body, agentwire.ReasonReplayed
-	case !body.Kind.IsOrder():
+	}
+	spec, known := agentwire.SpecOf(body.Kind)
+	if !known {
 		return body, agentwire.ReasonUnknownKind
 	}
-	right, known := action.RightOf(body.Kind)
-	if !known || !machine.HasCapability(r.identity.Capabilities(), right) {
-		return body, agentwire.RightMissing(right)
+	if !machine.HasCapability(r.identity.Capabilities(), spec.Right) {
+		return body, agentwire.RightMissing(spec.Right)
 	}
 	// Une clé inconnue, répétée ou d'une autre casse ne se lit pas : refusée
 	// ici, avant les ancres, qui jugent la valeur décodée.

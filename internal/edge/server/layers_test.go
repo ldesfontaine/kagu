@@ -28,7 +28,7 @@ var layerExceptions = map[string]string{}
 const (
 	// Règles 1 et 2 : kit est au rang 0, la règle du rang le tient déjà.
 	ruleImportRank   = 1 // un paquet n'importe que son dossier ou plus bas
-	ruleAgentOffEdge = 3 // edge/agent et edge/gate n'importent ni server ni store
+	ruleAgentOffEdge = 3 // edge/agent et edge/gate n'importent ni server ni store ; l'agent, pas action
 	ruleSubOfServer  = 4 // un sous-paquet de edge/server n'importe pas edge/server
 	ruleTestKit      = 5 // un banc n'est importé que par des _test.go
 	ruleHasFamily    = 6 // un paquet vit dans l'un des sept dossiers
@@ -108,6 +108,13 @@ func layerFaults(relative string, file *ast.File) []layerFault {
 				(isPackageOrBelow(target, "internal/edge/server") || isPackageOrBelow(target, "internal/edge/store")) {
 				add(ruleAgentOffEdge, importPath, "l'agent et la porte n'importent ni edge/server ni edge/store")
 			}
+			// action est du rang 3, permis par les rangs : c'est le service du
+			// serveur qui envoie les ordres, l'agent les juge avec le registre
+			// (agentwire.Spec). Ses bancs montent un vrai action.Service : la
+			// règle, comme les autres, ne vise pas les _test.go.
+			if strings.HasPrefix(packageDir, "internal/edge/agent") && isPackageOrBelow(target, "internal/gesture/action") {
+				add(ruleAgentOffEdge, importPath, "l'agent n'importe pas gesture/action : il lit agentwire.Spec")
+			}
 			if strings.HasPrefix(packageDir, "internal/edge/server/") && target == "internal/edge/server" {
 				add(ruleSubOfServer, importPath, "un sous-paquet de edge/server n'importe pas edge/server")
 			}
@@ -165,7 +172,8 @@ func TestLayers_NoImportGoesUp(t *testing.T) {
 }
 
 // Le bord se tient à l'écart : l'agent et la porte ne montent pas au serveur
-// ni à la base, un sous-paquet du serveur ne remonte pas à sa racine.
+// ni à la base, l'agent n'emprunte pas le service des ordres (X-10), un
+// sous-paquet du serveur ne remonte pas à sa racine.
 func TestLayers_AgentStaysOffTheServer(t *testing.T) {
 	checkLayerRules(t, ruleAgentOffEdge, ruleSubOfServer)
 }
@@ -213,6 +221,9 @@ import _ "github.com/ldesfontaine/kagu/internal/edge/config"
 `, ruleImportRank},
 		{"agent importing the server", "internal/edge/agent/faulty.go", `package agent
 import _ "github.com/ldesfontaine/kagu/internal/edge/server"
+`, ruleAgentOffEdge},
+		{"agent importing the order service", "internal/edge/agent/faulty.go", `package agent
+import _ "github.com/ldesfontaine/kagu/internal/gesture/action"
 `, ruleAgentOffEdge},
 		{"server sub-package importing the server", "internal/edge/server/faulty/faulty.go", `package faulty
 import _ "github.com/ldesfontaine/kagu/internal/edge/server"

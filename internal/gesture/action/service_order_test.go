@@ -173,13 +173,13 @@ func TestLastFolderRun_KeepsWhatTheAgentSaidOfTheFolder(t *testing.T) {
 	}
 }
 
-func TestRightOf_TheDockerOrdersHaveTheirOwnRight(t *testing.T) {
+func TestRegistryRight_TheDockerOrdersHaveTheirOwnRight(t *testing.T) {
 	for kind, want := range map[agentwire.Kind]string{
 		agentwire.KindDockerDeploy: "docker.deploy",
 		agentwire.KindDockerUpdate: "docker.update",
 	} {
-		if right, ok := action.RightOf(kind); !ok || right != want {
-			t.Errorf("%s: %q %t", kind, right, ok)
+		if spec, ok := agentwire.SpecOf(kind); !ok || spec.Right != want {
+			t.Errorf("%s: %q %t", kind, spec.Right, ok)
 		}
 	}
 }
