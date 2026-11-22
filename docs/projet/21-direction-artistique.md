@@ -295,25 +295,15 @@ binaire, comme aujourd'hui. Rien ne se charge depuis Internet.
 
 ## Marque
 
-- Mot-symbole « openCloud » : « open » en 500 encre 2, « Cloud » en 600 encre,
-  approche −0,02 em, sans espace.
-- Le signe se pose nu à côté du mot, dans la couleur du texte. Jamais de tuile
-  noire derrière ; la tuile ne sert qu'au favicon.
-- Le signe se dessine dans la grille 24 px et le trait des icônes.
+Le produit s'appelle Kagu (décision de Lucas du 12 novembre 2026). Le nom, le
+signe et leurs règles d'usage sont dans `branding/LISEZ-MOI.md` du dossier v2 ;
+on ne les redessine pas.
 
-| Piste | Idée | Coût |
-| --- | --- | --- |
-| **A · Nuage ouvert, retenue** | Un nuage d'un seul trait, laissé ouvert en bas : « open » | Discret ; le trait s'épaissit sous 16 px |
-| B · Trois machines, écartée | Trois silhouettes qui font un nuage plein | Le plus lisible en favicon ; proche de signes existants |
-| C · Nuage en réseau, écartée | Trois machines reliées, l'enveloppe fait le nuage | Dit le multi-machines ; ressemble à une icône de réseau |
-
-Le signe retenu, grille 24 px, trait 2,2 arrondi :
-
-```svg
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M9 19a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9H14"/>
-</svg>
-```
+| Élément | Dans le dépôt |
+| --- | --- |
+| Signe (le K huppé, `kagu-signe.svg`) | `Mark` (`web/src/components/Icon.tsx`), en `currentColor` |
+| Favicon (la tuile noire, `kagu-favicon.svg`) | `web/public/favicon.svg`, et nulle part ailleurs |
+| Mot-symbole | `Wordmark` : le nom en minuscules, Geist 600, encre, approche −0,02 em ; signe à gauche, 0,875 fois la taille du mot, écart 0,22 fois |
 
 ## Ton
 
@@ -343,5 +333,6 @@ changent pas : ils sont portés tels quels.
 1. Pile front : Go + HTMX + CSS à jetons ; **remplacée le 13 septembre par
    Go + React embarqué, SCSS à jetons** (voir « Pile front »).
 2. Accent : indigo `#5b5be6` (sombre `#7c7cf0`).
-3. Nom affiché : « openCloud ».
-4. Signe de la marque : piste A, le nuage ouvert.
+3. Nom affiché : « openCloud » ; **remplacé le 12 novembre par Kagu** (voir « Marque »).
+4. Signe de la marque : piste A, le nuage ouvert ; **remplacé le 12 novembre
+   par le K huppé** (voir « Marque »).
