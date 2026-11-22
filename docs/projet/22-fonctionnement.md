@@ -557,7 +557,7 @@ et qu'**aucun ordre ne peut écrire**.
 | Type | Ce qu'il borne | Valeurs | Drapeau du premier lancement | Droit utile |
 | --- | --- | --- | --- | --- |
 | `backup.recipient` | le destinataire age pour lequel `backup.produce` chiffre (`recipient`) | 1 à 2 clés `age1…` | `-backup-recipient` | `backup.produce` |
-| `backup.guest` | la VM ou le conteneur que `proxmox-vzdump` copie (`target`) | 1 à 32 identifiants, sans zéro en tête | `-backup-guest` | `backup.produce` |
+| `backup.guest` | la VM ou le conteneur que `proxmox-vzdump` copie : `target` de `backup.produce`, `vmid` de `restic.backup` en portée `vm` (la portée `service` n'est pas bornée) | 1 à 32 identifiants, sans zéro en tête | `-backup-guest` | `backup.produce` |
 | `restic.target-cert` | le certificat de la cible que `restic.provision` accepte (`certificate`) | 1 à 4 empreintes SHA-256 du certificat (64 hexadécimaux minuscules) | `-restic-target-cert` | `restic.produce` |
 
 - **Un registre, pas des `if`.** `internal/fact/anchor` déclare chaque type une
@@ -638,7 +638,7 @@ Ce qui protège de quoi, si le serveur est compromis :
 
 | Geste du serveur compromis | Protégé ? | Par quoi |
 | --- | --- | --- |
-| Copier une VM qu'on ne lui a pas confiée (Vaultwarden…) par `backup.produce` | oui | `backup.guest` |
+| Copier une VM qu'on ne lui a pas confiée (Vaultwarden…) par `backup.produce` ou `restic.backup` | oui | `backup.guest` |
 | La faire chiffrer pour sa propre clé | oui | `backup.recipient` |
 | Rediriger une source restic vers une cible à lui (`restic.provision`) | oui | `restic.target-cert` |
 | Se donner une ancre par un ordre | oui | aucun genre ne les écrit (test sur tous les genres, test statique des écritures) |

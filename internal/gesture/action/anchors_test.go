@@ -95,3 +95,40 @@ func TestSend_AnAgentThatReportsNoAnchorIsNotJudgedByThem(t *testing.T) {
 		t.Fatalf("%d runs", len(kinds))
 	}
 }
+
+// B-M1 côté serveur : restic.backup d'un invité hors des ancres rapportées
+// n'est pas envoyé, avec le vmid dans la commande ; la portée service part.
+func TestSend_AResticBackupOfAGuestTheReportedAnchorsWouldRefuseIsNotSent(t *testing.T) {
+	b := newBenchReporting(t, "observe,restic.produce,backup.produce=proxmox-vzdump")
+	order := func(params agentwire.ResticBackupParams) []byte {
+		encoded, err := json.Marshal(params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return encoded
+	}
+	guest := order(agentwire.ResticBackupParams{Target: "m-abc", Scope: agentwire.ResticScopeVM, VMID: 105, GuestType: agentwire.GuestQEMU})
+	service := order(agentwire.ResticBackupParams{Target: "m-abc", Scope: agentwire.ResticScopeService, Service: "wiki"})
+
+	reportAnchors(t, b, "backup.guest=101")
+	_, err := b.service.Send(operator(), machineID, agentwire.KindResticBackup, guest)
+	var refused *anchor.Refused
+	if !errors.As(err, &refused) {
+		t.Fatalf("guest outside: %v", err)
+	}
+	if key, _ := refusal.KeyOf(err); key != "anchor.backup_guest_outside" || !strings.HasSuffix(refused.Command(), "agent trust add backup.guest 105") {
+		t.Errorf("key %q, command %q", key, refused.Command())
+	}
+	if len(b.pusher.sent) != 0 {
+		t.Fatalf("a refused order was sent: %d", len(b.pusher.sent))
+	}
+
+	reportAnchors(t, b, "none")
+	if _, err := b.service.Send(operator(), machineID, agentwire.KindResticBackup, service); err != nil {
+		t.Fatalf("a service backup is not bounded by backup.guest: %v", err)
+	}
+	reportAnchors(t, b, "backup.guest=101:105")
+	if _, err := b.service.Send(operator(), machineID, agentwire.KindResticBackup, guest); err != nil {
+		t.Fatalf("an anchored guest: %v", err)
+	}
+}

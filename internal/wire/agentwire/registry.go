@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
@@ -36,6 +37,10 @@ type AnchorCheck struct {
 	Anchor string
 	// value rend la valeur ; vide quand l'ordre n'en donne pas de lisible.
 	value func(params any) string
+	// applies dit si l'ancre borne cet ordre. Des paramètres
+	// qui ne se lisent pas sont bornés : seul un ordre lu qui n'est pas du
+	// ressort de l'ancre n'en présente aucune valeur.
+	applies func(params any) bool
 }
 
 // Option complète la déclaration d'un genre.
@@ -50,13 +55,27 @@ func Journal(fields ...string) Option {
 // des paramètres décodés. P doit être le type des paramètres du genre : un
 // autre type ne présente aucune valeur, et l'ordre sort de l'ancre.
 func Anchored[P any](name string, value func(P) string) Option {
-	check := AnchorCheck{Anchor: name, value: func(params any) string {
-		typed, ok := params.(P)
-		if !ok {
-			return ""
-		}
-		return value(typed)
-	}}
+	return AnchoredWhen(name, func(P) bool { return true }, value)
+}
+
+// AnchoredWhen fait comme Anchored, mais l'ancre ne borne que les ordres pour
+// lesquels applies est vrai (restic.backup : l'invité, pas le service). Pour
+// les autres, l'ordre ne présente rien à cette ancre, pas même une valeur vide.
+func AnchoredWhen[P any](name string, applies func(P) bool, value func(P) string) Option {
+	check := AnchorCheck{
+		Anchor: name,
+		value: func(params any) string {
+			typed, ok := params.(P)
+			if !ok {
+				return ""
+			}
+			return value(typed)
+		},
+		applies: func(params any) bool {
+			typed, ok := params.(P)
+			return !ok || applies(typed)
+		},
+	}
 	return func(spec *Spec) { spec.Anchors = append(spec.Anchors, check) }
 }
 
@@ -130,7 +149,10 @@ var registry = []Spec{
 		Journal("target", "host", "port", "user"), WithSecret[ResticProvisionSecret](),
 		Anchored(anchor.ResticTargetCert, func(params ResticProvisionParams) string { return PEMFingerprint(params.Certificate) })),
 	Define[ResticBackupParams](KindResticBackup, machine.CapabilityResticProduce,
-		Journal("target", "scope", "vmid", "guest_type", "service", "force_relay")),
+		Journal("target", "scope", "vmid", "guest_type", "service", "force_relay"),
+		AnchoredWhen(anchor.BackupGuest,
+			func(params ResticBackupParams) bool { return params.Scope == ResticScopeVM },
+			func(params ResticBackupParams) string { return strconv.Itoa(params.VMID) })),
 	Define[ResticRetainParams](KindResticRetain, machine.CapabilityResticTarget,
 		Journal("user", "keep_last", "keep_daily", "keep_weekly", "keep_monthly", "keep_yearly"), WithSecret[ResticRetainSecret]()),
 	Define[ResticVerifyParams](KindResticVerify, machine.CapabilityResticVerify, Journal("user"), WithSecret[ResticVerifySecret]()),
@@ -240,6 +262,9 @@ func PresentedOf(kind Kind, params json.RawMessage) []anchor.Presented {
 func (s Spec) presented(params any) []anchor.Presented {
 	presented := make([]anchor.Presented, 0, len(s.Anchors))
 	for _, check := range s.Anchors {
+		if !check.applies(params) {
+			continue
+		}
 		presented = append(presented, anchor.Presented{Name: check.Anchor, Value: check.value(params)})
 	}
 	return presented

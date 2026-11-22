@@ -1181,7 +1181,7 @@ ordre de Kagu ne les écrit.
 | Ancre | Ce que l'agent accepte | Utile avec le droit |
 | --- | --- | --- |
 | `backup.recipient` | la clé publique age (`age1…`) pour laquelle il chiffre : 1 à 2 | `backup.produce` |
-| `backup.guest` | les VM et conteneurs qu'il copie : 1 à 32 identifiants | `backup.produce` |
+| `backup.guest` | les VM et conteneurs qu'il copie, par `backup.produce` ou par une sauvegarde restic d'invité : 1 à 32 identifiants | `backup.produce` |
 | `restic.target-cert` | les certificats des cibles restic qu'il accepte (empreinte SHA-256, 64 hexadécimaux) : 1 à 4 | `restic.produce` |
 
 **Sans ancre, l'ordre est refusé** (`anchor_missing:<ancre>` dans les ordres de la
