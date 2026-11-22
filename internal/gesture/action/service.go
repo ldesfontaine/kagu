@@ -256,7 +256,7 @@ func (s *Service) send(ctx context.Context, order ServiceOrder) (Run, error) {
 	if s.key == nil {
 		return Run{}, ErrNoServerKey
 	}
-	if _, ok := RightOf(kind); !ok || !kind.IsOrder() {
+	if !kind.IsOrder() {
 		return Run{}, fmt.Errorf("%q: %w", kind, ErrUnknownKind)
 	}
 	if len(secret) > agentwire.MaxSecretBytes {
@@ -274,7 +274,7 @@ func (s *Service) send(ctx context.Context, order ServiceOrder) (Run, error) {
 	}
 	// Une ancre que l'agent a dit tenir et que l'ordre ne satisfait pas : il le
 	// refuserait, la commande qui la pose est dans le refus.
-	if finding := anchor.JudgeReported(target.Agent.Anchors, string(kind), params); finding != nil {
+	if finding := anchor.JudgeReported(target.Agent.Anchors, agentwire.PresentedOf(kind, params)); finding != nil {
 		return Run{}, &anchor.Refused{Finding: *finding}
 	}
 	if !target.Online {

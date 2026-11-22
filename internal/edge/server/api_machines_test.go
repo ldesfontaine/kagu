@@ -20,6 +20,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/version"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Le jeton d'enrôlement est lisible de tous les comptes de la machine dès
@@ -809,8 +810,8 @@ func TestMachineToken_RefusesAnchorsOutsideTheRegistry(t *testing.T) {
 // l'écran montre la commande à lancer sur la machine.
 func TestFailed_AnAnchorRefusalCarriesItsKeyAndCommand(t *testing.T) {
 	server := newTestServer(t)
-	params := `{"producer":"proxmox-vzdump","target":"5012","recipient":"age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"}`
-	finding := anchor.Judge(anchor.FromFile(map[string][]string{"backup.recipient": {"age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"}}), "backup.produce", []byte(params))
+	params, _ := json.Marshal(agentwire.BackupProduceParams{Producer: "proxmox-vzdump", Target: "5012", Recipient: "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"})
+	finding := anchor.Judge(anchor.FromFile(map[string][]string{"backup.recipient": {"age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"}}), agentwire.PresentedOf(agentwire.KindBackupProduce, params))
 	if finding == nil {
 		t.Fatal("expected a finding")
 	}

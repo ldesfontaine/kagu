@@ -135,7 +135,7 @@ func TestAnchors_NothingElseDependsOnThem(t *testing.T) {
 		t.Fatalf("ping: %+v", result)
 	}
 	for _, kind := range agentwire.OrderKinds() {
-		if len(anchor.Governed(string(kind))) != 0 && kind != agentwire.KindBackupProduce && kind != agentwire.KindResticProvision {
+		if spec, _ := agentwire.SpecOf(kind); len(spec.Anchors) != 0 && kind != agentwire.KindBackupProduce && kind != agentwire.KindResticProvision {
 			t.Errorf("%s is bounded by an anchor kind the tests do not know", kind)
 		}
 	}
@@ -278,24 +278,30 @@ func TestJournal_RecordsWhatWasSignedAndNeverASecret(t *testing.T) {
 	b.countingProducer([]byte("x"))
 	const seeded = "SEEDED-SECRET-never-in-the-journal"
 
-	// Un ordre exécuté, avec un secret signé et des champs hors liste blanche.
+	// Un ordre exécuté.
 	params := produceParams(b.identity)
-	body := longOrder(1, agentwire.KindBackupProduce, map[string]any{
-		"producer": params.Producer, "target": params.Target, "prefix": params.Prefix, "recipient": params.Recipient, "parcel": params.Parcel,
-		"password": seeded, "env": "TOKEN=" + seeded,
-	})
-	body.Secret = json.RawMessage(`{"rest_password":"` + seeded + `"}`)
+	body := longOrder(1, agentwire.KindBackupProduce, params)
 	encoded, _ := json.Marshal(body)
 	b.runner.receive(b.signed(t, body))
 	b.until(t, body.RunID)
 
-	// Un refusé par ancre, un refusé par la signature, un refusé pour rejeu.
-	other := longOrder(2, agentwire.KindBackupProduce, map[string]any{"producer": params.Producer, "target": "100", "prefix": params.Prefix, "recipient": params.Recipient, "parcel": params.Parcel, "password": seeded})
-	other.Secret = body.Secret
+	// Un refusé par la lecture stricte (un secret signé sur un genre qui n'en
+	// porte pas, des champs hors liste blanche), un refusé par ancre, un refusé
+	// par la signature.
+	unread := longOrder(2, agentwire.KindBackupProduce, map[string]any{
+		"producer": params.Producer, "target": params.Target, "prefix": params.Prefix, "recipient": params.Recipient, "parcel": params.Parcel,
+		"password": seeded, "env": "TOKEN=" + seeded,
+	})
+	unread.Secret = json.RawMessage(`{"rest_password":"` + seeded + `"}`)
+	b.runner.receive(b.signed(t, unread))
+	b.until(t, unread.RunID)
+	outside := params
+	outside.Target = "100"
+	other := longOrder(3, agentwire.KindBackupProduce, outside)
 	b.runner.receive(b.signed(t, other))
 	b.until(t, other.RunID)
 	_, stranger, _ := ed25519.GenerateKey(rand.Reader)
-	forged := longOrder(3, agentwire.KindAgentPing, map[string]any{"password": seeded})
+	forged := longOrder(4, agentwire.KindAgentPing, map[string]any{"password": seeded})
 	forgedEncoded, _ := json.Marshal(forged)
 	forgedData, _ := json.Marshal(agentwire.SignedOrder{Body: forgedEncoded, Signature: ed25519.Sign(stranger, agentwire.OrderSigningBytes(forgedEncoded))})
 	b.runner.receive(forgedData)
@@ -318,6 +324,9 @@ func TestJournal_RecordsWhatWasSignedAndNeverASecret(t *testing.T) {
 	logged, _ := executed["params"].(map[string]any)
 	if logged["target"] != "5012" || logged["recipient"] != params.Recipient || logged["password"] != nil || logged["env"] != nil {
 		t.Errorf("params %v", logged)
+	}
+	if unreadable := findEntry(t, entries, "order refused", unread.RunID); unreadable["reason"] != agentwire.ReasonBadOrder || unreadable["body_sha256"] == nil {
+		t.Errorf("strict reading refusal entry %v", unreadable)
 	}
 	refused := findEntry(t, entries, "order refused", other.RunID)
 	if refused["reason"] != "anchor_outside:backup.guest" || refused["body_sha256"] == nil || refused["signing_key"] != sum.signingKey {
@@ -509,7 +518,7 @@ func withExtraKey(t *testing.T, params any, key string, value any) json.RawMessa
 }
 
 // B-H1 : backup.produce avec target et recipient ancrés, puis la même clé
-// d'une autre casse (ou répétée) hors ancre : refusé, vzdump non lancé.
+// d'une autre casse (ou répétée) hors ancre : refusé bad_order, vzdump non lancé.
 func TestR_A1_3_TheProducerIsNeverCalledOnAKeyOfAnotherCaseOrRepeated(t *testing.T) {
 	b := newProduceRig(t)
 	b.countingProducer([]byte("x"))
@@ -533,7 +542,9 @@ func TestR_A1_3_TheProducerIsNeverCalledOnAKeyOfAnotherCaseOrRepeated(t *testing
 		if report == nil || len(report.Results) != 1 {
 			t.Fatalf("%s: one answer expected: %+v", c.name, report)
 		}
-		if got := report.Results[0]; got.State != agentwire.ActionRefused || !strings.HasPrefix(got.Reason, "anchor_outside:") {
+		// C-1, C-2 : refusé à la lecture, avant toute ancre ; aucun refus ne
+		// nomme une ancre qu'il n'a pas jugée.
+		if got := report.Results[0]; got.State != agentwire.ActionRefused || got.Reason != agentwire.ReasonBadOrder {
 			t.Errorf("%s: %+v", c.name, got)
 		}
 	}
@@ -546,7 +557,8 @@ func TestR_A1_3_TheProducerIsNeverCalledOnAKeyOfAnotherCaseOrRepeated(t *testing
 	expectResult(t, b.run(t, 100, params), agentwire.ActionSucceeded, "")
 }
 
-// Même attaque sur restic.provision/certificate : aucun lien n'est écrit.
+// Même attaque sur restic.provision/certificate : refusé bad_order, aucun lien
+// n'est écrit.
 func TestR_A1_7_TheResticLinkIsNeverWrittenOnAnotherCaseOfTheCertificateKey(t *testing.T) {
 	b := newResticBench(t, "restic.produce")
 	b.withoutTrust = true
@@ -559,7 +571,7 @@ func TestR_A1_7_TheResticLinkIsNeverWrittenOnAnotherCaseOfTheCertificateKey(t *t
 		{"certificate repeated, same value", "certificate", trusted},
 	} {
 		expectResult(t, b.runWithSecret(t, agentwire.KindResticProvision, withExtraKey(t, params, c.key, c.value), seededLink()),
-			agentwire.ActionRefused, "anchor_outside:restic.target-cert")
+			agentwire.ActionRefused, agentwire.ReasonBadOrder)
 		if b.runner.restic.source.isProvisioned(resticTargetID) {
 			t.Fatalf("%s: the source linked itself", c.name)
 		}

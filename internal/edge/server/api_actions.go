@@ -97,7 +97,7 @@ func fixCommandOf(run action.Run) (command string, exact bool) {
 	if !ok {
 		return "", false
 	}
-	return anchor.FixFor(name, string(run.Kind), json.RawMessage(run.Params))
+	return anchor.FixFor(name, agentwire.PresentedOf(run.Kind, json.RawMessage(run.Params)))
 }
 
 func runLineToJSON(line action.LogLine) runLineJSON {

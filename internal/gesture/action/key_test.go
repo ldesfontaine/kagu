@@ -143,7 +143,7 @@ func TestRightOf_GuestOrdersNeedTheirOwnRight(t *testing.T) {
 func TestRightOf_ResticOrdersNeedTheTargetOrTheSourceRight(t *testing.T) {
 	want := map[agentwire.Kind]string{
 		agentwire.KindResticTargetSetup: "restic.target", agentwire.KindResticUserAdd: "restic.target",
-		agentwire.KindResticUserRemove: "restic.target", agentwire.KindResticRetain: "restic.target", agentwire.KindResticRelay: "restic.target",
+		agentwire.KindResticUserRemove: "restic.target", agentwire.KindResticRetain: "restic.target",
 		agentwire.KindResticProvision: "restic.produce", agentwire.KindResticBackup: "restic.produce",
 	}
 	for kind, right := range want {
@@ -155,5 +155,10 @@ func TestRightOf_ResticOrdersNeedTheTargetOrTheSourceRight(t *testing.T) {
 		if _, known := RightOf(kind); !known {
 			t.Errorf("order %s has no right", kind)
 		}
+	}
+	// Le relais n'est pas un ordre : il est hors du registre, la cible le
+	// rejuge elle-même (restic.Allow).
+	if _, known := RightOf(agentwire.KindResticRelay); known {
+		t.Error("restic_relay is an observation, not an order")
 	}
 }

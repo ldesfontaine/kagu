@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -211,6 +212,7 @@ func TestOrderRunner_AppliesTheRightsOfItsFile(t *testing.T) {
 	b := newOrderBench(t)
 	update := order(1)
 	update.Kind = agentwire.KindAgentUpdate
+	update.Params, _ = json.Marshal(agentwire.AgentUpdateParams{Version: "v0.0.2", Parcel: "colis1"})
 	result := b.send(t, update, b.private)
 	if result.State != agentwire.ActionRefused || result.Reason != "right_missing:agent.update" {
 		t.Fatalf("without the right: %+v", result)
@@ -298,5 +300,108 @@ func TestOrderRunner_ForgedResticOrdersAreRefused(t *testing.T) {
 				t.Fatalf("result %+v", result)
 			}
 		})
+	}
+}
+
+// sendBody signe des octets tels quels, comme un serveur qui les aurait écrits
+// à la main.
+func (b *orderBench) sendBody(t *testing.T, encoded []byte) agentwire.ActionResult {
+	t.Helper()
+	data, err := json.Marshal(agentwire.SignedOrder{Body: encoded, Signature: ed25519.Sign(b.private, agentwire.OrderSigningBytes(encoded))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.runner.receive(data)
+	report := b.results.take()
+	if report == nil || len(report.Results) != 1 {
+		t.Fatalf("one result expected, got %+v", report)
+	}
+	return report.Results[0]
+}
+
+// L'enveloppe signée et le champ secret se lisent comme les paramètres : une
+// clé répétée, d'une autre casse, inconnue, ou une autre écriture des mêmes
+// valeurs est refusée bad_order, même sous la bonne signature, sans prendre
+// de rang.
+func TestR_A1_4_TheEnvelopeAndTheSecretAreReadStrictly(t *testing.T) {
+	canonical, err := json.Marshal(order(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := strings.TrimSuffix(string(canonical), "}")
+	envelopes := map[string]string{
+		"kind repeated":        body + `,"kind":"agent.update"}`,
+		"kind of another case": body + `,"Kind":"agent.update"}`,
+		"seq repeated":         body + `,"seq":99}`,
+		"an unknown field":     body + `,"level":4}`,
+		"a space":              "{ " + string(canonical[1:]),
+	}
+	for name, envelope := range envelopes {
+		b := newOrderBench(t)
+		if result := b.sendBody(t, []byte(envelope)); result.State != agentwire.ActionRefused || result.Reason != agentwire.ReasonBadOrder {
+			t.Errorf("%s: %+v", name, result)
+		}
+		if saved, _ := LoadIdentity(b.stateDir); saved.LastOrderSeq != 0 {
+			t.Errorf("%s: a refused order moved the seq to %d", name, saved.LastOrderSeq)
+		}
+	}
+
+	b := newOrderBenchWithRights(t, []string{"observe", "docker.deploy"})
+	deploy := agentwire.DockerParams{ServiceID: "svc_1", Project: "wiki", Compose: "x", EnvSent: true}
+	secrets := map[string]json.RawMessage{
+		"env of another case":            json.RawMessage(`{"Env":"A=1"}`),
+		"env repeated":                   json.RawMessage(`{"env":"A=1","env":"B=2"}`),
+		"an unknown field in the secret": json.RawMessage(`{"env":"A=1","rest_password":"x"}`),
+		"a space in the secret":          json.RawMessage(`{"env": "A=1"}`),
+	}
+	// Le secret est posé à sa place dans le corps signé, puis réécrit tel quel :
+	// json.Marshal compacterait les espaces.
+	const placeholder = `{"env":"PLACEHOLDER"}`
+	signedWith := func(seq int64, secret string) []byte {
+		withSecret := longOrder(seq, agentwire.KindDockerDeploy, deploy)
+		withSecret.Secret = json.RawMessage(placeholder)
+		encoded, _ := json.Marshal(withSecret)
+		return []byte(strings.Replace(string(encoded), placeholder, secret, 1))
+	}
+	// Le témoin : le même corps, avec le secret tel que le serveur l'écrit, passe le juge.
+	var good agentwire.OrderBody
+	if err := json.Unmarshal(signedWith(1, `{"env":"A=1"}`), &good); err != nil {
+		t.Fatal(err)
+	}
+	if _, reason := b.runner.judge(b.signedOrder(t, good)); reason != "" {
+		t.Fatalf("the server's secret is refused: %s", reason)
+	}
+	seq := int64(1)
+	for name, secret := range secrets {
+		seq++
+		if result := b.sendBody(t, signedWith(seq, string(secret))); result.State != agentwire.ActionRefused || result.Reason != agentwire.ReasonBadOrder {
+			t.Errorf("%s: %+v", name, result)
+		}
+	}
+	seq++
+	ping := order(seq)
+	ping.Secret = json.RawMessage(`{"env":"A=1"}`)
+	if result := b.send(t, ping, b.private); result.State != agentwire.ActionRefused || result.Reason != agentwire.ReasonBadOrder {
+		t.Errorf("a secret on a kind that carries none: %+v", result)
+	}
+	if saved, _ := LoadIdentity(b.stateDir); saved.LastOrderSeq != 1 {
+		t.Fatalf("a refused order moved the seq to %d", saved.LastOrderSeq)
+	}
+}
+
+// Un genre hors du registre est refusé unknown_kind, même signé par la clé
+// épinglée : une observation non plus n'est pas un ordre.
+func TestR_A1_6_AKindOutsideTheRegistryIsUnknownEvenSigned(t *testing.T) {
+	b := newOrderBenchWithRights(t, []string{"observe", "restic.target=/srv/restic"})
+	kinds := []agentwire.Kind{"docker.purge", "shell.exec", "Agent.Ping", agentwire.KindLogs, agentwire.KindProbes, agentwire.KindResticRelay}
+	for index, kind := range kinds {
+		body := order(int64(index + 1))
+		body.Kind = kind
+		if result := b.send(t, body, b.private); result.State != agentwire.ActionRefused || result.Reason != agentwire.ReasonUnknownKind {
+			t.Errorf("%s: %+v", kind, result)
+		}
+	}
+	if saved, _ := LoadIdentity(b.stateDir); saved.LastOrderSeq != 0 {
+		t.Fatalf("a refused order moved the seq to %d", saved.LastOrderSeq)
 	}
 }

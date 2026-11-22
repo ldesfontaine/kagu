@@ -29,6 +29,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/testkit"
 	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -463,7 +464,7 @@ func TestRun_AppliesItsRightsAndItsRefusalIsJournaled(t *testing.T) {
 	granted := b.waitFor(t, "vps-lyon-2", func(s machine.Status) bool {
 		return s.Online && s.Agent.ID != online.Agent.ID && machine.HasCapability(s.Agent.Capabilities, machine.CapabilityAgentUpdate)
 	})
-	sent, err := b.actions.Send(operator, granted.ID, agentwire.KindAgentUpdate, nil)
+	sent, err := b.actions.Send(operator, granted.ID, agentwire.KindAgentUpdate, testkit.MustJSON(t, agentwire.AgentUpdateParams{Version: "v0.0.2", Parcel: "colis1"}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -238,7 +238,7 @@ func TestResticRestore_NeedsItsRightAndTakesNoSecret(t *testing.T) {
 	b := restoreBenchFor(t, "x")
 	original := b.original(t, "app.ini", "contenu actuel")
 	params := agentwire.ResticRestoreParams{Target: resticTargetID, Snapshot: testSnapshotID, Path: original, Stamp: restoreStamp}
-	expectResult(t, b.runWithSecret(t, agentwire.KindResticRestore, params, agentwire.ResticVerifySecret{RepoPassword: seededRepoPassword}), agentwire.ActionFailed, agentwire.ReasonBadOrder)
+	expectResult(t, b.runWithSecret(t, agentwire.KindResticRestore, params, agentwire.ResticVerifySecret{RepoPassword: seededRepoPassword}), agentwire.ActionRefused, agentwire.ReasonBadOrder)
 	if len(b.restic.callsMade()) != 0 {
 		t.Fatal("restic ran with an order that carried a secret")
 	}

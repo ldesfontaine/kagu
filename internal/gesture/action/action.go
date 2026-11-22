@@ -123,43 +123,14 @@ func (o Order) encode() ([]byte, error) {
 	return json.Marshal(body) // #nosec G117 -- le corps signé porte le secret jusqu'à l'agent, rien d'autre ne le garde.
 }
 
-// RightOf rend le droit qu'un genre exige de l'agent (décision 9) : observe
-// pour ce qui lit, pour agent.ping, qui ne change rien, et pour
-// agent.server_key, qui ne touche que la confiance de l'agent envers ce
-// serveur ; pour un geste, son droit. Le serveur s'en sert pour ne pas envoyer un ordre qu'il sait refusé,
-// l'agent pour refuser. Un genre inconnu n'en a aucun : rien ne le permet.
+// RightOf rend le droit qu'un genre d'ordre exige de l'agent (décision 9) :
+// celui que le registre déclare (agentwire.Spec.Right). Le serveur s'en sert
+// pour ne pas envoyer un ordre qu'il sait refusé, l'agent pour refuser. Un
+// genre hors du registre n'en a aucun : rien ne le permet. T01-06 le retire au
+// profit de Spec.Right lu directement.
 func RightOf(kind agentwire.Kind) (string, bool) {
-	switch kind {
-	case agentwire.KindLogs, agentwire.KindLogsStop, agentwire.KindProbes, agentwire.KindImages, agentwire.KindAgentPing, agentwire.KindServerKey:
-		return machine.CapabilityObserve, true
-	case agentwire.KindAgentUpdate, agentwire.KindAgentRollback:
-		return machine.CapabilityAgentUpdate, true
-	case agentwire.KindBackupReceive, agentwire.KindBackupPrune:
-		return machine.CapabilityBackupReceive, true
-	case agentwire.KindBackupProduce:
-		return machine.CapabilityBackupProduce, true
-	case agentwire.KindDockerDeploy:
-		return machine.CapabilityDockerDeploy, true
-	case agentwire.KindDockerUpdate, agentwire.KindDockerRollback:
-		return machine.CapabilityDockerUpdate, true
-	case agentwire.KindProxmoxStart, agentwire.KindProxmoxShutdown:
-		return machine.CapabilityProxmoxPower, true
-	case agentwire.KindProxmoxSnapshot, agentwire.KindProxmoxSnapshotDelete:
-		return machine.CapabilityProxmoxSnapshot, true
-	case agentwire.KindResticTargetSetup, agentwire.KindResticUserAdd, agentwire.KindResticUserRemove, agentwire.KindResticRetain, agentwire.KindResticRelay:
-		return machine.CapabilityResticTarget, true
-	case agentwire.KindResticVerify:
-		return machine.CapabilityResticVerify, true
-	case agentwire.KindResticBrowse:
-		return machine.CapabilityResticBrowse, true
-	case agentwire.KindResticRestore:
-		return machine.CapabilityResticRestore, true
-	// Une sauvegarde d'invité demande aussi backup.produce : l'agent le juge
-	// à l'ordre, avec ses paramètres.
-	case agentwire.KindResticProvision, agentwire.KindResticBackup:
-		return machine.CapabilityResticProduce, true
-	}
-	return "", false
+	spec, known := agentwire.SpecOf(kind)
+	return spec.Right, known
 }
 
 // coversOrder dit si les droits rapportés par l'agent couvrent cet ordre : le

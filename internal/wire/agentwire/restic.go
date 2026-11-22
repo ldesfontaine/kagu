@@ -210,6 +210,16 @@ func CertificateFingerprint(der []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// PEMFingerprint rend l'empreinte d'un certificat PEM ; vide s'il ne se lit
+// pas comme ParsePublicCertificate l'exige.
+func PEMFingerprint(certificatePEM string) string {
+	certificate, err := ParsePublicCertificate(certificatePEM)
+	if err != nil {
+		return ""
+	}
+	return CertificateFingerprint(certificate.Raw)
+}
+
 // ParsePublicCertificate lit un PEM qui ne contient qu'un certificat, et
 // rien d'autre : une clé privée collée à la suite ne voyage pas.
 func ParsePublicCertificate(certificatePEM string) (*x509.Certificate, error) {

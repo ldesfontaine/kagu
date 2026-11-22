@@ -75,11 +75,14 @@ type ServerKeyParams struct {
 	PublicKey string `json:"public_key"`
 }
 
-// OrderKinds rend les genres d'ordres, signés et journalisés.
+// OrderKinds rend les genres d'ordres, signés et journalisés : ceux du
+// registre (registry.go), dans son ordre.
 func OrderKinds() []Kind {
-	return []Kind{KindAgentPing, KindAgentUpdate, KindAgentRollback, KindServerKey, KindBackupReceive, KindBackupPrune, KindBackupProduce, KindDockerDeploy, KindDockerUpdate, KindDockerRollback,
-		KindProxmoxStart, KindProxmoxShutdown, KindProxmoxSnapshot, KindProxmoxSnapshotDelete,
-		KindResticTargetSetup, KindResticUserAdd, KindResticUserRemove, KindResticProvision, KindResticBackup, KindResticRetain, KindResticVerify, KindResticBrowse, KindResticRestore}
+	kinds := make([]Kind, 0, len(registry))
+	for _, spec := range registry {
+		kinds = append(kinds, spec.Kind)
+	}
+	return kinds
 }
 
 func (k Kind) IsOrder() bool {

@@ -12,7 +12,7 @@ import (
 // Les droits d'un agent : cochés à l'émission du jeton, écrits par la ligne
 // d'installation dans le fichier de l'agent, rapportés par lui à chaque
 // ouverture de flux, et appliqués par l'agent : un ordre dont le droit n'est
-// pas dans son fichier est refusé (action.RightOf dit lequel). observe est
+// pas dans son fichier est refusé (agentwire.Spec.Right dit lequel). observe est
 // toujours là. Les changer, c'est ré-enrôler avec d'autres droits.
 // probe.lan et observe.env sont les seuls droits qu'aucun ordre n'exige : ce
 // sont des bornes de l'observation, que l'agent applique à ses propres

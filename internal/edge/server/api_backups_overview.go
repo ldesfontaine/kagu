@@ -282,15 +282,15 @@ func protectionFix(protection restic.Protection, source restic.Source, recipient
 		return "", false
 	}
 	if protection.Origin != restic.OriginArchive || source.VMID == 0 {
-		return anchor.FixFor(name, "", nil)
+		return anchor.FixFor(name, nil)
 	}
 	params, err := json.Marshal(agentwire.BackupProduceParams{
 		Producer: machine.ProducerProxmoxVzdump, Target: strconv.Itoa(source.VMID), Recipient: recipient,
 	})
 	if err != nil {
-		return anchor.FixFor(name, "", nil)
+		return anchor.FixFor(name, nil)
 	}
-	return anchor.FixFor(name, string(agentwire.KindBackupProduce), params)
+	return anchor.FixFor(name, agentwire.PresentedOf(agentwire.KindBackupProduce, params))
 }
 
 func overviewProtectionToJSON(protection restic.Protection, source restic.Source, recipient string) overviewProtectionJSON {

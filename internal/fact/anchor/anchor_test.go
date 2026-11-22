@@ -1,19 +1,11 @@
 package anchor
 
 import (
-	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/json"
-	"encoding/pem"
 	"errors"
-	"math/big"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"filippo.io/age"
 
@@ -33,7 +25,7 @@ func TestKinds_AreTheExpectedOnes(t *testing.T) {
 func TestKinds_AreWellDeclared(t *testing.T) {
 	flags, keys := map[string]bool{}, map[string]bool{}
 	for _, kind := range Kinds() {
-		if kind.Flag == "" || kind.Right == "" || kind.Max < 1 || kind.Valid == nil || len(kind.Bound) == 0 {
+		if kind.Flag == "" || kind.Right == "" || kind.Max < 1 || kind.Valid == nil {
 			t.Errorf("%s: incomplete declaration", kind.Name)
 		}
 		if flags[kind.Flag] {
@@ -59,30 +51,10 @@ func testRecipient(t *testing.T) string {
 	return identity.Recipient().String()
 }
 
-func testCertificate(t *testing.T) (certificatePEM, fingerprint string) {
-	t.Helper()
-	public, private, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	template := &x509.Certificate{
-		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "restic-target"},
-		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
-	}
-	der, err := x509.CreateCertificate(rand.Reader, template, template, public, private)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fingerprint, ok := fingerprintOf(string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})))
-	if !ok {
-		t.Fatal("fingerprint")
-	}
-	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), fingerprint
-}
-
-func produceParams(recipient, target string) json.RawMessage {
-	params, _ := json.Marshal(map[string]string{"producer": "proxmox-vzdump", "target": target, "recipient": recipient})
-	return params
+// produceParams est ce que backup.produce présente à ses ancres
+// (agentwire.Spec.Anchors) : la clé age, puis l'invité.
+func produceParams(recipient, target string) []Presented {
+	return []Presented{{Name: BackupRecipient, Value: recipient}, {Name: BackupGuest, Value: target}}
 }
 
 func TestJudge_BackupProduce(t *testing.T) {
@@ -91,7 +63,7 @@ func TestJudge_BackupProduce(t *testing.T) {
 	cases := []struct {
 		name    string
 		state   State
-		params  json.RawMessage
+		params  []Presented
 		kind    string
 		why     Why
 		command string
@@ -102,12 +74,12 @@ func TestJudge_BackupProduce(t *testing.T) {
 		{"no anchor at all", FromFile(nil), produceParams(trusted, "101"), BackupRecipient, WhyMissing, "agent trust add backup.recipient " + trusted},
 		{"guest anchor missing", FromFile(map[string][]string{BackupRecipient: {trusted}}), produceParams(trusted, "101"), BackupGuest, WhyMissing, "agent trust add backup.guest 101"},
 		{"unreadable list", FromFile(map[string][]string{BackupRecipient: {"not-an-age-key"}, BackupGuest: {"101"}}), produceParams(trusted, "101"), BackupRecipient, WhyUnreadable, "agent trust add backup.recipient " + trusted},
-		{"parameters that do not read", state, json.RawMessage(`{"target":`), BackupRecipient, WhyOutside, ""},
+		{"parameters that do not read present nothing", state, produceParams("", ""), BackupRecipient, WhyOutside, ""},
 		{"a guest with a leading zero is not 101", state, produceParams(trusted, "0101"), BackupGuest, WhyOutside, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			finding := Judge(c.state, "backup.produce", c.params)
+			finding := Judge(c.state, c.params)
 			if c.kind == "" {
 				if finding != nil {
 					t.Fatalf("refused: %+v", finding)
@@ -128,36 +100,46 @@ func TestJudge_BackupProduce(t *testing.T) {
 }
 
 func TestJudge_ResticProvisionJudgesTheCertificateFingerprint(t *testing.T) {
-	certificatePEM, fingerprint := testCertificate(t)
-	params, _ := json.Marshal(map[string]any{"target": "t", "host": "10.0.0.2", "port": 8000, "user": "u", "certificate": certificatePEM})
-	if finding := Judge(FromFile(map[string][]string{ResticTargetCert: {fingerprint}}), "restic.provision", params); finding != nil {
+	fingerprint, elsewhere := strings.Repeat("cd", 32), strings.Repeat("ab", 32)
+	presented := []Presented{{Name: ResticTargetCert, Value: fingerprint}}
+	if finding := Judge(FromFile(map[string][]string{ResticTargetCert: {fingerprint}}), presented); finding != nil {
 		t.Fatalf("anchored certificate refused: %+v", finding)
 	}
-	elsewhere := strings.Repeat("ab", 32)
-	finding := Judge(FromFile(map[string][]string{ResticTargetCert: {elsewhere}}), "restic.provision", params)
+	finding := Judge(FromFile(map[string][]string{ResticTargetCert: {elsewhere}}), presented)
 	if finding == nil || finding.Why != WhyOutside || finding.Value != fingerprint {
 		t.Fatalf("foreign certificate: %+v", finding)
 	}
-	if finding := Judge(FromFile(nil), "restic.provision", params); finding == nil || finding.Why != WhyMissing {
+	if finding := Judge(FromFile(nil), presented); finding == nil || finding.Why != WhyMissing {
 		t.Fatalf("no anchor: %+v", finding)
 	}
-	notACertificate, _ := json.Marshal(map[string]string{"certificate": "-----BEGIN PRIVATE KEY-----"})
-	if finding := Judge(FromFile(map[string][]string{ResticTargetCert: {fingerprint}}), "restic.provision", notACertificate); finding == nil {
+	// Ce qui n'est pas un certificat ne présente aucune empreinte.
+	if finding := Judge(FromFile(map[string][]string{ResticTargetCert: {fingerprint}}), []Presented{{Name: ResticTargetCert}}); finding == nil {
 		t.Fatal("something that is not a certificate must not pass")
 	}
 }
 
 func TestJudge_OtherOrdersAreNotBounded(t *testing.T) {
-	if finding := Judge(FromFile(nil), "agent.ping", nil); finding != nil {
+	if finding := Judge(FromFile(nil), nil); finding != nil {
 		t.Fatalf("ping refused: %+v", finding)
 	}
 }
 
+func TestFixFor_GivesTheExactCommandOnlyForAReadableValue(t *testing.T) {
+	if command, exact := FixFor(BackupGuest, produceParams("x", "101")); !exact || !strings.HasSuffix(command, "agent trust add backup.guest 101") {
+		t.Fatalf("readable guest: %q %v", command, exact)
+	}
+	for _, presented := range [][]Presented{nil, produceParams("x", "0101"), {{Name: BackupRecipient, Value: "101"}}} {
+		if command, exact := FixFor(BackupGuest, presented); exact || !strings.HasSuffix(command, "agent trust list") {
+			t.Errorf("%v: %q %v", presented, command, exact)
+		}
+	}
+}
+
 func TestJudgeReported_AnAgentThatSaysNothingIsNotJudged(t *testing.T) {
-	if finding := JudgeReported(State{}, "backup.produce", produceParams("x", "1")); finding != nil {
+	if finding := JudgeReported(State{}, produceParams("x", "1")); finding != nil {
 		t.Fatalf("a v0.6.0 agent applies no anchor, the server must not refuse for it: %+v", finding)
 	}
-	if finding := JudgeReported(FromFile(nil), "backup.produce", produceParams("x", "1")); finding == nil {
+	if finding := JudgeReported(FromFile(nil), produceParams("x", "1")); finding == nil {
 		t.Fatal("an agent that reports no anchor refuses: the server knows it")
 	}
 }
@@ -255,7 +237,7 @@ func TestAddAndRemove_KeepTheBounds(t *testing.T) {
 }
 
 func TestRefused_CarriesTheKeyAndTheCommand(t *testing.T) {
-	finding := Judge(FromFile(nil), "backup.produce", produceParams("age1x", "101"))
+	finding := Judge(FromFile(nil), produceParams("age1x", "101"))
 	if finding == nil {
 		t.Fatal("expected a finding")
 	}
@@ -267,71 +249,5 @@ func TestRefused_CarriesTheKeyAndTheCommand(t *testing.T) {
 	var refused *Refused
 	if !errors.As(err, &refused) || refused.Command() != "" {
 		t.Fatalf("a recipient that is not valid has no command: %q", refused.Command())
-	}
-}
-
-// B-H1 : l'ancre lit par clé exacte, l'exécuteur relit sans égard à la casse.
-// Une clé répétée ou d'une autre casse n'a pas de lecture sûre : refusée, pour
-// chaque ancre, sans exception par genre (R-A1-3).
-func TestR_A1_3_AKeyRepeatedOrOfAnotherCaseIsNeverRead(t *testing.T) {
-	trusted, other := testRecipient(t), testRecipient(t)
-	certificatePEM, fingerprint := testCertificate(t)
-	foreignPEM, _ := testCertificate(t)
-	state := FromFile(map[string][]string{
-		BackupRecipient: {trusted}, BackupGuest: {"101"}, ResticTargetCert: {fingerprint},
-	})
-	produce := func(extra string) json.RawMessage {
-		return json.RawMessage(`{"producer":"proxmox-vzdump","target":"101","recipient":"` + trusted + `"` + extra + `}`)
-	}
-	provision := func(extra string) json.RawMessage {
-		certificate, _ := json.Marshal(certificatePEM)
-		return json.RawMessage(`{"target":"t","certificate":` + string(certificate) + extra + `}`)
-	}
-	foreign, _ := json.Marshal(foreignPEM)
-	cases := []struct {
-		name   string
-		order  string
-		params json.RawMessage
-		kind   string
-	}{
-		{"guest: Target after target", "backup.produce", produce(`,"Target":"999"`), BackupGuest},
-		{"guest: TARGET after target", "backup.produce", produce(`,"TARGET":"999"`), BackupGuest},
-		{"guest: target repeated, same value", "backup.produce", produce(`,"target":"101"`), BackupGuest},
-		{"guest: target repeated, other value", "backup.produce", produce(`,"target":"999"`), BackupGuest},
-		{"guest: Target before target", "backup.produce", json.RawMessage(`{"Target":"999","target":"101","recipient":"` + trusted + `"}`), BackupGuest},
-		{"guest: escaped key", "backup.produce", produce(`,"\u0054arget":"999"`), BackupGuest},
-		{"recipient: Recipient after recipient", "backup.produce", produce(`,"Recipient":"` + other + `"`), BackupRecipient},
-		{"recipient: recipient repeated, same value", "backup.produce", produce(`,"recipient":"` + trusted + `"`), BackupRecipient},
-		{"certificate: Certificate after certificate", "restic.provision", provision(`,"Certificate":` + string(foreign)), ResticTargetCert},
-		{"certificate: certificate repeated, same value", "restic.provision", provision(`,"certificate":` + string(foreign)), ResticTargetCert},
-		{"an unrelated key repeated", "backup.produce", produce(`,"prefix":"a","Prefix":"b"`), BackupGuest},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			finding := Judge(state, c.order, c.params)
-			if finding == nil || finding.Why != WhyOutside || finding.Value != "" {
-				t.Fatalf("finding %+v, expected %s refused with no value", finding, WhyOutside)
-			}
-		})
-	}
-	// Les mêmes ordres, sans la clé en trop, passent : le refus vient de la clé.
-	for order, params := range map[string]json.RawMessage{"backup.produce": produce(""), "restic.provision": provision("")} {
-		if finding := Judge(state, order, params); finding != nil {
-			t.Errorf("%s: the clean order is refused: %+v", order, finding)
-		}
-	}
-}
-
-// Une ancre borne la valeur décodée de chaque genre qui mène à son geste
-// (R-A1-7) : chaque (genre, champ) du registre refuse la clé d'une autre casse.
-func TestR_A1_7_EveryBoundFieldRefusesAnotherCaseOfItsKey(t *testing.T) {
-	for _, kind := range Kinds() {
-		for _, bound := range kind.Bound {
-			upper := strings.ToUpper(bound.Field)
-			params := json.RawMessage(`{"` + bound.Field + `":"x","` + upper + `":"y"}`)
-			if value, ok := valueOf(kind, bound.Order, params); ok || value != "" {
-				t.Errorf("%s/%s: read %q from %s", bound.Order, bound.Field, value, params)
-			}
-		}
 	}
 }

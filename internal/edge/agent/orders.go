@@ -23,11 +23,12 @@ import (
 // un redémarrage ne rouvre pas la porte d'un rejeu.
 //
 // Un ordre passe si, dans cet ordre : l'agent a une clé du serveur ; la
-// signature est de cette clé ; le corps se lit ; il vise cette machine et
-// cet agent ; il n'est pas périmé ; son rang dépasse le dernier exécuté ;
-// son genre est connu ; le fichier de l'agent porte le droit qu'il exige
-// (action.RightOf) ; ses paramètres sont dans les ancres de confiance locales
-// que le registre de internal/fact/anchor lui applique. Sinon il est refusé, et le
+// signature est de cette clé ; le corps se lit strictement ; il vise cette
+// machine et cet agent ; il n'est pas périmé ; son rang dépasse le dernier
+// exécuté ; son genre est au registre (agentwire.Spec) ; le fichier de
+// l'agent porte le droit qu'il exige (action.RightOf) ; ses paramètres et son
+// secret se lisent strictement dans leur type ; les valeurs décodées qu'il
+// présente sont dans les ancres de confiance locales. Sinon il est refusé, et le
 // refus est rapporté. Les
 // commandes d'observation ne passent pas ici : elles exigent observe, que le
 // fichier porte toujours (machine.NormalizeCapabilities l'ajoute).
@@ -128,7 +129,7 @@ func (r *orderRunner) judge(signed agentwire.SignedOrder) (agentwire.OrderBody, 
 		return agentwire.OrderBody{}, agentwire.ReasonBadSignature
 	}
 	var body agentwire.OrderBody
-	if err := json.Unmarshal(signed.Body, &body); err != nil || body.RunID == "" {
+	if err := agentwire.StrictDecode(signed.Body, &body); err != nil || body.RunID == "" {
 		return agentwire.OrderBody{}, agentwire.ReasonBadOrder
 	}
 	r.journal.remember(body.RunID, factsOf(signed.Body, r.identity.ServerKey))
@@ -148,10 +149,16 @@ func (r *orderRunner) judge(signed agentwire.SignedOrder) (agentwire.OrderBody, 
 	if !known || !machine.HasCapability(r.identity.Capabilities(), right) {
 		return body, agentwire.RightMissing(right)
 	}
-	// Les ancres de confiance locales : le registre dit quels paramètres de
-	// quels ordres elles bornent. Relues du disque à chaque ordre, pour
-	// qu'une ancre posée par « agent trust » vaille tout de suite.
-	if finding := anchor.Judge(r.reloadAnchors(), string(body.Kind), body.Params); finding != nil {
+	// Une clé inconnue, répétée ou d'une autre casse ne se lit pas : refusée
+	// ici, avant les ancres, qui jugent la valeur décodée.
+	order, err := agentwire.Decode(body.Kind, body.Params)
+	if err != nil || agentwire.CheckSecret(body.Kind, body.Secret) != nil {
+		return body, agentwire.ReasonBadOrder
+	}
+	// Les ancres de confiance locales : le registre des genres dit lesquelles
+	// bornent l'ordre et sur quelle valeur. Relues du disque à chaque ordre,
+	// pour qu'une ancre posée par « agent trust » vaille tout de suite.
+	if finding := anchor.Judge(r.reloadAnchors(), order.Presented()); finding != nil {
 		return body, agentwire.AnchorRefusal(*finding)
 	}
 	if !r.keepSeq(body.Seq) {

@@ -340,13 +340,14 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
 
 Liste de départ prise par Lucas le 21 octobre 2026 (décision 9). **Appliqués
 par l'agent** (#146) : chaque genre de la liste fermée déclare le droit qu'il
-exige (`action.RightOf`), et l'agent refuse un ordre dont le droit n'est pas
+exige (`Spec.Right`, au registre des genres d'`agentwire`, lu par
+`action.RightOf`), et l'agent refuse un ordre dont le droit n'est pas
 dans son fichier. Les changer, c'est ré-enrôler (décision 10, plus bas).
 
 | Droit | Portée | Ce qu'il permet |
 | --- | --- | --- |
 | `observe` | — | Mesurer la machine, lire son Docker, lancer ses sondes : les commandes d'observation, et l'ordre `agent.ping`, qui ne change rien. Toujours là, la case est cochée et grisée |
-| `probe.lan` | — | Que les sondes de l'agent composent vers **le réseau local** (boucle locale, adresses privées, partagée `100.64.0.0/10`, « Comment une cible est sondée »). **Coché par défaut** à l'émission d'un jeton (formulaire) et pour l'agent de la machine Kagu, décochable. Premier droit qu'**aucun ordre n'exige** (`action.RightOf` n'en a pas) : c'est une borne de l'observation, appliquée par l'agent à ses propres sondes. Un agent enrôlé avant ne l'a pas : ses sondes du réseau local tombent « Hors ligne » jusqu'à un ré-enrôlement qui coche le droit (on ne coche rien à la place de l'opérateur) |
+| `probe.lan` | — | Que les sondes de l'agent composent vers **le réseau local** (boucle locale, adresses privées, partagée `100.64.0.0/10`, « Comment une cible est sondée »). **Coché par défaut** à l'émission d'un jeton (formulaire) et pour l'agent de la machine Kagu, décochable. Premier droit qu'**aucun ordre n'exige** (aucun `Spec.Right` ne le nomme) : c'est une borne de l'observation, appliquée par l'agent à ses propres sondes. Un agent enrôlé avant ne l'a pas : ses sondes du réseau local tombent « Hors ligne » jusqu'à un ré-enrôlement qui coche le droit (on ne coche rien à la place de l'opérateur) |
 | `observe.env` | — | Que l'agent **lise l'environnement des conteneurs Docker** et en tire les liens entre instances de la machine (« Les liens de l'environnement »). **Refusé par défaut** : décoché dans le formulaire, absent des préréglages de rôle, absent de la ligne de la machine Kagu ; il se coche **machine par machine**, sous « Avancé : droits de l'agent », avec sa note. Comme `probe.lan`, aucun ordre ne l'exige : c'est une borne de l'observation, lue **une fois** au démarrage de l'agent. Un agent enrôlé avant ne l'a pas : la carte **Liens** de la fiche d'un service dit que l'environnement n'est pas lu et porte le bouton **Ré-enrôler avec « Lire l'environnement… »** (fenêtre déjà cochée, geste de U1) |
 | `agent.update` | — | Les ordres `agent.update` (mettre à jour l'agent depuis le serveur) et `agent.rollback` (revenir à la version précédente) (« Comment un agent se met à jour »). Un agent qui n'a pas le droit refuse l'ordre ; celui qui l'a le vérifie lui-même avant de changer de binaire, et ne le fait que sous le lanceur stable |
 | `restic.target` | Un dossier | Recevoir des sauvegardes restic : l'agent lance et surveille `rest-server` en écriture seule sur ce dossier (« Comment restic sauvegarde »). **Refusé par défaut**, coché par machine |
@@ -561,8 +562,11 @@ et qu'**aucun ordre ne peut écrire**.
 
 - **Un registre, pas des `if`.** `internal/fact/anchor` déclare chaque type une
   fois : nom, drapeau, droit utile, nombre de valeurs, forme d'une valeur,
-  ordres et paramètres bornés, clés de refus. Le juge des ordres de l'agent
-  l'interroge (`anchor.Judge`) ; le serveur, la ligne d'installation, les
+  clés de refus. Ce qu'un type borne se déclare avec le genre d'ordre, au
+  registre des genres (`agentwire.Spec.Anchors`) : une fonction tire la valeur
+  des paramètres **décodés** (l'empreinte du certificat pour
+  `restic.provision`). Le juge des ordres de l'agent juge ces valeurs
+  (`anchor.Judge`) ; le serveur, la ligne d'installation, les
   drapeaux et la commande locale le lisent aussi. Un test échoue dès qu'un
   type est ajouté ou retiré sans mise à jour de sa liste attendue. Le lot 2
   (clés d'opérateur, co-signature) ajoutera un type au même registre, avec la
@@ -624,8 +628,9 @@ et qu'**aucun ordre ne peut écrire**.
   refusé ou fini : `run_id`, `kind`, `seq`, `body_sha256` (le corps tel que
   signé), `signing_key` (l'empreinte de la clé qui a signé ; absente si la
   signature est fausse) et les paramètres **non secrets**, d'après une liste
-  blanche de champs par genre (`agentwire.JournalParams`, une entrée pour chaque
-  genre d'ordre, vérifiée par un test). Jamais le secret de l'ordre ni un
+  blanche de champs déclarée avec chaque genre (`agentwire.Spec.Journal`, lue
+  par `agentwire.JournalParams` ; un test vérifie que chaque champ est un champ
+  du type). Jamais le secret de l'ordre ni un
   champ hors de la liste : ni mot de passe, ni clé privée, ni `.env`, ni
   certificat.
 
@@ -1376,7 +1381,7 @@ fermée et vit dans le protocole (`agentwire.Kind`) : jamais une chaîne shell.
 | Sur le fil | un événement SSE à leur nom, au contenu typé (`agentwire.Command`) | l'événement `order` : le corps JSON tel qu'il a été signé, sa signature, l'empreinte de la clé |
 | Signées | **non** : elles ne font que lire, et ne partent que du serveur qui tient le flux | **oui**, Ed25519, par `server.key` |
 | Écrites avant l'envoi | non | oui : le run dans `action_runs`, l'événement `action.order` au journal d'audit |
-| Droits | `observe`, toujours là | celui de son genre (`action.RightOf`), appliqué par l'agent ; et, pour deux genres, les ancres de confiance locales (« Les ancres de confiance locales ») |
+| Droits | `observe`, toujours là | celui de son genre (`agentwire.Spec.Right`), appliqué par l'agent ; et, pour deux genres, les ancres de confiance locales (« Les ancres de confiance locales ») |
 
 1. **L'opérateur demande** : `POST /api/machines/{id}/actions/ping`, bouton
    « Éprouver l'agent » de la carte Ordres de la fiche. Refus, sans rien
@@ -1400,18 +1405,45 @@ fermée et vit dans le protocole (`agentwire.Kind`) : jamais une chaîne shell.
 5. **L'agent juge**, dans cet ordre, et refuse au premier écart : il a une
    clé du serveur épinglée (`server_key_missing`) ; la signature est de cette
    clé, sur ces octets, vérifiée avant de lire un champ (`bad_signature`) ; le
-   corps se lit (`bad_order`) ; il vise cette machine (`wrong_machine`) et
+   corps se lit **strictement** (`bad_order`, voir « Le registre des genres »
+   plus bas) ; il vise cette machine (`wrong_machine`) et
    cet agent : un ordre fait pour l'agent d'avant un ré-enrôlement est refusé
    (`wrong_agent`) ; il n'est pas périmé (`expired`) ; son rang dépasse
    strictement le dernier exécuté (`replayed`) ; son genre est connu
-   (`unknown_kind`) ; son fichier porte le droit du genre
-   (`right_missing:<droit>`) ; pour `backup.produce` et `restic.provision`, ses
-   paramètres sont dans les ancres de confiance locales posées par
+   (`unknown_kind`, même signé : un genre hors du registre n'existe pas) ; son
+   fichier porte le droit du genre (`right_missing:<droit>`) ; ses paramètres et
+   son secret se lisent strictement dans leur type (`bad_order`) ; pour
+   `backup.produce` et `restic.provision`, les valeurs décodées sont dans les
+   ancres de confiance locales posées par
    l'administrateur de la machine (`anchor_*:<type>`, « Les ancres de confiance
    locales »). Il **écrit le rang** dans `identity.json` avant
    d'exécuter (`state_unwritable` s'il ne le peut pas) : un rejeu reste
    refusé après un redémarrage. Un refus se rapporte au run que le corps
    nomme ; une enveloppe illisible ne se rapporte pas, elle se journalise.
+
+**Le registre des genres** (`internal/wire/agentwire/registry.go`). Chaque
+genre d'ordre s'y déclare **une fois**, par une ligne `Define[P]` : le type
+de ses paramètres, son droit (une constante de `machine`, jamais une chaîne
+tapée ; `agentpolicy` la reprendra), le type de son secret s'il en porte un,
+les ancres qui le bornent et ses champs de journal. `OrderKinds`,
+`action.RightOf`, le journal local et les ancres le lisent ; le serveur et
+l'agent aussi. Les observations (`logs`, `logs_stop`, `probes`,
+`image_checks`, `restic_relay`) n'y sont pas : elles ne sont pas signées.
+
+| Lu strictement | Comment | Refus |
+| --- | --- | --- |
+| L'enveloppe signée (`OrderBody`) | `agentwire.StrictDecode` : décodé avec `DisallowUnknownFields`, réencodé par `json.Marshal`, comparé octet pour octet | `bad_order` |
+| Les paramètres | `agentwire.Decode(genre, octets)` : la même lecture, dans le type du genre | `bad_order`, avant toute ancre |
+| Le secret | `agentwire.CheckSecret` : la même lecture ; un secret sur un genre qui n'en porte pas est refusé | `bad_order` |
+
+Une clé inconnue, répétée, d'une autre casse, échappée, un espace ou un autre
+ordre des clés ne passent donc pas : ce que l'agent juge et exécute est
+exactement ce que le serveur a signé. Le serveur fabrique toujours les
+paramètres par `json.Marshal` du même type, échappement HTML compris ; un test
+fait l'aller-retour pour chaque genre sur ce qu'il produit. Coût : une chaîne
+qui n'est pas de l'UTF-8 valide ne fait plus l'aller-retour (`json.Marshal`
+l'écrit `\ufffd`, relue puis réécrite autrement) : l'ordre est refusé
+`bad_order` au lieu d'être exécuté avec le caractère remplacé.
 6. **Il exécute** : `agent.ping` finit `succeeded`, sortie `pong <version>`.
    `agent.server_key` épingle la clé qu'il livre, sortie `pinned <empreinte>`.
    `agent.update` télécharge, vérifie, change son binaire et s'arrête (code 3) ;
