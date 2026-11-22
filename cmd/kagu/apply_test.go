@@ -408,7 +408,7 @@ func TestR_A1_12_ACreationShowsEveryField(t *testing.T) {
 }
 
 func TestR_A1_12_ServerTextIsPrintedStripped(t *testing.T) {
-	plan := `{"language": "fr", "file_hash": "sha256:x", "prune": false, "plan_hash": "sha256:p", "applicable": true,
+	plan := `{"language": "fr", "file_hash": "sha256:x\u001b[31m\ny", "prune": false, "plan_hash": "sha256:p", "applicable": true,
 	  "summary": {"create": 1, "update": 1, "delete": 0, "unchanged": 0, "unmanaged": 0},
 	  "changes": [{"action": "create", "kind": "probe", "id": "", "name": "a\u001b[31mb\nc",
 	    "fields": [{"field": "target", "before": "", "after": "x\u001b[2Jy\nz"}], "notes": [], "carries": []},
@@ -422,6 +422,9 @@ func TestR_A1_12_ServerTextIsPrintedStripped(t *testing.T) {
 	}
 	if strings.ContainsRune(out, '\x1b') {
 		t.Errorf("an escape reached the terminal: %q", out)
+	}
+	if !strings.Contains(out, "Plan pour opencloud.yaml (sha256:x\ufffd[31m\ufffdy)\n") {
+		t.Errorf("the plan header must stay on one stripped line:\n%s", out)
 	}
 	for _, want := range []string{"  + sonde a\ufffd[31mb\ufffdc\n", "target : ∅ → x\ufffd[2Jy\ufffdz\n", "interval 1\ufffd → 2\ufffd\n"} {
 		if !strings.Contains(out, want) {

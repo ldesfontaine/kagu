@@ -419,7 +419,7 @@ func (r *applyRun) kindText(code, kind string) string {
 // compte de ce qui reste.
 func (r *applyRun) show(plan planView) {
 	if len(plan.Changes) > 0 {
-		fmt.Fprintf(r.out, "Plan pour %s (%s)\n", r.name, shortHash(plan.FileHash))
+		fmt.Fprintf(r.out, "Plan pour %s (%s)\n", r.name, printable(shortHash(plan.FileHash)))
 	}
 	catalog := r.catalogs.For(planLanguage(plan.Language))
 	for _, change := range plan.Changes {
