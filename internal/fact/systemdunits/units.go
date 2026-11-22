@@ -107,11 +107,6 @@ type Unit struct {
 	Sub    Sub    `json:"sub"`
 }
 
-// IsRunning : l'unité tourne (active, sous-état running ou exited).
-func (u Unit) IsRunning() bool {
-	return u.Active == ActiveActive
-}
-
 // Report est le relevé d'une machine, remplacé à chaque fois. Available dit
 // que systemd a pu être lu ; sinon Reason le dit et Units est vide.
 type Report struct {
