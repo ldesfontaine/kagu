@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/verb"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/shape"
 )
 
 const (
@@ -233,8 +232,7 @@ func expiryOf(requested *int, now time.Time) (time.Time, error) {
 
 // ValidateName borne le nom d'un jeton : un mot pour le reconnaître.
 func ValidateName(name string) error {
-	trimmed := strings.TrimSpace(name)
-	if trimmed == "" || utf8.RuneCountInString(trimmed) > MaxNameLength {
+	if shape.Label(name, MaxNameLength) != nil {
 		return ErrNameInvalid
 	}
 	return nil

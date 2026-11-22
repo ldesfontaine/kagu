@@ -158,10 +158,13 @@ func TestCreate_RejectsBadDefinitions(t *testing.T) {
 		definition heartbeat.Definition
 		want       error
 	}{
-		"empty name":     {heartbeat.Definition{Name: " ", Interval: time.Hour}, heartbeat.ErrNameInvalid},
-		"short interval": {heartbeat.Definition{Name: "x", Interval: 30 * time.Second}, heartbeat.ErrIntervalInvalid},
-		"long interval":  {heartbeat.Definition{Name: "x", Interval: 8 * 24 * time.Hour}, heartbeat.ErrIntervalInvalid},
-		"grace too long": {heartbeat.Definition{Name: "x", Interval: time.Hour, Grace: 2 * time.Hour}, heartbeat.ErrGraceInvalid},
+		"empty name":      {heartbeat.Definition{Name: " ", Interval: time.Hour}, heartbeat.ErrNameInvalid},
+		"control in name": {heartbeat.Definition{Name: "a\x1bb", Interval: time.Hour}, heartbeat.ErrNameInvalid},
+		"newline in name": {heartbeat.Definition{Name: "a\nb", Interval: time.Hour}, heartbeat.ErrNameInvalid},
+		"81 accents":      {heartbeat.Definition{Name: strings.Repeat("é", 81), Interval: time.Hour}, heartbeat.ErrNameInvalid},
+		"short interval":  {heartbeat.Definition{Name: "x", Interval: 30 * time.Second}, heartbeat.ErrIntervalInvalid},
+		"long interval":   {heartbeat.Definition{Name: "x", Interval: 8 * 24 * time.Hour}, heartbeat.ErrIntervalInvalid},
+		"grace too long":  {heartbeat.Definition{Name: "x", Interval: time.Hour, Grace: 2 * time.Hour}, heartbeat.ErrGraceInvalid},
 	}
 	for name, tc := range cases {
 		if _, err := f.Create(context.Background(), tc.definition); !errors.Is(err, tc.want) {
