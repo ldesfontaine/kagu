@@ -2,6 +2,7 @@ package machine
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
@@ -55,5 +56,43 @@ func TestNewID_IsAVersion4UUID(t *testing.T) {
 	}
 	if len(id) != 36 || id[14] != '4' || ValidateID(id) != nil {
 		t.Fatalf("id %q", id)
+	}
+}
+
+// R-A1-11 : un identifiant de machine n'a que la forme de NewID. Majuscules,
+// tirets déplacés ou absents nommeraient la même machine autrement : refusés
+// à l'enrôlement (ErrBadID, bad_request), avant le jeton.
+func TestR_A1_11_AnIDOfAnotherCaseOrDashLayoutIsRefused(t *testing.T) {
+	id, err := NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateID(id); err != nil {
+		t.Fatalf("the form NewID writes was refused: %v", err)
+	}
+	bare := strings.ReplaceAll(id, "-", "")
+	letter := strings.IndexAny(id, "abcdef")
+	others := []string{
+		strings.ToUpper(id),
+		id[:letter] + strings.ToUpper(id[letter:letter+1]) + id[letter+1:],
+		bare,
+		bare[:4] + "-" + bare[4:12] + "-" + bare[12:16] + "-" + bare[16:20] + "-" + bare[20:],
+		id + "-",
+		"-" + id,
+		strings.Replace(id, "-", "--", 1),
+		LocalID,
+	}
+	h := newHarness(t)
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, other := range others {
+		if err := ValidateID(other); !errors.Is(err, ErrBadID) {
+			t.Errorf("ValidateID(%q) = %v, want ErrBadID", other, err)
+		}
+		if _, err := h.service.Enroll(context.Background(), Enrollment{MachineID: other, PublicKey: public}); !errors.Is(err, ErrBadID) {
+			t.Errorf("Enroll(%q) = %v, want ErrBadID", other, err)
+		}
 	}
 }

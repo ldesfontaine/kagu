@@ -271,7 +271,11 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    L'empreinte n'est pas un secret fort ; elle ne sert qu'à qui tient déjà un
    jeton, donc le droit d'enrôler une machine. Rien de l'empreinte n'est
    stocké. Les autres machines s'enrôlent sous l'identifiant que leur agent
-   a tiré.
+   a tiré, **sous la seule forme de `machine.NewID`** (minuscules, tirets aux
+   places fixes) : une autre casse ou d'autres tirets sont refusés
+   `bad_request`, et un identifiant égal à une machine déjà inscrite, casse
+   et tirets mis à part, aussi (R-A1-11) : il partagerait son utilisateur
+   restic, qui est l'identifiant en minuscules.
    Puis Kagu consomme le jeton, crée la machine (ou la retrouve) et inscrit son
    **agent** (`agt_` et seize hexadécimaux) dans une seule transaction : deux
    agents avec le même jeton, un seul passe. Le jeton ne sert plus jamais ; il
@@ -2179,6 +2183,7 @@ instantané **à côté de l'original**, sur la machine source.
 | Écran | Un seul nom coché (ou le dossier ouvert, jamais la racine). **Restaurer** pose la confirmation en ligne, qui dit le **chemin exact** : `<chemin>.restaure-<AAAAMMJJ-HHMMSS>`. L'horodatage est celui du navigateur, montré puis envoyé tel quel |
 | Ordre | `POST /api/machines/{id}/restic-backups/{backup}/actions/restore` (verbe `restic.backup.restore`, **à confirmation** : un jeton dépose une demande que l'opérateur confirme dans l'interface), corps `{snapshot, path, stamp}`. Le serveur juge la forme, le droit `restic.restore` de la **source** et la couverture de `files.write`, puis envoie `restic.restore` à la source et rend l'ordre ; son état et sa raison se lisent sur l'ordre |
 | Agent | Jugé avant d'écrire : forme, droit, restic présent, lien provisionné, destination sous `files.write` après résolution des liens, **destination absente** (`path_exists` sinon : ni écrasement, ni suffixe numéroté). restic restaure (`--no-lock`) dans un dossier temporaire **créé à côté** de la destination, l'agent le déplace à sa place et efface **ce seul dossier temporaire** (le sien). Un chemin absent de l'instantané : `path_not_in_snapshot` |
+| Écriture | Rejugée sous **la racine du droit `files.write`, ouverte une fois** (`os.OpenRoot`) : aucun lien suivi entre elle et le dossier de la destination, un lien posé après l'acceptation est refusé `path_outside_right`. Le dossier temporaire se crée, le déplacement se fait sous cette racine ; restic reçoit le dossier temporaire **ouvert** et y écrit par `/proc/self/fd/3` : son chemin n'est plus relu. Coût : un lien qui reste dans le droit, accepté à l'acceptation, est refusé à l'écriture |
 | Chemin | Le même que la sauvegarde : direct si la cible répond, par le relais sinon |
 | Mot de passe | **L'ordre n'en porte aucun** : la source relit le mot de passe du dépôt dans le fichier de son lien (`0600`), qu'elle détient déjà pour sauvegarder. Il ne voyage pas, donc ne peut fuir ni d'un ordre, ni de l'audit, ni d'une réponse ; masqué dans toute sortie de restic |
 | Dépôt | Lu seulement : `--no-lock` (aucun verrou posé, donc aucun `DELETE`), et la règle du dépôt refuse de toute façon un `DELETE` sur les données et les instantanés |
@@ -2194,7 +2199,7 @@ instantané **à côté de l'original**, sur la machine source.
 Banc de non-fuite : `agent/restic_restore_test.go` (mot de passe semé absent
 des résultats et du journal ; original intact ; destination existante refusée ;
 chemin hors `files.write`, lien symbolique et `..` refusés ; rien d'écrit en
-cas d'échec) et `server/api_restic_restore_test.go` (aucun secret dans l'ordre,
+cas d'échec ; lien posé entre l'acceptation et l'écriture, R-A1-10) et `server/api_restic_restore_test.go` (aucun secret dans l'ordre,
 la réponse, l'audit, le journal, la base ; droit absent ; audit de la
 destination).
 
