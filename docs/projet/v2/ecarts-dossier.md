@@ -126,7 +126,7 @@ Lignes sur `3e79bb1`. Tests lus, pas lancés.
 | --- | --- | --- | --- |
 | B-H1 | Fermé par TU-01 (PR #535) | `internal/anchor/anchor.go:313`, `:337-370` (`readFields`) | `internal/anchor/anchor_test.go` `TestR_A1_3_AKeyRepeatedOrOfAnotherCaseIsNeverRead`, `TestR_A1_7_…` ; `internal/agent/anchors_test.go` `TestR_A1_3_TheProducerIsNeverCalledOnAKeyOfAnotherCaseOrRepeated` |
 | A-1 | Fermé par TU-03 (PR #536, + PR #541) | `internal/auth/setupcode.go:78-101` ; `internal/server/control.go:40` | `internal/server/auth_setup_code_test.go` `TestR_A2_5`, `TestR_CNX_3`, `TestR_A2_5_OnlyOneActivationWins` ; `internal/auth/setupcode_test.go` |
-| B-M1 | Ouvert | `backup.guest` ne borne que `backup.produce` (`internal/anchor/anchor.go:92`) ; `restic.backup` en portée `vm` lance `vzdump` (`internal/agent/restic_backup.go:59`, `:198-209`) | — |
+| B-M1 | Fermé par T01-04 | `internal/wire/agentwire/registry.go` : `AnchoredWhen(anchor.BackupGuest, …)` sur `restic.backup`, portée `vm` seulement | `internal/edge/agent/anchors_test.go` `TestR_A1_7_ResticBackupOfAGuestOutsideTheAnchorsNeverRunsSudo` ; `internal/wire/agentwire/registry_test.go` `TestR_A1_7_ResticBackupPresentsItsGuestOnlyInTheVMScope` |
 | C-1 | Ouvert | `cmd/opencloud/apply.go:438-439` imprime `+ <nom>` seul | — |
 | A-2 | Fermé par TU-08 (PR #546) | `internal/server/auth_middleware.go:265-274`, `:277-287`, `:292-302` ; `internal/server/routes.go:347` ; `internal/server/server.go:651` | `internal/server/spa_test.go` `TestR_A2_13` |
 | A-3 | Ouvert | Toute demande ouvre `DeleteMachineDialog` (`web/src/components/VerbRequestsCard.tsx:63-69`) ; ni instantané ni chemin (`web/src/lib/verbRequests.ts:9-14`) | — |

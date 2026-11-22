@@ -410,6 +410,7 @@ func TestResticBackup_IsRefusedWithoutItsRights(t *testing.T) {
 	expectResult(t, without.run(t, agentwire.KindResticProvision, provision), agentwire.ActionRefused, agentwire.RightMissing(machine.CapabilityResticProduce))
 
 	noProducer := newResticBench(t, "restic.produce")
+	noProducer.trust(t, map[string][]string{anchor.BackupGuest: {"105"}})
 	guest := agentwire.ResticBackupParams{Target: resticTargetID, Scope: agentwire.ResticScopeVM, VMID: 105, GuestType: agentwire.GuestQEMU}
 	expectResult(t, noProducer.run(t, agentwire.KindResticBackup, guest), agentwire.ActionRefused, agentwire.RightMissing(machine.CapabilityBackupProduce))
 	if len(without.restic.callsMade())+len(noProducer.restic.callsMade()) != 0 {
@@ -565,6 +566,7 @@ func TestResticBackup_GuestStreamsVzdumpThroughRestic(t *testing.T) {
 	b := newResticBench(t, "restic.produce", "backup.produce=proxmox-vzdump")
 	b.runner.restic.source.dialer = &refusingDialer{}
 	b.provision(t, "nas", 8000, mustCertificate(t))
+	b.trust(t, map[string][]string{anchor.BackupGuest: {"105"}})
 	b.runner.checks.lookPath = func(name string) (string, error) {
 		if name == "sudo" {
 			return "/usr/bin/sudo", nil

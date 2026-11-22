@@ -135,7 +135,7 @@ func TestAnchors_NothingElseDependsOnThem(t *testing.T) {
 		t.Fatalf("ping: %+v", result)
 	}
 	for _, kind := range agentwire.OrderKinds() {
-		if spec, _ := agentwire.SpecOf(kind); len(spec.Anchors) != 0 && kind != agentwire.KindBackupProduce && kind != agentwire.KindResticProvision {
+		if spec, _ := agentwire.SpecOf(kind); len(spec.Anchors) != 0 && kind != agentwire.KindBackupProduce && kind != agentwire.KindResticProvision && kind != agentwire.KindResticBackup {
 			t.Errorf("%s is bounded by an anchor kind the tests do not know", kind)
 		}
 	}
@@ -555,6 +555,53 @@ func TestR_A1_3_TheProducerIsNeverCalledOnAKeyOfAnotherCaseOrRepeated(t *testing
 		t.Fatalf("something was sent: %+v", puts)
 	}
 	expectResult(t, b.run(t, 100, params), agentwire.ActionSucceeded, "")
+}
+
+// B-M1 : restic.backup d'un invité lance sudo et vzdump sur le vmid de l'ordre ;
+// backup.guest le borne comme backup.produce. Hors des ancres : refusé, sudo
+// jamais cherché, restic jamais lancé. La portée service n'est pas bornée par
+// cette ancre, même sur une machine qui n'en a posé aucune.
+func TestR_A1_7_ResticBackupOfAGuestOutsideTheAnchorsNeverRunsSudo(t *testing.T) {
+	b := newResticBench(t, "restic.produce", "backup.produce=proxmox-vzdump")
+	b.runner.restic.source.dialer = &refusingDialer{}
+	b.provision(t, "nas", 8000, mustCertificate(t))
+	var looked []string
+	b.runner.checks.lookPath = func(name string) (string, error) {
+		looked = append(looked, name)
+		return "/usr/bin/" + name, nil
+	}
+	guest := func(vmid int) agentwire.ResticBackupParams {
+		return agentwire.ResticBackupParams{Target: resticTargetID, Scope: agentwire.ResticScopeVM, VMID: vmid, GuestType: agentwire.GuestQEMU}
+	}
+	refusedWithoutRunning := func(label string, params any, reason string) {
+		t.Helper()
+		expectResult(t, b.run(t, agentwire.KindResticBackup, params), agentwire.ActionRefused, reason)
+		if slices.Contains(looked, "sudo") || len(b.restic.callsMade()) != 0 {
+			t.Fatalf("%s: sudo looked up %v, restic ran %d times", label, looked, len(b.restic.callsMade()))
+		}
+	}
+
+	// Une machine sans ancre refuse tout invité, et dit laquelle manque.
+	refusedWithoutRunning("no anchor", guest(105), "anchor_missing:backup.guest")
+	b.trust(t, map[string][]string{anchor.BackupGuest: {"101"}})
+	refusedWithoutRunning("vmid outside", guest(105), "anchor_outside:backup.guest")
+	// La portée service passe sans que backup.guest la juge.
+	b.trust(t, map[string][]string{anchor.BackupGuest: nil})
+	dir := b.service(t, "forgejo")
+	if err := os.WriteFile(filepath.Join(dir, "data"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expectResult(t, b.run(t, agentwire.KindResticBackup, serviceBackup("forgejo")), agentwire.ActionSucceeded, "")
+	if slices.Contains(looked, "sudo") {
+		t.Fatalf("a service backup looked up sudo: %v", looked)
+	}
+
+	// Le vmid ancré passe : sudo est enfin cherché.
+	b.trust(t, map[string][]string{anchor.BackupGuest: {"105"}})
+	expectResult(t, b.run(t, agentwire.KindResticBackup, guest(105)), agentwire.ActionSucceeded, "")
+	if !slices.Contains(looked, "sudo") {
+		t.Fatal("an anchored guest did not reach sudo")
+	}
 }
 
 // Même attaque sur restic.provision/certificate : refusé bad_order, aucun lien

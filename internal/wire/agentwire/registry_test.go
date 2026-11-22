@@ -263,6 +263,24 @@ func TestR_A1_7_AnAmbiguousKeyPresentsNoValueToAnyAnchor(t *testing.T) {
 	}
 }
 
+// B-M1 : restic.backup présente son vmid à backup.guest en portée vm ; la
+// portée service ne lui présente rien (pas une valeur vide, qui sortirait de
+// l'ancre) ; des paramètres illisibles lui présentent une valeur vide.
+func TestR_A1_7_ResticBackupPresentsItsGuestOnlyInTheVMScope(t *testing.T) {
+	encode := func(params ResticBackupParams) json.RawMessage { return encodeSample(t, params) }
+	vm := PresentedOf(KindResticBackup, encode(ResticBackupParams{Target: "m-abc", Scope: ResticScopeVM, VMID: 105, GuestType: GuestQEMU}))
+	if len(vm) != 1 || vm[0].Name != anchor.BackupGuest || vm[0].Value != "105" {
+		t.Fatalf("vm scope: %+v", vm)
+	}
+	if service := PresentedOf(KindResticBackup, encode(ResticBackupParams{Target: "m-abc", Scope: ResticScopeService, Service: "wiki"})); len(service) != 0 {
+		t.Fatalf("service scope: %+v", service)
+	}
+	unreadable := PresentedOf(KindResticBackup, json.RawMessage(`{"target":"m-abc","scope":"vm","scope":"service"}`))
+	if len(unreadable) != 1 || unreadable[0].Value != "" {
+		t.Fatalf("unreadable params: %+v", unreadable)
+	}
+}
+
 // Le journal et les ancres nomment des champs que le type porte vraiment.
 func TestRegistry_JournalNamesRealFields(t *testing.T) {
 	samples := serverSamples(t)

@@ -48,9 +48,10 @@ renommée `<tag>.md` à la publication, et son entrée passe dans le tableau de
 | Ancre | Borne | Valeurs |
 | --- | --- | --- |
 | `backup.recipient` | la clé age pour laquelle `backup.produce` chiffre | 1 à 2 |
-| `backup.guest` | les VM et conteneurs que `proxmox-vzdump` copie | 1 à 32 |
+| `backup.guest` | les VM et conteneurs que `proxmox-vzdump` copie, par `backup.produce` **et** par `restic.backup` en portée `vm` | 1 à 32 |
 | `restic.target-cert` | les certificats de cibles restic que `restic.provision` accepte | 1 à 4 |
 
+- **À savoir** (B-M1) : une machine qui sauvegarde un invité par restic est refusée (`anchor_missing:backup.guest`) tant que l'administrateur n'a pas posé `agent trust add backup.guest <vmid>`, en root. La portée `service` n'est pas concernée.
 - **Refus par défaut** : sans ancre posée, l'ordre est refusé (`anchor_missing:<ancre>`), avec la commande à lancer sur la machine.
 - **Se posent** au premier lancement (un drapeau par ancre, à côté de `-rights`) ou par `opencloud agent trust list | add | remove`, **en root**. L'agent les relit à chaque ordre : pas de redémarrage.
 - **L'écran** : la ligne d'installation et la fenêtre « Ré-enrôler » les demandent (la clé du trousseau est proposée) ; la fiche, onglet Agent, dit « posées », « aucune posée » ou « illisibles ».

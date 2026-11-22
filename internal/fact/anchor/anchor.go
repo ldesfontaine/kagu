@@ -70,7 +70,7 @@ var kinds = []Kind{
 	{
 		Name: BackupGuest, Right: "backup.produce", Flag: "backup-guest", Max: 32, Valid: guestPattern.MatchString,
 		Missing: refusal.Conflict("anchor.backup_guest_missing",
-			"no guest is trusted on this machine: backup.produce would refuse every order"),
+			"no guest is trusted on this machine: backup.produce and restic.backup of a guest would refuse every order"),
 		Outside: refusal.Conflict("anchor.backup_guest_outside",
 			"the guest of this order is not one the machine trusts"),
 		Unreadable: refusal.Conflict("anchor.backup_guest_unreadable",
