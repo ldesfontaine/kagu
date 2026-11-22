@@ -17,6 +17,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/edge/config"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 	"github.com/ldesfontaine/kagu/internal/view/manifest"
 )
 
@@ -318,7 +319,7 @@ func (r *applyRun) report(plan planView, body []byte) error {
 	}
 	total := applied.Summary.Create + applied.Summary.Update + applied.Summary.Delete
 	if applied.State == string(manifest.ApplyApplied) {
-		fmt.Fprintf(r.out, "Appliqué : %s (%s).\n", countText(applied.Done, "changement"), applied.ID)
+		fmt.Fprintf(r.out, "Appliqué : %s (%s).\n", countText(applied.Done, "changement"), printable(applied.ID))
 		return nil
 	}
 	reason := r.text(plan.Language, applied.Error)
@@ -331,7 +332,7 @@ func (r *applyRun) report(plan planView, body []byte) error {
 	default:
 		message += "\nRien n'est écrit ; "
 	}
-	message += fmt.Sprintf("corrigez puis relancez : %s reprend où il s'est arrêté (%s).", brand.Command+" apply", applied.ID)
+	message += fmt.Sprintf("corrigez puis relancez : %s reprend où il s'est arrêté (%s).", brand.Command+" apply", printable(applied.ID))
 	return fmt.Errorf("%s", message)
 }
 
@@ -348,7 +349,7 @@ func (r *applyRun) refuseFile(plan planView) error {
 	catalog := r.catalogs.For(planLanguage(plan.Language))
 	for _, item := range plan.Problems {
 		fmt.Fprintf(r.out, "  %s\n", problemText(catalog, manifest.Problem{
-			Key: item.Key, Line: item.Line, Column: item.Column, Path: item.Path, Value: item.Value,
+			Key: item.Key, Line: item.Line, Column: item.Column, Path: printable(item.Path), Value: printable(item.Value),
 		}))
 	}
 	return &refusal{message: fmt.Sprintf("%d refus dans %s : rien n'a été écrit", len(plan.Problems), r.name)}
@@ -400,9 +401,9 @@ func (r *applyRun) text(code, key string) string {
 func (r *applyRun) objectText(code, object string) string {
 	kind, name, found := strings.Cut(object, "/")
 	if !found {
-		return object
+		return printable(object)
 	}
-	return r.kindText(code, kind) + " " + name
+	return r.kindText(code, kind) + " " + printable(name)
 }
 
 func (r *applyRun) kindText(code, kind string) string {
@@ -433,14 +434,17 @@ func (r *applyRun) show(plan planView) {
 }
 
 func (r *applyRun) showChange(catalog lang.Catalog, code string, change changeView) {
-	label := r.kindText(code, change.Kind) + " " + change.Name
+	label := r.kindText(code, change.Kind) + " " + printable(change.Name)
 	switch change.Action {
 	case string(manifest.ActionCreate):
 		fmt.Fprintf(r.out, "  + %s\n", label)
+		for _, field := range change.Fields {
+			fmt.Fprintf(r.out, "      %s\n", fieldText(field.Field, "", field.After))
+		}
 	case string(manifest.ActionDelete):
 		line := fmt.Sprintf("  - %s", label)
 		if change.ID != "" {
-			line += fmt.Sprintf(" (%s)", shortID(change.ID))
+			line += fmt.Sprintf(" (%s)", printable(shortID(change.ID)))
 		}
 		var carries []string
 		for _, carry := range change.Carries {
@@ -453,12 +457,12 @@ func (r *applyRun) showChange(catalog lang.Catalog, code string, change changeVi
 	default:
 		if len(change.Fields) == 1 && len(change.Notes) == 0 {
 			field := change.Fields[0]
-			fmt.Fprintf(r.out, "  ~ %s : %s %s → %s\n", label, field.Field, valueText(field.Before), valueText(field.After))
+			fmt.Fprintf(r.out, "  ~ %s : %s %s → %s\n", label, printable(field.Field), valueText(field.Before), valueText(field.After))
 			return
 		}
 		line := "  ~ " + label
 		if change.ID != "" {
-			line += fmt.Sprintf(" (%s)", shortID(change.ID))
+			line += fmt.Sprintf(" (%s)", printable(shortID(change.ID)))
 		}
 		fmt.Fprintln(r.out, line)
 		for _, field := range change.Fields {
@@ -473,14 +477,21 @@ func (r *applyRun) showChange(catalog lang.Catalog, code string, change changeVi
 // fieldText écrit un champ qui change : « interval : 1m → 30s ». Une valeur
 // vide s'écrit « ∅ ».
 func fieldText(field, before, after string) string {
-	return fmt.Sprintf("%s : %s → %s", field, valueText(before), valueText(after))
+	return fmt.Sprintf("%s : %s → %s", printable(field), valueText(before), valueText(after))
 }
 
 func valueText(value string) string {
 	if value == "" {
 		return "∅"
 	}
-	return value
+	return printable(value)
+}
+
+// printable est la seule porte des textes du serveur vers le terminal : un
+// serveur pris ne peut pas y écrire de séquence d'échappement.
+func printable(serverText string) string {
+	clean, _ := untrusted.Strip(serverText)
+	return clean
 }
 
 // shortHash coupe « sha256:<64 hex> » à huit caractères utiles.
