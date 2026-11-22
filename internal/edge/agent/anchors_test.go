@@ -175,13 +175,16 @@ func TestAnchors_ATrustAddIsReadByTheRunningAgentAndSurvivesItsWrites(t *testing
 	}
 }
 
+// everyRight : un agent qui porte tous les droits, pour qu'aucun ordre ne
+// s'arrête au droit.
+var everyRight = []string{"observe", "agent.update", "docker.deploy", "docker.update", "backup.receive=/srv/receive", "backup.produce=" + machine.ProducerProxmoxVzdump,
+	"files.write=/srv/write", "proxmox.power", "proxmox.snapshot", "restic.target=/srv/restic", "restic.produce", "restic.docker", "restic.verify", "restic.browse", "restic.restore"}
+
 // Aucun genre d'ordre n'écrit une ancre : on envoie à chacun des paramètres et
 // un secret qui en réclament, avec tous les droits, et le fichier garde ses
 // ancres à l'identique.
 func TestAnchors_NoOrderKindWritesAnAnchor(t *testing.T) {
-	all := []string{"observe", "agent.update", "docker.deploy", "docker.update", "backup.receive=/srv/receive", "backup.produce=" + machine.ProducerProxmoxVzdump,
-		"files.write=/srv/write", "proxmox.power", "proxmox.snapshot", "restic.target=/srv/restic", "restic.produce", "restic.docker", "restic.verify", "restic.browse", "restic.restore"}
-	b := newOrderBenchWithRights(t, all)
+	b := newOrderBenchWithRights(t, everyRight)
 	posed := map[string][]string{anchor.BackupGuest: {"5012"}, anchor.BackupRecipient: {newAgeRecipient(t)}, anchor.ResticTargetCert: {strings.Repeat("ab", 32)}}
 	b.trust(t, posed)
 	hostile := map[string]any{
@@ -325,7 +328,9 @@ func TestJournal_RecordsWhatWasSignedAndNeverASecret(t *testing.T) {
 	if logged["target"] != "5012" || logged["recipient"] != params.Recipient || logged["password"] != nil || logged["env"] != nil {
 		t.Errorf("params %v", logged)
 	}
-	if unreadable := findEntry(t, entries, "order refused", unread.RunID); unreadable["reason"] != agentwire.ReasonBadOrder || unreadable["body_sha256"] == nil {
+	// Un ordre qui ne se décode pas n'a pas de valeur à écrire : le journal en
+	// garde les empreintes, jamais les octets.
+	if unreadable := findEntry(t, entries, "order refused", unread.RunID); unreadable["reason"] != agentwire.ReasonBadOrder || unreadable["body_sha256"] == nil || unreadable["params"] != nil {
 		t.Errorf("strict reading refusal entry %v", unreadable)
 	}
 	refused := findEntry(t, entries, "order refused", other.RunID)
@@ -335,6 +340,42 @@ func TestJournal_RecordsWhatWasSignedAndNeverASecret(t *testing.T) {
 	bad := findEntry(t, entries, "order refused", forged.RunID)
 	if bad["reason"] != agentwire.ReasonBadSignature || bad["body_sha256"] == nil || bad["signing_key"] != nil {
 		t.Errorf("a forged order is logged with its hash and no signing key: %v", bad)
+	}
+}
+
+// Le journal écrit les valeurs de l'ordre que le juge a décodé (R-A1-5) : une
+// valeur changée sur l'objet décodé est celle qui s'écrit, et un ordre dont une
+// clé d'une autre casse porte une autre valeur ne laisse au journal ni l'une ni
+// l'autre, seulement ses empreintes.
+func TestR_A1_5_TheJournalWritesTheDecodedValues(t *testing.T) {
+	logs := &lockedBuffer{}
+	b := newProduceRig(t)
+	b.runner.logger = slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	params := produceParams(b.identity)
+
+	judged := judgedOf(t, longOrder(1, agentwire.KindBackupProduce, params))
+	decoded := judged.Params.(agentwire.BackupProduceParams)
+	decoded.Target = "6000"
+	judged.Params = decoded
+	b.runner.journal.executed(judged)
+
+	unread := longOrder(2, agentwire.KindBackupProduce, nil)
+	unread.Params = json.RawMessage(`{"producer":"` + params.Producer + `","target":"5012","Target":"OTHER-TARGET","prefix":"` + params.Prefix +
+		`","recipient":"` + params.Recipient + `","parcel":"` + params.Parcel + `"}`)
+	b.runner.receive(b.signed(t, unread))
+	b.until(t, unread.RunID)
+
+	entries := journalEntries(t, logs.String())
+	logged, _ := findEntry(t, entries, "order executed", judged.RunID)["params"].(map[string]any)
+	if logged["target"] != "6000" || logged["recipient"] != params.Recipient || logged["producer"] != params.Producer {
+		t.Errorf("the journal must write the decoded object: %v", logged)
+	}
+	refused := findEntry(t, entries, "order refused", unread.RunID)
+	if refused["reason"] != agentwire.ReasonBadOrder || refused["body_sha256"] == nil || refused["params"] != nil {
+		t.Errorf("an order that does not decode keeps its hashes only: %v", refused)
+	}
+	if strings.Contains(logs.String(), "OTHER-TARGET") {
+		t.Errorf("a value of an undecoded order reached the journal:\n%s", logs.String())
 	}
 }
 

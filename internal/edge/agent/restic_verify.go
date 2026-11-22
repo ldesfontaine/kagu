@@ -3,7 +3,6 @@ package agent
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -47,22 +46,22 @@ type resticVerifyJob struct {
 // acceptResticVerify juge l'ordre vite (forme, secret, droit restic.verify,
 // restic présent, dépôt libre), puis l'accepte : la vérification est le
 // travail du worker.
-func (r *orderRunner) acceptResticVerify(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
+func (r *orderRunner) acceptResticVerify(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
 	dir, isTarget := resticTargetDir(r.identity.Capabilities())
 	if !isTarget {
 		// Le dépôt est sous le dossier du droit restic.target : sans lui, aucun
 		// dépôt à vérifier.
-		r.journal.notAccepted(body, agentwire.RightMissing(machine.CapabilityResticTarget))
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.RightMissing(machine.CapabilityResticTarget)}, nil
+		r.journal.notAccepted(order, agentwire.RightMissing(machine.CapabilityResticTarget))
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.RightMissing(machine.CapabilityResticTarget)}, nil
 	}
-	job, refused := r.restic.target.judgeVerify(body, dir, r.checks)
+	job, refused := r.restic.target.judgeVerify(order, dir, r.checks)
 	if refused != nil {
-		r.journal.notAccepted(body, refused.Reason)
+		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil
 	}
-	return accepted(body), func(ctx context.Context) {
+	return accepted(order), func(ctx context.Context) {
 		report, output, err := r.restic.target.verify(ctx, job)
-		result := r.finishRestic(body, output, err)
+		result := r.finishRestic(order, output, err)
 		if err == nil {
 			result.Verify = &report
 		}
@@ -71,16 +70,16 @@ func (r *orderRunner) acceptResticVerify(body agentwire.OrderBody) (agentwire.Ac
 }
 
 // judgeVerify lit l'ordre et le refuse sans rien lancer s'il ne passe pas.
-func (t *resticTarget) judgeVerify(body agentwire.OrderBody, dir string, checks hostChecks) (resticVerifyJob, *agentwire.ActionResult) {
+func (t *resticTarget) judgeVerify(order judgedOrder, dir string, checks hostChecks) (resticVerifyJob, *agentwire.ActionResult) {
 	refused := func(state agentwire.ActionState, reason string) *agentwire.ActionResult {
-		return &agentwire.ActionResult{RunID: body.RunID, State: state, Reason: reason}
+		return &agentwire.ActionResult{RunID: order.RunID, State: state, Reason: reason}
 	}
-	var params agentwire.ResticVerifyParams
-	if err := json.Unmarshal(body.Params, &params); err != nil || params.Validate() != nil {
+	params, ok := order.Params.(agentwire.ResticVerifyParams)
+	if !ok || params.Validate() != nil {
 		return resticVerifyJob{}, refused(agentwire.ActionFailed, agentwire.ReasonBadOrder)
 	}
-	var secret agentwire.ResticVerifySecret
-	if err := json.Unmarshal(body.Secret, &secret); err != nil || secret.Validate() != nil {
+	secret, ok := order.Secret.(agentwire.ResticVerifySecret)
+	if !ok || secret.Validate() != nil {
 		return resticVerifyJob{}, refused(agentwire.ActionFailed, agentwire.ReasonBadOrder)
 	}
 	binary, err := checks.findRestic()

@@ -11,25 +11,22 @@ import (
 // identifiant mais un contenu.
 const maxJournalValueRunes = 200
 
-// JournalFields rend les champs que le journal local retient pour ce genre
-// (Spec.Journal) ; ok est faux pour un genre hors du registre, dont rien ne se
-// journalise.
-func JournalFields(kind Kind) ([]string, bool) {
-	spec, ok := SpecOf(kind)
-	return spec.Journal, ok
-}
-
-// JournalParams rend, des paramètres d'un ordre, les seuls champs de la liste
-// blanche de son genre, en texte : nombres, booléens et chaînes imprimables et
-// courtes. Tout autre champ, et tout autre type de valeur, est laissé.
-func JournalParams(kind Kind, params json.RawMessage) map[string]string {
-	fields, _ := JournalFields(kind)
+// JournalValues rend, des paramètres décodés de l'ordre, les seuls champs de
+// la liste blanche de son genre (Spec.Journal), en texte : nombres, booléens et
+// chaînes imprimables et courtes. Tout autre champ, et tout autre type de
+// valeur, est laissé. Les valeurs sont celles de l'objet que le juge a lu,
+// écrites par json.Marshal ; les octets reçus ne sont pas relus (R-A1-5).
+func (o Order) JournalValues() map[string]string {
+	if len(o.spec.Journal) == 0 || o.Params == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(o.Params)
 	var all map[string]json.RawMessage
-	if len(fields) == 0 || json.Unmarshal(params, &all) != nil {
+	if err != nil || json.Unmarshal(encoded, &all) != nil {
 		return nil
 	}
 	kept := map[string]string{}
-	for _, field := range fields {
+	for _, field := range o.spec.Journal {
 		if text, ok := journalText(all[field]); ok {
 			kept[field] = text
 		}

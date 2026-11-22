@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -163,24 +162,25 @@ type dockerJob struct {
 
 // readDockerOrder juge l'ordre avant de l'accepter : un ordre mal formé est
 // refusé tout de suite. Le secret, s'il y en a un, est le contenu de l'.env.
-func readDockerOrder(body agentwire.OrderBody, root string, update bool) (dockerJob, *agentwire.ActionResult) {
-	bad := &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
-	job := dockerJob{update: update, root: root, runID: body.RunID}
-	if err := json.Unmarshal(body.Params, &job.params); err != nil || !isDeployable(job.params) {
+func readDockerOrder(order judgedOrder, root string, update bool) (dockerJob, *agentwire.ActionResult) {
+	bad := &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+	params, ok := order.Params.(agentwire.DockerParams)
+	if !ok || !isDeployable(params) {
 		return dockerJob{}, bad
 	}
+	job := dockerJob{params: params, update: update, root: root, runID: order.RunID}
 	// Le filet ne se pose que sur une montée, avec des bornes que l'agent juge.
 	if rollback := job.params.Rollback; rollback != nil && (!update || !rollback.IsValid()) {
 		return dockerJob{}, bad
 	}
 	if !job.params.EnvSent {
-		if len(body.Secret) != 0 {
+		if order.Secret != nil {
 			return dockerJob{}, bad
 		}
 		return job, nil
 	}
-	var secret agentwire.DockerSecret
-	if err := json.Unmarshal(body.Secret, &secret); err != nil || secret.Env == "" || !isEnvText(secret.Env) {
+	secret, ok := order.Secret.(agentwire.DockerSecret)
+	if !ok || secret.Env == "" || !isEnvText(secret.Env) {
 		return dockerJob{}, bad
 	}
 	job.env, job.hasEnv = secret.Env, true

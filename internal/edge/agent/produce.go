@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -105,20 +104,20 @@ type produceJob struct {
 // readBackupProduce juge l'ordre avant de l'accepter : le droit nomme ce
 // producteur, l'agent le connaît, et le reste est de la forme attendue. Un
 // ordre faux est refusé tout de suite, rien n'est lancé.
-func readBackupProduce(body agentwire.OrderBody, capabilities []machine.Capability, producers map[string]producer) (produceJob, *agentwire.ActionResult) {
-	bad := &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
-	var params agentwire.BackupProduceParams
-	if err := json.Unmarshal(body.Params, &params); err != nil {
+func readBackupProduce(order judgedOrder, capabilities []machine.Capability, producers map[string]producer) (produceJob, *agentwire.ActionResult) {
+	bad := &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+	params, ok := order.Params.(agentwire.BackupProduceParams)
+	if !ok {
 		return produceJob{}, bad
 	}
 	if !machine.CoversProducer(capabilities, params.Producer) {
 		return produceJob{}, &agentwire.ActionResult{
-			RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.RightMissing(machine.CapabilityBackupProduce),
+			RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.RightMissing(machine.CapabilityBackupProduce),
 		}
 	}
 	chosen, known := producers[params.Producer]
 	if !known {
-		return produceJob{}, &agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonProducerUnknown}
+		return produceJob{}, &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonProducerUnknown}
 	}
 	recipient, err := backup.ParseRecipient(params.Recipient)
 	if err != nil || !chosen.validTarget(params.Target) || !isProducePrefix(params.Prefix) ||

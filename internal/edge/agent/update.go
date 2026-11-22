@@ -3,7 +3,6 @@ package agent
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -135,9 +134,9 @@ func (u *selfUpdater) unavailableReason(judgeBin func(path string) string) strin
 // de trois fichiers (sommes, signature, un binaire d'architecture), chacun
 // avec sa taille et sa somme. Ce que l'ordre ne dit pas comme il faut est
 // refusé avant de télécharger quoi que ce soit.
-func readAgentUpdate(body agentwire.OrderBody) (agentwire.AgentUpdateParams, bool) {
-	var params agentwire.AgentUpdateParams
-	if err := json.Unmarshal(body.Params, &params); err != nil || params.Parcel == "" {
+func readAgentUpdate(order judgedOrder) (agentwire.AgentUpdateParams, bool) {
+	params, ok := order.Params.(agentwire.AgentUpdateParams)
+	if !ok || params.Parcel == "" {
 		return params, false
 	}
 	if _, err := release.ParseVersion(params.Version); err != nil || !updateBinaryName.MatchString(params.Binary) {
@@ -516,25 +515,25 @@ func (c *cappedBuffer) String() string {
 // dans le worker. Réussie, elle ne rapporte rien : l'agent s'arrête, et c'est
 // son retour avec la nouvelle version que le serveur prend pour la fin de
 // l'ordre.
-func (r *orderRunner) acceptAgentUpdate(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
+func (r *orderRunner) acceptAgentUpdate(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
 	// Hors de bin/, jamais : la règle ne dépend pas d'un juge qu'un banc
 	// remplace. Puis le compte de l'agent doit pouvoir écrire dans bin/ :
 	// refusé avant de télécharger quoi que ce soit.
 	reason := r.updater.refusalReason(r.checks.agentUpdate)
 	if reason != "" {
-		r.journal.notAccepted(body, reason)
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: reason}, nil
+		r.journal.notAccepted(order, reason)
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: reason}, nil
 	}
-	params, readable := readAgentUpdate(body)
+	params, readable := readAgentUpdate(order)
 	if !readable {
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}, nil
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}, nil
 	}
-	return accepted(body), func(ctx context.Context) {
-		if err := r.updater.update(ctx, r.fetch, params, body.RunID); err != nil {
-			r.finishLong(body, nil, err)
+	return accepted(order), func(ctx context.Context) {
+		if err := r.updater.update(ctx, r.fetch, params, order.RunID); err != nil {
+			r.finishLong(order, nil, err)
 			return
 		}
-		r.logger.Info("agent updated, restarting", "run_id", body.RunID, "version", params.Version, "seq", body.Seq)
+		r.logger.Info("agent updated, restarting", "run_id", order.RunID, "version", params.Version, "seq", order.Seq)
 		r.updater.restart()
 	}
 }
@@ -556,19 +555,19 @@ func (u *selfUpdater) refusalReason(judgeBin func() string) string {
 // retour est un lien à rebasculer, rien à télécharger. Réussi, il ne rapporte
 // rien : l'agent s'arrête, et c'est la version d'avant, revenue et confirmée,
 // qui dit au serveur que l'ordre est fait.
-func (r *orderRunner) acceptAgentRollback(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
+func (r *orderRunner) acceptAgentRollback(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
 	if reason := r.updater.refusalReason(r.checks.agentUpdate); reason != "" {
-		r.journal.notAccepted(body, reason)
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: reason}, nil
+		r.journal.notAccepted(order, reason)
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: reason}, nil
 	}
 	// Le précédent ne se juge que dans le worker, avec la même bascule : un
 	// refus sans précédent arrive juste après « accepté », avant toute écriture.
-	return accepted(body), func(ctx context.Context) {
-		if err := r.updater.rollback(ctx, body.RunID); err != nil {
-			r.finishProduce(body, nil, err)
+	return accepted(order), func(ctx context.Context) {
+		if err := r.updater.rollback(ctx, order.RunID); err != nil {
+			r.finishProduce(order, nil, err)
 			return
 		}
-		r.logger.Info("agent rolled back, restarting", "run_id", body.RunID, "seq", body.Seq)
+		r.logger.Info("agent rolled back, restarting", "run_id", order.RunID, "seq", order.Seq)
 		r.updater.restart()
 	}
 }

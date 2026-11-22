@@ -628,11 +628,12 @@ et qu'**aucun ordre ne peut écrire**.
   refusé ou fini : `run_id`, `kind`, `seq`, `body_sha256` (le corps tel que
   signé), `signing_key` (l'empreinte de la clé qui a signé ; absente si la
   signature est fausse) et les paramètres **non secrets**, d'après une liste
-  blanche de champs déclarée avec chaque genre (`agentwire.Spec.Journal`, lue
-  par `agentwire.JournalParams` ; un test vérifie que chaque champ est un champ
-  du type). Jamais le secret de l'ordre ni un
-  champ hors de la liste : ni mot de passe, ni clé privée, ni `.env`, ni
-  certificat.
+  blanche de champs déclarée avec chaque genre (`agentwire.Spec.Journal` ; un
+  test vérifie que chaque champ est un champ du type). Les valeurs sont celles
+  de l'ordre décodé par le juge (`agentwire.Order.JournalValues`), jamais les
+  octets reçus : un ordre refusé `bad_order` n'a que ses empreintes. Jamais le
+  secret de l'ordre ni un champ hors de la liste : ni mot de passe, ni clé
+  privée, ni `.env`, ni certificat.
 
 Ce qui protège de quoi, si le serveur est compromis :
 
@@ -1436,7 +1437,7 @@ L'agent n'importe pas `action` (`TestLayers_AgentStaysOffTheServer`). Les observ
 | --- | --- | --- |
 | L'enveloppe signée (`OrderBody`) | `agentwire.StrictDecode` : décodé avec `DisallowUnknownFields`, réencodé par `json.Marshal`, comparé octet pour octet | `bad_order` |
 | Les paramètres | `agentwire.Decode(genre, octets)` : la même lecture, dans le type du genre | `bad_order`, avant toute ancre |
-| Le secret | `agentwire.CheckSecret` : la même lecture ; un secret sur un genre qui n'en porte pas est refusé | `bad_order` |
+| Le secret | `agentwire.DecodeSecret` : la même lecture ; un secret sur un genre qui n'en porte pas est refusé | `bad_order` |
 
 Une clé inconnue, répétée, d'une autre casse, échappée, un espace ou un autre
 ordre des clés ne passent donc pas : ce que l'agent juge et exécute est
@@ -1446,6 +1447,13 @@ fait l'aller-retour pour chaque genre sur ce qu'il produit. Coût : une chaîne
 qui n'est pas de l'UTF-8 valide ne fait plus l'aller-retour (`json.Marshal`
 l'écrit `\ufffd`, relue puis réécrite autrement) : l'ordre est refusé
 `bad_order` au lieu d'être exécuté avec le caractère remplacé.
+
+**Une lecture, un objet** (R-A1-5). L'agent lit les paramètres et le secret
+une seule fois, dans le juge (`decodeOrder`). Les ancres, le journal local et
+l'exécuteur du genre reçoivent cet ordre décodé, sans ses octets : aucun ne
+relit le JSON, un test le vérifie dans le source. Chaque genre du registre a
+son exécuteur dans la table `executors` de l'agent, et la table n'en a pas
+d'autre (test). Un ordre qui ne se décode pas n'atteint aucun exécuteur.
 6. **Il exécute** : `agent.ping` finit `succeeded`, sortie `pong <version>`.
    `agent.server_key` épingle la clé qu'il livre, sortie `pinned <empreinte>`.
    `agent.update` télécharge, vérifie, change son binaire et s'arrête (code 3) ;

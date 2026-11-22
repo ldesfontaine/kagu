@@ -301,21 +301,25 @@ func TestRegistry_JournalNamesRealFields(t *testing.T) {
 	}
 }
 
-func TestCheckSecret_ReadsTheSecretStrictly(t *testing.T) {
+func TestDecodeSecret_ReadsTheSecretStrictly(t *testing.T) {
 	for _, kind := range OrderKinds() {
 		secret, carries := serverSecrets[kind]
 		if !carries {
-			if err := CheckSecret(kind, json.RawMessage(`{"rest_password":"p"}`)); !errors.Is(err, ErrNotCanonical) {
+			if _, err := DecodeSecret(kind, json.RawMessage(`{"rest_password":"p"}`)); !errors.Is(err, ErrNotCanonical) {
 				t.Errorf("%s carries no secret, one passes: %v", kind, err)
 			}
 			continue
 		}
 		canonical := encodeSample(t, secret)
-		if err := CheckSecret(kind, canonical); err != nil {
+		decoded, err := DecodeSecret(kind, canonical)
+		if err != nil {
 			t.Errorf("%s: the server's secret is refused: %v", kind, err)
 		}
+		if !reflect.DeepEqual(decoded, secret) {
+			t.Errorf("%s: decoded %#v, sent %#v", kind, decoded, secret)
+		}
 		for name, variant := range keyVariants(t, canonical) {
-			if err := CheckSecret(kind, variant); !errors.Is(err, ErrNotCanonical) {
+			if _, err := DecodeSecret(kind, variant); !errors.Is(err, ErrNotCanonical) {
 				t.Errorf("%s secret, %s: passes: %v", kind, name, err)
 			}
 		}
@@ -325,8 +329,8 @@ func TestCheckSecret_ReadsTheSecretStrictly(t *testing.T) {
 			t.Errorf("%s: a secret sample for a kind that declares none", kind)
 		}
 	}
-	if err := CheckSecret(KindDockerDeploy, nil); err != nil {
-		t.Fatalf("an absent secret is the executor's call: %v", err)
+	if decoded, err := DecodeSecret(KindDockerDeploy, nil); err != nil || decoded != nil {
+		t.Fatalf("an absent secret is the executor's call: %v %v", decoded, err)
 	}
 }
 
@@ -335,7 +339,7 @@ func TestDecode_AKindOutsideTheRegistryIsNotAnOrder(t *testing.T) {
 		if _, err := Decode(kind, json.RawMessage(`{}`)); !errors.Is(err, ErrNotAnOrder) {
 			t.Errorf("%q: %v", kind, err)
 		}
-		if err := CheckSecret(kind, nil); !errors.Is(err, ErrNotAnOrder) {
+		if _, err := DecodeSecret(kind, nil); !errors.Is(err, ErrNotAnOrder) {
 			t.Errorf("%q secret: %v", kind, err)
 		}
 	}

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -38,24 +37,24 @@ type resticRestoreJob struct {
 // acceptResticRestore juge l'ordre vite, avant de rien écrire : sa forme, le
 // droit (jugé plus haut), restic présent, le lien provisionné, la destination
 // couverte par files.write (liens résolus) et libre. Un refus ne touche à rien.
-func (r *orderRunner) acceptResticRestore(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
-	job, refused := judgeRestore(body, r.identity.Capabilities(), r.checks, r.restic.source.isProvisioned)
+func (r *orderRunner) acceptResticRestore(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
+	job, refused := judgeRestore(order, r.identity.Capabilities(), r.checks, r.restic.source.isProvisioned)
 	if refused != nil {
-		r.journal.notAccepted(body, refused.Reason)
+		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil
 	}
-	return accepted(body), func(ctx context.Context) {
+	return accepted(order), func(ctx context.Context) {
 		output, err := r.restic.source.restore(ctx, job)
-		r.results.push(r.finishRestic(body, output, err))
+		r.results.push(r.finishRestic(order, output, err))
 	}
 }
 
-func judgeRestore(body agentwire.OrderBody, capabilities []machine.Capability, checks hostChecks, isProvisioned func(string) bool) (resticRestoreJob, *agentwire.ActionResult) {
+func judgeRestore(order judgedOrder, capabilities []machine.Capability, checks hostChecks, isProvisioned func(string) bool) (resticRestoreJob, *agentwire.ActionResult) {
 	refused := func(state agentwire.ActionState, reason string) *agentwire.ActionResult {
-		return &agentwire.ActionResult{RunID: body.RunID, State: state, Reason: reason}
+		return &agentwire.ActionResult{RunID: order.RunID, State: state, Reason: reason}
 	}
-	var params agentwire.ResticRestoreParams
-	if err := json.Unmarshal(body.Params, &params); err != nil || params.Validate() != nil || len(body.Secret) != 0 {
+	params, ok := order.Params.(agentwire.ResticRestoreParams)
+	if !ok || params.Validate() != nil || order.Secret != nil {
 		return resticRestoreJob{}, refused(agentwire.ActionFailed, agentwire.ReasonBadOrder)
 	}
 	binary, err := checks.findRestic()

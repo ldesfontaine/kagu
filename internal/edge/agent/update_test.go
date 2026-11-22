@@ -507,7 +507,7 @@ func TestOrderRunner_AgentUpdateIsRefusedAcceptedOrMalformed(t *testing.T) {
 
 	seq++
 	body := updateOrder(seq, published.params)
-	result, job := b.runner.execute(body)
+	result, job := b.runner.execute(judgedOf(t, body))
 	if result.State != agentwire.ActionAccepted || job == nil {
 		t.Fatalf("a good order: %+v", result)
 	}

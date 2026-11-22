@@ -96,75 +96,101 @@ func (r *orderRunner) receive(data []byte) {
 		r.logger.Warn("order refused", "reason", agentwire.ReasonBadOrder, "error", err)
 		return
 	}
-	body, reason := r.judge(signed)
+	order, reason := r.judge(signed)
 	if reason != "" {
-		r.refuse(signed, body, reason)
+		r.refuse(signed, order, reason)
 		return
 	}
-	r.journal.received(body, "")
-	result, job := r.execute(body)
+	r.journal.received(order, "")
+	result, job := r.execute(order)
 	// « accepté » part avant que le worker ne puisse finir : la réponse
 	// finale ne le précède jamais.
 	r.results.push(result)
 	if job == nil {
 		// Un ordre fait tout de suite n'a plus de ligne à dire.
-		r.journal.forget(body.RunID)
+		r.journal.forget(order.RunID)
 		return
 	}
 	if !r.worker.submit(job) {
-		r.journal.refused(body, agentwire.ReasonBusy)
-		r.results.push(agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBusy})
+		r.journal.refused(order, agentwire.ReasonBusy)
+		r.results.push(agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBusy})
 	}
 }
 
-// judge rend le corps d'un ordre qui passe, ou la raison de son refus. Le
-// rang est écrit sur disque avant de rendre la main : un ordre exécuté ne
-// se rejoue plus, même après un redémarrage.
-func (r *orderRunner) judge(signed agentwire.SignedOrder) (agentwire.OrderBody, string) {
+// judgedOrder est un ordre dont le juge a lu le corps : le run et le rang de
+// l'enveloppe signée, et l'ordre que le registre a décodé (genre, paramètres
+// et secret dans leur type). Les octets des paramètres et du secret n'y sont
+// pas : l'exécuteur et le journal lisent l'objet que le juge a jugé, jamais une
+// seconde lecture du JSON (R-A1-5). Refusé avant d'être décodé, il n'a que son
+// genre.
+type judgedOrder struct {
+	RunID string
+	Seq   int64
+	agentwire.Order
+}
+
+// judge rend l'ordre qui passe, ou la raison de son refus. Le rang est écrit
+// sur disque avant de rendre la main : un ordre exécuté ne se rejoue plus,
+// même après un redémarrage.
+func (r *orderRunner) judge(signed agentwire.SignedOrder) (judgedOrder, string) {
 	if len(r.identity.ServerKey) != ed25519.PublicKeySize {
-		return agentwire.OrderBody{}, agentwire.ReasonServerKeyMissing
+		return judgedOrder{}, agentwire.ReasonServerKeyMissing
 	}
 	if !ed25519.Verify(r.identity.ServerKey, agentwire.OrderSigningBytes(signed.Body), signed.Signature) {
-		return agentwire.OrderBody{}, agentwire.ReasonBadSignature
+		return judgedOrder{}, agentwire.ReasonBadSignature
 	}
 	var body agentwire.OrderBody
 	if err := agentwire.StrictDecode(signed.Body, &body); err != nil || body.RunID == "" {
-		return agentwire.OrderBody{}, agentwire.ReasonBadOrder
+		return judgedOrder{}, agentwire.ReasonBadOrder
 	}
 	r.journal.remember(body.RunID, factsOf(signed.Body, r.identity.ServerKey))
+	undecoded := judgedOrder{RunID: body.RunID, Seq: body.Seq, Order: agentwire.Order{Kind: body.Kind}}
 	switch {
 	case body.MachineID != r.identity.MachineID:
-		return body, agentwire.ReasonWrongMachine
+		return undecoded, agentwire.ReasonWrongMachine
 	case body.AgentID != r.identity.AgentID:
-		return body, agentwire.ReasonWrongAgent
+		return undecoded, agentwire.ReasonWrongAgent
 	case !r.now().Before(time.Unix(body.NotAfter, 0)):
-		return body, agentwire.ReasonExpired
+		return undecoded, agentwire.ReasonExpired
 	case body.Seq <= r.identity.LastOrderSeq:
-		return body, agentwire.ReasonReplayed
+		return undecoded, agentwire.ReasonReplayed
 	}
 	spec, known := agentwire.SpecOf(body.Kind)
 	if !known {
-		return body, agentwire.ReasonUnknownKind
+		return undecoded, agentwire.ReasonUnknownKind
 	}
 	if !machine.HasCapability(r.identity.Capabilities(), spec.Right) {
-		return body, agentwire.RightMissing(spec.Right)
+		return undecoded, agentwire.RightMissing(spec.Right)
 	}
 	// Une clé inconnue, répétée ou d'une autre casse ne se lit pas : refusée
 	// ici, avant les ancres, qui jugent la valeur décodée.
-	order, err := agentwire.Decode(body.Kind, body.Params)
-	if err != nil || agentwire.CheckSecret(body.Kind, body.Secret) != nil {
-		return body, agentwire.ReasonBadOrder
+	order, err := decodeOrder(body)
+	if err != nil {
+		return undecoded, agentwire.ReasonBadOrder
 	}
 	// Les ancres de confiance locales : le registre des genres dit lesquelles
 	// bornent l'ordre et sur quelle valeur. Relues du disque à chaque ordre,
 	// pour qu'une ancre posée par « agent trust » vaille tout de suite.
 	if finding := anchor.Judge(r.reloadAnchors(), order.Presented()); finding != nil {
-		return body, agentwire.AnchorRefusal(*finding)
+		return order, agentwire.AnchorRefusal(*finding)
 	}
-	if !r.keepSeq(body.Seq) {
-		return body, agentwire.ReasonStateUnwritable
+	if !r.keepSeq(order.Seq) {
+		return order, agentwire.ReasonStateUnwritable
 	}
-	return body, ""
+	return order, ""
+}
+
+// decodeOrder lit les paramètres et le secret d'un corps par le registre des
+// genres, strictement : la seule lecture de ces octets dans l'agent.
+func decodeOrder(body agentwire.OrderBody) (judgedOrder, error) {
+	decoded, err := agentwire.Decode(body.Kind, body.Params)
+	if err != nil {
+		return judgedOrder{}, err
+	}
+	if decoded.Secret, err = agentwire.DecodeSecret(body.Kind, body.Secret); err != nil {
+		return judgedOrder{}, err
+	}
+	return judgedOrder{RunID: body.RunID, Seq: body.Seq, Order: decoded}, nil
 }
 
 // reloadAnchors relit les ancres du fichier d'identité et rend ce que l'agent
@@ -206,62 +232,68 @@ func (r *orderRunner) keepSeq(seq int64) bool {
 	return true
 }
 
-// execute fait ce que l'ordre demande. agent.ping ne change rien : il dit
-// que l'ordre est arrivé, vérifié, et quel agent l'a pris. agent.server_key
-// épingle la clé neuve du serveur. Un ordre long (backup.receive,
-// backup.prune, agent.update) est jugé ici, vite, puis accepté : le travail
-// est rendu à part, que le worker fera à son tour. Un genre dont l'exécution
-// n'est pas écrite est refusé, même avec son droit.
-//
-// Le secret de l'ordre (body.Secret) est signé avec lui ; seul l'exécuteur du
-// genre qui en a besoin le lit, et rien ne l'écrit.
-func (r *orderRunner) execute(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
-	switch body.Kind {
-	case agentwire.KindAgentPing:
-		r.journal.executed(body)
-		return agentwire.ActionResult{
-			RunID: body.RunID, State: agentwire.ActionSucceeded,
-			Output: []agentwire.OutputLine{{Stream: "stdout", Line: "pong " + r.version}},
-		}, nil
-	case agentwire.KindServerKey:
-		return r.pinServerKey(body), nil
-	case agentwire.KindBackupReceive:
-		return r.acceptBackupReceive(body)
-	case agentwire.KindBackupPrune:
-		return r.acceptBackupPrune(body)
-	case agentwire.KindBackupProduce:
-		return r.acceptBackupProduce(body)
-	case agentwire.KindAgentUpdate:
-		return r.acceptAgentUpdate(body)
-	case agentwire.KindAgentRollback:
-		return r.acceptAgentRollback(body)
-	case agentwire.KindProxmoxStart, agentwire.KindProxmoxShutdown, agentwire.KindProxmoxSnapshot, agentwire.KindProxmoxSnapshotDelete:
-		return r.acceptProxmox(body)
-	case agentwire.KindDockerDeploy:
-		return r.acceptDocker(body, false)
-	case agentwire.KindDockerUpdate:
-		return r.acceptDocker(body, true)
-	case agentwire.KindDockerRollback:
-		return r.requestServiceRollback(body), nil
-	case agentwire.KindResticTargetSetup:
-		return r.resticTargetSetup(body), nil
-	case agentwire.KindResticUserAdd, agentwire.KindResticUserRemove:
-		return r.resticUser(body), nil
-	case agentwire.KindResticProvision:
-		return r.resticProvision(body), nil
-	case agentwire.KindResticBackup:
-		return r.acceptResticBackup(body)
-	case agentwire.KindResticRetain:
-		return r.acceptResticRetain(body)
-	case agentwire.KindResticVerify:
-		return r.acceptResticVerify(body)
-	case agentwire.KindResticBrowse:
-		return r.acceptResticBrowse(body)
-	case agentwire.KindResticRestore:
-		return r.acceptResticRestore(body)
+// executor fait ce que l'ordre demande, sur l'ordre décodé par le juge. Un
+// ordre long est jugé vite, puis accepté : le travail rendu à part, le worker
+// le fera à son tour.
+type executor func(r *orderRunner, order judgedOrder) (agentwire.ActionResult, func(ctx context.Context))
+
+// executors est l'exécuteur de chaque genre du registre, et de lui seul
+// (TestExecutors_EveryDeclaredKindHasItsExecutor). Le secret de l'ordre est
+// signé avec lui ; seul l'exécuteur du genre qui en a besoin le lit, et rien
+// ne l'écrit.
+var executors = map[agentwire.Kind]executor{
+	agentwire.KindAgentPing:             immediate((*orderRunner).ping),
+	agentwire.KindServerKey:             immediate((*orderRunner).pinServerKey),
+	agentwire.KindBackupReceive:         (*orderRunner).acceptBackupReceive,
+	agentwire.KindBackupPrune:           (*orderRunner).acceptBackupPrune,
+	agentwire.KindBackupProduce:         (*orderRunner).acceptBackupProduce,
+	agentwire.KindAgentUpdate:           (*orderRunner).acceptAgentUpdate,
+	agentwire.KindAgentRollback:         (*orderRunner).acceptAgentRollback,
+	agentwire.KindProxmoxStart:          (*orderRunner).acceptProxmox,
+	agentwire.KindProxmoxShutdown:       (*orderRunner).acceptProxmox,
+	agentwire.KindProxmoxSnapshot:       (*orderRunner).acceptProxmox,
+	agentwire.KindProxmoxSnapshotDelete: (*orderRunner).acceptProxmox,
+	agentwire.KindDockerDeploy:          (*orderRunner).acceptDockerDeploy,
+	agentwire.KindDockerUpdate:          (*orderRunner).acceptDockerUpdate,
+	agentwire.KindDockerRollback:        immediate((*orderRunner).requestServiceRollback),
+	agentwire.KindResticTargetSetup:     immediate((*orderRunner).resticTargetSetup),
+	agentwire.KindResticUserAdd:         immediate((*orderRunner).resticUser),
+	agentwire.KindResticUserRemove:      immediate((*orderRunner).resticUser),
+	agentwire.KindResticProvision:       immediate((*orderRunner).resticProvision),
+	agentwire.KindResticBackup:          (*orderRunner).acceptResticBackup,
+	agentwire.KindResticRetain:          (*orderRunner).acceptResticRetain,
+	agentwire.KindResticVerify:          (*orderRunner).acceptResticVerify,
+	agentwire.KindResticBrowse:          (*orderRunner).acceptResticBrowse,
+	agentwire.KindResticRestore:         (*orderRunner).acceptResticRestore,
+}
+
+// immediate fait un exécuteur d'un ordre fait tout de suite : pas de travail
+// rendu au worker.
+func immediate(run func(r *orderRunner, order judgedOrder) agentwire.ActionResult) executor {
+	return func(r *orderRunner, order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
+		return run(r, order), nil
 	}
-	r.journal.refused(body, agentwire.ReasonNotImplemented)
-	return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonNotImplemented}, nil
+}
+
+// execute confie l'ordre à l'exécuteur de son genre. Un genre sans exécuteur
+// est refusé, même avec son droit.
+func (r *orderRunner) execute(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
+	run, known := executors[order.Kind]
+	if !known {
+		r.journal.refused(order, agentwire.ReasonNotImplemented)
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonNotImplemented}, nil
+	}
+	return run(r, order)
+}
+
+// ping ne change rien : il dit que l'ordre est arrivé, vérifié, et quel agent
+// l'a pris.
+func (r *orderRunner) ping(order judgedOrder) agentwire.ActionResult {
+	r.journal.executed(order)
+	return agentwire.ActionResult{
+		RunID: order.RunID, State: agentwire.ActionSucceeded,
+		Output: []agentwire.OutputLine{{Stream: "stdout", Line: "pong " + r.version}},
+	}
 }
 
 // coversBackupPath : le chemin est celui du droit backup.receive du fichier
@@ -274,31 +306,31 @@ func (r *orderRunner) coversBackupPath() coveringPath {
 	}
 }
 
-func accepted(body agentwire.OrderBody) agentwire.ActionResult {
-	return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionAccepted}
+func accepted(order judgedOrder) agentwire.ActionResult {
+	return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionAccepted}
 }
 
-func (r *orderRunner) acceptBackupReceive(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
-	params, granted, refused := readBackupReceive(body, r.coversBackupPath(), r.checks.writable, r.checks.freeBytes)
+func (r *orderRunner) acceptBackupReceive(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
+	params, granted, refused := readBackupReceive(order, r.coversBackupPath(), r.checks.writable, r.checks.freeBytes)
 	if refused != nil {
-		r.journal.notAccepted(body, refused.Reason)
+		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil
 	}
-	return accepted(body), func(ctx context.Context) {
+	return accepted(order), func(ctx context.Context) {
 		output, err := receiveBackup(ctx, r.logger, r.fetch, granted, params)
-		r.finishLong(body, output, err)
+		r.finishLong(order, output, err)
 	}
 }
 
-func (r *orderRunner) acceptBackupPrune(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
-	params, granted, refused := readBackupPrune(body, r.coversBackupPath(), r.checks.writable)
+func (r *orderRunner) acceptBackupPrune(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
+	params, granted, refused := readBackupPrune(order, r.coversBackupPath(), r.checks.writable)
 	if refused != nil {
-		r.journal.notAccepted(body, refused.Reason)
+		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil
 	}
-	return accepted(body), func(context.Context) {
+	return accepted(order), func(context.Context) {
 		output, err := pruneBackups(granted, params)
-		r.finishLong(body, output, err)
+		r.finishLong(order, output, err)
 	}
 }
 
@@ -306,104 +338,112 @@ func (r *orderRunner) acceptBackupPrune(body agentwire.OrderBody) (agentwire.Act
 // le connaît, les paramètres sont de la bonne forme), puis l'accepte : lancer
 // le producteur, emballer et téléverser est le travail du worker. Les droits
 // sont lus ici, sous le verrou.
-func (r *orderRunner) acceptBackupProduce(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
-	job, refused := readBackupProduce(body, r.identity.Capabilities(), r.produce.producers)
+func (r *orderRunner) acceptBackupProduce(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
+	job, refused := readBackupProduce(order, r.identity.Capabilities(), r.produce.producers)
 	if refused != nil {
-		r.journal.notAccepted(body, refused.Reason)
+		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil
 	}
-	return accepted(body), func(ctx context.Context) {
+	return accepted(order), func(ctx context.Context) {
 		output, err := r.produce.produce(ctx, r.checks, r.fetch, job, r.now())
-		r.finishProduce(body, output, err)
+		r.finishProduce(order, output, err)
 	}
 }
 
 // acceptProxmox juge un geste sur un invité vite (paramètres, jeton local),
 // puis l'accepte : appeler l'API et suivre la tâche de Proxmox est le travail
 // du worker. Il se juge et se rapporte comme une production.
-func (r *orderRunner) acceptProxmox(body agentwire.OrderBody) (agentwire.ActionResult, func(ctx context.Context)) {
-	job, refused := r.proxmox.readProxmoxOrder(body)
+func (r *orderRunner) acceptProxmox(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
+	job, refused := r.proxmox.readProxmoxOrder(order)
 	if refused != nil {
-		r.journal.notAccepted(body, refused.Reason)
+		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil
 	}
-	return accepted(body), func(ctx context.Context) {
+	return accepted(order), func(ctx context.Context) {
 		output, err := r.proxmox.run(ctx, job)
-		r.finishProduce(body, output, err)
+		r.finishProduce(order, output, err)
 	}
 }
 
 // acceptDocker juge un déploiement vite, puis l'accepte : le dossier, les
 // prérequis, les écritures et Compose sont le travail du worker. La racine
 // des services est celle du fichier de l'agent, lue ici sous le verrou.
-func (r *orderRunner) acceptDocker(body agentwire.OrderBody, update bool) (agentwire.ActionResult, func(ctx context.Context)) {
-	job, refused := readDockerOrder(body, r.identity.Root(), update)
+func (r *orderRunner) acceptDockerDeploy(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
+	return r.acceptDocker(order, false)
+}
+
+func (r *orderRunner) acceptDockerUpdate(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
+	return r.acceptDocker(order, true)
+}
+
+func (r *orderRunner) acceptDocker(order judgedOrder, update bool) (agentwire.ActionResult, func(ctx context.Context)) {
+	job, refused := readDockerOrder(order, r.identity.Root(), update)
 	if refused != nil {
-		r.journal.notAccepted(body, refused.Reason)
+		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil
 	}
-	return accepted(body), func(ctx context.Context) {
+	return accepted(order), func(ctx context.Context) {
 		output, err := r.docker.deployService(ctx, job)
 		if isAgentStopping(err) {
 			// Rien à rapporter : la montée reprendra au démarrage, par son marqueur.
-			r.logger.Warn("agent stopping during a service update, it will resume", "run_id", body.RunID)
+			r.logger.Warn("agent stopping during a service update, it will resume", "run_id", order.RunID)
 			return
 		}
-		r.finishDocker(body, output, err)
+		r.finishDocker(order, output, err)
 	}
 }
 
 // requestServiceRollback transmet le veto du serveur à la fenêtre de santé
 // ouverte du projet : la montée elle-même revient à la version d'avant et
 // rapporte. Hors fenêtre, rien à défaire.
-func (r *orderRunner) requestServiceRollback(body agentwire.OrderBody) agentwire.ActionResult {
-	var params agentwire.DockerRollbackParams
-	if err := json.Unmarshal(body.Params, &params); err != nil || !agentwire.IsComposeProject(params.Project) {
-		r.journal.notAccepted(body, agentwire.ReasonBadOrder)
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+func (r *orderRunner) requestServiceRollback(order judgedOrder) agentwire.ActionResult {
+	params, ok := order.Params.(agentwire.DockerRollbackParams)
+	if !ok || !agentwire.IsComposeProject(params.Project) {
+		r.journal.notAccepted(order, agentwire.ReasonBadOrder)
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
 	if !r.docker.watches.veto(params.Project) {
-		r.journal.notAccepted(body, agentwire.ReasonNoPendingUpdate)
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonNoPendingUpdate}
+		r.journal.notAccepted(order, agentwire.ReasonNoPendingUpdate)
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonNoPendingUpdate}
 	}
-	r.journal.executed(body)
+	r.journal.executed(order)
 	return agentwire.ActionResult{
-		RunID: body.RunID, State: agentwire.ActionSucceeded,
+		RunID: order.RunID, State: agentwire.ActionSucceeded,
 		Output: []agentwire.OutputLine{stdout("rollback requested for " + params.Project)},
 	}
 }
 
 // finishDocker rapporte la fin d'un déploiement. Le .env ne passe ici que par
 // le job : ni le résultat ni le journal ne le portent.
-func (r *orderRunner) finishDocker(body agentwire.OrderBody, output []agentwire.OutputLine, err error) {
+func (r *orderRunner) finishDocker(order judgedOrder, output []agentwire.OutputLine, err error) {
 	if err != nil {
-		r.journal.failed(body, err)
+		r.journal.failed(order, err)
 	} else {
-		r.journal.executed(body)
+		r.journal.executed(order)
 	}
-	r.results.push(dockerResultOf(body.RunID, output, err))
+	r.results.push(dockerResultOf(order.RunID, output, err))
 }
 
 // finishLong rapporte la fin d'un ordre long.
-func (r *orderRunner) finishLong(body agentwire.OrderBody, output []agentwire.OutputLine, err error) {
+func (r *orderRunner) finishLong(order judgedOrder, output []agentwire.OutputLine, err error) {
 	if err != nil {
-		r.journal.failed(body, err)
+		r.journal.failed(order, err)
 	} else {
-		r.journal.executed(body)
+		r.journal.executed(order)
 	}
-	r.results.push(resultOf(body.RunID, output, err))
+	r.results.push(resultOf(order.RunID, output, err))
 }
 
 // finishProduce rapporte la fin d'une production. Ce que l'agent a refusé avant
 // d'écrire (rien ne se lance, pas de place) est « refusé » ; un producteur ou un
 // envoi qui échoue est « échoué ».
-func (r *orderRunner) finishProduce(body agentwire.OrderBody, output []agentwire.OutputLine, err error) {
+func (r *orderRunner) finishProduce(order judgedOrder, output []agentwire.OutputLine, err error) {
 	if err != nil {
-		r.journal.failed(body, err)
+		r.journal.failed(order, err)
 	} else {
-		r.journal.executed(body)
+		r.journal.executed(order)
 	}
-	result := resultOf(body.RunID, output, err)
+	result := resultOf(order.RunID, output, err)
 	if result.State == agentwire.ActionFailed && isUntouched(err) {
 		result.State = agentwire.ActionRefused
 	}
@@ -413,27 +453,27 @@ func (r *orderRunner) finishProduce(body agentwire.OrderBody, output []agentwire
 // pinServerKey remplace la clé du serveur épinglée par celle que l'ordre
 // livre. L'ordre a été signé par la clé épinglée jusqu'ici : c'est elle qui
 // passe la main. Les ordres suivants sont vérifiés avec la neuve.
-func (r *orderRunner) pinServerKey(body agentwire.OrderBody) agentwire.ActionResult {
-	var params agentwire.ServerKeyParams
-	if err := json.Unmarshal(body.Params, &params); err != nil {
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+func (r *orderRunner) pinServerKey(order judgedOrder) agentwire.ActionResult {
+	params, ok := order.Params.(agentwire.ServerKeyParams)
+	if !ok {
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
 	key, err := base64.StdEncoding.DecodeString(params.PublicKey)
 	if err != nil || len(key) != ed25519.PublicKeySize {
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
 	updated := r.identity
 	updated.ServerKey = key
 	saved, err := saveKeepingAnchors(r.stateDir, updated)
 	if err != nil {
-		r.logger.Error("pin server key", "run_id", body.RunID, "error", err)
-		return agentwire.ActionResult{RunID: body.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonStateUnwritable}
+		r.logger.Error("pin server key", "run_id", order.RunID, "error", err)
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonStateUnwritable}
 	}
 	r.identity = saved
 	fingerprint := agentwire.KeyFingerprint(key)
-	r.logger.Info("server key pinned", "run_id", body.RunID, "server_key", fingerprint)
+	r.logger.Info("server key pinned", "run_id", order.RunID, "server_key", fingerprint)
 	return agentwire.ActionResult{
-		RunID: body.RunID, State: agentwire.ActionSucceeded,
+		RunID: order.RunID, State: agentwire.ActionSucceeded,
 		Output: []agentwire.OutputLine{{Stream: "stdout", Line: "pinned " + fingerprint}},
 	}
 }
@@ -447,12 +487,13 @@ func (r *orderRunner) serverKey() []byte {
 }
 
 // refuse dit le refus d'un ordre : au journal local, avec ce qu'on en sait
-// (les empreintes du corps signé, les paramètres si le corps se lit), et au
+// (les empreintes du corps signé, les valeurs décodées si l'ordre s'est
+// décodé, jamais ses octets), et au
 // serveur s'il y a un run à qui répondre.
-func (r *orderRunner) refuse(signed agentwire.SignedOrder, body agentwire.OrderBody, reason string) {
-	runID := body.RunID
+func (r *orderRunner) refuse(signed agentwire.SignedOrder, order judgedOrder, reason string) {
+	runID := order.RunID
 	if runID != "" {
-		r.journal.received(body, reason)
+		r.journal.received(order, reason)
 	} else {
 		runID = runIDOf(signed.Body)
 		r.logger.Warn("order refused", "run_id", runID, "reason", reason, "body_sha256", factsOf(signed.Body, nil).bodySHA256)
