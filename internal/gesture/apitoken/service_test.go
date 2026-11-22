@@ -81,6 +81,7 @@ func TestCreate_RefusesWhatTheListDoesNotOffer(t *testing.T) {
 	}{
 		"empty name":        {apitoken.Request{Name: "   "}, apitoken.ErrNameInvalid},
 		"long name":         {apitoken.Request{Name: strings.Repeat("é", apitoken.MaxNameLength+1)}, apitoken.ErrNameInvalid},
+		"control in name":   {apitoken.Request{Name: "a\x1bb"}, apitoken.ErrNameInvalid},
 		"verbs on read":     {apitoken.Request{Name: "x", Verbs: []string{"probe.pause"}}, apitoken.ErrVerbsNeedWrite},
 		"unknown verb":      {apitoken.Request{Name: "x", Scope: apitoken.ScopeWrite, Verbs: []string{"machine.rename"}}, apitoken.ErrVerbUnknown},
 		"unknown scope":     {apitoken.Request{Name: "x", Scope: "admin"}, apitoken.ErrScopeInvalid},

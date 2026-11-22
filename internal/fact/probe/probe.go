@@ -10,6 +10,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/shape"
 )
 
 // Les états d'une sonde, dans le vocabulaire de la direction artistique :
@@ -448,7 +449,7 @@ func (d Definition) ClearsCertificate(before Probe) bool {
 }
 
 func (d Definition) Validate() error {
-	if d.Name == "" || utf8.RuneCountInString(d.Name) > MaxNameLength {
+	if shape.Label(d.Name, MaxNameLength) != nil {
 		return ErrNameInvalid
 	}
 	if !slices.Contains(Kinds(), d.Kind) {

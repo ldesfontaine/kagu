@@ -2,11 +2,11 @@ package heartbeat
 
 import (
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/shape"
 )
 
 // Les états d'un moniteur, dans le vocabulaire de la direction artistique :
@@ -158,8 +158,7 @@ var (
 )
 
 func (d Definition) Validate() error {
-	name := strings.TrimSpace(d.Name)
-	if name == "" || len(name) > MaxNameLength {
+	if shape.Label(d.Name, MaxNameLength) != nil {
 		return ErrNameInvalid
 	}
 	if d.Interval < MinInterval || d.Interval > MaxInterval {

@@ -59,6 +59,7 @@ func TestDefinition_Validate_RefusesWhatCannotBeProbed(t *testing.T) {
 	}{
 		{"nom vide", func(d Definition) Definition { d.Name = "  "; return d }, ErrNameInvalid},
 		{"nom trop long", func(d Definition) Definition { d.Name = strings.Repeat("a", 81); return d }, ErrNameInvalid},
+		{"nom avec contrôle", func(d Definition) Definition { d.Name = "a\x1bb"; return d }, ErrNameInvalid},
 		{"type inconnu", func(d Definition) Definition { d.Kind = "ping"; return d }, ErrKindInvalid},
 		{"sans machine", func(d Definition) Definition { d.MachineID = ""; return d }, machine.ErrUnknown},
 		{"cible sans protocole", func(d Definition) Definition { d.Target = "cloud.exemple.fr"; return d }, ErrTargetInvalid},

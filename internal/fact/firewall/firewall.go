@@ -6,11 +6,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf8"
-
-	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/shape"
 )
 
 const (
@@ -207,10 +205,7 @@ func (d Definition) Normalize() (Definition, error) {
 }
 
 func isValidName(name string) bool {
-	if name == "" || utf8.RuneCountInString(name) > maxNameRunes {
-		return false
-	}
-	return !untrusted.HasControl(name)
+	return shape.Label(name, maxNameRunes) == nil
 }
 
 func isValidCredential(value string) bool {
