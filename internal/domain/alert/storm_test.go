@@ -12,6 +12,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/domain/alert"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
@@ -170,7 +171,7 @@ func TestDeliver_MachineShare_HoldsTheSurplusAndSummarizesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, err := alert.RenderSummary(catalogs.For(lang.French), alert.FormatText, summary.Held, f.clock, "https://oc.exemple.fr/alertes")
-	if err != nil || !strings.Contains(string(body.Content), "10 alertes de plus, voir openCloud") || !strings.Contains(string(body.Content), "Machines concernées : opencloud.") {
+	if err != nil || !strings.Contains(string(body.Content), "10 alertes de plus, voir "+brand.ProductName) || !strings.Contains(string(body.Content), "Machines concernées : opencloud.") {
 		t.Fatalf("body %q %v", body.Content, err)
 	}
 }

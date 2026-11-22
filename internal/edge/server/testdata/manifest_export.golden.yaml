@@ -1,4 +1,4 @@
-# Annuaire d'openCloud, exporté par « opencloud export ».
+# Annuaire de Kagu, exporté par « opencloud export ».
 # Les identifiants (id) rattachent chaque entrée à son objet : gardez-les.
 # Un jeton ne s'écrit jamais ici : « secret: kept » garde celui du serveur.
 version: 1

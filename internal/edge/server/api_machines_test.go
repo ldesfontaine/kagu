@@ -17,6 +17,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/version"
 )
@@ -232,7 +233,7 @@ func TestInstallPreparation_ProduceAddsOneLinePerGestureAfterTheAccount(t *testi
 	lines := strings.Split(installPreparation(rights, "v0.0.1", false), "\n")
 	want := []string{
 		"runuser -u opencloud-agent -- install -d -m 0700 /var/lib/opencloud-agent/produce",
-		`printf '%s\n' '#!/bin/sh' '# openCloud : vzdump hors du bac à sable de l agent, sur ordre de l agent.' 'exec /usr/bin/systemd-run --pipe --wait --collect --quiet /usr/bin/vzdump "$@"' | install -m 0755 -o root -g root /dev/stdin /usr/local/sbin/opencloud-vzdump`,
+		`printf '%s\n' '#!/bin/sh' '# ` + brand.ProductName + ` : vzdump hors du bac à sable de l agent, sur ordre de l agent.' 'exec /usr/bin/systemd-run --pipe --wait --collect --quiet /usr/bin/vzdump "$@"' | install -m 0755 -o root -g root /dev/stdin /usr/local/sbin/opencloud-vzdump`,
 		`printf '%s\n' 'opencloud-agent ALL=(root) NOPASSWD: /usr/local/sbin/opencloud-vzdump' | install -m 0440 -o root -g root /dev/stdin /etc/sudoers.d/.opencloud-agent.tmp && visudo -cf /etc/sudoers.d/.opencloud-agent.tmp && mv /etc/sudoers.d/.opencloud-agent.tmp /etc/sudoers.d/opencloud-agent || { rm -f /etc/sudoers.d/.opencloud-agent.tmp; false; }`,
 		"install -d -m 0755 /etc/systemd/system/opencloud-agent.service.d",
 		`printf '%s\n' '[Service]' 'NoNewPrivileges=false' | install -m 0644 /dev/stdin /etc/systemd/system/opencloud-agent.service.d/produce.conf`,

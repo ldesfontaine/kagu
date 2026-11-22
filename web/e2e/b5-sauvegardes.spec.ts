@@ -202,7 +202,7 @@ test("restaurer sans le droit : le refus nomme le droit et porte « Ré-enrôler
 test("la base d'openCloud est une ligne de plus : sa clé et ses destinations sont sur sa carte", async ({ page, findings }) => {
   findings.where = "/sauvegardes › base d'openCloud";
   await openBackups(page);
-  const database = card(page, label("backup.source_database").replace("{product}", "openCloud"));
+  const database = card(page, label("backup.source_database").replace("{product}", "Kagu"));
   await expect(database).toContainText(label("backup.keyring_title"));
   await database.getByRole("link", { name: new RegExp(`${label("backup.keyring_create")}|${label("backup.keyring_replace")}`) }).click();
   await expect(page).toHaveURL(/\/sauvegardes\/cle$/);

@@ -1,5 +1,5 @@
-# Extrait docker-compose pour un Traefik v3 en conteneur devant openCloud,
-# qui tourne sur l'hôte (unité systemd). Seuls les points utiles à openCloud
+# Extrait docker-compose pour un Traefik v3 en conteneur devant Kagu,
+# qui tourne sur l'hôte (unité systemd). Seuls les points utiles à Kagu
 # sont montrés ; gardez votre configuration Traefik pour le reste.
 # Vérifié avec Traefik v3.5.3 lancé par `docker run` avec les mêmes options
 # (réseau 172.18.0.0/16, host-gateway, provider file) ; ACME non testé.
@@ -14,7 +14,7 @@ services:
     image: traefik:v3.5.3
     command:
       - --entrypoints.websecure.address=:443
-      # Un hôte Proxmox qui sauvegarde ses VM par openCloud envoie chaque archive
+      # Un hôte Proxmox qui sauvegarde ses VM par Kagu envoie chaque archive
       # par un seul PUT qui dure : au-delà des 60 s par défaut, Traefik le coupe
       # et backup.produce finit en upload_failed. Une heure suffit (l'agent
       # abandonne après 55 minutes). Non rejoué sur le banc de ce guide.
@@ -31,7 +31,7 @@ services:
       - "443:443"
     # host-gateway vaut l'IP du pont docker0 (172.17.0.1 par défaut), quel
     # que soit le réseau du conteneur : c'est l'adresse que `listen` vise.
-    # openCloud voit alors arriver Traefik depuis son IP sur `edge`, fixée
+    # Kagu voit alors arriver Traefik depuis son IP sur `edge`, fixée
     # ci-dessous : c'est cette adresse seule, en /32, qui va dans
     # trusted_proxies (["172.30.0.2/32"]). Jamais le sous-réseau : tout
     # conteneur voisin pourrait alors écrire X-Forwarded-For ou l'en-tête

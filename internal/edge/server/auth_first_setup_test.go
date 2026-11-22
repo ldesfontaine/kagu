@@ -12,6 +12,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
 	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/fact/auth/authtest"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // Sans compte, chaque route est jugée : celles de la première configuration
@@ -115,7 +116,7 @@ func TestFirstSetup_RefusedPageSaysToOpenTheInterface(t *testing.T) {
 	request.Header.Set("Accept-Language", "fr-FR,fr;q=0.9")
 	recorder := httptest.NewRecorder()
 	server.writeSetupRequired(recorder, request)
-	want := "Première configuration en attente : ouvrez openCloud dans le navigateur et créez le compte de l'opérateur."
+	want := "Première configuration en attente : ouvrez " + brand.ProductName + " dans le navigateur et créez le compte de l'opérateur."
 	if recorder.Code != http.StatusUnauthorized || strings.TrimSpace(recorder.Body.String()) != want {
 		t.Fatalf("status %d, body %q", recorder.Code, recorder.Body.String())
 	}

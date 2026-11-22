@@ -157,8 +157,8 @@ func TestLoad_AIAgentCardAdmitsRawLogs(t *testing.T) {
 	}
 }
 
-// Le nom du produit s'écrit dans brand, pas dans les catalogues : une valeur
-// brute le nomme par un marqueur. Les clés, elles, gardent leur nom.
+// Le nom du produit, l'ancien comme le nouveau, s'écrit dans brand, pas dans
+// les catalogues : une valeur brute le nomme par un marqueur. Les clés, elles, gardent leur nom.
 func TestFiles_NameOnlyThroughPlaceholders(t *testing.T) {
 	for _, code := range Codes() {
 		content, err := files.ReadFile(string(code) + ".toml")
@@ -170,7 +170,8 @@ func TestFiles_NameOnlyThroughPlaceholders(t *testing.T) {
 			t.Fatal(err)
 		}
 		for key, value := range raw {
-			if strings.Contains(strings.ToLower(value), "opencloud") {
+			lower := strings.ToLower(value)
+			if strings.Contains(lower, "opencloud") || strings.Contains(lower, strings.ToLower(brand.ProductName)) {
 				t.Errorf("%s: %s names the product instead of a placeholder: %q", code, key, value)
 			}
 		}

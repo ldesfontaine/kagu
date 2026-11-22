@@ -1,4 +1,4 @@
-# Travailler sur openCloud avec un agent
+# Travailler sur Kagu avec un agent
 
 ## Lire d'abord
 
@@ -18,8 +18,8 @@
   dans le code. Phrases courtes, tableaux, pas d'explication longue.
 - **SSO** pour le mode `forward` (Authelia, Authentik…) ; *mandataire* est réservé
   au reverse proxy de `trusted_proxies`.
-- **Vocabulaire interdit** : « nœud de contrôle » (dire *la machine openCloud*),
-  « parc », « palier », « hors openCloud ».
+- **Vocabulaire interdit** : « nœud de contrôle » (dire *la machine Kagu*),
+  « parc », « palier », « hors Kagu ».
 - Chaque fait vit à un seul endroit ; les autres documents y renvoient.
 - Le coût d'un choix se dit franchement, à côté de ce qu'il rapporte.
 - Une décision se propose avec sa contrepartie ; **elle se prend par Lucas**.
@@ -99,9 +99,8 @@ L'essentiel :
   seuls ; « mode », « observé », « géré », « libre » ne s'affichent jamais.
 - **Le nom du produit vient d'une variable** : `brand.ProductName`
   (`internal/kit/brand`) côté Go, `productName()` côté écran. Jamais un
-  littéral ; `TestProductNameIsNotALiteral` (posé par T00-09) le tient ; d'ici
-  là, `TestNameOnlyInBrand` (`internal/kit/brand/literals_test.go`). Le signe et
-  le mot-symbole sont ceux de `branding/` du dossier v2 : on ne les redessine
+  littéral ; `TestProductNameIsNotALiteral`
+  (`internal/kit/brand/literals_test.go`) le tient. Le signe et le mot-symbole sont ceux de `branding/` du dossier v2 : on ne les redessine
   pas.
 - `gofmt`, `goimports`, `staticcheck` : la machine tient le style, l'humain
   garde l'attention pour le sens.

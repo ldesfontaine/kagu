@@ -14,6 +14,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
 	"github.com/ldesfontaine/kagu/internal/fact/auth/authtest"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
 )
 
@@ -113,7 +114,7 @@ func TestAuthBasic_GuardsEveryOperatorRouteAndLeavesTheOthersOpen(t *testing.T) 
 			if recorder.Code != http.StatusUnauthorized {
 				t.Errorf("%s %s: status %d, want 401", route.method, route.pattern, recorder.Code)
 			}
-			if got := recorder.Header().Get("WWW-Authenticate"); got != `Basic realm="openCloud", charset="UTF-8"` {
+			if got := recorder.Header().Get("WWW-Authenticate"); got != `Basic realm="`+brand.ProductName+`", charset="UTF-8"` {
 				t.Errorf("%s %s: WWW-Authenticate %q", route.method, route.pattern, got)
 			}
 			continue

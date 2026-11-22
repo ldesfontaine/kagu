@@ -14,6 +14,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/alert"
 	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
 	"github.com/ldesfontaine/kagu/internal/kit/live"
 )
@@ -159,7 +160,7 @@ func TestAlertsAPI_ChannelsAndMutesGoThroughTheComponent(t *testing.T) {
 	if request.Header.Get("OpenCloud-Event") != "test" || !alert.Verify("s3cret", body, request.Header.Get("OpenCloud-Signature")) || request.Header.Get("Title") == "" {
 		t.Fatalf("test request headers %v", request.Header)
 	}
-	if !strings.Contains(string(body), "openCloud") {
+	if !strings.Contains(string(body), brand.ProductName) {
 		t.Fatalf("test body %q", body)
 	}
 	recorder = callAPI(server.Server, http.MethodPut, "/api/alerts/channels/"+itoa(channel.ID), map[string]any{

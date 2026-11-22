@@ -1,5 +1,5 @@
-# Configuration dynamique Traefik v3 (provider « file ») pour openCloud.
-# openCloud n'est pas un conteneur : les labels Docker ne s'appliquent pas,
+# Configuration dynamique Traefik v3 (provider « file ») pour Kagu.
+# Kagu n'est pas un conteneur : les labels Docker ne s'appliquent pas,
 # d'où ce fichier. Adaptez le nom, l'entrypoint, le résolveur de
 # certificats et l'adresse du serveur.
 # Vérifié avec Traefik v3.5.3, en mode host et en conteneur.
@@ -7,7 +7,7 @@
 # Un réglage manque ICI parce qu'il ne peut pas y être : le délai de lecture de
 # l'entrée. Traefik v3 coupe une requête dont le corps met plus de 60 s à
 # arriver (respondingTimeouts.readTimeout), et une VM Proxmox sauvegardée par
-# openCloud arrive par un seul PUT /agent/parcels/… qui dure bien plus. Sans
+# Kagu arrive par un seul PUT /agent/parcels/… qui dure bien plus. Sans
 # réglage, l'ordre backup.produce finit en upload_failed. C'est un réglage de
 # l'entrée, donc de la configuration STATIQUE de Traefik, pas de ce fichier :
 #   entryPoints:
@@ -25,7 +25,7 @@ http:
       service: opencloud
       tls:
         certResolver: letsencrypt
-      # Mode forward (SSO devant openCloud) : décommentez, avec le middleware
+      # Mode forward (SSO devant Kagu) : décommentez, avec le middleware
       # ci-dessous et celui d'Authelia, `authelia` d'abord : forwardAuth
       # transmet les en-têtes de la requête à Authelia, le secret ne doit pas
       # en être. Voir « Derrière un SSO qui authentifie » dans
@@ -36,7 +36,7 @@ http:
       # flux SSE qui doivent partir tels quels et durer.
 
   # Mode forward seulement. `customRequestHeaders` remplace la valeur que le
-  # client enverrait : openCloud n'y croit que si elle égale le contenu de
+  # client enverrait : Kagu n'y croit que si elle égale le contenu de
   # `forward_secret_file`. Ce fichier-ci doit être aussi peu lisible que lui.
   # middlewares:
   #   opencloud-proxy-secret:
@@ -52,6 +52,6 @@ http:
         # Traefik en mode host (network_mode: host) : http://127.0.0.1:8080.
         servers:
           - url: "http://host.docker.internal:8080"
-        # Le Host d'origine part vers openCloud (défaut de Traefik) : il doit
+        # Le Host d'origine part vers Kagu (défaut de Traefik) : il doit
         # être celui de public_url, sinon l'API répond 403 bad_host.
         passHostHeader: true

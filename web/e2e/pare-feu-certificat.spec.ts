@@ -72,7 +72,7 @@ for (const theme of ["light", "dark"] as const) {
 
     // 2. Les gestes : menus dans la langue de l'interface, un seul privilège DHCP à choisir, rien d'ISC.
     await expect(dialog.locator(".wizard-title")).toHaveText(label("firewall.step_prepare"));
-    await expect(dialog.getByText(label("firewall.prepare_intro").replace("{product}", "openCloud"))).toBeVisible();
+    await expect(dialog.getByText(label("firewall.prepare_intro").replace("{product}", "Kagu"))).toBeVisible();
     await expect(dialog.locator("a.external-link").first()).toContainText(label("firewall.menu_users"));
     await expect(dialog.getByText(label("firewall.gesture_leases_text"))).toBeVisible();
     await expect(dialog.getByText(/\bISC\b/)).toHaveCount(0);

@@ -3,7 +3,7 @@
 > Ce document suit l'application. Chaque fonctionnalité intégrée y ajoute ce
 > qu'elle change : un flux, un port, une donnée stockée. Dernière mise à jour :
 > première configuration à la place du mode ouvert, journal d'audit, agents
-> séparés des machines (droits, révocation), la machine openCloud avec un
+> séparés des machines (droits, révocation), la machine Kagu avec un
 > agent comme les autres, puis les ordres signés envoyés aux agents et les
 > droits appliqués par l'agent (#146), puis la sortie du MCP vers mcp-maison
 > (#224), puis le README et « Ce qui manque encore » remis d'accord avec le
@@ -15,22 +15,22 @@
 | Acteur | Ce que c'est | Ce qu'il fait tourner |
 | --- | --- | --- |
 | L'opérateur | L'opérateur, dans un navigateur | Le front React, chargé une fois avec la page, qui lit l'API JSON et affiche. Tant qu'aucun compte n'existe, l'écran de première configuration à la place de l'interface : il crée le compte, puis l'interface s'ouvre |
-| La machine openCloud | Le VPS où openCloud est installé | `opencloud serve` : l'API, le front embarqué, la base. **Et son agent, `opencloud agent`, comme toute machine** : `serve` n'observe rien de sa propre machine. La ligne qui l'installe s'affiche dès la première configuration (« La machine openCloud ») |
-| La commande locale | `opencloud export` et `opencloud apply`, lancées sur la machine openCloud, sous le compte du service ou en root | Rien de son côté : elles parlent au `serve` qui tourne par la socket `state_dir/control.sock`. `export` écrit ce qu'il répond ; `apply` lit un fichier, montre le plan que le serveur en tire, demande confirmation, puis lui demande de l'écrire. Elles n'ouvrent pas la base |
-| Une machine | Un VPS, une VM, un NAS, que openCloud gère sans l'héberger | `opencloud agent` : le démon qui parle à openCloud, mesure la machine et veille son Docker, **sous un compte dédié (`opencloud-agent`), root sur demande**. Un agent à la fois par machine ; ses droits sont cochés à l'installation, écrits dans son fichier, rapportés à chaque connexion et **appliqués** : un ordre hors de ses droits est refusé. Il exécute les **ordres signés** par la clé du serveur qu'il a épinglée à l'enrôlement, et refuse tout autre. Les familles : l'agent (`agent.*`), la sauvegarde de la base (`backup.*`), les dépôts restic (`restic.*`), Docker (`docker.*`), Proxmox (`proxmox.vm.*`). La liste est fermée et ne se recopie pas : `agentwire.OrderKinds` la donne, chaque famille a sa section plus bas |
+| La machine Kagu | Le VPS où Kagu est installé | `opencloud serve` : l'API, le front embarqué, la base. **Et son agent, `opencloud agent`, comme toute machine** : `serve` n'observe rien de sa propre machine. La ligne qui l'installe s'affiche dès la première configuration (« La machine Kagu ») |
+| La commande locale | `opencloud export` et `opencloud apply`, lancées sur la machine Kagu, sous le compte du service ou en root | Rien de son côté : elles parlent au `serve` qui tourne par la socket `state_dir/control.sock`. `export` écrit ce qu'il répond ; `apply` lit un fichier, montre le plan que le serveur en tire, demande confirmation, puis lui demande de l'écrire. Elles n'ouvrent pas la base |
+| Une machine | Un VPS, une VM, un NAS, que Kagu gère sans l'héberger | `opencloud agent` : le démon qui parle à Kagu, mesure la machine et veille son Docker, **sous un compte dédié (`opencloud-agent`), root sur demande**. Un agent à la fois par machine ; ses droits sont cochés à l'installation, écrits dans son fichier, rapportés à chaque connexion et **appliqués** : un ordre hors de ses droits est refusé. Il exécute les **ordres signés** par la clé du serveur qu'il a épinglée à l'enrôlement, et refuse tout autre. Les familles : l'agent (`agent.*`), la sauvegarde de la base (`backup.*`), les dépôts restic (`restic.*`), Docker (`docker.*`), Proxmox (`proxmox.vm.*`). La liste est fermée et ne se recopie pas : `agentwire.OrderKinds` la donne, chaque famille a sa section plus bas |
 | Docker | Le démon de conteneurs d'une machine, s'il y en a un | Les services et leurs réseaux : pour observer, l'agent le lit par sa socket, en lecture seule. Il ne lui écrit que par `docker compose up`, pour déployer un service déclaré, avec le droit `docker.deploy` ou `docker.update` (« Comment un service se déploie ») |
-| Traefik | Le proxy de la machine openCloud | Termine TLS et transmet à openCloud sur la boucle locale |
+| Traefik | Le proxy de la machine Kagu | Termine TLS et transmet à Kagu sur la boucle locale |
 | Une tâche | Un cron, une sauvegarde, un script, n'importe où | Un `curl` sur son URL de ping quand elle démarre ou finit |
 | Une cible | Une URL ou un port qu'une sonde vérifie, dedans comme dehors | Rien : elle reçoit une requête et répond, c'est tout ce qu'on lui demande |
 | Un visiteur | N'importe qui, dans un navigateur, sans compte | La page publique d'un projet publié, à son adresse `/statut/<slug>` : un petit bundle à part, qui lit l'instantané et le direct publics de cette page, et d'elle seule |
 | Un canal | Une URL entrante : Discord, Slack, Mattermost, ntfy, un récepteur à soi ; un salon Matrix ; ou des adresses e-mail | Rien : il reçoit un POST signé, un message du bot dans le salon, ou un e-mail, quand une alerte s'ouvre, s'aggrave ou se résout |
-| Un relais SMTP | Celui de l'opérateur : Gmail, Brevo, l'hébergeur, un Postfix local | Rien : il reçoit d'openCloud les e-mails des canaux e-mail, avec l'identifiant réglé sous Paramètres, et les livre |
+| Un relais SMTP | Celui de l'opérateur : Gmail, Brevo, l'hébergeur, un Postfix local | Rien : il reçoit de Kagu les e-mails des canaux e-mail, avec l'identifiant réglé sous Paramètres, et les livre |
 | Un registre | Docker Hub, ghcr.io, un registre privé : là d'où les images ont été tirées | Rien : il répond en lecture à l'agent de chaque machine, qui lui demande les tags d'un dépôt et l'empreinte d'un tag, jamais une image |
-| endoflife.date | Un service public et gratuit qui tient, produit par produit, les branches maintenues et leur date de fin | Rien : il répond en lecture à la machine openCloud, une fois par jour, deux au plus, **tant que l'opérateur n'a pas coupé la fin de support** sous Paramètres. Les agents ne l'appellent jamais |
-| mcp-maison | Un serveur MCP à part, sur la machine openCloud, dans Docker (`network_mode: host`) | Il identifie chaque personne par l'IdP OIDC de l'opérateur, sert ses outils, et lit l'API d'openCloud en direct sur l'adresse de `listen` avec un **jeton d'API en lecture** (`Authorization: Bearer ock_…`), en posant `X-MCP-Maison-User` ; openCloud lit son `/health` à la demande (Paramètres) et marche sans lui |
-| Un agent IA | Claude, Claude Code, tout client MCP | Rien dans openCloud : il parle à mcp-maison. Ce qu'il lit est ce que l'API rend à un jeton : 32 lectures, secrets masqués. Avec un jeton en lecture, jamais une écriture ; avec un jeton en écriture, seulement les verbes cochés, sur les machines et les invités que sa portée admet (« Les verbes d'un jeton en écriture », « La portée d'un jeton ») ; les journaux bruts des conteneurs, eux, partent chez le fournisseur du modèle |
+| endoflife.date | Un service public et gratuit qui tient, produit par produit, les branches maintenues et leur date de fin | Rien : il répond en lecture à la machine Kagu, une fois par jour, deux au plus, **tant que l'opérateur n'a pas coupé la fin de support** sous Paramètres. Les agents ne l'appellent jamais |
+| mcp-maison | Un serveur MCP à part, sur la machine Kagu, dans Docker (`network_mode: host`) | Il identifie chaque personne par l'IdP OIDC de l'opérateur, sert ses outils, et lit l'API de Kagu en direct sur l'adresse de `listen` avec un **jeton d'API en lecture** (`Authorization: Bearer ock_…`), en posant `X-MCP-Maison-User` ; Kagu lit son `/health` à la demande (Paramètres) et marche sans lui |
+| Un agent IA | Claude, Claude Code, tout client MCP | Rien dans Kagu : il parle à mcp-maison. Ce qu'il lit est ce que l'API rend à un jeton : 32 lectures, secrets masqués. Avec un jeton en lecture, jamais une écriture ; avec un jeton en écriture, seulement les verbes cochés, sur les machines et les invités que sa portée admet (« Les verbes d'un jeton en écriture », « La portée d'un jeton ») ; les journaux bruts des conteneurs, eux, partent chez le fournisseur du modèle |
 
-Un seul binaire, `opencloud`, deux rôles. La machine openCloud fait tourner
+Un seul binaire, `opencloud`, deux rôles. La machine Kagu fait tourner
 les deux : le serveur, et son agent, qui en fait une machine comme les autres
 dans l'interface.
 
@@ -49,9 +49,9 @@ flowchart LR
         reg["Registre d'images<br>Docker Hub, ghcr.io, privé"]
         eol["endoflife.date<br>sauf si l'opérateur le coupe"]
         ai["Agent IA<br>client MCP"]
-        mcpm["mcp-maison<br>Docker, machine openCloud"]
+        mcpm["mcp-maison<br>Docker, machine Kagu"]
     end
-    subgraph oc["Machine openCloud"]
+    subgraph oc["Machine Kagu"]
         tr["Traefik<br>:443 TLS"]
         srv["<code>opencloud serve</code><br>127.0.0.1:8080"]
         db[("state_dir<br>opencloud.db<br>lifecycle.json")]
@@ -81,34 +81,34 @@ Trait double : chiffré. Trait simple : en clair, mais sans quitter la machine.
 
 | Flux | D'où à où | Chiffrement | Qui prouve quoi |
 | --- | --- | --- | --- |
-| Interface | navigateur → Traefik | TLS de Traefik | L'opérateur, par HTTP Basic, avec le compte créé à la première configuration (mode `basic`) : identifiant et mot de passe, renvoyés par le navigateur à chaque requête, `/api/events` et les flux de journaux compris. En mode `forward`, le SSO qui authentifie (Authelia derrière Traefik) : openCloud ne croit l'en-tête d'identité (`Remote-User` par défaut), présent une seule fois, que d'un pair de `trusted_proxies` qui porte aussi le secret partagé quand il est configuré (`forward_secret_file`, en-tête `X-OpenCloud-Proxy-Secret`), et répond `401` à tout le reste ; c'est au mandataire (Traefik) d'écraser l'en-tête envoyé par le client. Une identité ainsi prouvée mais absente d'une liste `forward_users` non vide reçoit `403 auth.forward_forbidden`. Un jeton d'API (`Authorization: Bearer`) remplace l'un et l'autre mode, sur sa liste fermée de lectures, plus les verbes qu'il porte en écriture (« Comment un agent IA lit openCloud »). Mode `none` (installation neuve, ou après `opencloud auth disable`) : aucun compte, le serveur ne sert que la première configuration et répond `401 auth.setup_required` au reste ; la création du compte exige le code de première configuration (« Comment l'opérateur entre dans l'interface »). Le front charge la page, puis parle à `/api/…` en JSON |
-| Interface | Traefik → openCloud | En clair, sur `127.0.0.1` de la même machine | Toute écriture de l'API exige `Content-Type: application/json`, même sans corps, et un `Sec-Fetch-Site` présent doit valoir `same-origin` ou `none`. Toute requête sous `/api/…` exige un `Host` reconnu (hôte de `public_url`, `localhost`, IP littérale, hôte de `listen`), contre le DNS rebinding : sinon `403 bad_host`. Un `%2F` dans le chemin brut d'une route `/api/…` est refusé `400 bad_path` avant tout routage ; les fichiers du front compilé ne s'ouvrent sans session que sur la route du front, jugée sur le chemin encodé (R-A2-13). Pas de cookie, mais le navigateur joint aussi les identifiants Basic à une requête partie d'une page tierce : c'est cette garde qui l'arrête |
+| Interface | navigateur → Traefik | TLS de Traefik | L'opérateur, par HTTP Basic, avec le compte créé à la première configuration (mode `basic`) : identifiant et mot de passe, renvoyés par le navigateur à chaque requête, `/api/events` et les flux de journaux compris. En mode `forward`, le SSO qui authentifie (Authelia derrière Traefik) : Kagu ne croit l'en-tête d'identité (`Remote-User` par défaut), présent une seule fois, que d'un pair de `trusted_proxies` qui porte aussi le secret partagé quand il est configuré (`forward_secret_file`, en-tête `X-OpenCloud-Proxy-Secret`), et répond `401` à tout le reste ; c'est au mandataire (Traefik) d'écraser l'en-tête envoyé par le client. Une identité ainsi prouvée mais absente d'une liste `forward_users` non vide reçoit `403 auth.forward_forbidden`. Un jeton d'API (`Authorization: Bearer`) remplace l'un et l'autre mode, sur sa liste fermée de lectures, plus les verbes qu'il porte en écriture (« Comment un agent IA lit Kagu »). Mode `none` (installation neuve, ou après `opencloud auth disable`) : aucun compte, le serveur ne sert que la première configuration et répond `401 auth.setup_required` au reste ; la création du compte exige le code de première configuration (« Comment l'opérateur entre dans l'interface »). Le front charge la page, puis parle à `/api/…` en JSON |
+| Interface | Traefik → Kagu | En clair, sur `127.0.0.1` de la même machine | Toute écriture de l'API exige `Content-Type: application/json`, même sans corps, et un `Sec-Fetch-Site` présent doit valoir `same-origin` ou `none`. Toute requête sous `/api/…` exige un `Host` reconnu (hôte de `public_url`, `localhost`, IP littérale, hôte de `listen`), contre le DNS rebinding : sinon `403 bad_host`. Un `%2F` dans le chemin brut d'une route `/api/…` est refusé `400 bad_path` avant tout routage ; les fichiers du front compilé ne s'ouvrent sans session que sur la route du front, jugée sur le chemin encodé (R-A2-13). Pas de cookie, mais le navigateur joint aussi les identifiants Basic à une requête partie d'une page tierce : c'est cette garde qui l'arrête |
 | Direct | navigateur → `/api/events`, une connexion par onglet | TLS de Traefik | L'opérateur, par HTTP Basic ou par le SSO, comme l'interface ; refusé en mode `none` (`401 auth.setup_required`). Le flux ne dit que « les machines ont changé », « les tâches ont changé », jamais lesquelles. Plafond de 64 onglets, comptés par le serveur et non par les abonnés du bus (la page de statut y est abonnée aussi), `503` au-delà |
-| Agent | machine → Traefik | TLS de Traefik, ou empreinte épinglée par `-pin` si pas de domaine | Ed25519 : l'agent signe un aléa qu'il tire, l'identifiant de sa machine et l'heure (protocole 2), openCloud vérifie avec la clé enrôlée. Le signal porte les mesures de la machine et ce que son Docker a montré, dans un débit borné par machine ; les journaux d'un conteneur remontent par `POST /agent/logs/…`, jeton de session |
-| Agent, sens retour | openCloud → machine, sur le flux ouvert | Le même flux | Le serveur pousse des **commandes d'observation** (« suis les journaux du conteneur X », « arrête », le jeu de sondes, les images à ne pas interroger) : des lectures, **non signées**, que l'agent ne reçoit que du serveur qui tient son flux. Elles ne sont pas crues pour autant : l'agent rejuge le jeu de sondes et n'ouvre que le journal d'un conteneur qu'il a lui-même rapporté, quatre suivis au plus à la fois (le cinquième est refusé `service.logs_busy`), quinze minutes chacun (le front rouvre un suivi encore affiché) ; ces bornes sont à l'agent, qui les tient sans attendre le serveur, séparées des quatre suivis par machine du serveur (« Comment une cible est sondée », « Comment les conteneurs sont suivis »). Les **ordres** voyagent dans une enveloppe **signée Ed25519 par la clé du serveur** (`server.key`), que l'agent vérifie avec la clé épinglée à l'enrôlement avant d'en lire un champ : qui tient le flux sans la clé (un mandataire, un faux serveur) peut couper ou retarder un ordre, pas en fabriquer ; un ordre périmé ou rejoué est refusé (« Comment un ordre part et revient ») |
+| Agent | machine → Traefik | TLS de Traefik, ou empreinte épinglée par `-pin` si pas de domaine | Ed25519 : l'agent signe un aléa qu'il tire, l'identifiant de sa machine et l'heure (protocole 2), Kagu vérifie avec la clé enrôlée. Le signal porte les mesures de la machine et ce que son Docker a montré, dans un débit borné par machine ; les journaux d'un conteneur remontent par `POST /agent/logs/…`, jeton de session |
+| Agent, sens retour | Kagu → machine, sur le flux ouvert | Le même flux | Le serveur pousse des **commandes d'observation** (« suis les journaux du conteneur X », « arrête », le jeu de sondes, les images à ne pas interroger) : des lectures, **non signées**, que l'agent ne reçoit que du serveur qui tient son flux. Elles ne sont pas crues pour autant : l'agent rejuge le jeu de sondes et n'ouvre que le journal d'un conteneur qu'il a lui-même rapporté, quatre suivis au plus à la fois (le cinquième est refusé `service.logs_busy`), quinze minutes chacun (le front rouvre un suivi encore affiché) ; ces bornes sont à l'agent, qui les tient sans attendre le serveur, séparées des quatre suivis par machine du serveur (« Comment une cible est sondée », « Comment les conteneurs sont suivis »). Les **ordres** voyagent dans une enveloppe **signée Ed25519 par la clé du serveur** (`server.key`), que l'agent vérifie avec la clé épinglée à l'enrôlement avant d'en lire un champ : qui tient le flux sans la clé (un mandataire, un faux serveur) peut couper ou retarder un ordre, pas en fabriquer ; un ordre périmé ou rejoué est refusé (« Comment un ordre part et revient ») |
 | Sauvegarde, le départ | `serve` → agent d'une autre machine : l'ordre signé `backup.receive` sur le flux, puis `GET /agent/parcels/{colis}/{nom}` sous le jeton de session de l'agent | TLS de Traefik ; le fichier est **déjà** chiffré (age, pour la clé publique de sauvegarde) avant de quitter `serve` | L'ordre est signé par `server.key` et porte la taille et le SHA-256 de chaque fichier : l'agent ne garde que ce qui correspond. Le colis ne se sert qu'à la machine pour laquelle il est écrit (`404` sinon), 30 requêtes par minute et par machine |
 | Sauvegarde produite par un agent | agent producteur → `serve` : `PUT /agent/parcels/{colis}/{nom}` sous le jeton de session de l'agent, puis `serve` → agent de destination par le `GET` ci-dessus | **Chiffrée age sur la machine source avant tout transport** (pour la clé publique de sauvegarde) ; téléversée à `serve` sous TLS ; `serve` ne peut pas la lire | L'agent producteur n'a que la clé publique : le clair du producteur n'existe que dans `produce/`, `0600`, et part avec l'ordre. `serve` range le fichier tel qu'il arrive, vérifie la taille et la somme annoncées, et n'a pas la clé privée : il ne la lit pas. 30 requêtes par minute et par machine, comme le téléchargement |
 | Sauvegarde, au repos | la destination, sur la machine d'un agent | age : X25519 et ChaCha20-Poly1305 pour l'archive ; la clé privée, déposée à côté, est scellée par scrypt avec la phrase de passe de l'opérateur | Seule la phrase ouvre la clé, seule la clé ouvre l'archive. L'agent n'a ni l'une ni l'autre : il vérifie la somme et l'en-tête `age-encryption.org/v1`, il ne déchiffre jamais |
 | Journaux | navigateur → `/api/containers/{id}/logs/stream` | TLS de Traefik | L'opérateur, par HTTP Basic ou par le SSO. En mode `none`, refusé comme le reste de l'interface (`401 auth.setup_required`). Une seconde connexion par onglet ; seize lectures de journaux en tout, suivis des onglets et tirages uniques compris |
 | Sonde | machine qui sonde → la cible | Celui de la cible : TLS si la sonde est en `https://` ou si une sonde TCP demande la poignée de main, rien sinon | Personne : une sonde n'est pas authentifiée, elle regarde du dehors comme n'importe qui. Un certificat refusé rend l'essai **dégradé**, jamais hors ligne, et la requête n'est pas rejouée. La chaîne est jugée par la machine qui sonde, avec les autorités qu'elle connaît |
 | Docker | agent → `/var/run/docker.sock` | Aucun : une socket Unix de la machine | Les droits Unix : le compte de l'agent est dans le groupe `docker` (ou l'agent est root), ce qui **équivaut à root** (« Ce qui manque encore »). `opencloud serve` ne lit plus la socket : il n'a besoin ni de root ni du groupe `docker`. Le client ne connaît aucun verbe qui écrit |
-| Agent | Traefik → openCloud | En clair, boucle locale | `X-Forwarded-*` cru seulement depuis `trusted_proxies`. `X-Forwarded-For` se lit de la droite : la source est la dernière entrée qui n'est pas un mandataire de confiance, ce que le client écrit à gauche ne compte pas |
+| Agent | Traefik → Kagu | En clair, boucle locale | `X-Forwarded-*` cru seulement depuis `trusted_proxies`. `X-Forwarded-For` se lit de la droite : la source est la dernière entrée qui n'est pas un mandataire de confiance, ce que le client écrit à gauche ne compte pas |
 | Agent en dev | machine → `http://127.0.0.1` | Aucun, et c'est accepté : rien ne sort de la machine | Idem |
 | Agent sur un LAN | machine → `http://192.168.…` | **Refusé** par l'agent, sauf `-allow-plain` | Réservé à un réseau déjà chiffré, WireGuard par exemple |
 | Ping | tâche → Traefik → `/ping/{jeton}` | TLS de Traefik | Personne : le jeton dans l'URL est le secret. Qui l'a peut faire passer une tâche pour faite |
 | Statut | visiteur → Traefik → `/statut/<slug>`, `/statut/<slug>/api/…` | TLS de Traefik | Personne, par conception : la page est publique. Elle ne dit que le nom de ses composants et ce que l'opérateur a écrit ; jamais un identifiant d'objet, un nom de machine, de conteneur ou de sonde, une cible, un port, ni rien d'une autre page. Des tests le prouvent sur la réponse réelle |
 | Registre | agent → le registre de l'image | TLS, sauf vers la boucle locale (un registre sur `localhost:5000`, comme Docker le fait) | L'agent s'authentifie par un jeton anonyme, ou signé des identifiants en clair du `config.json` de Docker de la machine ; le registre ne prouve rien de plus que son certificat. Rien ne sort qu'un nom de dépôt et un tag ; l'agent ne tire jamais une image. Aucune redirection suivie |
-| Agent IA | client MCP → Traefik → mcp-maison | TLS de Traefik | OAuth de mcp-maison, délégué à l'IdP OIDC de l'opérateur (Authelia, Authentik, Keycloak, GitLab) : openCloud n'y voit rien et n'y prouve rien |
-| Agent IA | mcp-maison → openCloud, `/api/…` | En clair, sur l'adresse de `listen`, sans sortir de la machine | Un Bearer, jeton d'API créé sous Paramètres, à échéance de 30, 90 (défaut) ou 365 jours, ou sans échéance si l'opérateur le choisit. Il est jugé **avant le mode** d'authentification de l'interface (ni Basic ni l'en-tête du mandataire), sauf en mode `none` où il est ignoré, et n'ouvre que 32 lectures, plus, pour un jeton en écriture, les routes des seuls verbes cochés, à débit borné par jeton (« Comment un agent IA lit openCloud »). Le jeton est haché avant d'être cherché, et son dernier usage noté au plus une fois par minute. Activer l'authentification de l'interface les révoque tous |
-| Vérification de mcp-maison | openCloud → `mcp_url`, `GET /health` | Celui de l'adresse réglée : en clair vers la machine ou un réseau privé, le lien-local est refusé | Personne : on lit un état, rien ne s'écrit. Trois secondes, une redirection n'est pas suivie, 64 Kio au plus ; déclenchée par la carte de Paramètres, jamais en fond |
+| Agent IA | client MCP → Traefik → mcp-maison | TLS de Traefik | OAuth de mcp-maison, délégué à l'IdP OIDC de l'opérateur (Authelia, Authentik, Keycloak, GitLab) : Kagu n'y voit rien et n'y prouve rien |
+| Agent IA | mcp-maison → Kagu, `/api/…` | En clair, sur l'adresse de `listen`, sans sortir de la machine | Un Bearer, jeton d'API créé sous Paramètres, à échéance de 30, 90 (défaut) ou 365 jours, ou sans échéance si l'opérateur le choisit. Il est jugé **avant le mode** d'authentification de l'interface (ni Basic ni l'en-tête du mandataire), sauf en mode `none` où il est ignoré, et n'ouvre que 32 lectures, plus, pour un jeton en écriture, les routes des seuls verbes cochés, à débit borné par jeton (« Comment un agent IA lit Kagu »). Le jeton est haché avant d'être cherché, et son dernier usage noté au plus une fois par minute. Activer l'authentification de l'interface les révoque tous |
+| Vérification de mcp-maison | Kagu → `mcp_url`, `GET /health` | Celui de l'adresse réglée : en clair vers la machine ou un réseau privé, le lien-local est refusé | Personne : on lit un état, rien ne s'écrit. Trois secondes, une redirection n'est pas suivie, 64 Kio au plus ; déclenchée par la carte de Paramètres, jamais en fond |
 | Commande locale | `opencloud export` et `opencloud apply` → `state_dir/control.sock` | Aucun : une socket Unix de la machine, rien ne passe par le réseau | Les droits Unix : la socket est en 0600 et `state_dir` doit être fermé au groupe et aux autres (sinon `serve` ne l'ouvre pas), il faut tourner sous le compte du service ou en root. Aucune garde d'opérateur ni de même-origine, aucun navigateur n'y passe ; elle ne sert que les quatre routes `/api/manifest/…` (export, plan, apply, journal), chacune avec sa méthode, tout le reste y répond 404. Elle **écrit** l'annuaire : qui l'atteint peut déjà lire la base et la clé de chiffrement, c'est le même raisonnement que pour `opencloud auth`. L'acteur du journal est `cli` et son nom est celui que la commande déclare : indicatif |
-| Alerte par e-mail | openCloud → le relais SMTP | STARTTLS exigé (défaut, 587) ou TLS dès la connexion (465), certificat vérifié contre le magasin du système ; `none` seulement si l'adresse jointe est sur la boucle locale ou un réseau privé, vérifié à la connexion | openCloud s'authentifie par AUTH PLAIN ou LOGIN, après le chiffrement. Un relais qui ne propose pas STARTTLS est refusé : jamais de repli en clair. Au-delà du relais, le message voyage comme tout courrier, et son destinataire le garde |
-| Alerte Matrix | openCloud → le serveur d'accueil | TLS : le serveur d'accueil est exigé en `https://` | openCloud écrit au nom du bot par `Authorization: Bearer <jeton>`, le jeton du canal ; qui a ce jeton parle au nom du bot partout où il est invité. Le serveur d'accueil prouve qui il est par son certificat. Le message dit ce que dit le corps d'un webhook, et le salon le garde |
-| Hyperviseur | openCloud → l'API de Proxmox (`https://hôte:8006`), en lecture, toutes les cinq minutes | TLS : le certificat se juge par le magasin du système, ou par l'**empreinte SHA-256** que l'opérateur a épinglée (un Proxmox livre un certificat auto-signé) ; pas de redirection suivie | Un jeton d'API Proxmox en lecture seule (rôle `PVEAuditor`, plus un droit sur le stockage des sauvegardes : « Lire les sauvegardes »), dans `Authorization: PVEAPIToken=…` ; le jeton ne voyage nulle part ailleurs. Voir « Comment un hôte Proxmox se lit » |
-| Alerte | openCloud → le canal | Celui de l'URL : TLS si elle est en `https://`, rien sinon, et l'interface le dit | openCloud prouve au récepteur que c'est lui, par `OpenCloud-Signature`, HMAC-SHA256 du corps avec le secret du canal, quand il y en a un. Le récepteur ne prouve rien : un 2xx suffit. Le corps dit le nom de l'objet, de la machine, la cible d'une sonde, le point de montage : ce qu'un canal reçoit, son service le garde |
+| Alerte par e-mail | Kagu → le relais SMTP | STARTTLS exigé (défaut, 587) ou TLS dès la connexion (465), certificat vérifié contre le magasin du système ; `none` seulement si l'adresse jointe est sur la boucle locale ou un réseau privé, vérifié à la connexion | Kagu s'authentifie par AUTH PLAIN ou LOGIN, après le chiffrement. Un relais qui ne propose pas STARTTLS est refusé : jamais de repli en clair. Au-delà du relais, le message voyage comme tout courrier, et son destinataire le garde |
+| Alerte Matrix | Kagu → le serveur d'accueil | TLS : le serveur d'accueil est exigé en `https://` | Kagu écrit au nom du bot par `Authorization: Bearer <jeton>`, le jeton du canal ; qui a ce jeton parle au nom du bot partout où il est invité. Le serveur d'accueil prouve qui il est par son certificat. Le message dit ce que dit le corps d'un webhook, et le salon le garde |
+| Hyperviseur | Kagu → l'API de Proxmox (`https://hôte:8006`), en lecture, toutes les cinq minutes | TLS : le certificat se juge par le magasin du système, ou par l'**empreinte SHA-256** que l'opérateur a épinglée (un Proxmox livre un certificat auto-signé) ; pas de redirection suivie | Un jeton d'API Proxmox en lecture seule (rôle `PVEAuditor`, plus un droit sur le stockage des sauvegardes : « Lire les sauvegardes »), dans `Authorization: PVEAPIToken=…` ; le jeton ne voyage nulle part ailleurs. Voir « Comment un hôte Proxmox se lit » |
+| Alerte | Kagu → le canal | Celui de l'URL : TLS si elle est en `https://`, rien sinon, et l'interface le dit | Kagu prouve au récepteur que c'est lui, par `OpenCloud-Signature`, HMAC-SHA256 du corps avec le secret du canal, quand il y en a un. Le récepteur ne prouve rien : un 2xx suffit. Le corps dit le nom de l'objet, de la machine, la cible d'une sonde, le point de montage : ce qu'un canal reçoit, son service le garde |
 
 Donc non, rien ne passe en clair sur le LAN de l'infra : le seul clair est sur
-la boucle locale de la machine openCloud, entre Traefik et le processus. Entre
+la boucle locale de la machine Kagu, entre Traefik et le processus. Entre
 deux machines, l'agent exige HTTPS, ou qu'on lui dise explicitement que le
 réseau est déjà chiffré.
 
@@ -125,46 +125,46 @@ dit comment. Une migration de plus part de `002`.
 
 | Où | Fichier | Contenu | Protection |
 | --- | --- | --- | --- |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les machines (`machines` : nom, hôte, adresse, système, rôle choisi), leurs agents (`agents` : clé publique Ed25519, version, racine `/srv/workspace`, date d'enrôlement, dernier signe de vie, révocation, l'empreinte de la clé du serveur que l'agent dit avoir épinglée `server_key_fingerprint`, le dernier rang d'ordre donné `last_order_seq`, les ancres de confiance locales que l'agent dit tenir `anchors` (texte de l'en-tête ; NULL tant qu'il n'a rien dit), le compte sous lequel il tourne `run_as_uid` et `run_as_name` (nuls tant qu'il ne l'a pas dit) ; un seul actif par machine, l'index `agents_one_active` le tient), les droits que chaque agent rapporte de son fichier (`agent_capabilities` : droit, chemins, instant du rapport, et `unavailable`, la raison pour laquelle son compte ne peut pas l'exercer, vide s'il le peut), les jetons d'enrôlement (avec les droits demandés, `requested_capabilities`, et l'agent qui l'a consommé, `agent_id`) | Jetons stockés hachés : une copie de la base n'enrôle personne. Un jeton vaut **1 h** et sert une fois (`machine.TokenLifetime`) ; au démarrage, `serve` efface les jetons périmés jamais servis et les consommés depuis plus de 90 jours, **sauf celui d'un agent actif** : il dit ce qui était demandé, contre quoi se lit ce que l'agent rapporte. La clé publique n'est pas un secret. Une machine retirée emporte ses agents et leurs droits (cascade) |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les machines (`machines` : nom, hôte, adresse, système, rôle choisi), leurs agents (`agents` : clé publique Ed25519, version, racine `/srv/workspace`, date d'enrôlement, dernier signe de vie, révocation, l'empreinte de la clé du serveur que l'agent dit avoir épinglée `server_key_fingerprint`, le dernier rang d'ordre donné `last_order_seq`, les ancres de confiance locales que l'agent dit tenir `anchors` (texte de l'en-tête ; NULL tant qu'il n'a rien dit), le compte sous lequel il tourne `run_as_uid` et `run_as_name` (nuls tant qu'il ne l'a pas dit) ; un seul actif par machine, l'index `agents_one_active` le tient), les droits que chaque agent rapporte de son fichier (`agent_capabilities` : droit, chemins, instant du rapport, et `unavailable`, la raison pour laquelle son compte ne peut pas l'exercer, vide s'il le peut), les jetons d'enrôlement (avec les droits demandés, `requested_capabilities`, et l'agent qui l'a consommé, `agent_id`) | Jetons stockés hachés : une copie de la base n'enrôle personne. Un jeton vaut **1 h** et sert une fois (`machine.TokenLifetime`) ; au démarrage, `serve` efface les jetons périmés jamais servis et les consommés depuis plus de 90 jours, **sauf celui d'un agent actif** : il dit ce qui était demandé, contre quoi se lit ce que l'agent rapporte. La clé publique n'est pas un secret. Une machine retirée emporte ses agents et leurs droits (cascade) |
 | Où tourne chaque machine, `state_dir` | `opencloud.db` | Le type rapporté (`machines.kind`), la correction de l'opérateur (`kind_override`, `host_override`), les cartes réseau (`machine_interfaces` : nom, adresse MAC), les disques physiques (`machine_block_devices` : nom, modèle, taille, nature, amovible), les pools (`machine_storage_pools` : genre, niveau, état, taille, disques) et les grappes d'hyperviseurs (`hypervisor_clusters`, `machine_proxmox.cluster_id`) | Rien de secret : des noms de noyau et des adresses MAC. Chaque rapport de l'agent remplace les listes ; une machine retirée les emporte (cascade), une grappe sans hôte est retirée |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les tâches surveillées et leur jeton de ping, **chiffré** (AES-256-GCM, clé du serveur, lié à sa ligne) : la page doit le réafficher. Pour le retrouver à chaque ping, la colonne `token_lookup` garde son SHA-256 ; le chiffré est dans `token_sealed` | Une copie de la base seule ne livre pas les URL de ping ; elle donne l'empreinte, qui ne remonte pas au jeton (128 bits tirés au hasard). Qui a la base **et** `secret.key` les lit. Le jeton se régénère depuis la page de la tâche : l'ancienne URL cesse aussitôt de répondre, sans recréer la tâche. La machine d'une tâche, facultative, est en `restrict` : une machine à laquelle une tâche est rattachée ne se retire pas (409 `machine.has_heartbeats`), on détache la tâche d'abord |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les pings bruts (forme, source, méthode, corps tronqué à 10 Kio, **en clair**) et les exécutions (début, fin, durée, code, issue dont « manquée » : un retard sans exécution) | Purgés : pings après 7 jours, exécutions après 90 jours |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les ressources mesurées par machine : le brut toutes les 10 s dans `machine_samples` (dont la taille de l'ARC ZFS, `zfs_cache`, vide sans ZFS), ses volumes dans `machine_disks`, les moyennes par heure et par jour dans `machine_rollups` (une ligne par machine, granularité `hour` ou `day` et seau) | Purgés : brut et volumes après 48 h, horaire après 90 jours, journalier après un an. La machine retirée emporte tout |
-| Machine openCloud, `state_dir` | `opencloud.db` | L'annuaire déclaré : `projects`, `declared_services`, `service_units`, `service_provides`, `project_services`, et sur chaque unité la politique de mise à jour (`service_units.update_policy`, `watch`, `hold` ou `ignore`). Aucun secret, aucune donnée lue sur une machine | Pas de purge : ce que l'opérateur déclare reste. Supprimer un service emporte ses unités et ses fournitures, supprimer un projet ne retire que les liens ; une machine qui porte des services ne se retire pas, un service que des sondes ou des composants visent non plus |
-| Machine openCloud, `state_dir` | `opencloud.db` | Le journal des fichiers appliqués : la table `applies` (`id` en `apl_` et seize hexadécimaux, `at`, `finished_at`, `actor_kind` `cli` ou `operator`, `actor_name`, `file_hash`, `file_name`, `prune`, `plan_hash`, `state` `confirmed`, `applied` ou `failed`, les quatre compteurs, `done`, `error` et `error_object`, et `plan`, le JSON des changements dans l'ordre d'écriture). **Ni le fichier ni aucun secret** : le plan ne porte que des valeurs de l'annuaire, la cible d'une sonde y est masquée (`user:…@hôte`) et un jeton n'y est jamais ; une tâche créée y est notée `token_generated` sans le jeton. Pas de clé étrangère vers les objets touchés : le journal leur survit | Pas de purge : le journal est petit (une ligne par fichier appliqué) et c'est lui qui répond à « qui a changé ça ». Une ligne restée `confirmed` au démarrage est celle d'un arrêt brutal : `serve` la passe en `failed` (`manifest.interrupted`) |
-| Machine openCloud, `state_dir` | `opencloud.db` | Le journal d'audit : la table `audit_events`, une ligne par geste réussi qui écrit un objet déclaré ou une autorité : `at`, `actor_kind`, `actor_name` et `actor_label` (le nom que portait l'acteur à l'instant du geste, nullable : migration `017_audit_actor_label.sql`), `action`, `object_kind`, `object_id`, `object_name` recopié, `details` (JSON plat de textes) et `apply_id` quand un apply l'a écrit. **Aucun secret** : ni mot de passe, ni jeton, ni secret, ni URL de webhook (« Le journal d'audit ») | Ajout seul : un déclencheur refuse toute modification d'une ligne, hors la mise à nul du lien `apply_id` (`ON DELETE SET NULL`). Pas de clé étrangère vers l'objet : la ligne lui survit. Purgé après **un an** (`audit.Retention`), avec les alertes, au démarrage puis une fois par jour |
-| Machine openCloud, `state_dir` | `opencloud.db` | L'envoi du journal : la table `audit_deliveries`, une ligne par (événement, canal qui reçoit le journal) : `status` (`pending`, `delivered`, `failed`), `attempts`, `reason` et `code` du dernier essai, `next_attempt_at`. Réservée dans la transaction de l'événement. **Aucun contenu** : le message se refait de l'événement, relu à l'envoi (« Le journal d'audit › Envoi aux canaux ») | Part avec son événement (la purge à un an) et avec son canal (`ON DELETE CASCADE`) |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les ordres envoyés aux agents : `action_runs` (identifiant, genre `action`, paramètres sans secret `params`, machine et agent en `set null` avec `machine_name` recopié, état, `refusal_reason`, `not_after`, rang `seq` unique par agent, `requested_by` recopié de l'acteur, `requested_at`, `finished_at`) et leur sortie, `run_logs` (rang, instant, flux, ligne ; 64 lignes au plus par run), partie avec son run (`cascade`). Écrit **avant** que l'ordre ne parte (« Comment un ordre part et revient ») | Un run survit à sa machine et à son agent : c'est une trace. Purgé à 90 jours (`action.Retention`) avec sa sortie, par la boucle des ordres. La sortie est ce que l'agent a écrit : rien n'y est masqué |
-| Machine openCloud, `state_dir` | `opencloud.db` | Le rattachement des conteneurs à l'annuaire : `containers.unit_id` (l'unité déclarée, nulle tant que rien ne rattache) et `containers.match_level` (`label`, `compose` ou `name`), recalculés à chaque rapport et après chaque écriture de l'annuaire ; la table `ignored_keys` (machine, genre `compose_service` — valeur `projet/service` —, `compose_project` ou `container_name`, valeur) des conteneurs que l'opérateur dit voulus. Les deux labels du produit que le conteneur porte, `containers.label_service` et `containers.label_unit` (texte, vides par défaut) et `containers.label_invalid` (0 ou 1 : des labels de la marque étaient là, mal formés), pour que le rapprochement relise la valeur sans la demander à l'agent ; aucun autre label n'est gardé. Aucun secret, aucun identifiant Docker : une clé d'observation survit à la recréation du conteneur | `unit_id` passe à nul quand l'unité est supprimée (`ON DELETE SET NULL`), `ignored_keys` part avec sa machine. Pas de purge : l'opérateur retire une clé d'un geste |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les conteneurs : une fiche par conteneur dans `containers` (nom, projet Compose, image, état Docker, code de sortie, tué faute de mémoire, tué sans arrêt demandé, arrêt demandé, santé, ports publiés, mode réseau, privilégié, dépendances déclarées, dates), ses transitions dans `container_events`, ses mesures dans `container_samples`, ce que chaque machine dit de son Docker dans `machine_engines` | Purgés : transitions après 90 jours, fiche d'un conteneur détruit après 30 jours avec ses transitions et mesures, mesures après 48 h ; plafonnés par machine (fiches vivantes, archivées, transitions, cadence des mesures : « Comment les conteneurs sont suivis », point 6). **L'extrait de journal** d'un arrêt anormal (50 lignes, 10 Kio) est stocké en clair sur la transition : ce qu'une application écrit dans ses logs peut s'y trouver |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les clés SSH autorisées que chaque agent relève (migration `011_ssh_keys.sql`) : `ssh_reports` (une ligne par machine : relevé tronqué ou non, instant), `ssh_accounts` (machine, compte, uid, état `read`, `none`, `denied`, `unsafe` ou `too_large`, relevé tronqué, lignes ignorées) et `ssh_keys` (compte, fichier `authorized_keys` ou `authorized_keys2`, **empreinte SHA256**, type, taille en bits, commentaire borné à 64 octets, noms d'options reconnus). **Jamais le contenu d'un fichier ni la clé publique entière** : l'empreinte ne remonte pas à la clé | Remplacé en entier à chaque relevé retenu, dans une transaction : ce qu'une machine ne dit plus disparaît. Pas de purge d'âge. La machine retirée emporte tout (`ON DELETE CASCADE`), et le plan de suppression compte « clés SSH relevées » |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les unités systemd que chaque agent relève (migration `029_systemd_units.sql`) : `systemd_reports` (une ligne par machine : systemd lu ou non, raison, relevé tronqué ou non, instant) et `systemd_units` (machine, **nom** de l'unité de service, état de chargement, état d'activité, sous-état : trois mots de listes fermées). **Jamais** la description, le fichier de l'unité, ses `Environment=`, son processus ni son groupe de contrôle | Remplacé en entier à chaque relevé retenu, dans une transaction : une unité que la machine ne dit plus disparaît. Pas de purge d'âge. La machine retirée emporte tout (`ON DELETE CASCADE`), et le plan de suppression compte « unités systemd relevées » |
-| Machine openCloud, **mémoire du processus `serve`** | aucun fichier | Qui a joint quels ports de l'hôte de chaque machine (`hostconn.Service`) : **une vue = un port, une source (compte, adresse du réseau local ou Internet), première et dernière vue**. Aucune migration. Au plus 2 000 vues par machine (les plus anciennes partent) | Perdu à l'arrêt de `serve` : chaque agent redit son rapport à l'ouverture de son flux, les vues repartent de zéro. Jamais dans la base, ni dans une sauvegarde, ni dans le journal d'audit |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les liens entre instances (migration `030_links.sql`) : la table `links`, une ligne par lien : l'instance de départ et celle d'arrivée (**machine et clé stable**, `compose:projet/service`, `container:nom` ou `systemd:unité.service`, jamais un identifiant Docker), la nature (`order`, `config`), la **preuve** (`declared`), le **signal** (`depends_on`, `container_link`, `operator`), un port facultatif, la première et la dernière vue. Aucune valeur de configuration, aucun environnement | Jamais effacé parce qu'on ne le revoit plus : la dernière vue vieillit, l'écran dit « Ancien » après 7 jours. Un lien d'outil se rafraîchit au rapport suivant ; un lien de l'opérateur ne se retire que par lui (`DELETE /api/directory/links/{id}`). Au plus 2 000 liens par machine. La machine retirée emporte les siens (`ON DELETE CASCADE`) |
-| Machine openCloud, `state_dir` | `opencloud.db` | L'hôte Proxmox qu'une machine porte et ce que son API en a dit (migration `013_proxmox.sql`) : `machine_proxmox` (une ligne par machine : adresse de l'API, identifiant du jeton, **secret du jeton chiffré**, empreinte épinglée, nœud, version, instant de la déclaration et du dernier relevé réussi, clé du refus du dernier relevé qui a échoué), `proxmox_guests` (VM et conteneurs : numéro, type `qemu` ou `lxc`, nom, état, modèle ou non, vCPU, mémoire et disque **alloués**, machine enrôlée rapprochée, dernière sauvegarde connue et sa taille ; depuis la migration `020`, le stockage de la plus récente, le nombre d'archives vzdump vues et leur taille totale) et `proxmox_storages` (nœud, nom, type, total, utilisé, libre, contenus acceptés, actif ; depuis la migration `035`, si le jeton lit les archives du stockage). **Jamais le contenu d'une VM** | Le secret du jeton est chiffré comme les autres (« Ce que le chiffrement couvre ») ; il ne sort jamais de l'API ni des journaux. Les VM et les stockages sont remplacés en entier à chaque relevé réussi, dans une transaction : ce que l'hôte ne montre plus disparaît, un relevé qui échoue garde le précédent. Pas d'historique, pas de purge d'âge. La machine retirée emporte l'hôte et ses relevés (`ON DELETE CASCADE`) ; une VM rapprochée d'une machine retirée reste, sans lien. Le plan de suppression compte « hôtes Proxmox déclarés » et « VM Proxmox rapprochées » |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les rôles que l'agent reconnaît sur sa machine (migration `014_machine_roles.sql`) : `machine_roles` (machine, rôle de la liste fermée `proxmox_ve`, version trouvée ; aujourd'hui le seul rôle). **Aucun secret, aucun droit** : un rôle se montre, il n'ouvre rien | Un reflet du dernier rapport, remplacé en entier à chaque rapport retenu : un rôle que l'agent ne voit plus disparaît. Pas d'historique, pas de purge d'âge. La machine retirée l'emporte (`ON DELETE CASCADE`) |
-| Machine openCloud, `state_dir` | `opencloud.db` | Le retour arrière des agents (migration `018_agent_rollback.sql`) : `agents.rollback_version` (la version du retour arrière que l'agent a dite à l'ouverture de son flux, 0 tant qu'il ne la dit pas) et `machines.update_last` (« à mettre à jour en dernier », 0 par défaut) | Aucun secret. `rollback_version` se réécrit à chaque ouverture de flux ; `update_last` ne change que par l'opérateur |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les pare-feu que l'opérateur déclare et ce que leur API en a dit (migration `015_firewalls.sql`) : `firewalls` (nom unique sans casse, connecteur `opnsense`, adresse de l'API, clé d'API, **secret d'API chiffré**, empreinte épinglée, version, instants de la déclaration et du dernier relevé réussi, clé du refus du dernier relevé qui a échoué), `firewall_interfaces`, `firewall_rules` (dans l'ordre où le pare-feu les rend), `firewall_leases` et `firewall_gateways`. **Jamais le trafic, jamais un journal de filtrage** | Le secret est chiffré comme les autres (« Ce que le chiffrement couvre »), lié à sa ligne ; il ne sort jamais de l'API ni des journaux. Les quatre tables de relevé sont remplacées en entier à chaque relevé réussi, dans une transaction ; un relevé qui échoue garde le précédent. Une autre adresse d'API ou un autre connecteur à la redéclaration efface le relevé (il décrivait un autre appareil). Pas d'historique, pas de purge d'âge. Le pare-feu retiré emporte son relevé (`ON DELETE CASCADE`). Un pare-feu n'appartient à aucune machine : le plan de suppression d'une machine n'en compte aucun. Au plus 20 pare-feu |
-| Machine openCloud, `state_dir` | `opencloud.db` | Le réseau des conteneurs : les réseaux Docker de chaque machine dans `machine_networks` (nom, pilote, interne, projet Compose), l'appartenance de chaque fiche à ses réseaux dans `container_networks` (adresse, alias) | Remplacés à chaque inventaire ; la fiche supprimée emporte ses appartenances, la machine retirée emporte tout. Les adresses sont celles des réseaux internes de Docker, pas des adresses publiques |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les sondes dans `probes` (nom, type, cible, machine qui sonde, service surveillé, état, cadence, seuils, attentes HTTP, poignée de main TLS demandée, dernier essai, `revised_at` : l'instant de la dernière édition qui a remis l'état à zéro), chaque essai dans `probe_results`, l'agrégat par jour UTC dans `probe_days` | Purgés : essais après 7 jours, agrégat après un an. La sonde supprimée emporte son histoire ; `machine_id` (la machine qui la lance) est en `restrict` : une machine qui lance des sondes ne se retire pas (409 `machine.has_probes`), on change la machine de la sonde ou on la supprime d'abord. `service_id` vise un **service déclaré**, sur n'importe quelle machine, en `restrict` : un service qu'une sonde surveille ne se supprime pas (409 `directory.service_linked`, avec le plan), et recréer un conteneur ne casse plus rien. La cible est écrite en clair : une copie de la base dit ce qui est surveillé, pas comment y entrer. Une cible HTTP n'accepte pas d'identifiants (`https://nom:mot@…`, refus `probe.target_credentials`) ; une sonde qui en portait d'avant ce refus **perd son mot de passe au démarrage** (R-D5-19) : le nom d'utilisateur reste, la sonde est mise en pause (jamais effacée, son historique reste) et l'alerte `probe_password_removed` dit de régler la cible à nouveau (« Comment une cible est sondée »). Il retire aussi le mot de passe que gardaient `alerts.details.target` les alertes `probe_down` écrites avant le masquage (22/09 au 19/10). Ce démarrage compacte la base une fois (`VACUUM`, puis journal `-wal` vidé dans le fichier) pour que l'ancienne valeur n'y reste pas ; les démarrages suivants n'en trouvent plus et ne compactent pas. `secure_delete` est actif : une ligne effacée est écrasée, pas laissée dans une page libre. **Coût** : chaque suppression écrit ses pages, et le compactage a besoin de place disque (échec journalisé, le démarrage continue). Les copies de la base faites avant (sauvegarde, restic) gardent l'ancien mot de passe jusqu'à leur expiration |
-| Machine openCloud, `state_dir` | `opencloud.db` | Le dernier certificat vu par chaque sonde, dans `probe_certificates` (une ligne au plus par sonde, partie avec elle) : sujet, émetteur, dates, empreinte SHA-256, chaîne valide, nom correspondant, agrafe OCSP | Écrasé à chaque essai qui en voit un ; un essai muet n'efface rien. **Aucun historique, aucune chaîne complète** : le renouvellement se lit au changement d'empreinte, l'âge sur la date de début. Rien de secret : un certificat serveur est public par construction |
-| Machine openCloud, `state_dir` | `opencloud.db` | La publication d'un projet dans `projects` (`slug` unique et non nul : le projet est publié ; annonce en texte brut, langue, `published_at` ; le titre de la page est celui du projet) ; les composants dans `status_components` (leur projet, en `cascade` ; nom public, ordre), leurs objets dans `status_component_members` (quatre clés étrangères, exactement une remplie ; celle du service vise un **service déclaré**, en `restrict`), les incidents dans `incidents` (titre, impact, statut, fenêtre d'une maintenance, dates), les objets qu'ils visent dans `incident_targets` (quatre clés étrangères, exactement une remplie, en `cascade` : un lien seul, l'incident reste), leur fil dans `incident_updates`. Une maintenance ne tait aucune alerte : c'est un silence qui le fait | Les quatre clés d'un membre sont en `restrict` : une machine, un service, une sonde ou une tâche qu'un composant affiche refuse d'être supprimé tant qu'on ne l'a pas retiré du composant ; le composant supprimé emporte ses liens ; la page supprimée emporte ses composants de même. Un incident ne vise pas un composant : il vise des objets, et l'objet supprimé détache l'incident (compté dans le plan), qui garde son texte et son fil. Un projet qui a sa page refuse d'être supprimé (`project.has_status_page`). Incidents résolus purgés après un an. Tout est écrit par l'opérateur pour être lu par le public : rien de secret |
-| Machine openCloud, `state_dir` | `opencloud.db` | Le dernier constat sur chaque image d'une machine dans `image_checks` (issue, empreinte tirée, empreinte publiée, tag plus récent et son empreinte, type déduit) ; sur la fiche `containers`, ce que Compose dit du service (`compose_service`, `compose_dir`, `compose_file`). La politique de l'opérateur ne vit plus sur la fiche : elle est sur l'unité (`service_units.update_policy`) | Écrasé à chaque vérification ; purgé après 30 jours sans vérification ; la machine retirée emporte tout. Le dossier du projet Compose est un chemin de la machine, en clair |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les alertes dans `alerts` (type, gravité, objet et son nom recopié, machine, service déclaré, détails en JSON, dates dont le début du calme, la lecture (`acknowledged_at`), la dernière annonce (`notified_at`) et le rappel parti (`reminded_at`) ; l'objet et le service en clés étrangères `set null`), les canaux dans `alert_channels` (**URL et secret chiffrés** — le jeton du bot pour Matrix —, format, destinataires d'un e-mail ou salon Matrix dans `destination`, gravité minimale, `categories` : les familles reçues, séparées par des virgules, **vide = toutes**), les livraisons dans `alert_deliveries` (événement, essais, motif, code, heure de l'essai suivant, ou retenue par la limite du canal, ou tue par un silence), les silences dans `mutes` (cible en clé étrangère, type, fenêtre, motif, auteur, et `announce` avec `public_title` quand le silence s'annonce en maintenance) | Résolues purgées après 90 jours, livraisons avec leur alerte, canaux sans purge. Silences finis depuis plus de 90 jours purgés avec les alertes (au départ, puis une fois par jour) ; une machine (avec ses conteneurs), un service déclaré, une sonde ou une tâche retirée emporte ses silences par la clé étrangère (`cascade`), une pause ou un archivage les garde ; le plan de suppression les compte. **L'URL et le secret d'un canal sont chiffrés** (AES-256-GCM, clé du serveur, liés à leur ligne) : un webhook Discord, Slack ou ntfy porte son jeton dans le chemin de l'URL, c'est un secret autant que la clé de signature. Il faut pouvoir les rejouer au récepteur, un haché ne servirait à rien ; l'API ne renvoie jamais le secret. Pour Matrix, c'est le jeton d'accès du bot : le déconnecter du compte du bot le révoque |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les jetons d'API dans `api_tokens` (empreinte SHA-256, préfixe affiché, portée `read` ou `write`, nom, échéance de 30, 90 ou 365 jours ou aucune, dernier usage) et leurs verbes dans `api_token_verbs` (migration `016_api_token_verbs.sql` : un verbe du registre par ligne, aucune ligne : aucune action ; `ON DELETE CASCADE`), leur portée dans `api_tokens.machines_limited` et `guests_limited` et les tables `api_token_machines` et `api_token_guests` (migration `023_api_token_reach.sql` : « La portée d'un jeton »), et les demandes de verbe à confirmation que ces jetons déposent dans `verb_requests` (migration `025_verb_requests.sql` : « Les verbes à confirmation ») | Rien n'est en clair : une copie de la base n'ouvre rien. Révoquer **efface** la ligne, ses verbes, sa portée et ses demandes en attente ; purge des jetons échus toutes les 15 minutes ; 16 jetons au plus ; activer l'authentification de l'interface les efface tous |
-| Machine openCloud, `state_dir` | `opencloud.db` | L'accès de l'opérateur à l'interface dans `auth_settings` (une ligne) : le mode (`none`, `basic`, `forward`), l'identifiant, l'empreinte **bcrypt** du mot de passe (coût 12), le nom de l'en-tête d'identité du mode `forward` (`forward_header`), la date d'activation | Le mot de passe n'est jamais stocké ni renvoyé ; une copie de la base donne l'identifiant, pas l'accès. L'identité transmise par le SSO n'est jamais stockée : elle arrive avec chaque requête. `none` ne veut plus dire « ouvert » : aucun compte, l'installation attend sa première configuration. Désactiver efface identifiant, empreinte et en-tête, et y ramène |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les réglages de l'opérateur dans `settings`, une seule ligne : la langue de l'interface ; le délai du rappel des alertes de danger (`danger_reminder_hours`, 12 par défaut, 0 le coupe) ; le relais d'e-mails (`mail_host`, `mail_port`, `mail_tls`, `mail_username`, `mail_from`, et **`mail_password` chiffré** : il faut le rejouer au relais, un haché ne servirait à rien ; l'API ne le renvoie jamais, `has_password` dit seulement qu'il y en a un) ; la fin de support (`lifecycle_disabled`, à 0 tant qu'elle est activée) | Chaque écrivain relit, modifie sa clé et réécrit dans une seule transaction : la langue et le relais changés en même temps survivent tous deux, même depuis deux processus. **Le mot de passe du relais est chiffré** comme les autres secrets saisis dans l'interface, lié à la ligne des réglages |
-| Machine openCloud, `state_dir` | `opencloud.db` | Les seuils des alertes de ressources dans `alert_thresholds` (migration `037_alert_thresholds.sql`) : une ligne par ressource (`cpu`, `memory`, `disk`) et par périmètre, `machine_id` à NULL pour le réglage global ou la machine qu'elle surcharge (clé étrangère en `cascade`) ; seuil d'attention, seuil de danger, fenêtre en secondes (0 : la dernière lecture, le disque). Le seuil de retour n'est pas stocké | Deux index uniques partiels : une règle par ressource pour le global, une par machine et ressource. Les seuils du disque déjà réglés sous Paramètres passent au global à la migration, tels quels |
-| Machine openCloud, `state_dir` | `secret.key` | La clé qui chiffre les secrets ci-dessus : une ligne `key-v1:<id>:<clé>`, AES-256, 32 octets tirés au hasard, jamais en base. `<id>` est l'empreinte courte de la clé, inscrite aussi dans chaque chiffré ; le temps d'une rotation, le fichier porte plusieurs lignes (quatre au plus) : un chiffré s'ouvre avec la clé de son `<id>`, la première ligne scelle | Mode 0600, écriture atomique, refusée si un autre compte peut la lire. `serve` la crée au premier démarrage par une création exclusive (un lien dur d'un temporaire écrit et synchronisé : si le fichier existe, elle échoue) ; deux `serve` lancés ensemble sur une base neuve tirent chacun une clé, un seul gagne, l'autre relit la sienne. `opencloud secrets rotate` en tire une neuve et rescelle chaque secret, l'ancienne gardée sous `secret.key.rotated-<horodatage>` ; `opencloud secrets forget` remplace une clé perdue, l'ancienne gardée sous `secret.key.forgotten-<horodatage>`. **À sauvegarder à part, une fois** : sans elle, la base garde ses données mais perd ses secrets. `opencloud secrets forget` repart d'une clé neuve (voir `installation.md`) |
-| Machine openCloud, `state_dir` | `server.key` | La clé qui **signe les ordres** envoyés aux agents : une ligne `ed25519-v1:<graine>`, Ed25519, tirée au premier démarrage de `serve`, jamais en base ; une seconde ligne, la clé précédente, le temps d'une rotation (`opencloud secrets rotate-server-key`, puis `finish-server-key`). Sa moitié publique est livrée à chaque agent à l'enrôlement, qui l'épingle | Les règles de `secret.key` : mode 0600 jugé sur le descripteur, refusée si un autre compte peut la lire, création exclusive (deux `serve` lancés ensemble gardent la même). Illisible ou abîmée, `serve` refuse de démarrer plutôt que d'en tirer une autre. **Qui l'a commande toutes les machines** ; perdue, chaque agent refuse les ordres (`bad_signature`) jusqu'à son ré-enrôlement ; volée, aussi : une rotation se fait sous la signature de l'ancienne clé, elle ne chasse pas qui la tient. À sauvegarder avec `secret.key` |
-| Machine openCloud, `state_dir` | `opencloud.db` | L'historique des exécutions des plans de sauvegarde dans `backup_runs` (migration `019` : une ligne par cible d'un passage : plan, source, début, fin, résultat `ok`/`failed`/`refused`, raison fermée, taille de l'archive, nom de la destination), lu par l'inventaire et par `GET /api/backups/runs`. Les volumes Docker de chaque machine dans `machine_volumes` (migration `021` : nom, pilote, noms des conteneurs qui le montent ; **jamais le contenu ni la taille**) | L'historique est borné à 400 lignes par plan, purgé à l'écriture ; il survit au plan et à la destination qu'il nomme. Les volumes sont remplacés à chaque inventaire de l'agent ; la machine retirée emporte les siens. Aucun secret dans l'un ni l'autre |
-| Machine openCloud, `state_dir` | `opencloud.db` | La sauvegarde de la base : `backup_keyring` (une ligne : la clé **publique** `age1…` en clair, la privée `identity_sealed` scellée par la phrase de passe, l'empreinte), `backup_destinations` (nom, machine en `restrict`, chemin), `backup_plans` (le sujet, unique, le libellé, le type de source `database` ou `agent`, la machine source en `restrict`, le producteur, la sélection, la destination en `restrict`, combien garder, la dernière tentative, la clé de son refus, le dernier ordre en `set null`). **La phrase de passe n'est écrite nulle part** : ni base, ni journal, ni audit | La clé privée n'est lisible qu'avec la phrase ; la publique ne chiffre que |
-| Machine openCloud, `state_dir` | `outgoing/<colis>/` | Les colis des ordres longs, de deux sortes. *À télécharger* (la base, `backup.receive`) : l'instantané de la base (`VACUUM INTO`) le temps de l'emballer, puis l'archive chiffrée jusqu'à son téléchargement par l'agent, **la vie de son ordre au plus** (`action.ParcelLifetime` : 2 min pour être pris, une heure pour finir). *À téléverser* (`backup.produce`, `Outbox.CreateForUpload`) : un colis que la machine **source** remplit par `PUT /agent/parcels/{colis}/{nom}` (l'archive chiffrée d'une VM, 64 Gio au plus, 1 Gio libre de marge ; la clé scellée y est déposée par `serve`), jusqu'à ce que la destination l'ait téléchargé ; `serve` le jette dès la cible traitée, et **un seul vit à la fois**. Vidé au démarrage de `serve`. Aucune sauvegarde n'est gardée sur cette machine | `0700`, `0600`, même disque et mêmes droits que la base ; l'instantané en clair est effacé avant l'envoi ; un téléversement n'apporte que du chiffré |
-| Machine openCloud, `state_dir` | `lifecycle.json` | La dernière lecture d'endoflife.date : quel dépôt d'images est quel produit, et les branches des produits que les services utilisent (nom, maintenue ou non, date de fin, dernière version). Absent tant que la fin de support n'a jamais été activée | Données publiques, 0600, écriture atomique, remplacé d'un bloc à chaque lecture réussie ; l'effacer coûte une lecture de la source |
-| Machine openCloud, `state_dir` | `control.sock` | La socket de commande, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/api/manifest/…`. Une socket que personne n'écoute (arrêt brutal) est remplacée au démarrage suivant ; celle d'un `serve` vivant n'est jamais touchée | Mode 0600, et `state_dir` fermé au groupe et aux autres, sans quoi elle n'est pas ouverte. Elle n'est pas à sauvegarder |
-| Toute machine, la machine openCloud comprise, `/var/lib/opencloud-agent` (au compte de l'agent, `opencloud-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, identifiant de la machine et de l'agent (`agent_id`), adresse d'openCloud, empreinte du certificat, langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`) | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (la clé change seule pendant une rotation, par l'ordre `agent.server_key`) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/opencloud`**, que le compte du serveur possède sur la machine openCloud : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
-| Toute machine, la machine openCloud comprise, `/var/lib/opencloud-agent` | `bin/` et `update.json` | `bin/opencloud-<version>` (la courante et la précédente, rien d'autre), les liens `bin/current` (ce que le lanceur exécute) et `bin/previous` (la version d'avant la dernière bascule), et le **marqueur** `update.json` : une mise à jour (ou un retour arrière) en attente de confirmation, avec son échéance, ou ce que le lanceur en a fait (« Comment un agent se met à jour », décision 9). Aucun secret : états, numéros de version, identifiant d'ordre | `0600` au compte de l'agent. Le marqueur disparaît à la confirmation, ou une fois son rapport livré au serveur ; un marqueur illisible est écarté |
-| Toute machine, la machine openCloud comprise, `/usr/local/lib/opencloud-agent` | `opencloud-guard` | Le **lanceur stable** : une copie du binaire, posée une fois par root (`root:root`, `0755`), que l'unité systemd lance. L'agent, qui écrit son état et `bin/`, ne le remplace jamais | Se repose à la main si le lanceur change (`GuardVersion`) ; l'agent le sait par la variable `OPENCLOUD_AGENT_GUARD` |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les tâches surveillées et leur jeton de ping, **chiffré** (AES-256-GCM, clé du serveur, lié à sa ligne) : la page doit le réafficher. Pour le retrouver à chaque ping, la colonne `token_lookup` garde son SHA-256 ; le chiffré est dans `token_sealed` | Une copie de la base seule ne livre pas les URL de ping ; elle donne l'empreinte, qui ne remonte pas au jeton (128 bits tirés au hasard). Qui a la base **et** `secret.key` les lit. Le jeton se régénère depuis la page de la tâche : l'ancienne URL cesse aussitôt de répondre, sans recréer la tâche. La machine d'une tâche, facultative, est en `restrict` : une machine à laquelle une tâche est rattachée ne se retire pas (409 `machine.has_heartbeats`), on détache la tâche d'abord |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les pings bruts (forme, source, méthode, corps tronqué à 10 Kio, **en clair**) et les exécutions (début, fin, durée, code, issue dont « manquée » : un retard sans exécution) | Purgés : pings après 7 jours, exécutions après 90 jours |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les ressources mesurées par machine : le brut toutes les 10 s dans `machine_samples` (dont la taille de l'ARC ZFS, `zfs_cache`, vide sans ZFS), ses volumes dans `machine_disks`, les moyennes par heure et par jour dans `machine_rollups` (une ligne par machine, granularité `hour` ou `day` et seau) | Purgés : brut et volumes après 48 h, horaire après 90 jours, journalier après un an. La machine retirée emporte tout |
+| Machine Kagu, `state_dir` | `opencloud.db` | L'annuaire déclaré : `projects`, `declared_services`, `service_units`, `service_provides`, `project_services`, et sur chaque unité la politique de mise à jour (`service_units.update_policy`, `watch`, `hold` ou `ignore`). Aucun secret, aucune donnée lue sur une machine | Pas de purge : ce que l'opérateur déclare reste. Supprimer un service emporte ses unités et ses fournitures, supprimer un projet ne retire que les liens ; une machine qui porte des services ne se retire pas, un service que des sondes ou des composants visent non plus |
+| Machine Kagu, `state_dir` | `opencloud.db` | Le journal des fichiers appliqués : la table `applies` (`id` en `apl_` et seize hexadécimaux, `at`, `finished_at`, `actor_kind` `cli` ou `operator`, `actor_name`, `file_hash`, `file_name`, `prune`, `plan_hash`, `state` `confirmed`, `applied` ou `failed`, les quatre compteurs, `done`, `error` et `error_object`, et `plan`, le JSON des changements dans l'ordre d'écriture). **Ni le fichier ni aucun secret** : le plan ne porte que des valeurs de l'annuaire, la cible d'une sonde y est masquée (`user:…@hôte`) et un jeton n'y est jamais ; une tâche créée y est notée `token_generated` sans le jeton. Pas de clé étrangère vers les objets touchés : le journal leur survit | Pas de purge : le journal est petit (une ligne par fichier appliqué) et c'est lui qui répond à « qui a changé ça ». Une ligne restée `confirmed` au démarrage est celle d'un arrêt brutal : `serve` la passe en `failed` (`manifest.interrupted`) |
+| Machine Kagu, `state_dir` | `opencloud.db` | Le journal d'audit : la table `audit_events`, une ligne par geste réussi qui écrit un objet déclaré ou une autorité : `at`, `actor_kind`, `actor_name` et `actor_label` (le nom que portait l'acteur à l'instant du geste, nullable : migration `017_audit_actor_label.sql`), `action`, `object_kind`, `object_id`, `object_name` recopié, `details` (JSON plat de textes) et `apply_id` quand un apply l'a écrit. **Aucun secret** : ni mot de passe, ni jeton, ni secret, ni URL de webhook (« Le journal d'audit ») | Ajout seul : un déclencheur refuse toute modification d'une ligne, hors la mise à nul du lien `apply_id` (`ON DELETE SET NULL`). Pas de clé étrangère vers l'objet : la ligne lui survit. Purgé après **un an** (`audit.Retention`), avec les alertes, au démarrage puis une fois par jour |
+| Machine Kagu, `state_dir` | `opencloud.db` | L'envoi du journal : la table `audit_deliveries`, une ligne par (événement, canal qui reçoit le journal) : `status` (`pending`, `delivered`, `failed`), `attempts`, `reason` et `code` du dernier essai, `next_attempt_at`. Réservée dans la transaction de l'événement. **Aucun contenu** : le message se refait de l'événement, relu à l'envoi (« Le journal d'audit › Envoi aux canaux ») | Part avec son événement (la purge à un an) et avec son canal (`ON DELETE CASCADE`) |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les ordres envoyés aux agents : `action_runs` (identifiant, genre `action`, paramètres sans secret `params`, machine et agent en `set null` avec `machine_name` recopié, état, `refusal_reason`, `not_after`, rang `seq` unique par agent, `requested_by` recopié de l'acteur, `requested_at`, `finished_at`) et leur sortie, `run_logs` (rang, instant, flux, ligne ; 64 lignes au plus par run), partie avec son run (`cascade`). Écrit **avant** que l'ordre ne parte (« Comment un ordre part et revient ») | Un run survit à sa machine et à son agent : c'est une trace. Purgé à 90 jours (`action.Retention`) avec sa sortie, par la boucle des ordres. La sortie est ce que l'agent a écrit : rien n'y est masqué |
+| Machine Kagu, `state_dir` | `opencloud.db` | Le rattachement des conteneurs à l'annuaire : `containers.unit_id` (l'unité déclarée, nulle tant que rien ne rattache) et `containers.match_level` (`label`, `compose` ou `name`), recalculés à chaque rapport et après chaque écriture de l'annuaire ; la table `ignored_keys` (machine, genre `compose_service` — valeur `projet/service` —, `compose_project` ou `container_name`, valeur) des conteneurs que l'opérateur dit voulus. Les deux labels du produit que le conteneur porte, `containers.label_service` et `containers.label_unit` (texte, vides par défaut) et `containers.label_invalid` (0 ou 1 : des labels de la marque étaient là, mal formés), pour que le rapprochement relise la valeur sans la demander à l'agent ; aucun autre label n'est gardé. Aucun secret, aucun identifiant Docker : une clé d'observation survit à la recréation du conteneur | `unit_id` passe à nul quand l'unité est supprimée (`ON DELETE SET NULL`), `ignored_keys` part avec sa machine. Pas de purge : l'opérateur retire une clé d'un geste |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les conteneurs : une fiche par conteneur dans `containers` (nom, projet Compose, image, état Docker, code de sortie, tué faute de mémoire, tué sans arrêt demandé, arrêt demandé, santé, ports publiés, mode réseau, privilégié, dépendances déclarées, dates), ses transitions dans `container_events`, ses mesures dans `container_samples`, ce que chaque machine dit de son Docker dans `machine_engines` | Purgés : transitions après 90 jours, fiche d'un conteneur détruit après 30 jours avec ses transitions et mesures, mesures après 48 h ; plafonnés par machine (fiches vivantes, archivées, transitions, cadence des mesures : « Comment les conteneurs sont suivis », point 6). **L'extrait de journal** d'un arrêt anormal (50 lignes, 10 Kio) est stocké en clair sur la transition : ce qu'une application écrit dans ses logs peut s'y trouver |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les clés SSH autorisées que chaque agent relève (migration `011_ssh_keys.sql`) : `ssh_reports` (une ligne par machine : relevé tronqué ou non, instant), `ssh_accounts` (machine, compte, uid, état `read`, `none`, `denied`, `unsafe` ou `too_large`, relevé tronqué, lignes ignorées) et `ssh_keys` (compte, fichier `authorized_keys` ou `authorized_keys2`, **empreinte SHA256**, type, taille en bits, commentaire borné à 64 octets, noms d'options reconnus). **Jamais le contenu d'un fichier ni la clé publique entière** : l'empreinte ne remonte pas à la clé | Remplacé en entier à chaque relevé retenu, dans une transaction : ce qu'une machine ne dit plus disparaît. Pas de purge d'âge. La machine retirée emporte tout (`ON DELETE CASCADE`), et le plan de suppression compte « clés SSH relevées » |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les unités systemd que chaque agent relève (migration `029_systemd_units.sql`) : `systemd_reports` (une ligne par machine : systemd lu ou non, raison, relevé tronqué ou non, instant) et `systemd_units` (machine, **nom** de l'unité de service, état de chargement, état d'activité, sous-état : trois mots de listes fermées). **Jamais** la description, le fichier de l'unité, ses `Environment=`, son processus ni son groupe de contrôle | Remplacé en entier à chaque relevé retenu, dans une transaction : une unité que la machine ne dit plus disparaît. Pas de purge d'âge. La machine retirée emporte tout (`ON DELETE CASCADE`), et le plan de suppression compte « unités systemd relevées » |
+| Machine Kagu, **mémoire du processus `serve`** | aucun fichier | Qui a joint quels ports de l'hôte de chaque machine (`hostconn.Service`) : **une vue = un port, une source (compte, adresse du réseau local ou Internet), première et dernière vue**. Aucune migration. Au plus 2 000 vues par machine (les plus anciennes partent) | Perdu à l'arrêt de `serve` : chaque agent redit son rapport à l'ouverture de son flux, les vues repartent de zéro. Jamais dans la base, ni dans une sauvegarde, ni dans le journal d'audit |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les liens entre instances (migration `030_links.sql`) : la table `links`, une ligne par lien : l'instance de départ et celle d'arrivée (**machine et clé stable**, `compose:projet/service`, `container:nom` ou `systemd:unité.service`, jamais un identifiant Docker), la nature (`order`, `config`), la **preuve** (`declared`), le **signal** (`depends_on`, `container_link`, `operator`), un port facultatif, la première et la dernière vue. Aucune valeur de configuration, aucun environnement | Jamais effacé parce qu'on ne le revoit plus : la dernière vue vieillit, l'écran dit « Ancien » après 7 jours. Un lien d'outil se rafraîchit au rapport suivant ; un lien de l'opérateur ne se retire que par lui (`DELETE /api/directory/links/{id}`). Au plus 2 000 liens par machine. La machine retirée emporte les siens (`ON DELETE CASCADE`) |
+| Machine Kagu, `state_dir` | `opencloud.db` | L'hôte Proxmox qu'une machine porte et ce que son API en a dit (migration `013_proxmox.sql`) : `machine_proxmox` (une ligne par machine : adresse de l'API, identifiant du jeton, **secret du jeton chiffré**, empreinte épinglée, nœud, version, instant de la déclaration et du dernier relevé réussi, clé du refus du dernier relevé qui a échoué), `proxmox_guests` (VM et conteneurs : numéro, type `qemu` ou `lxc`, nom, état, modèle ou non, vCPU, mémoire et disque **alloués**, machine enrôlée rapprochée, dernière sauvegarde connue et sa taille ; depuis la migration `020`, le stockage de la plus récente, le nombre d'archives vzdump vues et leur taille totale) et `proxmox_storages` (nœud, nom, type, total, utilisé, libre, contenus acceptés, actif ; depuis la migration `035`, si le jeton lit les archives du stockage). **Jamais le contenu d'une VM** | Le secret du jeton est chiffré comme les autres (« Ce que le chiffrement couvre ») ; il ne sort jamais de l'API ni des journaux. Les VM et les stockages sont remplacés en entier à chaque relevé réussi, dans une transaction : ce que l'hôte ne montre plus disparaît, un relevé qui échoue garde le précédent. Pas d'historique, pas de purge d'âge. La machine retirée emporte l'hôte et ses relevés (`ON DELETE CASCADE`) ; une VM rapprochée d'une machine retirée reste, sans lien. Le plan de suppression compte « hôtes Proxmox déclarés » et « VM Proxmox rapprochées » |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les rôles que l'agent reconnaît sur sa machine (migration `014_machine_roles.sql`) : `machine_roles` (machine, rôle de la liste fermée `proxmox_ve`, version trouvée ; aujourd'hui le seul rôle). **Aucun secret, aucun droit** : un rôle se montre, il n'ouvre rien | Un reflet du dernier rapport, remplacé en entier à chaque rapport retenu : un rôle que l'agent ne voit plus disparaît. Pas d'historique, pas de purge d'âge. La machine retirée l'emporte (`ON DELETE CASCADE`) |
+| Machine Kagu, `state_dir` | `opencloud.db` | Le retour arrière des agents (migration `018_agent_rollback.sql`) : `agents.rollback_version` (la version du retour arrière que l'agent a dite à l'ouverture de son flux, 0 tant qu'il ne la dit pas) et `machines.update_last` (« à mettre à jour en dernier », 0 par défaut) | Aucun secret. `rollback_version` se réécrit à chaque ouverture de flux ; `update_last` ne change que par l'opérateur |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les pare-feu que l'opérateur déclare et ce que leur API en a dit (migration `015_firewalls.sql`) : `firewalls` (nom unique sans casse, connecteur `opnsense`, adresse de l'API, clé d'API, **secret d'API chiffré**, empreinte épinglée, version, instants de la déclaration et du dernier relevé réussi, clé du refus du dernier relevé qui a échoué), `firewall_interfaces`, `firewall_rules` (dans l'ordre où le pare-feu les rend), `firewall_leases` et `firewall_gateways`. **Jamais le trafic, jamais un journal de filtrage** | Le secret est chiffré comme les autres (« Ce que le chiffrement couvre »), lié à sa ligne ; il ne sort jamais de l'API ni des journaux. Les quatre tables de relevé sont remplacées en entier à chaque relevé réussi, dans une transaction ; un relevé qui échoue garde le précédent. Une autre adresse d'API ou un autre connecteur à la redéclaration efface le relevé (il décrivait un autre appareil). Pas d'historique, pas de purge d'âge. Le pare-feu retiré emporte son relevé (`ON DELETE CASCADE`). Un pare-feu n'appartient à aucune machine : le plan de suppression d'une machine n'en compte aucun. Au plus 20 pare-feu |
+| Machine Kagu, `state_dir` | `opencloud.db` | Le réseau des conteneurs : les réseaux Docker de chaque machine dans `machine_networks` (nom, pilote, interne, projet Compose), l'appartenance de chaque fiche à ses réseaux dans `container_networks` (adresse, alias) | Remplacés à chaque inventaire ; la fiche supprimée emporte ses appartenances, la machine retirée emporte tout. Les adresses sont celles des réseaux internes de Docker, pas des adresses publiques |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les sondes dans `probes` (nom, type, cible, machine qui sonde, service surveillé, état, cadence, seuils, attentes HTTP, poignée de main TLS demandée, dernier essai, `revised_at` : l'instant de la dernière édition qui a remis l'état à zéro), chaque essai dans `probe_results`, l'agrégat par jour UTC dans `probe_days` | Purgés : essais après 7 jours, agrégat après un an. La sonde supprimée emporte son histoire ; `machine_id` (la machine qui la lance) est en `restrict` : une machine qui lance des sondes ne se retire pas (409 `machine.has_probes`), on change la machine de la sonde ou on la supprime d'abord. `service_id` vise un **service déclaré**, sur n'importe quelle machine, en `restrict` : un service qu'une sonde surveille ne se supprime pas (409 `directory.service_linked`, avec le plan), et recréer un conteneur ne casse plus rien. La cible est écrite en clair : une copie de la base dit ce qui est surveillé, pas comment y entrer. Une cible HTTP n'accepte pas d'identifiants (`https://nom:mot@…`, refus `probe.target_credentials`) ; une sonde qui en portait d'avant ce refus **perd son mot de passe au démarrage** (R-D5-19) : le nom d'utilisateur reste, la sonde est mise en pause (jamais effacée, son historique reste) et l'alerte `probe_password_removed` dit de régler la cible à nouveau (« Comment une cible est sondée »). Il retire aussi le mot de passe que gardaient `alerts.details.target` les alertes `probe_down` écrites avant le masquage (22/09 au 19/10). Ce démarrage compacte la base une fois (`VACUUM`, puis journal `-wal` vidé dans le fichier) pour que l'ancienne valeur n'y reste pas ; les démarrages suivants n'en trouvent plus et ne compactent pas. `secure_delete` est actif : une ligne effacée est écrasée, pas laissée dans une page libre. **Coût** : chaque suppression écrit ses pages, et le compactage a besoin de place disque (échec journalisé, le démarrage continue). Les copies de la base faites avant (sauvegarde, restic) gardent l'ancien mot de passe jusqu'à leur expiration |
+| Machine Kagu, `state_dir` | `opencloud.db` | Le dernier certificat vu par chaque sonde, dans `probe_certificates` (une ligne au plus par sonde, partie avec elle) : sujet, émetteur, dates, empreinte SHA-256, chaîne valide, nom correspondant, agrafe OCSP | Écrasé à chaque essai qui en voit un ; un essai muet n'efface rien. **Aucun historique, aucune chaîne complète** : le renouvellement se lit au changement d'empreinte, l'âge sur la date de début. Rien de secret : un certificat serveur est public par construction |
+| Machine Kagu, `state_dir` | `opencloud.db` | La publication d'un projet dans `projects` (`slug` unique et non nul : le projet est publié ; annonce en texte brut, langue, `published_at` ; le titre de la page est celui du projet) ; les composants dans `status_components` (leur projet, en `cascade` ; nom public, ordre), leurs objets dans `status_component_members` (quatre clés étrangères, exactement une remplie ; celle du service vise un **service déclaré**, en `restrict`), les incidents dans `incidents` (titre, impact, statut, fenêtre d'une maintenance, dates), les objets qu'ils visent dans `incident_targets` (quatre clés étrangères, exactement une remplie, en `cascade` : un lien seul, l'incident reste), leur fil dans `incident_updates`. Une maintenance ne tait aucune alerte : c'est un silence qui le fait | Les quatre clés d'un membre sont en `restrict` : une machine, un service, une sonde ou une tâche qu'un composant affiche refuse d'être supprimé tant qu'on ne l'a pas retiré du composant ; le composant supprimé emporte ses liens ; la page supprimée emporte ses composants de même. Un incident ne vise pas un composant : il vise des objets, et l'objet supprimé détache l'incident (compté dans le plan), qui garde son texte et son fil. Un projet qui a sa page refuse d'être supprimé (`project.has_status_page`). Incidents résolus purgés après un an. Tout est écrit par l'opérateur pour être lu par le public : rien de secret |
+| Machine Kagu, `state_dir` | `opencloud.db` | Le dernier constat sur chaque image d'une machine dans `image_checks` (issue, empreinte tirée, empreinte publiée, tag plus récent et son empreinte, type déduit) ; sur la fiche `containers`, ce que Compose dit du service (`compose_service`, `compose_dir`, `compose_file`). La politique de l'opérateur ne vit plus sur la fiche : elle est sur l'unité (`service_units.update_policy`) | Écrasé à chaque vérification ; purgé après 30 jours sans vérification ; la machine retirée emporte tout. Le dossier du projet Compose est un chemin de la machine, en clair |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les alertes dans `alerts` (type, gravité, objet et son nom recopié, machine, service déclaré, détails en JSON, dates dont le début du calme, la lecture (`acknowledged_at`), la dernière annonce (`notified_at`) et le rappel parti (`reminded_at`) ; l'objet et le service en clés étrangères `set null`), les canaux dans `alert_channels` (**URL et secret chiffrés** — le jeton du bot pour Matrix —, format, destinataires d'un e-mail ou salon Matrix dans `destination`, gravité minimale, `categories` : les familles reçues, séparées par des virgules, **vide = toutes**), les livraisons dans `alert_deliveries` (événement, essais, motif, code, heure de l'essai suivant, ou retenue par la limite du canal, ou tue par un silence), les silences dans `mutes` (cible en clé étrangère, type, fenêtre, motif, auteur, et `announce` avec `public_title` quand le silence s'annonce en maintenance) | Résolues purgées après 90 jours, livraisons avec leur alerte, canaux sans purge. Silences finis depuis plus de 90 jours purgés avec les alertes (au départ, puis une fois par jour) ; une machine (avec ses conteneurs), un service déclaré, une sonde ou une tâche retirée emporte ses silences par la clé étrangère (`cascade`), une pause ou un archivage les garde ; le plan de suppression les compte. **L'URL et le secret d'un canal sont chiffrés** (AES-256-GCM, clé du serveur, liés à leur ligne) : un webhook Discord, Slack ou ntfy porte son jeton dans le chemin de l'URL, c'est un secret autant que la clé de signature. Il faut pouvoir les rejouer au récepteur, un haché ne servirait à rien ; l'API ne renvoie jamais le secret. Pour Matrix, c'est le jeton d'accès du bot : le déconnecter du compte du bot le révoque |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les jetons d'API dans `api_tokens` (empreinte SHA-256, préfixe affiché, portée `read` ou `write`, nom, échéance de 30, 90 ou 365 jours ou aucune, dernier usage) et leurs verbes dans `api_token_verbs` (migration `016_api_token_verbs.sql` : un verbe du registre par ligne, aucune ligne : aucune action ; `ON DELETE CASCADE`), leur portée dans `api_tokens.machines_limited` et `guests_limited` et les tables `api_token_machines` et `api_token_guests` (migration `023_api_token_reach.sql` : « La portée d'un jeton »), et les demandes de verbe à confirmation que ces jetons déposent dans `verb_requests` (migration `025_verb_requests.sql` : « Les verbes à confirmation ») | Rien n'est en clair : une copie de la base n'ouvre rien. Révoquer **efface** la ligne, ses verbes, sa portée et ses demandes en attente ; purge des jetons échus toutes les 15 minutes ; 16 jetons au plus ; activer l'authentification de l'interface les efface tous |
+| Machine Kagu, `state_dir` | `opencloud.db` | L'accès de l'opérateur à l'interface dans `auth_settings` (une ligne) : le mode (`none`, `basic`, `forward`), l'identifiant, l'empreinte **bcrypt** du mot de passe (coût 12), le nom de l'en-tête d'identité du mode `forward` (`forward_header`), la date d'activation | Le mot de passe n'est jamais stocké ni renvoyé ; une copie de la base donne l'identifiant, pas l'accès. L'identité transmise par le SSO n'est jamais stockée : elle arrive avec chaque requête. `none` ne veut plus dire « ouvert » : aucun compte, l'installation attend sa première configuration. Désactiver efface identifiant, empreinte et en-tête, et y ramène |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les réglages de l'opérateur dans `settings`, une seule ligne : la langue de l'interface ; le délai du rappel des alertes de danger (`danger_reminder_hours`, 12 par défaut, 0 le coupe) ; le relais d'e-mails (`mail_host`, `mail_port`, `mail_tls`, `mail_username`, `mail_from`, et **`mail_password` chiffré** : il faut le rejouer au relais, un haché ne servirait à rien ; l'API ne le renvoie jamais, `has_password` dit seulement qu'il y en a un) ; la fin de support (`lifecycle_disabled`, à 0 tant qu'elle est activée) | Chaque écrivain relit, modifie sa clé et réécrit dans une seule transaction : la langue et le relais changés en même temps survivent tous deux, même depuis deux processus. **Le mot de passe du relais est chiffré** comme les autres secrets saisis dans l'interface, lié à la ligne des réglages |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les seuils des alertes de ressources dans `alert_thresholds` (migration `037_alert_thresholds.sql`) : une ligne par ressource (`cpu`, `memory`, `disk`) et par périmètre, `machine_id` à NULL pour le réglage global ou la machine qu'elle surcharge (clé étrangère en `cascade`) ; seuil d'attention, seuil de danger, fenêtre en secondes (0 : la dernière lecture, le disque). Le seuil de retour n'est pas stocké | Deux index uniques partiels : une règle par ressource pour le global, une par machine et ressource. Les seuils du disque déjà réglés sous Paramètres passent au global à la migration, tels quels |
+| Machine Kagu, `state_dir` | `secret.key` | La clé qui chiffre les secrets ci-dessus : une ligne `key-v1:<id>:<clé>`, AES-256, 32 octets tirés au hasard, jamais en base. `<id>` est l'empreinte courte de la clé, inscrite aussi dans chaque chiffré ; le temps d'une rotation, le fichier porte plusieurs lignes (quatre au plus) : un chiffré s'ouvre avec la clé de son `<id>`, la première ligne scelle | Mode 0600, écriture atomique, refusée si un autre compte peut la lire. `serve` la crée au premier démarrage par une création exclusive (un lien dur d'un temporaire écrit et synchronisé : si le fichier existe, elle échoue) ; deux `serve` lancés ensemble sur une base neuve tirent chacun une clé, un seul gagne, l'autre relit la sienne. `opencloud secrets rotate` en tire une neuve et rescelle chaque secret, l'ancienne gardée sous `secret.key.rotated-<horodatage>` ; `opencloud secrets forget` remplace une clé perdue, l'ancienne gardée sous `secret.key.forgotten-<horodatage>`. **À sauvegarder à part, une fois** : sans elle, la base garde ses données mais perd ses secrets. `opencloud secrets forget` repart d'une clé neuve (voir `installation.md`) |
+| Machine Kagu, `state_dir` | `server.key` | La clé qui **signe les ordres** envoyés aux agents : une ligne `ed25519-v1:<graine>`, Ed25519, tirée au premier démarrage de `serve`, jamais en base ; une seconde ligne, la clé précédente, le temps d'une rotation (`opencloud secrets rotate-server-key`, puis `finish-server-key`). Sa moitié publique est livrée à chaque agent à l'enrôlement, qui l'épingle | Les règles de `secret.key` : mode 0600 jugé sur le descripteur, refusée si un autre compte peut la lire, création exclusive (deux `serve` lancés ensemble gardent la même). Illisible ou abîmée, `serve` refuse de démarrer plutôt que d'en tirer une autre. **Qui l'a commande toutes les machines** ; perdue, chaque agent refuse les ordres (`bad_signature`) jusqu'à son ré-enrôlement ; volée, aussi : une rotation se fait sous la signature de l'ancienne clé, elle ne chasse pas qui la tient. À sauvegarder avec `secret.key` |
+| Machine Kagu, `state_dir` | `opencloud.db` | L'historique des exécutions des plans de sauvegarde dans `backup_runs` (migration `019` : une ligne par cible d'un passage : plan, source, début, fin, résultat `ok`/`failed`/`refused`, raison fermée, taille de l'archive, nom de la destination), lu par l'inventaire et par `GET /api/backups/runs`. Les volumes Docker de chaque machine dans `machine_volumes` (migration `021` : nom, pilote, noms des conteneurs qui le montent ; **jamais le contenu ni la taille**) | L'historique est borné à 400 lignes par plan, purgé à l'écriture ; il survit au plan et à la destination qu'il nomme. Les volumes sont remplacés à chaque inventaire de l'agent ; la machine retirée emporte les siens. Aucun secret dans l'un ni l'autre |
+| Machine Kagu, `state_dir` | `opencloud.db` | La sauvegarde de la base : `backup_keyring` (une ligne : la clé **publique** `age1…` en clair, la privée `identity_sealed` scellée par la phrase de passe, l'empreinte), `backup_destinations` (nom, machine en `restrict`, chemin), `backup_plans` (le sujet, unique, le libellé, le type de source `database` ou `agent`, la machine source en `restrict`, le producteur, la sélection, la destination en `restrict`, combien garder, la dernière tentative, la clé de son refus, le dernier ordre en `set null`). **La phrase de passe n'est écrite nulle part** : ni base, ni journal, ni audit | La clé privée n'est lisible qu'avec la phrase ; la publique ne chiffre que |
+| Machine Kagu, `state_dir` | `outgoing/<colis>/` | Les colis des ordres longs, de deux sortes. *À télécharger* (la base, `backup.receive`) : l'instantané de la base (`VACUUM INTO`) le temps de l'emballer, puis l'archive chiffrée jusqu'à son téléchargement par l'agent, **la vie de son ordre au plus** (`action.ParcelLifetime` : 2 min pour être pris, une heure pour finir). *À téléverser* (`backup.produce`, `Outbox.CreateForUpload`) : un colis que la machine **source** remplit par `PUT /agent/parcels/{colis}/{nom}` (l'archive chiffrée d'une VM, 64 Gio au plus, 1 Gio libre de marge ; la clé scellée y est déposée par `serve`), jusqu'à ce que la destination l'ait téléchargé ; `serve` le jette dès la cible traitée, et **un seul vit à la fois**. Vidé au démarrage de `serve`. Aucune sauvegarde n'est gardée sur cette machine | `0700`, `0600`, même disque et mêmes droits que la base ; l'instantané en clair est effacé avant l'envoi ; un téléversement n'apporte que du chiffré |
+| Machine Kagu, `state_dir` | `lifecycle.json` | La dernière lecture d'endoflife.date : quel dépôt d'images est quel produit, et les branches des produits que les services utilisent (nom, maintenue ou non, date de fin, dernière version). Absent tant que la fin de support n'a jamais été activée | Données publiques, 0600, écriture atomique, remplacé d'un bloc à chaque lecture réussie ; l'effacer coûte une lecture de la source |
+| Machine Kagu, `state_dir` | `control.sock` | La socket de commande, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/api/manifest/…`. Une socket que personne n'écoute (arrêt brutal) est remplacée au démarrage suivant ; celle d'un `serve` vivant n'est jamais touchée | Mode 0600, et `state_dir` fermé au groupe et aux autres, sans quoi elle n'est pas ouverte. Elle n'est pas à sauvegarder |
+| Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` (au compte de l'agent, `opencloud-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, identifiant de la machine et de l'agent (`agent_id`), adresse de Kagu, empreinte du certificat, langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`) | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (la clé change seule pendant une rotation, par l'ordre `agent.server_key`) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/opencloud`**, que le compte du serveur possède sur la machine Kagu : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
+| Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` | `bin/` et `update.json` | `bin/opencloud-<version>` (la courante et la précédente, rien d'autre), les liens `bin/current` (ce que le lanceur exécute) et `bin/previous` (la version d'avant la dernière bascule), et le **marqueur** `update.json` : une mise à jour (ou un retour arrière) en attente de confirmation, avec son échéance, ou ce que le lanceur en a fait (« Comment un agent se met à jour », décision 9). Aucun secret : états, numéros de version, identifiant d'ordre | `0600` au compte de l'agent. Le marqueur disparaît à la confirmation, ou une fois son rapport livré au serveur ; un marqueur illisible est écarté |
+| Toute machine, la machine Kagu comprise, `/usr/local/lib/opencloud-agent` | `opencloud-guard` | Le **lanceur stable** : une copie du binaire, posée une fois par root (`root:root`, `0755`), que l'unité systemd lance. L'agent, qui écrit son état et `bin/`, ne le remplace jamais | Se repose à la main si le lanceur change (`GuardVersion`) ; l'agent le sait par la variable `OPENCLOUD_AGENT_GUARD` |
 | Hôte Proxmox, `/var/lib/opencloud-agent` | `proxmox.json` | Le jeton Proxmox **local** de l'agent : identifiant, **secret** et empreinte du certificat (`token_id`, `secret`, `fingerprint`), posé à la main par l'opérateur, jamais envoyé ni stocké par le serveur | `0600`, au compte de l'agent ; sans lui les droits `proxmox.*` sont indisponibles (« Comment un hôte Proxmox agit »). Le secret est en clair dans ce fichier : le protège le compte, pas un chiffrement |
 | Un hôte Proxmox dont l'agent a `backup.produce`, `/var/lib/opencloud-agent/produce/` | `<préfixe>-AAAAMMJJ-HHMMSS.tar.age.raw`, puis `….tar.age` | Les archives en cours de production : le flux brut de `vzdump` (compressé `zstd`, **en clair**), puis le même emballé dans un `tar` et chiffré pour la clé publique du trousseau ; les deux coexistent avant l'envoi, d'où **deux fois** la plus grosse VM compressée. L'agent refuse de commencer sous 1 Gio libre (`disk_full`) | `0700` et `0600`, au compte de l'agent. Vidé à la fin de **chaque** ordre, réussi ou non, et au démarrage de l'agent (un arrêt en pleine production ne laisse rien). Posé par la préparation du droit, créé par l'agent s'il manque. Le clair de la VM ne quitte jamais cet hôte |
 
@@ -195,7 +195,7 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
 
 1. L'opérateur nomme la machine, choisit son rôle (qui coche d'avance les droits
    de son agent et décide de ses modules) et ajuste les droits (« Les droits
-   d'un agent », plus bas). openCloud tire un jeton, en garde
+   d'un agent », plus bas). Kagu tire un jeton, en garde
    l'empreinte et les droits demandés, affiche le clair une seule fois avec la
    commande à coller.
 2. Sur la machine, en **étapes** : le serveur rend avec le jeton la liste
@@ -204,7 +204,7 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    avec son bouton « Copier » ; **le jeton n'est que dans le bloc `enroll`**
    (un test le garde). Dans l'ordre : `stop` (un ré-enrôlement seulement :
    arrêter l'unité, supprimer `identity.json`) ; `binary` (sauf sur la machine
-   openCloud : `machine.ReleaseDownloadLines`, le binaire de la version du
+   Kagu : `machine.ReleaseDownloadLines`, le binaire de la version du
    serveur téléchargé de la publication, `SHA256SUMS` vérifié, posé dans
    `/tmp/opencloud` ; il s'arrête au premier échec. Le serveur n'offre pas son
    binaire par HTTP : une version non publiée y échoue, 404) ; `prepare` ;
@@ -226,7 +226,7 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    shell, son dossier personnel est l'état de l'agent), le groupe `docker` s'il
    existe, l'état à ce compte, puis **sous le compte** (`runuser`) `bin/` et le
    binaire (`/tmp/opencloud` copié par l'opérateur, `/usr/local/bin/opencloud`
-   pour la machine openCloud) posé dans `bin/` sous la version du serveur avec
+   pour la machine Kagu) posé dans `bin/` sous la version du serveur avec
    son lien `current`, puis un `install -d` au nom du compte par dossier où un
    droit coché écrit (la racine des services, le dossier de `backup.receive`,
    ceux de `files.write`), précédé de `test ! -L` ; un dossier sous un autre
@@ -258,9 +258,9 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    machine-id de son modèle : vérifié le 10 octobre 2026, deux clones
    étaient pris l'un pour l'autre et le second refusé à tort.
 3. `opencloud serve` fait la même empreinte au démarrage (`SetServerHost`).
-   C'est **la seule chose qui distingue la machine openCloud** : l'agent qui
+   C'est **la seule chose qui distingue la machine Kagu** : l'agent qui
    présente l'empreinte du serveur s'enrôle sous l'identifiant stable de la
-   machine openCloud, `local`, et reprend sa ligne et son historique si elle
+   machine Kagu, `local`, et reprend sa ligne et son historique si elle
    existe (une base d'avant les agents, un agent révoqué) ; sinon il la
    crée, au nom de son jeton. Tant qu'elle a un agent actif, un second
    agent qui vient de la même machine par un jeton de machine neuve est
@@ -272,7 +272,7 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    jeton, donc le droit d'enrôler une machine. Rien de l'empreinte n'est
    stocké. Les autres machines s'enrôlent sous l'identifiant que leur agent
    a tiré.
-   Puis openCloud consomme le jeton, crée la machine (ou la retrouve) et inscrit son
+   Puis Kagu consomme le jeton, crée la machine (ou la retrouve) et inscrit son
    **agent** (`agt_` et seize hexadécimaux) dans une seule transaction : deux
    agents avec le même jeton, un seul passe. Le jeton ne sert plus jamais ; il
    garde le nom de l'agent qui l'a consommé.
@@ -318,7 +318,7 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    | `401 bad_proof` | la signature n'est pas celle de la clé de l'agent | s'arrête (code 2) et le dit |
    | `401 revoked` | la signature est la bonne, mais l'opérateur a révoqué l'agent | s'arrête (code 2) et dit de ré-enrôler |
    | `404 machine_not_found` | machine retirée, ou sans agent | s'arrête (code 2) et le dit |
-   | `426 protocol_unsupported` | l'agent et le serveur ne parlent pas la même version du protocole | s'arrête (code 2) et dit d'installer le même binaire que sur la machine openCloud |
+   | `426 protocol_unsupported` | l'agent et le serveur ne parlent pas la même version du protocole | s'arrête (code 2) et dit d'installer le même binaire que sur la machine Kagu |
 
    Ré-enrôler garde l'identifiant de la machine et son historique : un
    **nouvel agent** est inscrit, l'ancien révoqué dans la même transaction.
@@ -329,7 +329,7 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
 6. Serveur redémarré avant que l'agent ait vu la coupure : son signal arrive
    avec une session que le serveur ne connaît plus (`no_session`), l'agent
    rouvre aussitôt son flux avec une preuve neuve. Horloge de la machine à
-   plus de 5 min de celle d'openCloud (`clock_skew`) : la preuve est
+   plus de 5 min de celle de Kagu (`clock_skew`) : la preuve est
    refusée, la machine reste hors ligne, l'agent écrit dans son journal,
    dans la langue de l'opérateur, de régler l'heure par NTP, et réessaie
    avec le même délai croissant. Tout autre refus (un 404 d'un proxy en
@@ -346,14 +346,14 @@ dans son fichier. Les changer, c'est ré-enrôler (décision 10, plus bas).
 | Droit | Portée | Ce qu'il permet |
 | --- | --- | --- |
 | `observe` | — | Mesurer la machine, lire son Docker, lancer ses sondes : les commandes d'observation, et l'ordre `agent.ping`, qui ne change rien. Toujours là, la case est cochée et grisée |
-| `probe.lan` | — | Que les sondes de l'agent composent vers **le réseau local** (boucle locale, adresses privées, partagée `100.64.0.0/10`, « Comment une cible est sondée »). **Coché par défaut** à l'émission d'un jeton (formulaire) et pour l'agent de la machine openCloud, décochable. Premier droit qu'**aucun ordre n'exige** (`action.RightOf` n'en a pas) : c'est une borne de l'observation, appliquée par l'agent à ses propres sondes. Un agent enrôlé avant ne l'a pas : ses sondes du réseau local tombent « Hors ligne » jusqu'à un ré-enrôlement qui coche le droit (on ne coche rien à la place de l'opérateur) |
-| `observe.env` | — | Que l'agent **lise l'environnement des conteneurs Docker** et en tire les liens entre instances de la machine (« Les liens de l'environnement »). **Refusé par défaut** : décoché dans le formulaire, absent des préréglages de rôle, absent de la ligne de la machine openCloud ; il se coche **machine par machine**, sous « Avancé : droits de l'agent », avec sa note. Comme `probe.lan`, aucun ordre ne l'exige : c'est une borne de l'observation, lue **une fois** au démarrage de l'agent. Un agent enrôlé avant ne l'a pas : la carte **Liens** de la fiche d'un service dit que l'environnement n'est pas lu et porte le bouton **Ré-enrôler avec « Lire l'environnement… »** (fenêtre déjà cochée, geste de U1) |
+| `probe.lan` | — | Que les sondes de l'agent composent vers **le réseau local** (boucle locale, adresses privées, partagée `100.64.0.0/10`, « Comment une cible est sondée »). **Coché par défaut** à l'émission d'un jeton (formulaire) et pour l'agent de la machine Kagu, décochable. Premier droit qu'**aucun ordre n'exige** (`action.RightOf` n'en a pas) : c'est une borne de l'observation, appliquée par l'agent à ses propres sondes. Un agent enrôlé avant ne l'a pas : ses sondes du réseau local tombent « Hors ligne » jusqu'à un ré-enrôlement qui coche le droit (on ne coche rien à la place de l'opérateur) |
+| `observe.env` | — | Que l'agent **lise l'environnement des conteneurs Docker** et en tire les liens entre instances de la machine (« Les liens de l'environnement »). **Refusé par défaut** : décoché dans le formulaire, absent des préréglages de rôle, absent de la ligne de la machine Kagu ; il se coche **machine par machine**, sous « Avancé : droits de l'agent », avec sa note. Comme `probe.lan`, aucun ordre ne l'exige : c'est une borne de l'observation, lue **une fois** au démarrage de l'agent. Un agent enrôlé avant ne l'a pas : la carte **Liens** de la fiche d'un service dit que l'environnement n'est pas lu et porte le bouton **Ré-enrôler avec « Lire l'environnement… »** (fenêtre déjà cochée, geste de U1) |
 | `agent.update` | — | Les ordres `agent.update` (mettre à jour l'agent depuis le serveur) et `agent.rollback` (revenir à la version précédente) (« Comment un agent se met à jour »). Un agent qui n'a pas le droit refuse l'ordre ; celui qui l'a le vérifie lui-même avant de changer de binaire, et ne le fait que sous le lanceur stable |
 | `restic.target` | Un dossier | Recevoir des sauvegardes restic : l'agent lance et surveille `rest-server` en écriture seule sur ce dossier (« Comment restic sauvegarde »). **Refusé par défaut**, coché par machine |
 | `restic.produce` | — | Lancer restic sur la machine pour sauvegarder un service ou une VM vers une cible. **Refusé par défaut**, coché par machine. Une VM demande aussi `backup.produce`. Lier la source à une cible (`restic.provision`) demande l'ancre `restic.target-cert` (« Les ancres de confiance locales ») |
 | `restic.docker` | — | Sauvegarder les **volumes nommés** et les **bases** Docker d'un service entier : l'agent lit un volume par le conteneur qui le monte (`docker cp`) et lance l'outil de dump d'une base **dans son conteneur** (`docker exec`). **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Équivaut à la socket Docker que l'agent a déjà. Demandé **en plus** de `restic.produce` dès qu'un service porte un volume ou une base ; sans lui, l'ordre est refusé (`right_missing:restic.docker`) |
 | `restic.verify` | — | Vérifier les dépôts que la machine reçoit : `restic check`, puis la relecture **en mémoire** de fichiers du dernier instantané (« Comment restic se vérifie »). **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Demandé **en plus** de `restic.target` ; sans lui, l'ordre est refusé (`right_missing:restic.verify`) et l'écran propose « Ré-enrôler avec ce droit ». Coût : l'agent déchiffre du contenu (rien n'est écrit sur son disque, rien n'est rapporté) ; il détient déjà le mot de passe du dépôt pour la rétention, le droit le dit en clair |
-| `restic.browse` | — | Parcourir les dépôts que la machine reçoit, pour l'explorateur de la page Sauvegardes (« Comment on parcourt une sauvegarde ») : elle lit les **noms, tailles et dates** des fichiers d'un instantané et les rend à openCloud, qui ne les garde pas. **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Demandé **en plus** de `restic.target` ; sans lui, l'ordre est refusé (`restic.target_browse_right_missing`) et l'écran propose « Ré-enrôler avec ce droit ». Coût : un nom de fichier est déjà une donnée, et il transite par le serveur le temps de la requête (contenu jamais lu). Ce droit est distinct de `restic.verify` : vérifier ne montre aucun nom |
+| `restic.browse` | — | Parcourir les dépôts que la machine reçoit, pour l'explorateur de la page Sauvegardes (« Comment on parcourt une sauvegarde ») : elle lit les **noms, tailles et dates** des fichiers d'un instantané et les rend à Kagu, qui ne les garde pas. **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Demandé **en plus** de `restic.target` ; sans lui, l'ordre est refusé (`restic.target_browse_right_missing`) et l'écran propose « Ré-enrôler avec ce droit ». Coût : un nom de fichier est déjà une donnée, et il transite par le serveur le temps de la requête (contenu jamais lu). Ce droit est distinct de `restic.verify` : vérifier ne montre aucun nom |
 | `restic.restore` | — | Restaurer sur la **machine source** un fichier ou un dossier d'un instantané, **à côté de l'original** (« Comment on restaure »). **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Sans chemin propre : la destination doit être sous un dossier de `files.write` (liens résolus), donc sous les `ReadWritePaths` de l'unité. Sans le droit, l'ordre est refusé (`restic.source_restore_right_missing`) et l'écran propose « Ré-enrôler avec ce droit ». Coût : l'agent écrit sur sa machine (jamais par-dessus, jamais de suppression) ; deux droits à cocher (`restic.restore` et `files.write`) |
 | `docker.deploy` | — | Déployer un service Compose déclaré, la première fois (`docker.deploy`) |
 | `docker.update` | — | Redéployer un service Compose déjà déployé : versions changées, `.env` remplacé (`docker.update`) |
@@ -510,7 +510,7 @@ dans son fichier. Les changer, c'est ré-enrôler (décision 10, plus bas).
   supervision continue, et la
   fiche montre l'écart « droits rapportés ≠ cochés ». Le fichier n'est pas
   touché : l'état corrigé, un redémarrage rend les droits. Un agent d'avant,
-  sur la machine openCloud et non déplacé, perd ainsi ses droits d'écriture
+  sur la machine Kagu et non déplacé, perd ainsi ses droits d'écriture
   (installation.md, « Déplacer l'état de l'agent »).
 - **Le serveur n'envoie pas ce qu'il sait refusé** : un ordre dont l'agent a
   rapporté ses droits sans celui-là est refusé tout de suite,
@@ -675,7 +675,7 @@ Une machine archivée reste **dans la liste**, avec la pastille « Archivée »
 en ligne », ni dans le compteur du menu, et n'est jamais déclarée **perdue** :
 sans agent actif il n'y a rien à perdre, et son alerte « perdue » ouverte se
 résout à l'archivage. Sur la fiche d'une machine archivée, la fenêtre ne propose
-plus que l'issue définitive. La machine openCloud s'archive et se supprime comme
+plus que l'issue définitive. La machine Kagu s'archive et se supprime comme
 les autres.
 
 Refus : `409 machine.no_agent` pour une archive déjà archivée, `404` pour une
@@ -687,7 +687,7 @@ Ce que l'agent détenait, il le détient encore (sa clé, désormais refusée ; 
 `.env` des services de la machine) : après une compromission, tourner les
 secrets des services de cette machine reste à faire à la main.
 
-### La machine openCloud
+### La machine Kagu
 
 Une machine comme les autres, avec un agent comme les autres : `serve`
 n'observe rien de sa propre machine, ni ses mesures, ni son Docker, ni ses
@@ -696,11 +696,11 @@ toujours eue : c'est par lui qu'elle garde son historique.
 
 | Étape | Ce qui se passe |
 | --- | --- |
-| Premier démarrage | Tant que la machine openCloud n'a **jamais** eu d'agent (pas de ligne `local`, ou une ligne sans agent), `serve` émet le jeton de son agent (`OfferLocalEnrollment`) : `observe` et `probe.lan` (ses sondes visent d'abord ses propres services), nommé d'après le nom d'hôte (sans le domaine ; un nom d'hôte qui ne fait pas un nom de machine laisse `opencloud`), un jeton de ré-enrôlement si la ligne existe. Le clair ne vit qu'en mémoire. Le journal dit, en `INFO` et dans la langue de l'interface, qu'un jeton attend pour cette machine et où trouver la ligne ; **jamais le jeton** |
+| Premier démarrage | Tant que la machine Kagu n'a **jamais** eu d'agent (pas de ligne `local`, ou une ligne sans agent), `serve` émet le jeton de son agent (`OfferLocalEnrollment`) : `observe` et `probe.lan` (ses sondes visent d'abord ses propres services), nommé d'après le nom d'hôte (sans le domaine ; un nom d'hôte qui ne fait pas un nom de machine laisse `opencloud`), un jeton de ré-enrôlement si la ligne existe. Le clair ne vit qu'en mémoire. Le journal dit, en `INFO` et dans la langue de l'interface, qu'un jeton attend pour cette machine et où trouver la ligne ; **jamais le jeton** |
 | Première configuration | Le compte créé, l'écran montre les étapes d'installation de l'agent de cette machine (`POST /api/machines/local-enrollment` : le jeton déjà émis s'il attend encore, un neuf sinon) : préparation (le compte `opencloud-agent`, son état, le binaire pris de `/usr/local/bin/opencloud`, sans lien dans `/usr/local/bin`), enrôlement, unité : la même installation que les autres machines, sans l'étape du binaire. « Ouvrir l'interface » passe à la suite. Si la ligne ne s'obtient pas, l'interface s'ouvre directement |
 | Ensuite | `409 machine.local_enrolled` dès que la machine a, ou a eu, un agent : un agent révoqué ne se réinstalle pas de lui-même. La ligne se redonne par la fiche › **Ré-enrôler**, ou par Ajouter une machine, jouée sur elle (l'empreinte la rattache à `local`) |
 | À chaque démarrage | Le jeton est émis de nouveau tant que la machine n'a jamais eu d'agent : celui d'avant, dont le clair est perdu, expire seul dans l'heure |
-| Hors ligne | Sans le flux de son agent, la machine openCloud est hors ligne, comme les autres ; tant qu'elle n'a pas d'agent actif, elle n'est jamais déclarée **perdue** |
+| Hors ligne | Sans le flux de son agent, la machine Kagu est hors ligne, comme les autres ; tant qu'elle n'a pas d'agent actif, elle n'est jamais déclarée **perdue** |
 | Suppression | Comme les autres : archivée (agent coupé) ou effacée par son plan, qui emporte son agent. Au démarrage suivant, sans ligne `local`, le jeton est de nouveau offert |
 
 ## Comment les modules et le rôle d'une machine décident de l'écran
@@ -762,7 +762,7 @@ déclaré (`machine_proxmox`) ou si l'agent a reconnu Proxmox VE
 un hôte Proxmox fait souvent tourner Docker aussi. Le test
 `TestMigration024_DeducesTheRoleFromTheFacts` la joue sur une base d'avant.
 
-## Comment openCloud sait où tourne une machine
+## Comment Kagu sait où tourne une machine
 
 Une machine peut être du matériel, une VM, un conteneur LXC ou un VPS ; une VM
 a un hôte, et un hôte fait parfois partie d'une grappe. Rien de cela n'est saisi
@@ -841,10 +841,10 @@ C'est la première étape de #266 : **lire**, jamais écrire (la sauvegarde d'un
 VM est un autre geste, qui ne passe pas par cette lecture : l'agent de l'hôte
 lance `vzdump`, « Comment une sauvegarde se fait » ; la lecture lui donne la
 liste des VM du sélecteur `all`). L'opérateur déclare,
-sur la fiche d'une machine, l'hôte Proxmox qu'elle porte ; openCloud interroge
+sur la fiche d'une machine, l'hôte Proxmox qu'elle porte ; Kagu interroge
 l'API de l'hyperviseur et montre ses VM et conteneurs, ses stockages et la
 dernière sauvegarde de chaque VM (onglet « Hyperviseur » de la machine), et, sur
-la fiche d'une machine qui est une de ces VM, son identité (« Comment openCloud
+la fiche d'une machine qui est une de ces VM, son identité (« Comment Kagu
 sait où tourne une machine » : hôte, nœud, invité 5012, « 2 vCPU · 2 Gio · 32 Gio »
 alloués, dernière sauvegarde (233 Mio)). **Le
 serveur ne donne aucun ordre à Proxmox** (ses gestes passent par l'agent de
@@ -861,7 +861,7 @@ d'agir ou d'alerter viendra, s'il vient, d'une décision à part.
 | `/cluster/resources?type=vm` | Chaque VM (`qemu`) et conteneur (`lxc`) de toute la grappe : numéro, nom, nœud, état, modèle ou non, vCPU, mémoire et disque **alloués** (pas ce qu'ils consomment) |
 | `/cluster/resources?type=storage` | Chaque stockage, un par nœud pour un stockage local : type, taille, utilisé, libre, contenus acceptés, actif ou non |
 | `/cluster/status` | Le nom de la grappe (entrée de type `cluster`) ; un nœud seul n'en a pas. Un refus n'arrête pas le relevé |
-| `/nodes/{nœud}/{qemu\|lxc}/{vmid}/config` | Les adresses MAC des cartes de l'invité, pour le rapprochement (« Comment openCloud sait où tourne une machine »). Un invité illisible garde ses adresses vides ; un refus arrête ces lectures |
+| `/nodes/{nœud}/{qemu\|lxc}/{vmid}/config` | Les adresses MAC des cartes de l'invité, pour le rapprochement (« Comment Kagu sait où tourne une machine »). Un invité illisible garde ses adresses vides ; un refus arrête ces lectures |
 | `/access/permissions?path=/storage/{stockage}` (et `path=/vms` si besoin) | Les privilèges **du jeton lui-même**, avant de croire une liste d'archives (ouvert à tout jeton pour ses propres droits). Une panne de cette lecture fait échouer le relevé |
 | `/nodes/{nœud}/storage/{stockage}/content?content=backup` | Les archives de sauvegarde, pour chaque stockage **actif qui accepte les sauvegardes et que le jeton sait lister** ; on retient, par VM, la plus récente et sa taille. Le nœud et le stockage viennent de l'API : ils sont échappés avant d'entrer dans le chemin |
 
@@ -876,7 +876,7 @@ l'accès. Une archive de sauvegarde d'une VM n'y passe que par
 `/storage/<id>` **et** `VM.Backup` sur `/vms/<vmid>`. `PVEAuditor` n'a aucun
 des deux.
 
-| Ce que fait openCloud | Pourquoi |
+| Ce que fait Kagu | Pourquoi |
 | --- | --- |
 | Lit les droits du jeton sur chaque stockage de sauvegardes avant de lister (`internal/domain/proxmox/backup_access.go`) | Une liste vide ne dit pas si elle est vide ou filtrée |
 | Un stockage dont le jeton n'a ni `Datastore.Allocate`, ni `AllocateSpace` + `VM.Backup` sur `/vms` n'est **pas listé** : il est nommé « illisible » | Jamais de « Aucune » faux |
@@ -893,7 +893,7 @@ pveum acl modify /storage/<stockage> --roles LectureSauvegardes --tokens '<utili
 
 **Le coût, dit franchement.** Aucun privilège de pure lecture ne fait lister les
 archives : `Datastore.Allocate` permet aussi de **supprimer** des archives de ce
-stockage (openCloud ne fait que `GET`, mais un jeton volé le pourrait ; le
+stockage (Kagu ne fait que `GET`, mais un jeton volé le pourrait ; le
 secret est chiffré en base). L'autre voie, `Datastore.AllocateSpace` sur le
 stockage et `VM.Backup` sur `/vms`, ne supprime rien mais permet de **lancer**
 des sauvegardes de toutes les VM : ni plus petite, ni sur le stockage seul. Le
@@ -938,7 +938,7 @@ qui n'est pas celle de l'API, plus de 8 Mio). Le prochain relevé réussi efface
 raison. Un secret que la perte de `secret.key` a vidé est lu comme un jeton
 refusé : l'hôte reste déclaré, l'opérateur ressaisit le jeton.
 
-**Le jeton.** Un jeton d'API Proxmox, créé pour openCloud, **en lecture seule** :
+**Le jeton.** Un jeton d'API Proxmox, créé pour Kagu, **en lecture seule** :
 le rôle `PVEAuditor` sur `/` (`Sys.Audit`, `VM.Audit`, `Datastore.Audit`) suffit
 pour les VM et les stockages, **pas pour les sauvegardes** : voir « Lire les
 sauvegardes » ci-dessous. Sa création est décrite dans
@@ -969,7 +969,7 @@ l'exception : l'empreinte s'y écrit à la main, sur la machine.
 **Les destinations.** Le client sort par la garde d'`egress` (`DialWith`, réseau
 local ouvert : c'est le cas normal d'un Proxmox ; le lien-local, qui porte les
 métadonnées des hébergeurs, reste fermé) et n'utilise pas de mandataire
-d'environnement. La machine openCloud doit joindre le port 8006 de l'hôte.
+d'environnement. La machine Kagu doit joindre le port 8006 de l'hôte.
 
 **Déclarer, modifier, retirer.** `PUT /api/machines/{id}/proxmox` déclare ou
 remplace l'hôte (adresse en `https://hôte[:port]` sans chemin, identifiant de
@@ -1040,12 +1040,12 @@ déclaré, le relevé est celui d'avant.
 exacte d'abord, puis, à défaut, une casse différente **si une seule machine
 convient** ; deux candidates qui ne diffèrent que par la casse ne rapprochent
 rien. La machine de l'hôte n'est jamais sa propre VM. Le rapprochement est
-recalculé à chaque relevé ; la machine openCloud elle-même (`local`) peut porter
+recalculé à chaque relevé ; la machine Kagu elle-même (`local`) peut porter
 un hôte comme toute autre. Si deux hôtes montrent une VM de même nom, la
 première (par nom de machine) décrit la machine.
 
 **Le jeton d'API.** `GET /api/machines/{id}/proxmox` (l'hôte, ses VM et ses
-stockages) est dans la liste fermée de « Comment un agent IA lit openCloud » :
+stockages) est dans la liste fermée de « Comment un agent IA lit Kagu » :
 elle ne rend aucun secret, et un test le parcourt clé par clé. Les rôles
 détectés passent par `GET /api/machines` et `GET /api/machines/{id}`, déjà dans
 la liste. La déclaration et le retrait n'y sont pas : `403` à un Bearer.
@@ -1183,7 +1183,7 @@ Un module **générique** : l'interface et l'API ne parlent d'aucune marque, seu
 le **connecteur** (`internal/fact/firewall/opnsense`) connaît l'API d'OPNsense. Un
 autre pare-feu ajoute son genre (`firewall.Kind…`) et son connecteur, sans
 toucher à la page. L'opérateur déclare un pare-feu (Paramètres › Modules, puis la page « Pare-feu » qui entre au menu avec le premier) ;
-openCloud lit sa version, ses interfaces, ses règles, ses baux DHCP et ses
+Kagu lit sa version, ses interfaces, ses règles, ses baux DHCP et ses
 passerelles, pour l'opérateur et pour les agents IA (jeton d'API, donc
 mcp-maison). **Lecture seule** : aucun ordre n'est donné au pare-feu, aucune
 alerte ne naît d'un relevé. Un pare-feu n'est lié à aucune machine.
@@ -1231,8 +1231,8 @@ chiffré (« Une configuration de pare-feu », sous « Comment une sauvegarde se
 
 **Le coût, dit franchement.** OPNsense n'a **pas de privilège en lecture seule**
 pour ces pages : celui qui ouvre `searchRule` ouvre aussi l'ajout et la
-suppression de règles. L'utilisateur d'API créé pour openCloud **pourrait donc
-écrire** si quelqu'un détenait sa clé. openCloud ne fait que lire, mais la clé
+suppression de règles. L'utilisateur d'API créé pour Kagu **pourrait donc
+écrire** si quelqu'un détenait sa clé. Kagu ne fait que lire, mais la clé
 se garde comme un secret (chiffrée dans la base, jamais rendue). Les noms de
 privilèges sont ceux d'OPNsense, **affichés en anglais même en interface
 française** (ils ne sont pas dans son catalogue de traduction). **Non vérifié sur
@@ -1247,16 +1247,16 @@ dans les sources d'OPNsense (`opnsense/core`, étiquettes `26.1` et `26.7`) :
 | Quoi | Où | Source |
 | --- | --- | --- |
 | Le chemin de la page des utilisateurs, `/ui/auth/user` | Menu *System › Access › Users* | `Core/Menu/Menu.xml` |
-| Les **libellés de menu et de champ** | **Dans la langue de l'interface openCloud** (français ou anglais) : `Système : Accès : Utilisateurs`, `Système : Gestion des certificats : Certificats`, champs `Nom d'utilisateur`, `Mot de passe`, `Privilèges`, onglet `Clés Api`, bouton `Créer et télécharger la clé API pour cet utilisateur`, puis `Oui`. Catalogues : `firewall.menu_*`, `firewall.label_*` | Traductions officielles d'OPNsense : dépôt `opnsense/lang`, `fr_FR.po` (étiquette `26.1`, msgid `Users`, `Access`, `Trust`, `Certificates`, `Privileges`, `Username`, `Password`, `ApiKeys`, `Create and download API key for this user`, `Yes`) ; vues `views/OPNsense/Auth/user.volt` |
+| Les **libellés de menu et de champ** | **Dans la langue de l'interface Kagu** (français ou anglais) : `Système : Accès : Utilisateurs`, `Système : Gestion des certificats : Certificats`, champs `Nom d'utilisateur`, `Mot de passe`, `Privilèges`, onglet `Clés Api`, bouton `Créer et télécharger la clé API pour cet utilisateur`, puis `Oui`. Catalogues : `firewall.menu_*`, `firewall.label_*` | Traductions officielles d'OPNsense : dépôt `opnsense/lang`, `fr_FR.po` (étiquette `26.1`, msgid `Users`, `Access`, `Trust`, `Certificates`, `Privileges`, `Username`, `Password`, `ApiKeys`, `Create and download API key for this user`, `Yes`) ; vues `views/OPNsense/Auth/user.volt` |
 | La clé | Sur la ligne de l'utilisateur, bouton « Create and download API key for this user », puis confirmation ; le fichier téléchargé s'appelle `<hôte>_<utilisateur>_apikey.txt` et porte `key=` et `secret=` ; les clés créées se listent dans l'onglet `ApiKeys` | `views/OPNsense/Auth/user.volt` |
 | Les **noms de privilèges** : `Lobby: Dashboard`, `Status: Interfaces`, `System: Gateways` | **En anglais, tels que le champ « Privilèges » les affiche** : `PrivField` rend le `<name>` de chaque `ACL.xml` sans le traduire, et aucun n'est dans `fr_FR.po` | `Core/ACL/ACL.xml` ; `Auth/FieldTypes/PrivField.php` |
 | `Firewall: Rules [new]` | Idem. Existe en `26.1` et `26.7` (en `25.7`, la même page s'appelait `Firewall: Automation: Filter`) | `Firewall/ACL/ACL.xml` |
 | `Services: Dnsmasq DNS/DHCP: Settings` (couvre `api/dnsmasq/*`, donc les baux), `Services: DHCP: Kea(v4)` (couvre `api/kea/leases4/*`) | Idem. **Un seul des deux**, selon le serveur DHCP : Dnsmasq par défaut dans la configuration d'un OPNsense neuf (`config.xml.sample`, section `dnsmasq` avec `dhcp_ranges`, depuis `25.7`), sinon Kea | `Dnsmasq/ACL/ACL.xml`, `Kea/ACL/ACL.xml` ; `config.xml.sample` |
 | **`Services: ISC DHCPv4: Leases` n'est plus proposé** | ISC DHCP n'est plus dans le cœur depuis `26.1` : `api/dhcpv4/leases/*` et « Status: DHCP leases » ont disparu de `opnsense/core`. Le privilège n'existe que si le greffon `os-isc-dhcp` est installé ; sans lui, OPNsense ne l'offre pas dans la liste, d'où « No results matched ». Le connecteur lit encore ce point d'accès en repli, pour un OPNsense plus ancien | `opnsense/plugins`, `net/isc-dhcp/…/DHCPv4/ACL/ACL.xml` ; `opnsense/core` `25.7` (`DHCPv4/Api/LeasesController.php`), absent en `26.1` |
 
-L'assistant dit aussi que l'utilisateur est **dédié** à openCloud (jamais un
-compte existant) et que l'adresse est **celle par laquelle la machine openCloud
-joint** OPNsense. Les menus suivent la langue de l'interface openCloud, pas
+L'assistant dit aussi que l'utilisateur est **dédié** à Kagu (jamais un
+compte existant) et que l'adresse est **celle par laquelle la machine Kagu
+joint** OPNsense. Les menus suivent la langue de l'interface Kagu, pas
 celle du compte OPNsense : un OPNsense réglé dans l'autre langue montre d'autres
 mots. Les pages ne s'ouvrent que si l'adresse saisie est celle que le
 navigateur de l'opérateur atteint aussi.
@@ -1326,7 +1326,7 @@ déclaré, l'opérateur ressaisit le secret. Le direct publie le sujet `firewall
 | Passerelles | Une pastille par passerelle : état, adresse, délai et perte (« non sondée » sinon) | `GET /{id}` |
 | Interfaces | Une carte par zone : nom, réseau, état (le trait de gauche), nombre de règles et de bloquantes. Un clic ouvre le groupe de règles de la zone | `GET /{id}/interfaces`, `/rules` |
 | Règles | Groupées par interface, **repliées**. Recherche (description, adresses, ports, protocole) et filtres Toutes / Passantes / Bloquantes / Désactivées, chacun avec son compte ; chercher ou filtrer ouvre les groupes qui répondent. Les règles sans interface (flottantes) ont leur groupe | `GET /{id}/rules` |
-| Baux DHCP | Un bail dont **la carte réseau (MAC) ou l'adresse** est celle d'une machine d'openCloud nomme cette machine, avec un lien vers sa fiche ; sinon un tiret. Deux machines qui se disputent l'adresse : rien n'est dit | `GET /{id}/leases` (`machine: {id, name}` ou `null`), `firewall.MatchMachine` |
+| Baux DHCP | Un bail dont **la carte réseau (MAC) ou l'adresse** est celle d'une machine de Kagu nomme cette machine, avec un lien vers sa fiche ; sinon un tiret. Deux machines qui se disputent l'adresse : rien n'est dit | `GET /{id}/leases` (`machine: {id, name}` ou `null`), `firewall.MatchMachine` |
 | Connexion | Repliée : connecteur, adresse, version, clé (**quatre premiers caractères**, `api_key_hint`), dernier relevé, certificat. Le secret n'y est jamais | `GET /{id}` |
 
 **Qui parle à qui.** La grille se lit dans un **modèle des échanges** que
@@ -1352,7 +1352,7 @@ recalcule à chaque lecture depuis les règles du dernier relevé (aucune migrat
 **Ce que la grille ne fait pas.** L'**ordre d'évaluation n'est pas rejoué** : une
 règle de refus placée avant une règle passante est montrée dans la même case (en rouge), sans
 dire laquelle l'emporte. Les règles **éteintes** ne comptent pas (leur nombre est dit). Sont **non placées**, donc à part sous la grille : les règles flottantes (sans interface), les règles sortantes (`direction: out`) et celles qui visent un **alias** (le connecteur ne lit pas les alias : un appel et un privilège de plus, à décider). Lecture seule : l'écriture de règles
-depuis openCloud, plus tard, partira de ces mêmes types (`internal/fact/policy`).
+depuis Kagu, plus tard, partira de ces mêmes types (`internal/fact/policy`).
 
 **Audit.** `firewall.create`, `firewall.update`, `firewall.delete` passent au
 journal, avec l'hôte de l'API, le connecteur et « empreinte épinglée oui/non » ;
@@ -1611,7 +1611,7 @@ transporter (« Une source produite par un agent », plus bas). Le
 | | |
 | --- | --- |
 | Ce qui part | Un tar sans compression de trois entrées exactement : `opencloud.db` (l'instantané `VACUUM INTO`), `secret.key`, `server.key`, en `0600`. Nom : `<préfixe>-AAAAMMJJ-HHMMSS.tar.age` (UTC), le préfixe étant `opencloud` pour le plan `database` (`brand.ID`) et le sujet du plan pour les autres. À côté, `opencloud-key-<empreinte>.age` : la clé privée scellée |
-| Chiffré comment | [age](https://age-encryption.org) : la clé publique `age1…` (X25519) chiffre ; la privée est scellée par `age.NewScryptRecipient(phrase)` (scrypt, facteur 2^18). L'empreinte est les 16 premiers hexadécimaux du SHA-256 de la clé publique. La bibliothèque est `filippo.io/age` : le format est lu par l'outil `age` courant, on restaure sans openCloud |
+| Chiffré comment | [age](https://age-encryption.org) : la clé publique `age1…` (X25519) chiffre ; la privée est scellée par `age.NewScryptRecipient(phrase)` (scrypt, facteur 2^18). L'empreinte est les 16 premiers hexadécimaux du SHA-256 de la clé publique. La bibliothèque est `filippo.io/age` : le format est lu par l'outil `age` courant, on restaure sans Kagu |
 | La phrase | 16 caractères au moins (runes, espaces de bord retirés), 1024 au plus. Saisie deux fois dans le navigateur, **une** reçue par le serveur, le temps de sceller la clé ; **jamais écrite**. Perdue, aucune sauvegarde ne se relit |
 | Une paire à la fois | `POST /api/backups/keyring` refuse si elle existe (`409 backup.keyring_exists`), sauf `replace: true`. Remplacer ne rend rien illisible : chaque sauvegarde a sa clé scellée à côté d'elle, nommée par empreinte |
 | Pas de copie locale | L'instantané en clair n'existe que le temps de l'emballer, dans `outgoing/<colis>/`, et il est effacé **avant** l'envoi. L'archive chiffrée y reste jusqu'au téléchargement par l'agent, le temps que son ordre peut vivre au plus (un peu plus d'une heure), puis part ; `serve` vide `outgoing/` au démarrage |
@@ -1697,7 +1697,7 @@ La machine source d'un plan ne se supprime pas (`restrict`,
 **Une source produite par un agent.** Le passage d'un plan `agent` (la nuit,
 ou « Sauvegarder maintenant ») sauvegarde **une cible à la fois**, c'est-à-dire
 une machine virtuelle ou un conteneur, et **un seul colis vit** sur la machine
-openCloud à chaque instant, quelle que soit la taille de la cible.
+Kagu à chaque instant, quelle que soit la taille de la cible.
 
 *Avant le moindre ordre*, `serve` juge, dans cet ordre : la clé de sauvegarde
 (`backup.keyring_missing`), la destination en ligne et son droit
@@ -1711,7 +1711,7 @@ ordre ni colis ; sa clé s'écrit dans `last_error`.
 | `409 backup.source_offline` | la machine source n'a pas d'agent en ligne |
 | `409 backup.source_right_missing` | pas d'agent actif, ou l'agent a rapporté ses droits et `backup.produce` ne nomme pas le producteur du plan |
 | `409 backup.selector_needs_list` | `all`, alors que la source n'a pas d'hôte Proxmox déclaré avec au moins un invité relevé (les modèles sont écartés) : `serve` n'invente pas de liste, l'opérateur donne les numéros |
-| `409 backup.run_in_progress` | un passage court déjà, de ce plan ou de n'importe lequel : un seul à la fois sur la machine openCloud. Le plan n'est pas touché |
+| `409 backup.run_in_progress` | un passage court déjà, de ce plan ou de n'importe lequel : un seul à la fois sur la machine Kagu. Le plan n'est pas touché |
 
 *Par cible*, dans l'ordre :
 
@@ -1781,7 +1781,7 @@ passent après lui. Si `serve` s'arrête au milieu, le passage s'interrompt sans
 rien noter, le colis en cours est jeté, et les cibles restantes attendent la
 nuit suivante.
 
-*La restauration* d'une machine virtuelle se fait **sans openCloud** : on
+*La restauration* d'une machine virtuelle se fait **sans Kagu** : on
 déchiffre la clé scellée (`age -d -o cle.txt opencloud-key-<empreinte>.age`, la
 phrase est demandée), on s'en sert pour l'archive (`age -d -i cle.txt
 <préfixe>-….tar.age | tar -x`), qui rend une seule entrée, l'archive de
@@ -1823,7 +1823,7 @@ noms de détail interdits), jamais `identity_sealed`.
 
 **Ce que cela ne garantit pas.** Qui a la phrase **et** une archive lit la
 base, `secret.key` et `server.key` : la phrase se garde dans un coffre, ailleurs
-que les sauvegardes. Qui a la machine openCloud n'a pas besoin des
+que les sauvegardes. Qui a la machine Kagu n'a pas besoin des
 sauvegardes. Une destination qui perd son disque perd ses sauvegardes : en
 avoir deux est à la charge de l'opérateur (huit au plus ; plusieurs plans
 peuvent viser des destinations différentes).
@@ -1832,14 +1832,14 @@ peuvent viser des destinations différentes).
 
 Le **producteur `opnsense-config`** sauvegarde le `config.xml` d'un pare-feu
 déclaré (module Pare-feu). **C'est `serve` qui le joue, pas un agent** : la clé
-d'API ne quitte pas la machine openCloud, et le fichier n'en sort que chiffré.
+d'API ne quitte pas la machine Kagu, et le fichier n'en sort que chiffré.
 
 | | |
 | --- | --- |
-| Le plan | Un plan `agent` (aucune migration : `producer` et `selector` sont libres en base). Producteur `opnsense-config`, machine source **la machine openCloud** (posée par le serveur si le formulaire ne la donne pas ; toute autre est refusée, `backup.source_machine_unknown`), sélecteur **l'identifiant du pare-feu** (jamais `all`). L'écran en fait une source à part : « La configuration d'un pare-feu » |
+| Le plan | Un plan `agent` (aucune migration : `producer` et `selector` sont libres en base). Producteur `opnsense-config`, machine source **la machine Kagu** (posée par le serveur si le formulaire ne la donne pas ; toute autre est refusée, `backup.source_machine_unknown`), sélecteur **l'identifiant du pare-feu** (jamais `all`). L'écran en fait une source à part : « La configuration d'un pare-feu » |
 | À la création | Le pare-feu doit être déclaré (`422 backup.firewall_unknown`) et sa clé doit pouvoir **exporter** : `serve` lit la configuration une fois. Sans le privilège, `422 firewall.export_forbidden` nomme `Diagnostics: Configuration History`, et **rien n'est créé**. Modifier un plan existant ne relit pas le pare-feu |
 | Chaque nuit | `serve` lit le fichier (`firewall.Service.ExportConfiguration`), l'emballe dans un tar d'une entrée `config.xml`, le chiffre age pour la clé publique du trousseau **dans le colis**, dépose la clé scellée à côté, envoie `backup.receive` puis `backup.prune` à la destination, comme pour la base. Le clair n'est jamais écrit sur le disque. Nom : `<sujet>-AAAAMMJJ-HHMMSS.tar.age` ; l'élagage garde `keep` copies du préfixe du plan |
-| Aucun droit d'agent | L'agent de la machine openCloud ne reçoit ni ordre ni fichier ; la destination reçoit de l'age, comme toujours. Aucune nouvelle ligne dans l'enrôlement |
+| Aucun droit d'agent | L'agent de la machine Kagu ne reçoit ni ordre ni fichier ; la destination reçoit de l'age, comme toujours. Aucune nouvelle ligne dans l'enrôlement |
 | Un refus | Pare-feu retiré ou illisible (`backup.firewall_unknown`, `backup.firewall_unreadable`), clé sans le privilège (`firewall.export_forbidden`) : la clé du refus est écrite sur le plan (`last_error`), l'historique garde une ligne `firewall:<id>`, rien ne part |
 | Dans l'inventaire | Chaque pare-feu déclaré est une source (`kind: firewall`, clé `firewall:<id>`) couverte par le plan qui vise son identifiant |
 | Restaurer | Déchiffrer l'archive comme celle de la base (clé scellée à côté, phrase du trousseau), puis Système → Configuration → Sauvegardes → Restaurer sur `config.xml` |
@@ -1865,11 +1865,11 @@ agent, les plans, les destinations, l'historique).
 
 | Genre | D'où elle vient | Clé |
 | --- | --- | --- |
-| `database` | la base d'openCloud ; toujours présente | `database` |
+| `database` | la base de Kagu ; toujours présente | `database` |
 | `vm`, `lxc` | les invités du dernier relevé de chaque hôte Proxmox déclaré, **modèles exclus** (vzdump n'en sauvegarde pas ; c'est aussi la règle du sélecteur `all`) | `guest:<machine de l'hôte>:<numéro>` |
 | `docker_volume` | les volumes nommés que l'agent d'une machine a listés : nom, pilote, noms des conteneurs qui le montent. **Ni le contenu, ni la taille, ni le point de montage** | `volume:<machine>:<nom>` |
 
-**La couverture** dit quels plans d'openCloud couvrent la source aujourd'hui :
+**La couverture** dit quels plans de Kagu couvrent la source aujourd'hui :
 le plan `database` couvre la base ; un plan `agent` `proxmox-vzdump` couvre les
 invités de l'hôte qu'il nomme, tous pour `all` (ceux du dernier relevé), ceux de
 la liste sinon. Aucun producteur ne sauvegarde encore un volume Docker : un
@@ -1884,7 +1884,7 @@ nocturne de l'hôte apparaît sans y toucher. Une archive dont le numéro ne
 correspond à aucun invité du relevé n'est rattachée à personne et ne s'affiche
 pas. La limite : on voit les fichiers, pas la tâche qui les a faits.
 
-**Les cibles** sont de deux genres, **séparés** : les **destinations** d'openCloud
+**Les cibles** sont de deux genres, **séparés** : les **destinations** de Kagu
 (une machine avec agent et un dossier, avec l'état du droit de réception) et les
 **stockages Proxmox** qui acceptent des sauvegardes (nœud, type, capacité, s'ils
 répondent). Un même endroit physique peut figurer sous les deux formes (un
@@ -1987,8 +1987,8 @@ restic, dans le dépôt de la source, sous un nom de fichier stable.
 (gardée même quand le dernier essai échoue : `last_success_at`), retard
 (plus de 36 h sans réussite : « En retard »), échec et refus avec leur raison.
 Les tâches vzdump que Proxmox mène encore de lui-même (« nuit-pi ») restent
-**observées** : la carte le dit (« À remplacer par un plan openCloud ») et
-porte le bouton **Remplacer par openCloud**. En tête de page, la carte
+**observées** : la carte le dit (« À remplacer par un plan Kagu ») et
+porte le bouton **Remplacer par Kagu**. En tête de page, la carte
 **Surveillance** montre les alertes de sauvegarde ouvertes, chacune avec son
 geste (« La supervision des sauvegardes ») ; chaque carte de sauvegarde restic
 porte son **Test de restauration** (réussi, jamais testé, périmé, ou ce qui
@@ -2197,21 +2197,21 @@ qu'il manque (`restic.restic_missing`, `restic.rest_server_missing`).
 | Risque | Pourquoi on l'accepte |
 | --- | --- |
 | Événement de relais non signé par le serveur | Comme les observations. Le serveur détient déjà les clés des dépôts : signer cet événement n'ôterait rien à un serveur compromis. La cible rejuge la requête, et `rest-server` en ajout seul décide en dernier |
-| Un lien retiré garde ses mots de passe | Décision de Lucas (02/11) : c'est ce qui rouvre le dépôt, toujours sur la cible sous le même utilisateur, si le couple est redéclaré. Coût : des secrets restent scellés en base pour un dépôt que plus personne ne sauvegarde. Ils suivent `opencloud secrets rotate` et la vérification au démarrage ; l'opérateur peut les oublier avec `opencloud secrets forget` (le dépôt ne se rouvrira plus depuis openCloud) |
+| Un lien retiré garde ses mots de passe | Décision de Lucas (02/11) : c'est ce qui rouvre le dépôt, toujours sur la cible sous le même utilisateur, si le couple est redéclaré. Coût : des secrets restent scellés en base pour un dépôt que plus personne ne sauvegarde. Ils suivent `opencloud secrets rotate` et la vérification au démarrage ; l'opérateur peut les oublier avec `opencloud secrets forget` (le dépôt ne se rouvrira plus depuis Kagu) |
 | Volumes nommés Docker | Non couverts : l'écran le dit |
 
 ### Les sauvegardes que Proxmox fait déjà
 
 Le serveur lit `/cluster/backup` (tâches vzdump) avec le jeton en lecture seule
 de l'hôte, comme les stockages. Chaque invité couvert affiche, **sans plan
-openCloud**, sa prochaine sauvegarde, son stockage et sa rétention
+Kagu**, sa prochaine sauvegarde, son stockage et sa rétention
 (`prune-backups`). Un refus (403) se lit « inconnu », pas « aucune ».
 
 ## Comment un service se déploie
 
 Depuis la fiche d'un service déclaré d'origine **Compose**, l'opérateur
 **déploie** (la première fois) puis **redéploie** (versions changées, `.env`
-remplacé) le service sur sa machine. openCloud écrit le `compose.yml` qu'il
+remplacé) le service sur sa machine. Kagu écrit le `compose.yml` qu'il
 **génère** de l'annuaire, et l'`.env` qu'il transmet une fois sans le garder,
 dans `<racine de l'agent>/<projet>/`, puis l'agent lance `docker compose up -d`.
 L'état du service se lit comme avant, par le rapport des conteneurs
@@ -2219,8 +2219,8 @@ L'état du service se lit comme avant, par le rapport des conteneurs
 
 | | |
 | --- | --- |
-| Deux ordres | `docker.deploy` (le dossier du service ne doit **pas** exister : `service_dir_exists`) et `docker.update` (il doit exister : `service_dir_missing`), avec le droit homonyme. Ordres longs : acceptés tout de suite, exécutés par le worker, une heure au plus. Un dossier qu'openCloud ne sait pas avoir écrit se retire à la main |
-| Qui décide « Déployer » ou « Redéployer » | **Le dernier constat de l'agent sur le dossier** (`action_runs.service_id`) : parmi les ordres de ce service, le plus récent qui dit quelque chose du dossier. Réussi, `compose_failed` (Compose a échoué après l'écriture) et `timeout` (accepté puis plus de nouvelles : le dossier a pu être écrit, l'agent ne retire pas un dossier qu'il n'a pas fini) disent « déployé » ; `service_dir_missing` (l'agent a regardé) dit « pas déployé ». Le reste ne compte pas : un refus d'avant l'écriture, un ordre expiré, et `service_dir_exists`, pour ne jamais proposer « Redéployer » par-dessus un dossier qu'openCloud ne sait pas avoir écrit. Un déploiement coupé se reprend donc en un geste au plus : « Redéployer », et si le dossier n'existait pas, l'agent répond `service_dir_missing` et « Déployer » revient |
+| Deux ordres | `docker.deploy` (le dossier du service ne doit **pas** exister : `service_dir_exists`) et `docker.update` (il doit exister : `service_dir_missing`), avec le droit homonyme. Ordres longs : acceptés tout de suite, exécutés par le worker, une heure au plus. Un dossier que Kagu ne sait pas avoir écrit se retire à la main |
+| Qui décide « Déployer » ou « Redéployer » | **Le dernier constat de l'agent sur le dossier** (`action_runs.service_id`) : parmi les ordres de ce service, le plus récent qui dit quelque chose du dossier. Réussi, `compose_failed` (Compose a échoué après l'écriture) et `timeout` (accepté puis plus de nouvelles : le dossier a pu être écrit, l'agent ne retire pas un dossier qu'il n'a pas fini) disent « déployé » ; `service_dir_missing` (l'agent a regardé) dit « pas déployé ». Le reste ne compte pas : un refus d'avant l'écriture, un ordre expiré, et `service_dir_exists`, pour ne jamais proposer « Redéployer » par-dessus un dossier que Kagu ne sait pas avoir écrit. Un déploiement coupé se reprend donc en un geste au plus : « Redéployer », et si le dossier n'existait pas, l'agent répond `service_dir_missing` et « Déployer » revient |
 | Le `compose.yml` | **Généré**, jamais saisi, déterministe : le même annuaire donne le même texte. Il est **réécrit à chaque** (re)déploiement : une retouche faite à la main sur la machine est perdue |
 | Le dossier de données | Un champ de l'unité, `data_path` (chemin absolu **dans le conteneur**, facultatif, un par unité) : `./data/<unité>:<data_path>`. Jamais de volume nommé. L'agent crée `data/<unité>` en `0755`, au compte de l'agent ; l'UID du conteneur reste à régler à la main. `data_path` s'exporte et s'applique (`data_path:` sous l'unité) |
 | Le `.env` | **Write-only** : facultatif, 64 Kio au plus, UTF-8 sans octet nul, saisi dans la boîte de confirmation, signé dans `OrderBody.Secret` (`{"env": "…"}`), écrit par l'agent en `0600`. Jamais stocké, jamais journalisé : l'audit dit `env: sent`, `action_runs.params` dit `"env_sent": true`. Absent au déploiement : aucun `.env`. Vide au redéploiement : celui de la machine reste. Pas de relecture dans cette version |
@@ -2412,7 +2412,7 @@ journaux » (`alert_channels.attach_logs`, **oui** pour les canaux existants et 
 la création dans l'interface ; **non** pour un client d'API qui n'envoie pas le
 champ). Éteinte, `Details.Log` est retiré avant le rendu : le journal ne quitte
 la maison par aucun format. Allumée : bloc de code (Discord, Slack), texte
-(ntfy, e-mail), `<pre>` (e-mail HTML, Matrix) ; le JSON d'openCloud le porte
+(ntfy, e-mail), `<pre>` (e-mail HTML, Matrix) ; le JSON de Kagu le porte
 dans `alert.details.log`. **Le masquage ne connaît que les valeurs de l'`.env`** :
 un journal peut contenir un secret qu'il ne reconnaît pas.
 
@@ -2461,7 +2461,7 @@ ne rapporterait rien.
 | Le paquet `internal/domain/heartbeat` (`Heartbeat`, `Service`), les tables `heartbeats`, `heartbeat_pings`, `heartbeat_runs`, la section `heartbeats` du fichier de l'annuaire, le genre d'objet `heartbeat` des alertes et des silences | Les routes `/api/jobs…`, les clés `job.*`, les types d'alerte `job_late` et `job_failed`, le sujet direct `jobs`, les outils MCP `list_jobs`, `get_job`, `pause_job`, `resume_job`, l'écran `/taches` |
 
 1. L'opérateur crée une tâche : un nom, un intervalle, une grâce, une
-   machine facultative. openCloud tire un identifiant pour la page et un
+   machine facultative. Kagu tire un identifiant pour la page et un
    jeton `hb_…` pour l'URL de ping, qu'elle garde chiffré (la page doit le
    réafficher) avec son empreinte SHA-256, par laquelle un ping retrouve la
    tâche sans déchiffrer. Son état est « Nouveau », avec déjà une
@@ -2611,9 +2611,9 @@ parent pèsent quelques Kio. Au-delà, `431` avant même le routage.
    serveur borne le débit des signaux de chaque machine (« Limitation de
    débit sur `/agent/signal` ») ; sur un `429`, l'agent garde son flux et son
    tampon, et réessaie au signal suivant.
-4. La machine openCloud est mesurée par son agent, comme les autres :
+4. La machine Kagu est mesurée par son agent, comme les autres :
    `opencloud serve` ne mesure rien.
-5. openCloud refuse en bloc un lot dont une lecture est hors de mesure
+5. Kagu refuse en bloc un lot dont une lecture est hors de mesure
    (pourcentage hors de 0 à 100, nombre négatif, date à plus de cinq minutes
    dans le futur ou plus vieille que le brut gardé, volume sans point de
    montage absolu ou compté deux fois, point de montage ou périphérique qui
@@ -2655,7 +2655,7 @@ calculent dans le navigateur.
 
 ## Comment les conteneurs sont suivis
 
-Un conteneur est ce que Docker montre d'une machine : openCloud en garde une
+Un conteneur est ce que Docker montre d'une machine : Kagu en garde une
 fiche, l'observé. Le mot « service » est celui de l'annuaire, ce que
 l'opérateur déclare (section suivante). La fiche porte un genre pour qu'une
 application native en soit une aussi plus tard. Le projet Compose est un
@@ -2701,7 +2701,7 @@ machine suit toujours le flux, pas cette règle.
 1. L'agent sonde la socket Docker au départ puis toutes les 60 s tant
    qu'elle ne répond pas, en lecture seule, API Engine épinglée à `1.41`
    (Docker 20.10, celui de Debian 12) ; un démon plus vieux est refusé. Il
-   dit à openCloud si Docker est présent, sinon pourquoi : pas de socket,
+   dit à Kagu si Docker est présent, sinon pourquoi : pas de socket,
    pas le droit, démon muet, trop vieux. Ce n'est pas une erreur : la
    machine n'a aucun conteneur, et l'interface l'écrit.
 2. Docker répond : l'agent liste et inspecte chaque conteneur (un
@@ -2762,7 +2762,7 @@ machine suit toujours le flux, pas cette règle.
    attendait est marqué **rejoué** : le serveur l'écrit, mais la feature
    alertes n'y verra pas du neuf. Un agent plus vieux n'envoie pas de
    section : le serveur l'accepte.
-6. openCloud refuse en bloc un rapport de forme absurde (plus de 256
+6. Kagu refuse en bloc un rapport de forme absurde (plus de 256
    conteneurs, 512 événements ou 1 024 mesures, un Docker absent sans
    raison) ; le signal de vie compte quand même, et les autres sections du
    signal s'écrivent (« Comment une machine est mesurée », point 5). Un
@@ -2796,7 +2796,7 @@ machine suit toujours le flux, pas cette règle.
    ancien ; celui des autres machines n'est jamais touché. Les durées de
    rétention ne changent pas. Les plafonds s'appliquent dans la transaction
    qui écrit le rapport (`internal/edge/store`).
-   La machine openCloud passe par son agent, comme les autres.
+   La machine Kagu passe par son agent, comme les autres.
 7. Le serveur rend des faits : l'état Docker brut, le code de sortie, la
    santé, `oom_killed`, `killed` et `stop_requested`. Le navigateur en fait les pastilles :
    Actif, Démarre, Défaillant, Manque de mémoire, Tué, Redémarre, En pause,
@@ -3497,7 +3497,7 @@ groupes, les arêtes, les constats ; le navigateur place et trace.
    un `connect` ou un `disconnect` réinspecte le conteneur concerné et
    repart avec ses réseaux du moment, sans transition ; un `create` ou un
    `destroy` de réseau fait relire la liste, qui repart seule.
-3. openCloud refuse en bloc un rapport hors de mesure (plus de 256
+3. Kagu refuse en bloc un rapport hors de mesure (plus de 256
    réseaux par machine ou 32 par conteneur, un id qui n'est pas un id
    Docker, une adresse qui n'en est pas une, plus de 16 alias, plus de 64
    dépendances, une dépendance d'une source inconnue) ; sinon il écrit
@@ -3554,9 +3554,9 @@ Docker ne connaît aucun verbe qui écrit.
 
 ## Comment une image est comparée à son registre
 
-openCloud dit quand l'image d'un service a quelque chose de plus récent à
+Kagu dit quand l'image d'un service a quelque chose de plus récent à
 offrir. La comparaison ne tire rien et ne relance rien. Pour un service
-qu'openCloud n'a pas déployé, il fabrique la commande, et c'est l'opérateur
+que Kagu n'a pas déployé, il fabrique la commande, et c'est l'opérateur
 qui la joue ; pour un service qu'il a déployé, un bouton « Passer à `<tag>` »
 change la version dans l'annuaire puis redéploie, en un geste (point 5 et
 « Comment un service se déploie »). Ce que le module d'origine
@@ -3576,7 +3576,7 @@ pas.
 
 1. **L'agent de chaque machine interroge lui-même** les registres de ses
    images : il a le trousseau Docker de la machine, et un registre privé
-   joignable seulement depuis elle. La machine openCloud le fait par son
+   joignable seulement depuis elle. La machine Kagu le fait par son
    agent, comme les autres. Le premier passage
    attend 2 min après le démarrage ; ensuite, toutes les 5 min, l'agent
    liste ses conteneurs (arrêtés compris, jetables exclus) et vérifie les
@@ -3617,10 +3617,10 @@ pas.
    fichier écrit. La ligne d'avant est celle que Docker rend, variables
    résolues : elle peut s'écrire autrement dans le fichier.
    Pour un conteneur lancé à la main : `docker pull <image:tag>` seul, et
-   la fiche dit de le recréer avec ses options, qu'openCloud ne connaît
+   la fiche dit de le recréer avec ses options, que Kagu ne connaît
    pas. Une rétrogradation est impossible par construction : seul un tag
    strictement plus récent est nommé.
-   **Sur un service qu'openCloud a déployé**, la ligne à copier laisse la
+   **Sur un service que Kagu a déployé**, la ligne à copier laisse la
    place au bouton **« Passer à `<tag>` »** (le compose est réécrit par le
    serveur, pas édité à la main). Il paraît quand les quatre conditions
    tiennent : le conteneur est rattaché à une unité déclarée, un ordre a déjà
@@ -3670,10 +3670,10 @@ pas.
 
 Le constat sur l'image dit s'il existe plus récent. Il ne dit pas si la
 version qui tourne est encore maintenue : c'est une autre question, et une
-autre source. openCloud la lit sur endoflife.date, **activée par défaut**
+autre source. Kagu la lit sur endoflife.date, **activée par défaut**
 (décidé par Lucas le 12 octobre 2026) ; l'opérateur la coupe sous
 Paramètres, et plus rien ne sort. C'est, avec la comparaison des images à
-leur registre, ce qu'openCloud appelle à l'extérieur sans qu'on le lui ait
+leur registre, ce que Kagu appelle à l'extérieur sans qu'on le lui ait
 demandé : la carte des Paramètres le dit.
 Elle vaut pour l'image d'un service et pour le système d'une machine. Pour
 le système c'est une information seule : aucune commande n'est proposée.
@@ -3683,10 +3683,10 @@ seule « Lecture en cours ».
 
 | Ce que ça rapporte | Ce que ça coûte |
 | --- | --- |
-| La fiche d'un service et celle d'une machine disent la branche qui tourne, jusqu'à quand elle est maintenue, et les branches maintenues au-dessus | Une fois par jour, deux au plus, la machine openCloud appelle un tiers, dès l'installation : il voit son adresse et le nom des produits demandés (« postgresql », « traefik », « debian ») |
+| La fiche d'un service et celle d'une machine disent la branche qui tourne, jusqu'à quand elle est maintenue, et les branches maintenues au-dessus | Une fois par jour, deux au plus, la machine Kagu appelle un tiers, dès l'installation : il voit son adresse et le nom des produits demandés (« postgresql », « traefik », « debian ») |
 | Un correctif proposé dans une branche morte se voit comme tel | Ce que la source ne suit pas reste « support inconnu » ; ses dates sont celles d'une base tenue par des bénévoles |
 
-1. **Seule la machine openCloud appelle**, par `internal/fact/lifecycle`. Les
+1. **Seule la machine Kagu appelle**, par `internal/fact/lifecycle`. Les
    agents n'appellent rien : la source apprend une adresse, pas la liste des
    machines.
 2. Une lecture fait `1 + N` requêtes : la table des identifiants, puis un
@@ -3703,7 +3703,7 @@ seule « Lecture en cours ».
    lecture aussitôt. Le prix : un nouveau service attend jusqu'à douze
    heures son support, un essai raté aussi.
 4. **Du dépôt au produit** : la source publie des identifiants
-   `pkg:docker/library/postgres` ; openCloud compare le dépôt de l'image,
+   `pkg:docker/library/postgres` ; Kagu compare le dépôt de l'image,
    sans l'hôte du registre. Un dépôt absent de cette table : « support
    inconnu ». Aucune correspondance n'est devinée.
    **Du système au produit** : l'agent nomme son système comme
@@ -3738,7 +3738,7 @@ seule « Lecture en cours ».
     « Fin de support » des Paramètres dit ce qui sort, la date de la
     dernière lecture, ou qu'elle a échoué, et porte le bouton « Couper ».
 
-| Ce que la machine openCloud demande | Ce qu'elle en garde |
+| Ce que la machine Kagu demande | Ce qu'elle en garde |
 | --- | --- |
 | `GET https://endoflife.date/api/v1/identifiers/purl/` | les identifiants `pkg:docker/…` : dépôt → produit ; réponse bornée à 4 Mio |
 | `GET https://endoflife.date/api/v1/products/<produit>/` | par branche : nom, maintenue, fin de support, date de fin, dernière version ; réponse bornée à 1 Mio, 200 branches au plus |
@@ -3749,7 +3749,7 @@ l'agent le redit à chaque ouverture du flux, par l'en-tête
 l'agent, sans ré-enrôler. Un agent plus ancien ne le redit pas : la
 machine garde le système de son enrôlement.
 
-Ce qu'openCloud n'envoie jamais : un nom de service, un tag, une
+Ce que Kagu n'envoie jamais : un nom de service, un tag, une
 empreinte, un nom de machine, une version de système. Ce que la fin de support n'est pas : une
 recherche de failles. Une branche maintenue peut porter une CVE non
 corrigée ; une branche morte en porte sûrement qu'on ne corrigera plus.
@@ -3765,7 +3765,7 @@ query gardés.
 
 Une sonde vérifie qu'une URL ou qu'un port répond, à intervalle régulier.
 Elle ne naît que de l'interface : aucun label, aucune découverte. C'est
-**l'agent de la machine qui la porte** qui l'exécute ; la machine openCloud
+**l'agent de la machine qui la porte** qui l'exécute ; la machine Kagu
 voit la cible depuis l'extérieur (c'est aussi celle d'une sonde sans
 `runner` dans le fichier de l'annuaire), l'agent de la machine du service
 la voit depuis l'intérieur, ce qui marche derrière un NAT. Le formulaire
@@ -3781,7 +3781,7 @@ propose la première machine de la liste.
    remplace le précédent ; une sonde en pause n'y est pas. Une machine
    hors ligne le reçoit en revenant. Une file de commandes pleine (16 en
    attente) le dit au journal et le jeu repart dans les 30 s. La machine
-   openCloud reçoit le sien sans passer par le réseau : c'est son rôle
+   Kagu reçoit le sien sans passer par le réseau : c'est son rôle
    d'agent.
 3. L'agent tient une goroutine par sonde. Une sonde part tout de suite,
    puis suit son intervalle ; une sonde dont rien n'a changé garde sa
@@ -3818,7 +3818,7 @@ propose la première machine de la liste.
    du signal, section `probes`. Après une reconnexion, ce qui attendait est
    marqué **rejoué** : le serveur l'écrit dans l'histoire, mais ni l'état,
    ni les compteurs, ni le direct n'y voient du neuf.
-8. openCloud refuse en bloc un rapport hors de mesure (plus de 512 essais,
+8. Kagu refuse en bloc un rapport hors de mesure (plus de 512 essais,
    une date à plus de cinq minutes dans le futur ou plus vieille que le
    brut gardé, une durée négative, un code hors de 100 à 599, un motif
    inconnu) ; le signal de vie compte quand même. Une sonde que la machine
@@ -3955,7 +3955,7 @@ rien notifier.
 
 ## Comment un certificat est jugé
 
-Un certificat n'est pas un objet d'openCloud : c'est **un fait de la
+Un certificat n'est pas un objet de Kagu : c'est **un fait de la
 sonde**. Aucune liste à tenir, aucune cadence de plus, aucun écran de
 création. Surveiller l'échéance d'un domaine, c'est créer une sonde
 dessus ; une sonde HTTPS en voit un sans qu'on demande rien, et une sonde
@@ -3990,7 +3990,7 @@ port chiffré qui ne parle pas HTTP, SMTP ou IMAP.
    certificat **arrêtent le démarrage** — sans quoi `crypto/x509` rendrait
    un magasin vide sans une ligne de journal, et toutes les chaînes
    deviendraient « autorité inconnue ». À poser sur **chaque machine qui
-   sonde**, la machine openCloud comprise.
+   sonde**, la machine Kagu comprise.
 
 **L'échéance et la confiance sont deux faits, jamais fusionnés.** Un
 certificat d'autorité interne, ou qui couvre le mauvais nom, garde une date
@@ -4028,7 +4028,7 @@ ne dit plus rien de la cible.
 
 ## Comment une page de statut est publiée
 
-Un visiteur ne connaît pas openCloud. **La page est la publication d'un
+Un visiteur ne connaît pas Kagu. **La page est la publication d'un
 projet** : un projet est publié quand il a une adresse `/statut/<slug>`
 (minuscules, chiffres et tirets ; « api » est réservé), une annonce, une
 langue. Son titre est celui du projet (à défaut son nom). Le projet se publie,
@@ -4046,10 +4046,10 @@ une adresse inconnue, ou celle d'un projet dépublié, répond `404` comme tout
 chemin inconnu.
 
 1. **Un composant** appartient à un projet, choisi à sa création et qui ne
-   change plus, a un nom public et regroupe des objets qu'openCloud
+   change plus, a un nom public et regroupe des objets que Kagu
    surveille déjà : une machine, un service, une tâche, une sonde. Le
    certificat n'est pas un objet, c'est un fait de la sonde : rattacher
-   une sonde rattache son certificat. Le nom est le seul mot d'openCloud
+   une sonde rattache son certificat. Le nom est le seul mot de Kagu
    qui sort en public. **Un projet publié sans composant saisi en montre un par
    service du projet**, nommé comme lui : rien n'est écrit, la liste se lit à
    chaque instantané (ajouter un service au projet ajoute son composant), et
@@ -4063,7 +4063,7 @@ chemin inconnu.
    Un service dont la machine n'est pas observée (voir « Comment les
    conteneurs sont suivis ») vaut **Panne** et **compte** : sinon un composant
    fait de ces seuls services disparaîtrait de la page pendant la panne.
-   **Parade** à une fausse panne publique (lien openCloud ↔ machine coupé,
+   **Parade** à une fausse panne publique (lien Kagu ↔ machine coupé,
    machine saine) : un incident, ou une sonde membre du composant.
 3. **L'état global** d'une page est le pire de ses composants visibles. Sans composant,
    la page dit « rien à afficher », jamais « tout fonctionne » à vide.
@@ -4336,16 +4336,16 @@ liste vit dans `internal/domain/alert`.
    alerte et n'est jamais envoyée ; quand le canal et chaque machine
    retenue ont de la place sur la fenêtre, à la livraison suivante ou au
    balayage de 30 s, un seul message part : « N alertes de plus, voir
-   openCloud » (événement `summary`, lien vers la page des alertes, aucune
+   Kagu » (événement `summary`, lien vers la page des alertes, aucune
    ligne en base). Le résumé **porte la gravité la plus haute des alertes
    retenues** et **nomme les machines concernées** (trois au plus, puis
    « et N autres ») ; s'il retient du danger, il le dit, il est rendu en
    rouge (Discord, Slack) et part en priorité haute chez ntfy, sinon en
    priorité normale. Le corps JSON porte `severity`, `machines` et
-   `other_machines`. La limite vit en mémoire : un redémarrage d'openCloud
+   `other_machines`. La limite vit en mémoire : un redémarrage de Kagu
    la remet à zéro et perd un résumé en attente.
 7. **La sortie passe par la garde `internal/kit/egress`**, la même que les
-   sondes : le nom est résolu par openCloud, le lien-local écarté, la
+   sondes : le nom est résolu par Kagu, le lien-local écarté, la
    connexion faite sur l'adresse retenue, à chaque saut. Une redirection
    n'est **jamais suivie** : un 3xx est un échec. La boucle locale et les
    adresses privées restent ouvertes, un ntfy sur le LAN est l'usage voulu ;
@@ -4407,7 +4407,7 @@ liste vit dans `internal/domain/alert`.
 
 | Alerte | Source | S'ouvre quand | Se résout quand | Gravité |
 | --- | --- | --- | --- | --- |
-| Machine perdue | `machine`, toutes les 15 s | dernier signal de plus de **2 min** (`machine.Observed`), **flux ouvert ou non** : une machine coupée à chaud garde son flux ; la machine openCloud comprise ; jamais une machine sans agent actif (révoqué, ou en attente de son agent) | l'agent rouvre son flux, ou ses signaux reprennent sur le flux resté ouvert (le passage de 15 s la résout) | danger |
+| Machine perdue | `machine`, toutes les 15 s | dernier signal de plus de **2 min** (`machine.Observed`), **flux ouvert ou non** : une machine coupée à chaud garde son flux ; la machine Kagu comprise ; jamais une machine sans agent actif (révoqué, ou en attente de son agent) | l'agent rouvre son flux, ou ses signaux reprennent sur le flux resté ouvert (le passage de 15 s la résout) | danger |
 | Service arrêté sans qu'on l'ait demandé | `container`, après chaque rapport | état final `exited` avec un code hors 0, 137 et 143, ou tué faute de mémoire (motif `oom` : « arrêté par manque de mémoire »), ou tué en SIGKILL sans arrêt demandé (motif `killed` : « arrêté brutalement (signal KILL), sans arrêt demandé » ; chercher un `docker kill`, un `kill -9` sur l'hôte, un outil d'administration), ou `dead`. Un `docker stop` dont le délai expire (137), le 143 (SIGTERM) et tout arrêt demandé (`stop_requested`, même en code 1) restent des arrêts demandés | il tourne de nouveau depuis **2 min**, ou devient « redémarrage non demandé » s'il a été relancé (la même alerte) ; fiche archivée | danger |
 | Service défaillant | `container` | `running` avec santé `unhealthy` | santé revenue depuis **2 min**, ou arrêt ; un échec qui revient avant reprend la même alerte | attention |
 | Redémarrage non demandé | `container` | un arrêt non demandé suivi d'un `start`, dans le rapport ou depuis le précédent, ou un passage par `restarting` | **10 min** sans nouveau redémarrage ; un nouvel arrêt la repasse en « arrêté » sans en ouvrir une autre | attention |
@@ -4513,16 +4513,16 @@ leur délai, pour qu'aucun rappel ne sorte d'un coup.
 | Les faits de l'alerte : type, gravité, objet et son identifiant, machine, chiffres, dates | Le secret du canal, ni dans l'API ni dans le journal : `has_secret` dit seulement qu'il y en a un |
 | L'en-tête `Title` et `Priority` pour le format texte, ce que ntfy lit | Une alerte sous la gravité minimale du canal, hors de ses catégories, ou vers un canal désactivé |
 | Pour un e-mail : le titre en sujet (encodé RFC 2047), le fait, la cause et le geste en texte brut et en HTML simple, `Date`, `Message-ID` sur le domaine de l'expéditeur, `Auto-Submitted: auto-generated` | Pour un e-mail : le mot de passe du relais, l'identifiant de l'alerte hors du lien, les détails en JSON |
-| Quand `public_url` est renseigné, le lien vers la fiche de l'alerte, `<public_url>/alertes/alerte/<id>` : `alert.url` en JSON, titre cliquable et lien « Ouvrir dans openCloud » pour Discord, Slack et Mattermost, en-tête `Click` pour ntfy, dernière ligne et lien du HTML pour un e-mail et pour Matrix ; la signature couvre le corps qui le porte | Un lien deviné : sans `public_url`, aucun lien ; un test n'en porte jamais |
+| Quand `public_url` est renseigné, le lien vers la fiche de l'alerte, `<public_url>/alertes/alerte/<id>` : `alert.url` en JSON, titre cliquable et lien « Ouvrir dans Kagu » pour Discord, Slack et Mattermost, en-tête `Click` pour ntfy, dernière ligne et lien du HTML pour un e-mail et pour Matrix ; la signature couvre le corps qui le porte | Un lien deviné : sans `public_url`, aucun lien ; un test n'en porte jamais |
 
 | Format | Corps | Pour |
 | --- | --- | --- |
 | `json` | `{event, sent_at, language, title, text{fact, cause, action}, alert{…, url}}` | Un récepteur à soi, Gotify par un relais, n'importe quoi qui lit du JSON |
 | `text` | Trois lignes : titre, cause, geste ; le lien dans l'en-tête `Click` | ntfy, et tout ce qui affiche un texte |
-| `discord` | Un embed : titre (cliquable), description, couleur de la gravité. Le texte que choisit l'agent (nom de conteneur ou de machine, point de montage, cible) est mis sur une ligne, et chaque caractère de Markdown, de lien ou de mention (barre oblique inverse, étoile, tiret bas, tilde, accent grave, barre verticale, chevrons, dièse, crochets, parenthèses, arobase) reçoit une barre oblique inverse : le seul lien actif est celui d'openCloud | Discord |
+| `discord` | Un embed : titre (cliquable), description, couleur de la gravité. Le texte que choisit l'agent (nom de conteneur ou de machine, point de montage, cible) est mis sur une ligne, et chaque caractère de Markdown, de lien ou de mention (barre oblique inverse, étoile, tiret bas, tilde, accent grave, barre verticale, chevrons, dièse, crochets, parenthèses, arobase) reçoit une barre oblique inverse : le seul lien actif est celui de Kagu | Discord |
 | `slack` | `text` et un attachement coloré, `title_link` vers la fiche. Le même texte, sur une ligne, encode `&`, `<` et `>` en `&amp;`, `&lt;` et `&gt;`, la règle de Slack : plus de mention `!channel` ni de lien à chevrons. Mattermost lisant le même message en Markdown, la barre oblique inverse et les crochets sont échappés aussi | Slack, Mattermost, Rocket.Chat |
 | `email` | Un e-mail `multipart/alternative` : texte brut (titre, cause, geste, lien) et HTML sans style ni image, UTF-8 en quoted-printable ; le HTML est échappé | Toute boîte e-mail, par le relais de l'opérateur |
-| `matrix` | Un `m.room.message` : `msgtype: m.text`, `body` en texte brut (titre, cause, geste, lien), `format: org.matrix.custom.html` et `formatted_body` (titre en gras, lien « Ouvrir dans openCloud ») | Un salon Matrix, Element ou tout client, par un bot |
+| `matrix` | Un `m.room.message` : `msgtype: m.text`, `body` en texte brut (titre, cause, geste, lien), `format: org.matrix.custom.html` et `formatted_body` (titre en gras, lien « Ouvrir dans Kagu ») | Un salon Matrix, Element ou tout client, par un bot |
 
 La page Alertes (`/alertes`) est une **boîte de réception** : une seule
 liste, les **non lues** en tête, les **lues** dessous, les **résolues** repliées
@@ -4583,14 +4583,14 @@ requête : `none` (par défaut), `basic` et `forward`.
   `422 auth.setup_code_wrong` (faux, compté), `409 auth.setup_code_unusable`
   (aucun tiré, échu ou brûlé). Il tient après un redémarrage, jusqu'à son
   échéance. Le tirage est au journal d'audit (`auth.setup_code_issue`, acteur `cli`, échéance, jamais la valeur). `serve` écrit en `WARN` « première configuration en attente »
-  au démarrage en `none`. La contrepartie : la machine openCloud doit être
+  au démarrage en `none`. La contrepartie : la machine Kagu doit être
   atteinte (accès au compte du service ou root) pour créer le compte, et cinq
   essais faux de n'importe qui brûlent le code (il se remplace). L'empreinte
   d'un code de huit chiffres se retrouve par force brute pour qui lit la
   base, qui peut de toute façon y écrire ; la socket n'a que son mode `0600`
   (la garde par uid 0 viendra avec la commande `admin` complète). Rien ne se
   fait sans compte, pas même lire.
-- **`basic`** : HTTP Basic, realm `openCloud`, UTF-8. Créé à la première
+- **`basic`** : HTTP Basic, realm `Kagu`, UTF-8. Créé à la première
   configuration : identifiant (64 caractères,
   sans `:`), mot de passe de 12 caractères au moins et 72 octets au plus
   (au-delà, bcrypt ne lit plus). Sans identifiants justes, `401` avec
@@ -4601,7 +4601,7 @@ requête : `none` (par défaut), `basic` et `forward`.
   et renvoie seul les identifiants, `EventSource` compris. La barre
   latérale dit « Accès protégé · identifiant ».
 - **`forward`** (« SSO » dans l'interface et la documentation ; *mandataire* ne
-  désigne que le reverse proxy de `trusted_proxies`) : openCloud derrière un
+  désigne que le reverse proxy de `trusted_proxies`) : Kagu derrière un
   SSO en amont qui authentifie (Authelia en `forwardAuth` de Traefik) et lui transmet l'identité dans
   un en-tête, `Remote-User` par défaut (lettres, chiffres et `-`, 64
   caractères au plus). Passe seulement une requête venue d'un pair de
@@ -4619,7 +4619,7 @@ requête : `none` (par défaut), `basic` et `forward`.
   repose sur trois réglages du déploiement : `trusted_proxies` limité à
   l'adresse du mandataire seul, un mandataire qui écrase l'en-tête
   envoyé par le client (Traefik `authResponseHeaders`), et le secret
-  partagé. openCloud en rattrape une part : un préfixe de `trusted_proxies`
+  partagé. Kagu en rattrape une part : un préfixe de `trusted_proxies`
   plus large qu'une adresse fait un `WARN` au démarrage, et un en-tête
   d'identité présent plusieurs fois (le mandataire a ajouté au lieu
   d'écraser) répond `401`. Un mandataire qui laisse passer l'en-tête du
@@ -4659,7 +4659,7 @@ requête : `none` (par défaut), `basic` et `forward`.
   configuration de Traefik.
 
   **La seconde serrure : `forward_users`.** Le SSO dit *qui* est
-  l'utilisateur ; il n'a pas à dire si openCloud l'admet. La clé
+  l'utilisateur ; il n'a pas à dire si Kagu l'admet. La clé
   `forward_users = ["lucas"]` de `config.toml` (relue au démarrage seulement,
   comme `trusted_proxies` : ce qui garde la porte ne se change pas par cette
   porte) est une liste blanche. `checkForward` la juge **après** le pair, le
@@ -4688,7 +4688,7 @@ requête : `none` (par défaut), `basic` et `forward`.
     liste reste refusé) et ouvre la première configuration à toute identité
     que le SSO laisse passer.
   - **Un jeton d'API n'est pas une identité du SSO** : il est jugé
-    avant le mode (« Comment un agent IA lit openCloud ») et la liste ne le
+    avant le mode (« Comment un agent IA lit Kagu ») et la liste ne le
     juge pas. Retirer quelqu'un de la liste ne révoque donc pas les jetons
     qu'il a tirés (Paramètres → Agent IA → Jetons d'API).
   - **Le journal d'audit** nomme l'acteur par l'identité transmise
@@ -4699,7 +4699,7 @@ requête : `none` (par défaut), `basic` et `forward`.
 Gardé : le front, tout `/api/…`, `/api/events` et les flux de journaux (en mode
 `none`, tout cela sauf les routes de la première configuration). Un Bearer de
 jeton d'API n'y fait pas exception : il lit les 25 routes de la liste fermée, et
-aucune autre (« Comment un agent IA lit openCloud »). Ouverts, chacun avec sa
+aucune autre (« Comment un agent IA lit Kagu »). Ouverts, chacun avec sa
 propre preuve ou par conception : `/agent/…` (la clé de l'agent), `/ping/…`
 (le jeton) et `/statut…` (public). Le
 jugement porte sur le motif de route enregistré, et le test
@@ -4857,12 +4857,12 @@ Le serveur HTTP borne ce qu'un client garde ouvert (R-A2-18).
 - **Pas encore posé** : le plafond de 4 attentes longues `?wait=` par jeton
   vient avec D8 (`GET /api/actions/{id}`).
 
-## Comment un agent IA lit openCloud
+## Comment un agent IA lit Kagu
 
-openCloud ne parle pas MCP. **mcp-maison**, un serveur MCP à part
+Kagu ne parle pas MCP. **mcp-maison**, un serveur MCP à part
 (`installation.md`, « Brancher un agent IA »), sert les outils à l'agent IA
-et lit l'API d'openCloud avec un **jeton d'API** (dont l'inventaire des
-sauvegardes et leur historique, « L'inventaire et l'historique »). Ce qu'openCloud fournit :
+et lit l'API de Kagu avec un **jeton d'API** (dont l'inventaire des
+sauvegardes et leur historique, « L'inventaire et l'historique »). Ce que Kagu fournit :
 le jeton, l'admission de ce jeton sur une liste fermée de lectures et, pour un
 jeton en écriture, sur les seuls verbes qu'il porte, le masquage des secrets,
 l'acteur du journal, et un moyen de voir si mcp-maison répond.
@@ -4922,7 +4922,7 @@ configuration seule est servie.
 
 Le dernier usage du jeton est noté **au plus une fois par minute** : mcp-maison
 peut enchaîner les lectures. Le `Host` de la requête est jugé comme celui de
-toute requête `/api/…` : mcp-maison joint openCloud par l'IP de `listen`
+toute requête `/api/…` : mcp-maison joint Kagu par l'IP de `listen`
 (`OPENCLOUD_URL`), un hôte reconnu ; un nom que `public_url` ignore est refusé
 en `403 bad_host`.
 
@@ -5234,7 +5234,7 @@ section Paramètres → Agent IA le dit.
 de journal, extraits d'un arrêt anormal, charges de ping, sujet d'un
 certificat, noms de conteneurs, de services et de sondes) peut viser le modèle
 qui le lit. C'est à mcp-maison et au client de le traiter comme de la donnée.
-Côté openCloud, la défense est qu'**un jeton `read` n'écrit rien**, et qu'un
+Côté Kagu, la défense est qu'**un jeton `read` n'écrit rien**, et qu'un
 jeton `write` ne fait que ce que l'opérateur a coché : des verbes réversibles,
 à débit borné, sans déploiement ni réglage, et où la suppression d'une machine
 n'est qu'une demande que l'opérateur doit confirmer. Un
@@ -5250,7 +5250,7 @@ n'importe de version.
 
 Une requête admise par jeton agit sous l'acteur `api` dont le nom est
 l'identifiant du jeton. mcp-maison dit pour qui il appelle dans l'en-tête
-`X-MCP-Maison-User` (le `sub` OIDC de la personne) ; openCloud le lit s'il y en
+`X-MCP-Maison-User` (le `sub` OIDC de la personne) ; Kagu le lit s'il y en
 a **exactement un**, retire les caractères de contrôle, le borne à 200
 caractères, et le range dans `details.on_behalf_of` de la ligne du journal.
 Il est **indicatif** : il n'ouvre aucun droit, et il n'est lu que sur une
@@ -5267,7 +5267,7 @@ jamais lu du corps de la requête : un test y met un `on_behalf_of` forgé.
 ### Vérifier mcp-maison
 
 `mcp_url` (`config.toml`) est l'adresse de mcp-maison, vide par défaut :
-openCloud ne le cherche pas et marche sans lui. Renseignée, Paramètres →
+Kagu ne le cherche pas et marche sans lui. Renseignée, Paramètres →
 **Agent IA** lit son `/health` (`GET /api/settings/mcp`) à l'ouverture de la
 carte et au bouton « Vérifier », jamais en fond, sans alerte.
 
@@ -5285,7 +5285,7 @@ n'écrit rien.
 
 ### Retiré le 21 octobre 2026
 
-Le MCP interne a quitté openCloud (#224) : `internal/mcp`, OAuth et sa page de
+Le MCP interne a quitté Kagu (#224) : `internal/mcp`, OAuth et sa page de
 consentement, `/mcp`, `opencloud mcp` (stdio), les 21 outils, `go-sdk`, les
 tables `mcp_clients` et `mcp_codes`. Les jetons d'API vivants ont été repris
 tels quels par la migration `008_api_tokens.sql`, en lecture : celui que
@@ -5308,7 +5308,7 @@ sans geste cassent un test au lieu de s'installer.
 
 Les numéros de migration sont uniques (`TestMigrations_NumbersAreWellFormedAndUnique`),
 et le nom du produit n'est écrit ni dans une chaîne ni dans le texte d'un
-composant `.tsx` (`TestNameOnlyInBrand`) : le mot-symbole se lit dans la page
+composant `.tsx` (`TestProductNameIsNotALiteral`) : le mot-symbole se lit dans la page
 (`Wordmark`, la balise `application-name` que le serveur remplit).
 
 ## Comment l'interface demande confirmation
@@ -5395,7 +5395,7 @@ l'agent). Une période s'écrit partout pareil (`describeEvery` : « chaque
 minute », « toutes les 5 min »), que le champ soit en secondes (sonde) ou en
 minutes (tâche).
 
-**L'adresse d'openCloud jugée locale** (v0.5.2 U3). L'URL de ping d'une tâche et
+**L'adresse de Kagu jugée locale** (v0.5.2 U3). L'URL de ping d'une tâche et
 la commande d'une machine s'écrivent depuis `public_url`, ou à défaut depuis
 l'adresse de la requête. Si elle paraît locale, `url_local` est vrai ; la
 réponse porte aussi `url_suggestion`, l'adresse de la page **quand celle-ci est
@@ -5608,7 +5608,7 @@ seau.
 
 C'est la première étape de #152 : **lire**, jamais écrire. L'agent inventorie
 les fichiers `authorized_keys` et `authorized_keys2` de chaque compte de sa
-machine ; openCloud les affiche, par machine (onglet « Accès SSH » de la fiche,
+machine ; Kagu les affiche, par machine (onglet « Accès SSH » de la fiche,
 le même nom que l'onglet de Machines)
 et toutes ensemble (onglet « Accès SSH » de Machines : qui peut se connecter à
 quoi, par clé ou par machine). **Aucune écriture** sur une machine : ni
@@ -5681,7 +5681,7 @@ l'ancien dans une transaction et prévient le direct (sujet `machines`).
 un relevé vide et sans date tant que l'agent n'a rien dit) et
 `GET /api/ssh-keys` (toutes les machines, par nom). Lecture seule, pour
 l'opérateur seul : **aucun jeton d'API** ne les lit (des noms de comptes et des
-empreintes ; la liste fermée de « Comment un agent IA lit openCloud » ne change
+empreintes ; la liste fermée de « Comment un agent IA lit Kagu » ne change
 pas).
 
 **Une clé est dite faible** quand elle est DSA, ou RSA sous 3072 bits : un mot
@@ -5755,7 +5755,7 @@ d'environnement (L5, droit `observe.env`), ni label Traefik (L7), ni connexion (
 rafraîchissement par un rapport ne s'écrit pas, comme une mesure.
 
 **Jetons d'API.** Aucune des routes des liens (les trois de L3, les trois gestes de L4) n'est dans la liste fermée de
-« Comment un agent IA lit openCloud » : un jeton ne lit pas les liens
+« Comment un agent IA lit Kagu » : un jeton ne lit pas les liens
 (décision à prendre, voir `services-modele.md` §4.1).
 
 **Impact mcp-maison** (source absente de cet espace de travail : déduit des
@@ -5788,7 +5788,7 @@ chaque lecture, **jamais écrite**. C'est un repli faible (décision 4 de
 | Cible | Le service qui a une `public_url`, par **sa première unité**. Un service à plusieurs unités est donc visé par la première : l'opérateur qui veut une autre unité écrit le lien lui-même (`Ajouter un lien`) |
 | Nature, preuve, signal | `route`, `deduced`, `public_url` |
 | Jamais vers soi | Un proxy qui a lui-même une adresse publique n'est pas joint par lui-même |
-| Plusieurs proxys | Une route par proxy : openCloud ne sait pas lequel route quoi, l'opérateur écarte les autres |
+| Plusieurs proxys | Une route par proxy : Kagu ne sait pas lequel route quoi, l'opérateur écarte les autres |
 | Ce que la déduction ne lit pas | L'adresse elle-même ne sort pas de l'annuaire : le lien ne porte ni l'adresse ni le port. Rien ne vient de l'agent |
 | Identifiant | `ded_` + empreinte de la paire : le même à chaque lecture, sans ligne en base |
 | Fraîcheur | Aucune : « Calculé à l'instant », jamais « Ancien » |
@@ -6129,7 +6129,7 @@ dit) : chaque unité dit le service déclaré qui la porte. Chaque unité d'un
 service (`GET /api/directory/services[/{id}]`) porte `observed` (nul pour un
 conteneur). Lecture seule, pour l'opérateur seul : **aucun jeton d'API** ne
 lit la route des unités (la liste fermée de « Comment un agent IA lit
-openCloud » ne change pas).
+Kagu » ne change pas).
 
 **Ce que L2 ne fait pas** (chantiers suivants de `services-modele.md`) : pas de
 connexions de l'hôte (L6, voir « Les connexions de l'hôte »), pas de port
@@ -6304,7 +6304,7 @@ avec ce qui n'existe pas encore, est dans `24-modele-cible.md`) :
   `/api/jobs/{id}/delete-plan`, `/api/status/components/{id}/delete-plan` :
   `{blocked, blockers: [{kind, objects: [{id, name}]}], removes: [{kind,
   count}], detaches: [{kind, count}]}`, un genre vide n'y figure pas. 404 pour
-  un objet inconnu ; la machine openCloud a son plan comme les autres. Le
+  un objet inconnu ; la machine Kagu a son plan comme les autres. Le
   composant le rend par `DeletePlan` (`DeleteServicePlan`, `DeleteProjectPlan`,
   `DeleteComponentPlan`), le store le compte (`internal/edge/store/deletion.go`),
   le paquet `internal/kit/deletion` en porte la forme.
@@ -6572,7 +6572,7 @@ exige leur clé, littérale et unique, dans chaque catalogue.
 
 ## Comment un agent se met à jour
 
-L'opérateur importe une version signée sur la machine openCloud, puis la fiche
+L'opérateur importe une version signée sur la machine Kagu, puis la fiche
 d'une machine propose « Mettre à jour l'agent » quand la version de son agent
 n'est pas celle du serveur. L'agent ne croit pas le serveur sur parole : il
 revérifie la signature avec **ses** clés embarquées avant de toucher à son
@@ -6603,7 +6603,7 @@ précédente, même si le nouveau binaire ne s'exécute pas. Le serveur refuse
 | 3 | **Double vérification.** Le serveur rouvre la version à chaque envoi (`Library.Artifact`) et compare la somme du fichier emprunté à celle qu'il vient de vérifier. L'agent vérifie ensuite lui-même : clés embarquées, moins celles qu'il a retirées (`release_key_missing` s'il n'en reste aucune), signature par l'une d'elles (`signature_invalid`), version signée = version demandée (`version_mismatch`), une version plus récente que la sienne, jamais la même ni une plus ancienne, et jamais par-dessus le binaire que `current` lance (`downgrade`), binaire listé dans les sommes signées et de la taille et de la somme que l'ordre a signées (`digest_mismatch`) | Un serveur compromis ne fait pas installer ce que la clé de version n'a pas signé |
 | 4 | **Le colis est celui des sauvegardes** : trois fichiers (binaire de l'architecture de la machine, `SHA256SUMS`, `SHA256SUMS.minisig`), empruntés à la bibliothèque (`ParcelWriter.Borrow`, ni copiés ni effacés), téléchargés sous le jeton de session | Un ordre qui ne part pas rend le colis (`Discard`) |
 | 5 | **Disposition de l'agent** : `<état>/bin/opencloud-<version>`, le lien `<état>/bin/current` que le lanceur exécute, le lien `<état>/bin/previous`. Le nouveau binaire arrive en `.incoming-<version>`, prend ses droits d'exécution, **s'éprouve** (`<binaire> version` sous un environnement remplacé, 10 s, la sortie doit nommer la version) ; le lien `previous` et le marqueur sont écrits ; seulement ensuite `current.new` est créé puis **renommé** sur `current` (atomique, dossier synchronisé). La version courante et la précédente restent, **intactes** ; les plus anciennes sont retirées | Un binaire qui ne s'éprouve pas est retiré, le lien ne bouge pas (`self_check_failed`). Une version d'avant illisible (`current` ne vise pas `opencloud-vX.Y.Z`) refuse la mise à jour (`no_previous`) |
-| 6 | **Un agent qui ne vit pas dans `bin/`**, ou qui ne tourne pas sous le lanceur, refuse avant de lire l'ordre (`not_self_updatable`, `guard_missing`) : son exécutable, liens suivis, doit être directement dans `<état>/bin/`. **La machine openCloud n'est pas une exception** : son état, `/var/lib/opencloud-agent`, est hors du dossier du serveur, son agent lance `bin/current` et se met à jour depuis sa fiche. Seule différence : pas de lien `/usr/local/bin/opencloud` vers `bin/current` sur elle, car `/usr/local/bin/opencloud` y est le binaire du serveur, que rien ne met à jour seul | Une étape manuelle par machine, une seule : la migration (installation.md, « Migrer l'agent vers le retour arrière automatique ») |
+| 6 | **Un agent qui ne vit pas dans `bin/`**, ou qui ne tourne pas sous le lanceur, refuse avant de lire l'ordre (`not_self_updatable`, `guard_missing`) : son exécutable, liens suivis, doit être directement dans `<état>/bin/`. **La machine Kagu n'est pas une exception** : son état, `/var/lib/opencloud-agent`, est hors du dossier du serveur, son agent lance `bin/current` et se met à jour depuis sa fiche. Seule différence : pas de lien `/usr/local/bin/opencloud` vers `bin/current` sur elle, car `/usr/local/bin/opencloud` y est le binaire du serveur, que rien ne met à jour seul | Une étape manuelle par machine, une seule : la migration (installation.md, « Migrer l'agent vers le retour arrière automatique ») |
 | 7 | **L'agent s'arrête avec le code 3** une fois le lien basculé, sans rapporter de résultat : le run reste « accepté ». systemd relance le lanceur, qui relance `bin/current` ; l'agent annonce sa version à l'ouverture du flux (`OpenCloud-Agent-Version`) | Entre l'arrêt et le retour, la fiche montre l'ordre en cours |
 | 8 | **Le succès se constate au retour** : `CompleteAgentUpdates` ferme les runs `agent.update` envoyés ou acceptés **de cet agent** dont la version visée est celle qu'il annonce, ligne de sortie `reconnected as <version>`. Une autre version annoncée ne ferme rien ; un agent qui ne revient pas laisse l'ordre expirer (`MaxRunDuration`, une heure) | Pas de « fait » sans l'avoir entendu |
 | 9 | **Le marqueur** `<état>/update.json` (`0600`, écrit en une fois : temporaire, `fsync`, `rename`) est écrit **avant** la bascule : l'état (`pending`, `confirmed`, `rolled_back`, `failed`), le genre (`update` ou `rollback`), l'ordre (`run_id`), la version visée, la précédente, l'instant et l'**échéance** (`GracePeriod` = 3 minutes, constante de `internal/kit/rollback`, ni dans l'ordre ni réglable par le serveur). Un marqueur illisible, d'un autre état, ou dont une version n'est pas `vX.Y.Z` est écarté bruyamment : le lanceur et l'agent démarrent sans lui | Trois minutes laissent un redémarrage (10 s), une reconnexion et une machine lente ; une machine éteinte plus de trois minutes juste après la bascule revient en arrière à son démarrage, à tort mais sans danger |
@@ -6709,7 +6709,7 @@ posé la clé de signature.
 | # | Décision | Contrepartie |
 | --- | --- | --- |
 | 1 | Format **minisign**, écrit en Go (`crypto/ed25519` et `blake2b` de `golang.org/x/crypto`, aucune dépendance de plus) ; seul l'algorithme pré-haché `ED` est accepté, l'ancien `Ed` est refusé | Environ 200 lignes de format à maintenir ; n'importe qui vérifie avec l'outil `minisign` officiel |
-| 2 | Clé **privée** courante au format d'openCloud (identifiant de 8 octets suivi de la graine, en base64, non chiffrée) ; signature et clé **publique** au format minisign exact. La clé de secours, elle, est un fichier de `minisign -G`, chiffré par mot de passe | La courante vit dans un secret de l'environnement `release` et dans le coffre de Lucas ; la secours se signe avec l'outil `minisign`, pas avec `release sign` |
+| 2 | Clé **privée** courante au format de Kagu (identifiant de 8 octets suivi de la graine, en base64, non chiffrée) ; signature et clé **publique** au format minisign exact. La clé de secours, elle, est un fichier de `minisign -G`, chiffré par mot de passe | La courante vit dans un secret de l'environnement `release` et dans le coffre de Lucas ; la secours se signe avec l'outil `minisign`, pas avec `release sign` |
 | 3 | **`rebuild` refait les binaires sans npm** et les compare octet par octet à ceux de `build` ; `sign` n'exécute que le binaire amd64 ainsi prouvé, sans récupérer le dépôt ni rien installer. La clé passe par une variable d'environnement posée sur cette seule étape, jamais par `argv` | Un job et quelques minutes de plus. Un script npm piégé dans `build` qui modifie une source Go ou l'outil de compilation donne d'autres octets que `rebuild`, qui compile **sans le cache Go** (celui de `build` sort d'un runner où npm a tourné, et `go` ne revérifie ni `GOCACHE` ni `GOMODCACHE`). Le paquet du front, lui, vient de `build` : `rebuild` n'en prouve que le transfert (empreinte), et il est embarqué tel quel |
 | 4 | Le **commentaire de confiance** (signé) porte la version : `timestamp:<unix>\tfile:SHA256SUMS\tversion:vX.Y.Z`. Le serveur et l'agent lisent la version là, jamais dans un nom de fichier | Une version ne se lit que dans un fichier signé |
 | 5 | **Deux clés publiques embarquées** (`release.TrustedPublicKeys` : `CurrentPublicKey`, posée le 23/10/2026, et `BackupPublicKey`, la secours, posée le 20/11/2026) ; la signature dit laquelle par son identifiant. Une version signée par la secours retire la courante sur chaque agent qui l'installe. `make release` (tag `release`) ne compile pas sans secours ; un binaire sans clé courante (la `v0.0.1`) : `release verify` refuse (code 2) | Rien ne se publie sans les deux clés ; une rotation passe par une version signée hors ligne, et les binaires suivants embarquent une nouvelle secours |
@@ -6775,8 +6775,9 @@ déjà étiquetés deviennent des orphelins jusqu'à la mise à jour de leurs
 labels. Le catalogue le dit par le marqueur `{label_prefix}` (comme `{product}`),
 jamais en littéral.
 
-Le nom du binaire (`Command`) est un littéral à part : il suit
-`cmd/kagu` et le Makefile, pas `ID`. Le jeton de ping `hb_` n'est pas
+Le nom du binaire (`Command`) est un littéral à part : il suit le Makefile
+(`-o bin/opencloud`, tenu par `TestCommand_FollowsTheMakefile`), pas `ID` ni le
+répertoire `cmd/kagu`. Le jeton de ping `hb_` n'est pas
 une marque et reste dans `internal/domain/heartbeat`.
 
 Les catalogues `internal/kit/lang/*.toml` n'écrivent jamais le nom : une valeur
@@ -6791,15 +6792,19 @@ remplace à la livraison (`expandProductName` dans `spa.go`), et l'écran
 cette balise (`web/src/lib/product.ts`). Sous `vite dev` le serveur ne
 remplit rien : l'onglet affiche `{{product}}` jusqu'au premier `PageHead`, et l'écran « ne répond pas » aussi.
 
-Les élisions françaises des catalogues (« d'{product} ») supposent un nom
-qui commence par une voyelle. `TestNameOnlyInBrand` échoue si le nom ou un
-préfixe de jeton réapparaît en littéral dans le code Go hors du paquet.
+Le produit s'appelle Kagu : les catalogues écrivent « de {product} »,
+« que {product} », jamais l'élision. `TestProductNameIsNotALiteral` échoue si
+le nom, l'ancien (« openCloud ») ou le nouveau, ou un préfixe de jeton
+réapparaît en littéral dans le code Go ou un composant `.tsx` hors du paquet ;
+`TestFiles_NameOnlyThroughPlaceholders` fait de même pour les catalogues. Le
+signe (`Mark`) et le favicon sont ceux de `branding/` du dossier v2 ; le
+mot-symbole s'écrit en minuscules, d'un seul poids.
 
 ## Ports
 
 | Port | Où | Sert à |
 | --- | --- | --- |
-| 8080 | `127.0.0.1` de la machine openCloud, réglable par `listen` | Tout : interface et agents, derrière Traefik |
+| 8080 | `127.0.0.1` de la machine Kagu, réglable par `listen` | Tout : interface et agents, derrière Traefik |
 | 443 | Traefik | L'entrée publique, interface et agents sur le même nom |
 
 La socket de commande `state_dir/control.sock` n'est pas un port : elle ne
@@ -6809,7 +6814,7 @@ Un seul port derrière Traefik : les agents appellent `/agent/…`, les tâches
 `/ping/…`, les visiteurs `/statut`, l'opérateur le reste, et un jeton d'API les
 32 lectures de sa liste, sur le même port. mcp-maison, lui, écoute à part, sur
 le port 3000 de l'hôte de `listen` : c'est son propre routeur Traefik qui le
-sert aux clients des agents IA, et openCloud ne le met pas derrière le sien.
+sert aux clients des agents IA, et Kagu ne le met pas derrière le sien.
 
 À l'arrêt (`SIGTERM`, `SIGINT`), `opencloud serve` annule le contexte de
 toutes les requêtes en cours : les flux en direct (`/agent/stream`,
@@ -6832,7 +6837,7 @@ refusés avant d'envoyer quoi que ce soit.
 
 | Manque | Conséquence aujourd'hui | Quand |
 | --- | --- | --- |
-| Première configuration sous code | Tant que le compte n'est pas créé, il faut le code que `opencloud admin setup-code` tire sur la machine (8 chiffres, 30 minutes, un usage, 5 essais faux) : un port atteint par un tiers ne suffit plus, mais cinq essais faux brûlent le code. En `basic` : ni comptes multiples, ni déconnexion (le navigateur garde les identifiants jusqu'à sa fermeture), ni second facteur ; le mode `forward` les délègue au SSO devant openCloud | Comptes (`accounts`) et page de connexion : le modèle cible (`24-modele-cible.md`) |
+| Première configuration sous code | Tant que le compte n'est pas créé, il faut le code que `opencloud admin setup-code` tire sur la machine (8 chiffres, 30 minutes, un usage, 5 essais faux) : un port atteint par un tiers ne suffit plus, mais cinq essais faux brûlent le code. En `basic` : ni comptes multiples, ni déconnexion (le navigateur garde les identifiants jusqu'à sa fermeture), ni second facteur ; le mode `forward` les délègue au SSO devant Kagu | Comptes (`accounts`) et page de connexion : le modèle cible (`24-modele-cible.md`) |
 | Le groupe `docker` équivaut à root | Le compte dédié de l'agent (`opencloud-agent`, décision 2 du 22 octobre 2026) est dans le groupe `docker` quand la machine a Docker, et la socket de Docker lance un conteneur privilégié qui monte `/` : sur une machine avec Docker, le compte dédié protège des erreurs et d'une compromission maladroite (pas de réécriture directe de `/etc`, `/usr`, des comptes), pas d'un attaquant décidé. Sans Docker, c'est un compte sans privilège. Root reste possible (drop-in `root.conf`), au prix de la machine entière | Un observateur non privilégié et un exécuteur root étroit : seulement si l'usage le demande (décision 2) |
 | Docker muet sur une machine en ligne | La machine signale, mais Docker ne répond plus (ou l'agent dit « Docker absent ») : ses conteneurs gardent leur dernier état, pas encore « Inconnu » | Après #136 point 1 (issue de suite : 12 min, ou tout de suite si l'agent dit « Docker absent ») |
 | Des ordres qui n'existent pas encore | La liste des ordres est `agentwire.OrderKinds` (« Les acteurs »). Aucun ne retire un déploiement (supprimer le service de l'annuaire laisse conteneurs, dossier et `data/` sur la machine), et aucun ne sauvegarde le `data/` ni le `.env` d'un service (« Comment une sauvegarde se fait ») | À décider |
@@ -6842,7 +6847,7 @@ refusés avant d'envoyer quoi que ce soit.
 | Les unités systemd ne se relèvent qu'au niveau du système, en nom et en état | Les unités d'un utilisateur (`systemctl --user`) ne sont pas vues ; la description, le processus, le fichier et l'environnement d'une unité ne sont jamais lus ; le **port** d'un binaire ne se déduit pas (il demanderait `/proc/<pid>/fd`, donc `ptrace`) : il se déclare. Les liens entre instances viennent avec L3 (déclarés), L4 (déduits) et L5 (environnement, sous `observe.env`) | Une décision de Lucas, si un jour le port doit se déduire (droit élevé : refusé par la décision 5 de l'étude) |
 | Un jeton d'API n'écrit que par ses verbes | Aucun verbe ne marque une alerte comme lue, ne met un canal en pause ni n'ouvre un incident : mcp-maison ne peut pas le faire. La liste des verbes (« Les verbes d'un jeton en écriture ») fait seule foi | À décider |
 | Les journaux de conteneur partent chez le fournisseur du modèle | Ce qu'un agent IA lit par mcp-maison, journaux de conteneur compris, quitte la machine, comme tout ce qu'il lit ; c'est le choix de l'opérateur qui crée un jeton et branche mcp-maison | Par conception |
-| TLS servi par openCloud lui-même | Sans Traefik ni domaine, il faut `-pin` sur un certificat tiers | À part |
+| TLS servi par Kagu lui-même | Sans Traefik ni domaine, il faut `-pin` sur un certificat tiers | À part |
 | Téléchargement du binaire | La commande d'installation suppose le binaire présent : il se télécharge ou se compile, et se copie à la main. Une version signée se vérifie (`release verify`), la clé de version est posée depuis le 23/10/2026 : la `v0.0.1` est non signée et n'embarque pas la clé, donc la première version signée s'installe à la main, serveur et agents (`agent.update` refuse sans clé). Des unités systemd d'exemple sont dans `docs/installation/`, non testées sous systemd | À part, avec `make release` |
 | Spool côté agent | Une coupure de plus d'une heure, ou un redémarrage de l'agent, perd des mesures : un trou dans l'historique | Avec les premiers événements à rejouer |
 | Pas d'historique par volume | Les graphes et la vue d'ensemble montrent la somme des volumes ; le détail par volume n'existe que pour la valeur courante | À décider |
@@ -6853,18 +6858,18 @@ refusés avant d'envoyer quoi que ce soit.
 | Un apply n'est pas une transaction | Un refus au milieu laisse les premiers changements écrits (le journal le dit, la relance reprend). Deux services qui s'échangent leurs noms ne s'appliquent qu'en deux fois | Par conception : chaque objet passe par le geste de son domaine, pour que les agents et les alertes suivent |
 | Pas d'historique par service | La mesure d'un service ne vit que 48 h, sans graphe ; la fiche montre la valeur courante | À décider |
 | Pas de spool des services | Un redémarrage de l'agent perd les événements en attente ; l'inventaire suivant remet les fiches d'aplomb, sans les transitions manquées | Avec le spool des mesures |
-| La machine openCloud ne se voit pas sans son agent | Tant que la ligne de la première configuration n'a pas été jouée (elle vaut 1 h), ou que son agent est révoqué ou retiré : ni mesures, ni conteneurs, ni sondes, ni images pour elle ; ses sondes attendent | Installer l'agent : première configuration, ou fiche › Ré-enrôler (ou Ajouter une machine, jouée sur elle) |
+| La machine Kagu ne se voit pas sans son agent | Tant que la ligne de la première configuration n'a pas été jouée (elle vaut 1 h), ou que son agent est révoqué ou retiré : ni mesures, ni conteneurs, ni sondes, ni images pour elle ; ses sondes attendent | Installer l'agent : première configuration, ou fiche › Ré-enrôler (ou Ajouter une machine, jouée sur elle) |
 | Alerte sur le processeur ou la mémoire | Seul le disque alerte ; une machine saturée se voit en jauge, personne n'est prévenu | À décider |
 | Seuils fixes, hors disque | 2 min, 3 redémarrages en 10 min, 30 et 7 jours : constantes du produit, sans réglage ; seuls ceux du disque se règlent sous Paramètres | À décider |
 | Pas de Telegram | Un canal est un webhook, un e-mail ou un salon Matrix ; un récepteur sans URL entrante passe par un relais (ntfy, Gotify) | Plus tard |
-| L'e-mail dépend d'un relais | openCloud ne signe rien (DKIM, SPF) et ne gère aucune réputation : la délivrabilité est celle du relais choisi, ses quotas aussi | Voulu |
+| L'e-mail dépend d'un relais | Kagu ne signe rien (DKIM, SPF) et ne gère aucune réputation : la délivrabilité est celle du relais choisi, ses quotas aussi | Voulu |
 | Une livraison échouée pendant 24 h est abandonnée | Trois essais rapprochés (tout de suite, puis 5 s et 30 s après), puis à 2 min, 10 min, 30 min, puis toutes les heures : un récepteur en panne plus de 24 h ne reçoit pas l'alerte ; la fiche de l'alerte le montre | À décider |
 | La clé des secrets est à côté de la base | `secret.key` vit sous `state_dir`, lisible par le compte du service : le chiffrement protège une copie de la base seule, pas qui lit tout le dossier. `opencloud secrets rotate` la change, serveur arrêté. Une clé perdue fait perdre les secrets, `opencloud secrets forget` repart à neuf | À décider (la sauvegarde chiffrée par `age` emporte `secret.key` sous la phrase, elle ne déplace pas la clé) |
 | Pas de « vérifier maintenant » | Un correctif se voit au prochain essai, dans les 30 s à 24 h de l'intervalle. La création, elle, sonde tout de suite | À décider, par une commande sur le flux de l'agent |
 | Pas d'incident compté par jour | La barre dit qu'un jour a eu des échecs, pas combien de fois la cible est tombée ; l'historique des alertes résolues le dit sur 90 jours | À décider |
 | Pas de spool des sondes | Un redémarrage de l'agent perd les essais en attente : un trou dans l'historique, et l'agrégat de ce jour le dit | Avec le spool des mesures |
-| Pas de renouvellement | openCloud observe un certificat, il ne le renouvelle pas et ne sait rien d'un renouvellement qui a échoué | À décider, avec le proxy |
-| Pas d'historique des certificats | Un renouvellement se reconnaît au changement d'empreinte, mais on ne sait pas quand il a eu lieu si openCloud était coupé, ni combien de fois | À décider |
+| Pas de renouvellement | Kagu observe un certificat, il ne le renouvelle pas et ne sait rien d'un renouvellement qui a échoué | À décider, avec le proxy |
+| Pas d'historique des certificats | Un renouvellement se reconnaît au changement d'empreinte, mais on ne sait pas quand il a eu lieu si Kagu était coupé, ni combien de fois | À décider |
 | Un domaine sans sonde n'est pas surveillé | Surveiller l'échéance d'un domaine impose de créer une sonde dessus ; pour un domaine qu'on ne veut pas sonder chaque minute, il faut régler l'intervalle à 24 h | À décider |
 | L'autorité interne se pose machine par machine | `ca_file` n'est pas distribuée par le serveur : chaque machine qui sonde porte la sienne | À décider |
 | Pas d'incident automatique | Une sonde qui tombe change l'état du composant et ouvre une alerte ; personne n'ouvre l'incident public ni ne le résout | À décider, retouche après la 11 : ouvrir un incident public demande une règle, et une erreur se lit en public |
@@ -6872,7 +6877,7 @@ refusés avant d'envoyer quoi que ce soit.
 | Un échec isolé n'alerte pas | Un plan ou une sauvegarde restic qui échoue se lit sur la page Sauvegardes (état du dernier ordre, `last_error`) ; l'alerte `backup_stale` n'arrive qu'après **36 h** sans réussite, et dit « le dernier essai a échoué » | Seuil non réglable ; à décider si Lucas veut un réglage ou une alerte dès l'échec |
 | Pas d'onglets machine Sauvegardes, Réglages | Onglets masqués tant qu'ils ne sont pas livrés ; leurs adresses mènent au résumé de la machine. La page Sauvegardes existe, au menu, mais pas rangée par machine. L'onglet Journaux est un raccourci vers la fiche de chaque service, pas une vue unifiée des journaux de la machine | Une par une, sur décision |
 | Pas d'abonnement à la page de statut | Un visiteur revient voir ; rien ne le prévient | Avec un canal e-mail, plus tard |
-| Appliquer une mise à jour : ce qui reste | Pour un service **déployé par openCloud**, le tag plus récent se prend d'un geste (« Passer à »). Restent : **aucun retour arrière** si le service ne redevient pas sain ; une **empreinte changée sous le même tag** (aucun bouton : `--pull missing` ne la tirerait pas) ; une **autre version** que celle proposée (modifier le service, puis « Redéployer ») ; un service dont une unité épingle une empreinte (à retirer à la main). Pour les services **qu'openCloud n'a pas déployés**, il montre la ligne `image:` à changer et fabrique la commande ; l'opérateur les applique, et openCloud ne le sait qu'au passage suivant, quand le constat ne nomme plus rien (décidé le 12 octobre 2026, issue #125) | Le retour arrière : à décider (issue à part) |
+| Appliquer une mise à jour : ce qui reste | Pour un service **déployé par Kagu**, le tag plus récent se prend d'un geste (« Passer à »). Restent : **aucun retour arrière** si le service ne redevient pas sain ; une **empreinte changée sous le même tag** (aucun bouton : `--pull missing` ne la tirerait pas) ; une **autre version** que celle proposée (modifier le service, puis « Redéployer ») ; un service dont une unité épingle une empreinte (à retirer à la main). Pour les services **que Kagu n'a pas déployés**, il montre la ligne `image:` à changer et fabrique la commande ; l'opérateur les applique, et Kagu ne le sait qu'au passage suivant, quand le constat ne nomme plus rien (décidé le 12 octobre 2026, issue #125) | Le retour arrière : à décider (issue à part) |
 | Une image en retard se voit jusqu'à 24 h après | La cadence tient le quota du Hub ; « Vérifier maintenant » raccourcit à la demande | À décider, avec un écran de réglages |
 | Pas d'assistant d'identifiants | Un registre dont les identifiants passent par `credHelpers` ou `credsStore` répond « refusé » ; seuls les `auths` en clair du `config.json` sont lus | À décider |
 | Dix mille tags au plus | Un dépôt qui en publie plus est lu jusqu'à la dixième page ; un tag plus récent au-delà n'est pas vu | À décider |
@@ -6881,7 +6886,7 @@ refusés avant d'envoyer quoi que ce soit.
 | Fin de support : systèmes absents de la table | Raspbian, Arch, NixOS, un BSD, Windows : « support inconnu ». Proxmox VE dit le support de sa base Debian, pas le sien | À décider, au cas par cas |
 | Fin de support : un agent ancien ne redit pas son système | Après une montée de version, la machine affiche le support de l'ancien système jusqu'à la mise à jour de l'agent | Se règle en mettant l'agent à jour |
 | Fin de support : ni liste, ni vue d'ensemble, ni alerte | Une branche morte se voit en ouvrant la fiche du service, nulle part ailleurs | À décider (issue #132) |
-| Pas de recherche de failles (CVE) | openCloud dit qu'une branche ne reçoit plus de correctifs, pas quelles failles touchent l'image qui tourne | À décider : demande une autre source et une autre lecture de l'image |
+| Pas de recherche de failles (CVE) | Kagu dit qu'une branche ne reçoit plus de correctifs, pas quelles failles touchent l'image qui tourne | À décider : demande une autre source et une autre lecture de l'image |
 | Pas de sous-domaine dédié | Chaque page vit sous `/statut/<adresse>` du même nom ; Traefik peut réécrire la racine d'un `status.exemple.fr` vers l'une d'elles | À décider, avec le proxy |
 
 ## Par fonctionnalité
@@ -6912,9 +6917,9 @@ d'équivalence (`internal/edge/store/testdata/legacy_migrations/`).
 | Fin de support | Le paquet `internal/fact/lifecycle` (source endoflife.date, correspondance dépôt → produit et tag → branche, cache `lifecycle.json`), la quinzième boucle de fond, la clé `lifecycle_disabled` de `settings.toml` (aujourd'hui la table `settings`), l'API `/api/settings/lifecycle`, le champ `lifecycle` de la fiche d'un service et d'une machine, le bloc « Support de la version » de la carte Mise à jour et « Support du système » du résumé d'une machine, la table système → produit, l'en-tête `OpenCloud-Agent-OS` qui tient le système à jour, la carte « Fin de support » des Paramètres |
 | Réglages en base | La table `settings` (migration `019_settings.sql`) et ses requêtes dans `internal/edge/store/settings.go`, à la place de `settings.toml` |
 | Secrets chiffrés | Le paquet `internal/kit/seal` (AES-256-GCM, fichier de clé `secret.key`), la migration `020_sealed_secrets.sql` (`heartbeats.token_hash`), `internal/edge/store/secrets.go` (vérification au démarrage, `ForgetSecrets`) et les requêtes de `settings`, `alert_channels` et `heartbeats` qui chiffrent à l'écriture et ouvrent à la lecture, `HashToken` dans `internal/domain/heartbeat`, `cmd/kagu/secrets.go` (la clé au démarrage de `serve`, la sous-commande `opencloud secrets forget`), les constantes `SecretKeyFile` et `SecretKeyIDDomain` de `internal/kit/brand` |
-| Le nom du produit | Le paquet `internal/kit/brand` (nom affiché, identifiant technique, empreinte du protocole), les marqueurs `{product}`, `{command}` et `{signature_header}` des catalogues et `expand` dans `internal/kit/lang/lang.go`, le marqueur `{{product}}` des pages HTML et `expandProductName`, `web/src/lib/product.ts`, le champ `server_name` de `/api/mcp` et le golden `mcp.golden.json` (tous deux retirés avec le MCP), les tests `TestNameOnlyInBrand` et `TestFiles_NameOnlyThroughPlaceholders` |
+| Le nom du produit | Le paquet `internal/kit/brand` (nom affiché, identifiant technique, empreinte du protocole), les marqueurs `{product}`, `{command}` et `{signature_header}` des catalogues et `expand` dans `internal/kit/lang/lang.go`, le marqueur `{{product}}` des pages HTML et `expandProductName`, `web/src/lib/product.ts`, le champ `server_name` de `/api/mcp` et le golden `mcp.golden.json` (tous deux retirés avec le MCP), les tests `TestProductNameIsNotALiteral` et `TestFiles_NameOnlyThroughPlaceholders` |
 | Édition sur place | `PUT /api/probes/{id}` et `PUT /api/jobs/{id}` (la définition entière, mêmes refus que la création), `POST /api/jobs/{id}/actions/regenerate-token`, `Service.Update` des paquets `internal/fact/probe` et `internal/domain/heartbeat` et `RegenerateToken`, la migration `021_probe_revision.sql` (`probes.revised_at`) et sa garde dans `planChanges` et `updateProbeState`, la pause d'une tâche qui n'est plus reprise par un ping, les formulaires `ProbeForm` et `JobForm` (création et édition), les boutons Modifier et « Régénérer le jeton », les trois routes de `testdata/routes.txt` |
-| 13 · editions | Rien à intégrer : le module est le verrou commercial de Projet_M (trois éditions, licence vérifiée en ligne, télémétrie horaire), sans objet dans un openCloud gratuit où rien ne sort sans demande. Retenu de sa lecture : tester l'accord entre deux lectures d'une même table. Vérifié ici : les seuils servis par `/api/session`, les refus en clés, l'inconnu refusé au fil. Ajouté : chaque liste fermée du serveur s'expose (`probe.Reasons()`, `alert.Formats()`…) et un test exige sa clé de catalogue par valeur dans chaque langue, ce qui a fait apparaître `silence.object_kind_volume` ; un test du front rejoue ses règles « demande attention » sur les fixtures figées de l'API et les compare aux compteurs du serveur |
+| 13 · editions | Rien à intégrer : le module est le verrou commercial de Projet_M (trois éditions, licence vérifiée en ligne, télémétrie horaire), sans objet dans un Kagu gratuit où rien ne sort sans demande. Retenu de sa lecture : tester l'accord entre deux lectures d'une même table. Vérifié ici : les seuils servis par `/api/session`, les refus en clés, l'inconnu refusé au fil. Ajouté : chaque liste fermée du serveur s'expose (`probe.Reasons()`, `alert.Formats()`…) et un test exige sa clé de catalogue par valeur dans chaque langue, ce qui a fait apparaître `silence.object_kind_volume` ; un test du front rejoue ses règles « demande attention » sur les fixtures figées de l'API et les compare aux compteurs du serveur |
 | Annuaire (1/5) | Le paquet `internal/domain/directory` (identité propre, validation, création et édition sur place des services, unités, fournitures et projets), la migration `022_directory.sql` (`projects`, `declared_services`, `service_units`, `service_provides`, `project_services`), `internal/edge/store/directory.go`, le refus 409 `machine.has_declared_services` au retrait d'une machine, les dix routes `/api/directory/…`, le sujet `directory`, les onglets Annuaire et Projets de la page Services, la fiche et le formulaire de service |
 | Annuaire (2/5) | Le rapprochement `internal/domain/directory/match.go` (deux niveaux) et son application par le suivi des conteneurs (`Tracker.SetUnits`, `Rematch`, `RematchAll`, verrou par machine), la migration `023_container_units.sql` (`unit_id`, `match_level` de la table des conteneurs, alors `services`, et `ignored_keys`), le calcul de l'écart `gap.go`, la proposition d'adoption `propose.go`, les quatre routes `/api/directory/gaps`, `/proposal` et `/ignored`, `directory` sur la fiche d'un conteneur, l'outil MCP `list_declared_services`, la colonne Écart, la liste des non déclarés, l'adoption dans le formulaire et la carte Annuaire |
 | Annuaire (3/6) | Les liens : la migration `024_directory_links.sql` et son étape Go `store.linkContainersToDirectory` (`internal/edge/store/migrate_024.go`, requêtes figées sur le schéma 23, vérification de ce qui devait survivre), le runner de migrations hors clés étrangères avec `PRAGMA foreign_key_check` avant le COMMIT (`internal/edge/store/store.go`, pour toutes les migrations), le plan pur `directory.PlanLinks`, `service_units.update_policy` (`watch`, `hold`, `ignore`) à la place de `services.update_policy`, `probes.service_id` et le membre `service` d'un composant vers `declared_services` en `restrict`, la suppression refusée avec la liste (409 `directory.service_linked`, `links` sur la fiche), les routes `POST /api/directory/services/{id}/actions/review` et `PUT /api/directory/units/{id}/update-policy`, l'outil MCP `set_update_policy` sur une unité, la règle d'état d'un service déclaré dans la page de statut, la ligne `declared services to review` au journal, la marque « à vérifier » et l'action Valider, la sonde sur n'importe quelle machine, la carte Mise à jour qui lit la politique de l'unité |

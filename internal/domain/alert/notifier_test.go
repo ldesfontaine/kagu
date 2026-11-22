@@ -15,6 +15,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/alert"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
@@ -124,7 +125,7 @@ func TestNotifier_DeliversASignedBodyInTheInterfaceLanguage(t *testing.T) {
 	if !alert.Verify("s3cret", got.body, got.headers.Get("OpenCloud-Signature")) {
 		t.Fatalf("signature %q does not match the body", got.headers.Get("OpenCloud-Signature"))
 	}
-	if got.headers.Get("OpenCloud-Event") != "opened" || got.headers.Get("Content-Type") != "application/json" || got.headers.Get("User-Agent") != "openCloud" {
+	if got.headers.Get("OpenCloud-Event") != "opened" || got.headers.Get("Content-Type") != "application/json" || got.headers.Get("User-Agent") != brand.UserAgent {
 		t.Fatalf("headers %v", got.headers)
 	}
 	var payload struct {
@@ -191,7 +192,7 @@ func TestNotifier_LinksToTheAlertPageWhenThePublicURLIsKnown(t *testing.T) {
 				t.Errorf("json: url %q, want %q (%v)", payload.Alert.URL, want, err)
 			}
 		default:
-			if !strings.Contains(string(got.body), want) || !strings.Contains(string(got.body), "Ouvrir dans openCloud") {
+			if !strings.Contains(string(got.body), want) || !strings.Contains(string(got.body), "Ouvrir dans "+brand.ProductName) {
 				t.Errorf("%s: body %s lacks the link", format, got.body)
 			}
 		}
