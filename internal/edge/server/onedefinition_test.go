@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -473,5 +475,295 @@ func TestOneDefinition_DocDoesNotCountTheOrders(t *testing.T) {
 	}
 	if !orderCount.MatchString("Huit ordres existent") {
 		t.Error("the order-count pattern no longer matches what it must refuse")
+	}
+}
+
+// Les gardes de copies (T00-04) : quatre gestes qui ont chacun une maison,
+// et que le code d'aujourd'hui écrit encore plusieurs fois. Chaque inventaire
+// dit, par fichier (par littéral pour les regexp), combien d'écritures
+// restent : il ne fait que descendre. Un fichier qui monte ou qui apparaît est
+// refusé ; un fichier qui baisse oblige à baisser son entrée, jusqu'à la
+// retirer. Un échange (une faute ajoutée, une autre retirée ailleurs) ne passe pas.
+var (
+	repeatedRegexpInventory = map[string]int{
+		"`^(?:([0-9]{1,5}):)?([0-9]{1,5})(?:/(?:tcp|udp))?$`": 1,
+		"`^/[A-Za-z0-9._/-]{1,254}$`":                         2,
+		"`^[0-9a-f]{64}$`":                                    4,
+		"`^[A-Za-z0-9:_.@-]{1,250}\\.service$`":               1,
+		"`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$`":                 2,
+		"`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`":               1,
+		"`^[\\x21-\\x7e]+$`":                                  1,
+		"`^[a-z0-9][a-z0-9-]{0,62}$`":                         1,
+		"`^[a-z0-9][a-z0-9_-]{0,62}$`":                        1,
+		"`^sha256:[0-9a-f]{64}$`":                             2,
+	}
+	handBuiltTransportInventory = map[string]int{
+		"internal/domain/alert/notifier.go":         1,
+		"internal/domain/proxmox/client.go":         1,
+		"internal/edge/agent/proxmox_api.go":        1,
+		"internal/edge/agent/restic_target.go":      1,
+		"internal/fact/firewall/opnsense/client.go": 1,
+		"internal/fact/lifecycle/source.go":         1,
+		"internal/fact/probe/check.go":              1,
+		"internal/kit/mcpcheck/mcpcheck.go":         1,
+		"internal/kit/registry/client.go":           1,
+	}
+	handBoundedReadInventory = map[string]int{
+		"cmd/opencloud/backup.go":                   1,
+		"internal/domain/proxmox/client.go":         1,
+		"internal/edge/agent/proxmox_api.go":        1,
+		"internal/edge/agent/proxmox_token.go":      1,
+		"internal/fact/firewall/opnsense/client.go": 1,
+		"internal/fact/lifecycle/source.go":         1,
+		"internal/fact/sshkeys/read.go":             1,
+		"internal/kit/proxysecret/proxysecret.go":   1,
+		"internal/kit/release/library.go":           1,
+		"internal/kit/release/release.go":           1,
+	}
+	handDrawnIdentifierInventory = map[string]int{
+		"internal/domain/restic/proxy.go":   1,
+		"internal/fact/machine/sessions.go": 1,
+	}
+)
+
+// Les maisons des gestes : seuls ces chemins (relatifs au module) les écrivent.
+var (
+	transportHomes  = []string{"internal/kit/egress/", "internal/kit/dockerapi/", "cmd/opencloud/control.go"}
+	boundedReadHome = "internal/kit/fsx/"
+	identifierHome  = "internal/kit/ident/"
+)
+
+func relativeToModule(path string) string {
+	return filepath.ToSlash(strings.TrimPrefix(path, moduleRoot()+string(filepath.Separator)))
+}
+
+func isUnder(path string, homes ...string) bool {
+	relative := relativeToModule(path)
+	for _, home := range homes {
+		if strings.HasPrefix(relative, home) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSelectorCall(node ast.Node, pkg, name string) (*ast.CallExpr, bool) {
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return nil, false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != name {
+		return nil, false
+	}
+	return call, isIdent(selector.X, pkg)
+}
+
+// regexpLiterals relève chaque `regexp.MustCompile("…")` : le littéral et sa place.
+func regexpLiterals(fileSet *token.FileSet, file *ast.File) map[string][]string {
+	found := map[string][]string{}
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := isSelectorCall(node, "regexp", "MustCompile")
+		if !ok || len(call.Args) != 1 {
+			return true
+		}
+		literal, ok := call.Args[0].(*ast.BasicLit)
+		if ok && literal.Kind == token.STRING {
+			found[literal.Value] = append(found[literal.Value], fileSet.Position(literal.Pos()).String())
+		}
+		return true
+	})
+	return found
+}
+
+// handBuiltTransports relève les `&http.Transport{` : un client HTTP gardé
+// se construit par egress.
+func handBuiltTransports(fileSet *token.FileSet, file *ast.File) []string {
+	var found []string
+	ast.Inspect(file, func(node ast.Node) bool {
+		literal, ok := node.(*ast.CompositeLit)
+		if !ok {
+			return true
+		}
+		selector, ok := literal.Type.(*ast.SelectorExpr)
+		if ok && selector.Sel.Name == "Transport" && isIdent(selector.X, "http") {
+			found = append(found, fileSet.Position(literal.Pos()).String())
+		}
+		return true
+	})
+	return found
+}
+
+// handBoundedReads relève les `io.LimitReader(x, limite+1)` : une lecture
+// plafonnée passe par fsx.
+func handBoundedReads(fileSet *token.FileSet, file *ast.File) []string {
+	var found []string
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := isSelectorCall(node, "io", "LimitReader")
+		if !ok || len(call.Args) != 2 {
+			return true
+		}
+		sum, ok := call.Args[1].(*ast.BinaryExpr)
+		if !ok || sum.Op != token.ADD {
+			return true
+		}
+		if one, ok := sum.Y.(*ast.BasicLit); ok && one.Kind == token.INT && one.Value == "1" {
+			found = append(found, fileSet.Position(call.Pos()).String())
+		}
+		return true
+	})
+	return found
+}
+
+// handDrawnIdentifiers relève les fonctions qui tirent des octets au sort
+// (`rand.Read`) puis les écrivent en hexadécimal : un identifiant se tire
+// par ident.
+func handDrawnIdentifiers(fileSet *token.FileSet, file *ast.File) []string {
+	var found []string
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Body == nil {
+			continue
+		}
+		draws, encodes := false, false
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			if _, ok := isSelectorCall(node, "rand", "Read"); ok {
+				draws = true
+			}
+			if _, ok := isSelectorCall(node, "hex", "EncodeToString"); ok {
+				encodes = true
+			}
+			return true
+		})
+		if draws && encodes {
+			found = append(found, fileSet.Position(function.Pos()).String()+": "+function.Name.Name)
+		}
+	}
+	return found
+}
+
+// perFile compte les relevés par fichier (chemin relatif au module) : un
+// relevé commence par sa position, « chemin:ligne:colonne ».
+func perFile(found []string) map[string]int {
+	counts := map[string]int{}
+	for _, position := range found {
+		counts[relativeToModule(strings.SplitN(position, ":", 2)[0])]++
+	}
+	return counts
+}
+
+// inventoryProblems compare les comptes du jour à l'inventaire : même logique
+// que ceilingProblems du front (composition.test.ts).
+func inventoryProblems(counts, inventory map[string]int) []string {
+	var problems []string
+	for key := range counts {
+		if _, listed := inventory[key]; !listed {
+			problems = append(problems, fmt.Sprintf("%s : %d, absent de l'inventaire", key, counts[key]))
+		}
+	}
+	for key, listed := range inventory {
+		switch found := counts[key]; {
+		case found > listed:
+			problems = append(problems, fmt.Sprintf("%s : %d, l'inventaire dit %d", key, found, listed))
+		case found < listed:
+			problems = append(problems, fmt.Sprintf("%s : %d, l'inventaire dit encore %d : le baisser (ou retirer l'entrée)", key, found, listed))
+		}
+	}
+	sort.Strings(problems)
+	return problems
+}
+
+func checkInventory(t *testing.T, gesture, home string, counts, inventory map[string]int) {
+	t.Helper()
+	if problems := inventoryProblems(counts, inventory); len(problems) > 0 {
+		t.Errorf("%s (utiliser %s) :\n%s", gesture, home, strings.Join(problems, "\n"))
+	}
+}
+
+func TestOneDefinition_NoGestureWrittenAgain(t *testing.T) {
+	literals := map[string][]string{}
+	var transports, reads, identifiers []string
+	checked := 0
+	forEachGoFile(t, moduleRoot(), false, func(path string, fileSet *token.FileSet, file *ast.File) {
+		checked++
+		for literal, places := range regexpLiterals(fileSet, file) {
+			literals[literal] = append(literals[literal], places...)
+		}
+		if !isUnder(path, transportHomes...) {
+			transports = append(transports, handBuiltTransports(fileSet, file)...)
+		}
+		if !isUnder(path, boundedReadHome) {
+			reads = append(reads, handBoundedReads(fileSet, file)...)
+		}
+		if !isUnder(path, identifierHome) {
+			identifiers = append(identifiers, handDrawnIdentifiers(fileSet, file)...)
+		}
+	})
+	if checked == 0 {
+		t.Fatal("no source file seen: the guard no longer sees the code")
+	}
+	repeated := map[string]int{}
+	for literal, places := range literals {
+		if len(places) > 1 {
+			repeated[literal] = len(places) - 1
+		}
+	}
+	checkInventory(t, "un même littéral de regexp.MustCompile", "une définition partagée", repeated, repeatedRegexpInventory)
+	checkInventory(t, "&http.Transport{", "egress", perFile(transports), handBuiltTransportInventory)
+	checkInventory(t, "io.LimitReader(…+1)", "fsx", perFile(reads), handBoundedReadInventory)
+	checkInventory(t, "rand.Read puis hex", "ident", perFile(identifiers), handDrawnIdentifierInventory)
+}
+
+func TestOneDefinition_CopyGuardsCatchTheirFault(t *testing.T) {
+	const faulty = `package faulty
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"io"
+	"net/http"
+	"regexp"
+	"sort"
+)
+
+var first = regexp.MustCompile("^a$")
+var second = regexp.MustCompile("^a$")
+
+var transport = &http.Transport{}
+
+func read(r io.Reader, limit int64) { io.ReadAll(io.LimitReader(r, limit+1)) }
+
+func draw() string {
+	raw := make([]byte, 8)
+	rand.Read(raw)
+	return hex.EncodeToString(raw)
+}
+`
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, "faulty.go", faulty, parser.SkipObjectResolution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := regexpLiterals(fileSet, file); len(got[`"^a$"`]) != 2 {
+		t.Errorf("repeated regexp literal not caught: %v", got)
+	}
+	if got := handBuiltTransports(fileSet, file); len(got) != 1 {
+		t.Errorf("hand-built transport not caught: %v", got)
+	}
+	if got := handBoundedReads(fileSet, file); len(got) != 1 {
+		t.Errorf("hand-bounded read not caught: %v", got)
+	}
+	if got := handDrawnIdentifiers(fileSet, file); len(got) != 1 {
+		t.Errorf("hand-drawn identifier not caught: %v", got)
+	}
+	// Un échange (une faute ailleurs, une autre retirée) n'est pas un total constant.
+	if got := inventoryProblems(map[string]int{"new.go": 1}, map[string]int{"old.go": 1}); len(got) != 2 {
+		t.Errorf("swapped fault not caught: %v", got)
+	}
+	if got := inventoryProblems(map[string]int{"a.go": 2}, map[string]int{"a.go": 1}); len(got) != 1 {
+		t.Errorf("raised count not caught: %v", got)
+	}
+	if got := inventoryProblems(map[string]int{"a.go": 1}, map[string]int{"a.go": 2}); len(got) != 1 {
+		t.Errorf("lowered count not caught: %v", got)
 	}
 }

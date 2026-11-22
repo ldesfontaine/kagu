@@ -10,12 +10,13 @@ STATICCHECK := honnef.co/go/tools/cmd/staticcheck@v0.8.1
 GOIMPORTS   := golang.org/x/tools/cmd/goimports@v0.50.0
 GOVULNCHECK := golang.org/x/vuln/cmd/govulncheck@v1.8.0
 GOSEC       := github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+DUPL        := github.com/mibk/dupl@v1.1.0
 
 FRONT_DIR   := web
 
 export CGO_ENABLED = 0
 
-.PHONY: build release release-binaries run test ci fmt vet staticcheck vulncheck gosec front front-check e2e clean
+.PHONY: build release release-binaries run test ci fmt vet staticcheck vulncheck gosec dupl front front-check e2e clean
 
 # Le front compilé est embarqué par go:embed : il précède tout build ou test Go.
 build: front
@@ -69,7 +70,7 @@ run: build
 test: front
 	go test ./...
 
-ci: fmt vet staticcheck front-check e2e test vulncheck gosec build
+ci: fmt vet staticcheck front-check e2e test vulncheck gosec dupl build
 
 fmt:
 	@unformatted="$$(gofmt -l . ; go run $(GOIMPORTS) -l .)"; \
@@ -87,6 +88,11 @@ vulncheck:
 
 gosec:
 	go run $(GOSEC) -quiet ./...
+
+# Les copies Go de 80 jetons et plus, par fichier, comparées à la liste des
+# copies admises (scripts/dupl-admises.txt) : elle ne fait que raccourcir.
+dupl:
+	go run $(DUPL) -t 80 -plumbing internal cmd | scripts/dupl-releve.sh
 
 clean:
 	rm -rf bin/opencloud dist dist-release
