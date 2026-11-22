@@ -325,6 +325,83 @@ func TestOneDefinition_MachineFacts(t *testing.T) {
 	}
 }
 
+// identDir : la seule maison du tirage d'un identifiant.
+const identDir = "internal/kit/ident/"
+
+// secretDrawExceptions : les fonctions qui tirent un aléa et l'écrivent en
+// hexadécimaux sans passer par ident, avec la raison. Clé : « fichier
+// fonction », fichier relatif au module.
+var secretDrawExceptions = map[string]string{
+	"internal/domain/restic/proxy.go Start":  "le jeton du mandataire local ouvre le dépôt à qui le connaît : un secret, pas un identifiant (128 bits, dans l'URL donnée à restic)",
+	"internal/fact/machine/sessions.go Open": "le jeton de session authentifie le flux d'un agent : un secret de 256 bits, pas un identifiant",
+}
+
+// handWrittenIdentifierDraws relève les fonctions qui appellent rand.Read puis
+// hex.EncodeToString : l'identifiant tiré à la main, sans ident.New.
+func handWrittenIdentifierDraws(fileSet *token.FileSet, file *ast.File) []string {
+	var found []string
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Body == nil {
+			continue
+		}
+		draws, encodes := false, false
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			receiver, ok := selector.X.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			draws = draws || (receiver.Name == "rand" && selector.Sel.Name == "Read")
+			encodes = encodes || (receiver.Name == "hex" && selector.Sel.Name == "EncodeToString")
+			return true
+		})
+		if draws && encodes {
+			found = append(found, fileSet.Position(function.Pos()).String()+": "+function.Name.Name)
+		}
+	}
+	return found
+}
+
+// Un identifiant se tire par ident.New (ou ident.NewSized), jamais par un
+// rand.Read suivi de hex.EncodeToString. Un secret garde son tirage et sa
+// raison dans secretDrawExceptions.
+func TestOneDefinition_IdentifiersAreDrawnByIdent(t *testing.T) {
+	checked := 0
+	seenExceptions := map[string]bool{}
+	forEachGoFile(t, moduleRoot(), true, func(path string, fileSet *token.FileSet, file *ast.File) {
+		relative := filepath.ToSlash(strings.TrimPrefix(path, moduleRoot()+string(filepath.Separator)))
+		if strings.HasPrefix(relative, identDir) {
+			return
+		}
+		checked++
+		for _, at := range handWrittenIdentifierDraws(fileSet, file) {
+			name := at[strings.LastIndex(at, ": ")+2:]
+			key := relative + " " + name
+			if _, excepted := secretDrawExceptions[key]; excepted {
+				seenExceptions[key] = true
+				continue
+			}
+			t.Errorf("%s : un identifiant se tire par ident.New ou ident.NewSized ; un secret se déclare dans secretDrawExceptions", at)
+		}
+	})
+	if checked == 0 {
+		t.Fatal("no source file seen: the guard no longer sees the code")
+	}
+	for key := range secretDrawExceptions {
+		if !seenExceptions[key] {
+			t.Errorf("exception %q : plus aucun tirage à la main, la retirer", key)
+		}
+	}
+}
+
 // Les gardes ne valent que si elles échouent sur la faute : on leur donne
 // un source fautif.
 func TestOneDefinition_GuardsCatchTheirFault(t *testing.T) {
@@ -350,6 +427,12 @@ func waitFor(t *testing.T, condition func() bool) {
 }
 
 var ErrOffline = refusal.Conflict("backup.machine_offline", "offline")
+
+func newID() string {
+	raw := make([]byte, 8)
+	_, _ = rand.Read(raw)
+	return hex.EncodeToString(raw)
+}
 `
 	fileSet := token.NewFileSet()
 	file, err := parser.ParseFile(fileSet, "faulty_test.go", faulty, parser.SkipObjectResolution)
@@ -370,6 +453,9 @@ var ErrOffline = refusal.Conflict("backup.machine_offline", "offline")
 	}
 	if got := machineFactKeys(fileSet, file); len(got) != 1 {
 		t.Errorf("machine fact key outside machine not caught: %v", got)
+	}
+	if got := handWrittenIdentifierDraws(fileSet, file); len(got) != 1 {
+		t.Errorf("hand-drawn identifier not caught: %v", got)
 	}
 }
 

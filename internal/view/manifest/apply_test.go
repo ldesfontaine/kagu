@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -758,6 +759,9 @@ func TestApply_JournalKeepsWhoWhatAndHowItEnded(t *testing.T) {
 		stored.PlanHash != plan.Hash || stored.State != manifest.ApplyApplied || stored.Updated != 5 || stored.Done != 5 ||
 		stored.Unchanged != plan.Unchanged || len(stored.Changes) != 5 || !strings.HasPrefix(stored.ID, manifest.ApplyPrefix) {
 		t.Fatalf("stored: %+v", stored)
+	}
+	if !regexp.MustCompile(`^apl_[0-9a-f]{16}$`).MatchString(stored.ID) {
+		t.Fatalf("apply id shape: %q", stored.ID)
 	}
 	if !reflect.DeepEqual(stored.Changes, plan.Changes) {
 		t.Fatalf("the journal must keep the confirmed plan:\n%+v\n%+v", stored.Changes, plan.Changes)

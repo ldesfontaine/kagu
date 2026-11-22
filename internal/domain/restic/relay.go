@@ -2,8 +2,6 @@ package restic
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/opencloud/internal/kit/ident"
 	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
 )
 
@@ -294,11 +293,11 @@ func (b *Broker) finish(id string) {
 }
 
 func newRelayID() (string, error) {
-	raw := make([]byte, relayIDRandomBytes)
-	if _, err := rand.Read(raw); err != nil {
+	id, err := ident.NewSized(relayIDRandomBytes)
+	if err != nil {
 		return "", fmt.Errorf("draw relay id: %w", err)
 	}
-	return hex.EncodeToString(raw), nil
+	return id, nil
 }
 
 // relayedHeaders ne garde que les en-têtes de réponse de la liste.

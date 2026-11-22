@@ -1,13 +1,14 @@
 package fsx
 
 import (
-	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"os"
 	"path"
 	"strings"
+
+	"github.com/ldesfontaine/opencloud/internal/kit/ident"
 )
 
 // Un temporaire s'appelle « <nom>.tmp-<16 hexadécimaux> » : assez long pour
@@ -40,7 +41,10 @@ func WriteAtomicOwned(root *os.Root, name string, data []byte, perm os.FileMode,
 }
 
 func writeAtomic(root *os.Root, name string, data []byte, perm os.FileMode, owner *Owner) error {
-	temp := uniqueTempName(name)
+	temp, err := uniqueTempName(name)
+	if err != nil {
+		return err
+	}
 	if err := writeTemp(root, temp, data, perm, os.O_EXCL); err != nil {
 		return err
 	}
@@ -93,7 +97,10 @@ func isTempSuffix(suffix string) bool {
 // (lien dur d'un temporaire à nom unique), donc un lecteur ne voit jamais un
 // fichier vide ou partiel.
 func CreateExclusive(root *os.Root, name string, data []byte, perm os.FileMode) error {
-	temp := uniqueTempName(name)
+	temp, err := uniqueTempName(name)
+	if err != nil {
+		return err
+	}
 	if err := writeTemp(root, temp, data, perm, os.O_EXCL); err != nil {
 		return err
 	}
@@ -116,10 +123,12 @@ func LinkExclusive(root *os.Root, temp, name string) error {
 
 // uniqueTempName rend un nom de temporaire imprévisible, dans le même dossier
 // que name : le rename final doit rester sur le même système de fichiers.
-func uniqueTempName(name string) string {
-	suffix := make([]byte, tempSuffixBytes)
-	_, _ = rand.Read(suffix)
-	return name + tempInfix + hex.EncodeToString(suffix)
+func uniqueTempName(name string) (string, error) {
+	suffix, err := ident.NewSized(tempSuffixBytes)
+	if err != nil {
+		return "", fmt.Errorf("draw temp name: %w", err)
+	}
+	return name + tempInfix + suffix, nil
 }
 
 // writeTemp écrit data dans temp, en mode perm exactement : le umask de

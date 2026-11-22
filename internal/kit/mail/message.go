@@ -2,8 +2,6 @@ package mail
 
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"mime"
 	"mime/quotedprintable"
@@ -11,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/ident"
 )
 
 // Message est ce qu'on envoie : un sujet, un texte brut, et un HTML
@@ -105,9 +104,9 @@ func newMessageID(from string) (string, error) {
 }
 
 func randomHex(size int) (string, error) {
-	buffer := make([]byte, size)
-	if _, err := rand.Read(buffer); err != nil {
+	random, err := ident.NewSized(size)
+	if err != nil {
 		return "", fmt.Errorf("draw random: %w", err)
 	}
-	return hex.EncodeToString(buffer), nil
+	return random, nil
 }

@@ -12,7 +12,15 @@ const randomBytes = 8
 
 // New tire un identifiant de seize hexadécimaux en minuscules.
 func New() (string, error) {
-	raw := make([]byte, randomBytes)
+	return NewSized(randomBytes)
+}
+
+// NewSized tire un identifiant plus long ou plus court que New, pour les
+// formes que d'autres attendent (identifiant de transaction, de corrélation,
+// de message) : deux hexadécimaux en minuscules par octet. Jamais pour un
+// secret : un secret garde sa propre forme et sa propre garde.
+func NewSized(bytes int) (string, error) {
+	raw := make([]byte, bytes)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
 	}

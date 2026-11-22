@@ -1,13 +1,12 @@
 package server
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/ldesfontaine/opencloud/internal/kit/ident"
 	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
 )
 
@@ -15,7 +14,6 @@ import (
 // l'API et les pings ont leurs bornes plus serrées en dessous.
 const (
 	maxRequestBody     = 1 << 20
-	requestIDBytes     = 8
 	requestIDHeader    = "X-Request-ID"
 	panicResponseTitle = "internal server error"
 	pingPrefix         = "/ping/"
@@ -99,11 +97,11 @@ func requestID(next http.Handler) http.Handler {
 }
 
 func newRequestID() string {
-	raw := make([]byte, requestIDBytes)
-	if _, err := rand.Read(raw); err != nil {
+	id, err := ident.New()
+	if err != nil {
 		return "unknown"
 	}
-	return hex.EncodeToString(raw)
+	return id
 }
 
 // logRequest écrit une ligne par requête finie : Debug d'ordinaire, Warn

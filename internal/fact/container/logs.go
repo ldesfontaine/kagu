@@ -2,10 +2,10 @@ package container
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/ldesfontaine/opencloud/internal/kit/ident"
 )
 
 // LogSource sait ouvrir un journal sur sa machine : c'est l'agent, qui lit
@@ -26,6 +26,9 @@ type Commander interface {
 // Un lot attend ici tant que le navigateur ne l'a pas lu ; au-delà l'agent
 // bloque sur son POST, ce qui freine la source.
 const batchBacklog = 16
+
+// requestIDBytes : la taille de l'identifiant d'une demande de journal.
+const requestIDBytes = 16
 
 // Relay demande un journal à l'agent d'une machine et fait suivre les lots
 // qu'il livre à qui les attend.
@@ -203,11 +206,11 @@ func (f *follow) send(ctx context.Context, batch LogBatch) bool {
 }
 
 func newRequestID() string {
-	raw := make([]byte, 16)
-	if _, err := rand.Read(raw); err != nil {
+	id, err := ident.NewSized(requestIDBytes)
+	if err != nil {
 		panic(err)
 	}
-	return hex.EncodeToString(raw)
+	return id
 }
 
 // Les journaux d'un conteneur, par son relais.

@@ -3,8 +3,6 @@ package alert
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"html"
 	"io"
 	"net/http"
@@ -13,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/opencloud/internal/kit/ident"
 )
 
 // matrixMessage est un m.room.message : le texte brut pour les clients
@@ -42,6 +41,9 @@ func matrixBody(title string, text Text, link, openLabel string) (Body, error) {
 	})
 }
 
+// matrixTestRandomBytes : la taille de l'aléa de l'identifiant d'un envoi de test.
+const matrixTestRandomBytes = 16
+
 // matrixTransactionID nomme un envoi auprès du serveur d'accueil : le même
 // identifiant rejoué avec le même jeton n'écrit qu'un message. Une
 // livraison garde le sien d'un essai à l'autre et après un redémarrage ;
@@ -57,11 +59,11 @@ func matrixTransactionID(delivery Delivery) (string, error) {
 		}
 		return prefix + strconv.FormatInt(delivery.ID, 10) + "-" + strconv.FormatInt(delivery.CreatedAt.Unix(), 10), nil
 	}
-	random := make([]byte, 16)
-	if _, err := rand.Read(random); err != nil {
+	random, err := ident.NewSized(matrixTestRandomBytes)
+	if err != nil {
 		return "", err
 	}
-	return brand.MatrixTransactionPrefix + "test-" + hex.EncodeToString(random), nil
+	return brand.MatrixTransactionPrefix + "test-" + random, nil
 }
 
 // matrixSendURL est l'adresse de l'envoi dans le salon, sous le serveur

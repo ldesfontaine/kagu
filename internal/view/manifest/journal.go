@@ -2,12 +2,11 @@ package manifest
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"time"
 
 	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/opencloud/internal/kit/ident"
 )
 
 // ApplyState est où en est un passage d'apply. « planned » (un plan mis de
@@ -110,9 +109,9 @@ type Journal interface {
 }
 
 func newApplyID() (string, error) {
-	raw := make([]byte, 8)
-	if _, err := rand.Read(raw); err != nil {
+	id, err := ident.New()
+	if err != nil {
 		return "", err
 	}
-	return ApplyPrefix + hex.EncodeToString(raw), nil
+	return ApplyPrefix + id, nil
 }
