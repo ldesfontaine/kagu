@@ -227,11 +227,6 @@ func (l Link) Observed() bool {
 	return strings.HasPrefix(l.ID, ObservedPrefix)
 }
 
-// Touches dit si une extrémité du lien est sur la machine.
-func (l Link) Touches(machineID string) bool {
-	return l.From.MachineID == machineID || l.To.MachineID == machineID
-}
-
 // Definition : ce que l'opérateur donne pour écrire un lien.
 type Definition struct {
 	From Endpoint
