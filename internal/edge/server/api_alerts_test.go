@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
-	"github.com/ldesfontaine/opencloud/internal/kit/goldentest"
-	"github.com/ldesfontaine/opencloud/internal/kit/live"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
+	"github.com/ldesfontaine/kagu/internal/kit/live"
 )
 
 // Les données de test ouvrent déjà des alertes par les composants : la

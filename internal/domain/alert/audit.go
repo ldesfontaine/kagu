@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
 // SetAuditor branche le journal d'audit ; nil est toléré.

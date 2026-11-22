@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Les droits d'un agent : cochés à l'émission du jeton, écrits par la ligne

@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/crypto/blake2b"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 var (

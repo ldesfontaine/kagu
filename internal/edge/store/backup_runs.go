@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/domain/backup"
 )
 
 // RecordBackupRun écrit la ligne et purge, dans la même transaction, ce que le

@@ -4,7 +4,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/registry"
+	"github.com/ldesfontaine/kagu/internal/kit/registry"
 )
 
 // Category dit ce qu'est un service : un serveur web, un SSO, une base de

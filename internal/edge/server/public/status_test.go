@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/servertest"
+	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
 )
 
 // Le public ne voit que le nom des composants et ce que l'opérateur a

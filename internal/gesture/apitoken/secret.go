@@ -5,8 +5,8 @@ import (
 	"encoding/base32"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // Le préfixe des jetons : reconnaissable dans un journal ou un

@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/hostinfo"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait"
+	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
+	"github.com/ldesfontaine/kagu/internal/kit/wait"
 )
 
 // Où tourne la machine et ses disques se relisent toutes les dix minutes : un

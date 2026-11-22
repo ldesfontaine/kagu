@@ -74,7 +74,7 @@ serveur ni sur les machines.
 ## Télécharger
 
 Les binaires Linux amd64 et arm64 sont dans les
-[releases](https://github.com/ldesfontaine/opencloud/releases) du dépôt. Une
+[releases](https://github.com/ldesfontaine/kagu/releases) du dépôt. Une
 version publiée ne change jamais ; elle porte `SHA256SUMS` (les sommes
 SHA-256) et `SHA256SUMS.minisig` (leur signature).
 
@@ -82,7 +82,7 @@ SHA-256) et `SHA256SUMS.minisig` (leur signature).
 jusqu'ici. Elle ne se vérifie que par ses sommes :
 
 ```sh
-base=https://github.com/ldesfontaine/opencloud/releases/download/v0.0.1
+base=https://github.com/ldesfontaine/kagu/releases/download/v0.0.1
 curl -fLO "$base/opencloud-linux-amd64" -fLO "$base/SHA256SUMS"
 sha256sum -c --ignore-missing SHA256SUMS
 mv opencloud-linux-amd64 opencloud && chmod +x opencloud
@@ -95,7 +95,7 @@ workflow `release` (voir
 Pour une version signée, `vX.Y.Z` :
 
 ```sh
-base=https://github.com/ldesfontaine/opencloud/releases/download/vX.Y.Z
+base=https://github.com/ldesfontaine/kagu/releases/download/vX.Y.Z
 curl -fLO "$base/opencloud-linux-amd64" -fLO "$base/SHA256SUMS" -fLO "$base/SHA256SUMS.minisig"
 chmod +x opencloud-linux-amd64
 ./opencloud-linux-amd64 release verify opencloud-linux-amd64
@@ -116,7 +116,7 @@ GitHub :
 ```sh
 minisign -Vm SHA256SUMS -P <clé publique des versions>
 sha256sum -c --ignore-missing SHA256SUMS
-gh attestation verify opencloud-linux-amd64 -R ldesfontaine/opencloud
+gh attestation verify opencloud-linux-amd64 -R ldesfontaine/kagu
 ```
 
 La clé publique des versions sera publiée ici le jour de la première version
@@ -127,7 +127,7 @@ signée.
 Sur un poste avec Go et Node :
 
 ```sh
-git clone https://github.com/ldesfontaine/opencloud.git
+git clone https://github.com/ldesfontaine/kagu.git
 cd opencloud
 make build                 # npm ci, compile l'interface, puis bin/opencloud
 ./bin/opencloud version    # opencloud v0.0.1 (<commit>)
@@ -1726,7 +1726,7 @@ variante, avec `sudo`, reste au choix. Les lignes, avec `sudo` (en root, retirez
 ```sh
 # Sur la machine : le binaire de cette version, vérifié, dans /tmp/opencloud
 (cd "$(mktemp -d)" &&
-base=https://github.com/ldesfontaine/opencloud/releases/download/v0.6.0 &&
+base=https://github.com/ldesfontaine/kagu/releases/download/v0.6.0 &&
 arch=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') &&
 curl -fLO "$base/opencloud-linux-$arch" -fLO "$base/SHA256SUMS" &&
 sha256sum -c --ignore-missing SHA256SUMS &&

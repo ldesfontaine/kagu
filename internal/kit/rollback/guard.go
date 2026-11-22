@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // Les codes de sortie que le lanceur rend à systemd, ceux de l'agent : 3 dit

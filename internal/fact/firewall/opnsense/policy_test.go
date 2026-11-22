@@ -3,8 +3,8 @@ package opnsense
 import (
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/firewall"
-	"github.com/ldesfontaine/opencloud/internal/fact/policy"
+	"github.com/ldesfontaine/kagu/internal/fact/firewall"
+	"github.com/ldesfontaine/kagu/internal/fact/policy"
 )
 
 func testSnapshot() firewall.Snapshot {

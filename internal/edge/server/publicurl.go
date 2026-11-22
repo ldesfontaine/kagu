@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
 )
 
 // publicAddress est l'adresse que les machines doivent appeler, et ce que

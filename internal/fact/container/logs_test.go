@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
 type fakeCommander struct {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
 )
 
 // La 035 sur une base qui a déjà un hôte Proxmox relevé : l'hôte, ses VM et ses

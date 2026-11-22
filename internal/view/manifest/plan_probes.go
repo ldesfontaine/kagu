@@ -3,7 +3,7 @@ package manifest
 import (
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
 )
 
 func (b *builder) planProbes() {

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // ApplyState est où en est un passage d'apply. « planned » (un plan mis de

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/live"
+	"github.com/ldesfontaine/kagu/internal/kit/live"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/goldentest"
+	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
 )
 
 // reconnectAs fait redire à l'agent de la machine distante son compte et les

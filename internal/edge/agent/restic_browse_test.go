@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 const browseSnapshot = "3333333333333333333333333333333333333333333333333333333333333333"

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
-	"github.com/ldesfontaine/opencloud/internal/edge/server/servertest"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
 )
 
 // Les connexions de l'hôte (étude services-modèle §2.3, signal 9, décision 5) :

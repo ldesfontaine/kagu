@@ -4,7 +4,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // Ce que le composant machine constate : une machine perdue, revenue,

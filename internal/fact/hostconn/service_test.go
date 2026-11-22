@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/link"
+	"github.com/ldesfontaine/kagu/internal/fact/link"
 )
 
 type countingWatcher struct{ changes int }

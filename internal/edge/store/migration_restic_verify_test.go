@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/domain/restic"
 )
 
 // La 034 sur une base qui a déjà des liens restic, une rétention notée et une

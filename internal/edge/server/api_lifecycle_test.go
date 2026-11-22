@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/lifecycle"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/lifecycle"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // La source des tests : PostgreSQL et Debian, et le compte de ce qu'on lui

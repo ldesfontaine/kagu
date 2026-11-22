@@ -1,4 +1,4 @@
-module github.com/ldesfontaine/opencloud
+module github.com/ldesfontaine/kagu
 
 go 1.26.11
 

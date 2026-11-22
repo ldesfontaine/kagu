@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
 )
 
 // L'acquittement groupé passe les ouvertes non acquittées, ignore le reste

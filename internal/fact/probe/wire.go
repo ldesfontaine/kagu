@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Task est une sonde telle que l'agent l'exécute : ce qu'il faut pour

@@ -6,8 +6,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // Un type d'alerte sans catégorie ne passerait que par les canaux sans

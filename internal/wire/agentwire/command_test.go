@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
-	"github.com/ldesfontaine/opencloud/internal/fact/update"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/fact/update"
 )
 
 // Les noms d'événement d'observation sont ceux que les agents lisent ; un

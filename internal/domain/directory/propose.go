@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
-	"github.com/ldesfontaine/opencloud/internal/kit/registry"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/kit/registry"
 )
 
 // Proposal est ce que « Accepter » écrit, et que « Modifier avant d'accepter »

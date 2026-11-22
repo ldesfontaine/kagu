@@ -8,7 +8,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/fact/auth"
 )
 
 // SetupCode tire le code qui ouvre la première configuration. Hors du mode

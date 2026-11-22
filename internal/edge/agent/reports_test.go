@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
 )
 
 func TestReports_MergeTakeRestoreAndReplay(t *testing.T) {

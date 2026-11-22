@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/testkit"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/testkit"
 )
 
 func TestCreateLoad_RoundTripsInMode0600(t *testing.T) {

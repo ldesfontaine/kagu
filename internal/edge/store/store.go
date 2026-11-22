@@ -17,9 +17,9 @@ import (
 
 	_ "modernc.org/sqlite" // pilote SQLite pur Go, enregistré sous le nom "sqlite"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/view/reader"
-	"github.com/ldesfontaine/opencloud/migrations"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/view/reader"
+	"github.com/ldesfontaine/kagu/migrations"
 )
 
 // La base est le Reader que le serveur, la page de statut et le fichier de

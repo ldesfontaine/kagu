@@ -9,7 +9,7 @@ go.dev) : un point d'entrée sous `cmd/`, tout le reste sous `internal/`, que
 le compilateur interdit d'importer d'ailleurs. Pas de `src/`, pas de `pkg/`.
 
 ```
-cmd/opencloud/                     # le seul main : il aiguille vers la commande
+cmd/kagu/                     # le seul main : il aiguille vers la commande
 internal/<famille>/<paquet>/       # un paquet par concept, rangé dans sa famille (« Les familles »)
 internal/kit/                      # rang 0 : les outils sans règle d'openCloud
 internal/fact/                     # rang 1 : ce qu'on sait d'un objet
@@ -201,7 +201,7 @@ autre : chacun a sa règle d'import.
 | `internal/view/` | 5 | Les lectures croisées : `reader`, page de statut, fichier de l'annuaire | les rangs 0 à 4, `view` |
 | `internal/edge/` | 6 | Le bord : HTTP, base, agent, configuration | tout le dessous |
 
-`cmd/opencloud` importe tout.
+`cmd/kagu` importe tout.
 
 | Famille | Paquets |
 | --- | --- |
@@ -247,7 +247,7 @@ s'y déclare avec sa raison, et il n'y en a aucune.
 
 | Paquet | Ce qu'il fait | Jamais |
 | --- | --- | --- |
-| `cmd/opencloud` | Aiguille vers la commande, ouvre la base, construit les composants et les branche : une fois, dans `components.go`, pour `serve` et les commandes qui en ont besoin | Une règle métier |
+| `cmd/kagu` | Aiguille vers la commande, ouvre la base, construit les composants et les branche : une fois, dans `components.go`, pour `serve` et les commandes qui en ont besoin | Une règle métier |
 | `edge/server` (racine) | Le montage des routes, la chaîne de middlewares, les gardes (hôte, même-origine, opérateur), l'API JSON, le front servi | Du SQL, une règle métier |
 | `server/agentapi`, `server/ping`, `server/public`, `server/sse` | Les routes d'un seul consommateur, avec ses dépendances, son format de réponse et ses limiteurs (« Le dépôt ») | Importer `server` |
 | `server/httpx` | Les gestes de réponse de la racine et des sous-paquets : `WriteJSON`, `WriteEvent`, `WriteTooMany`, `PeerHost`, `ConvertAll`, `TimeOrNil` | Une route, un composant |

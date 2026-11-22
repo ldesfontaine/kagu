@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/resource"
-	"github.com/ldesfontaine/opencloud/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/fact/resource"
+	"github.com/ldesfontaine/kagu/internal/kit/sampler"
 )
 
 // Les colonnes d'un seau agrégé, dans l'ordre où scanReading les lit ; les

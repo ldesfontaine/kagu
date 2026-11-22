@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
 // containerStore ne sait que rendre la fiche : FetchLogs n'en lit pas plus.

@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // ErrEventTooLarge : le serveur a envoyé une ligne ou un événement plus long

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/live"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/kit/live"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
 const testPing = 20 * time.Millisecond

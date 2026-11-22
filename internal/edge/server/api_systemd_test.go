@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
-	"github.com/ldesfontaine/opencloud/internal/fact/systemdunits"
-	"github.com/ldesfontaine/opencloud/internal/kit/goldentest"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/fact/systemdunits"
+	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 func systemdUnit(name string, active systemdunits.Active, sub systemdunits.Sub) systemdunits.Unit {

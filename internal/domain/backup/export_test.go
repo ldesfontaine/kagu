@@ -3,7 +3,7 @@ package backup
 import (
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // Due ouvre la règle du rythme aux tests de backup_test, qui ne peuvent pas

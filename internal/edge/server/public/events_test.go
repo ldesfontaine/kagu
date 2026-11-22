@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
-	"github.com/ldesfontaine/opencloud/internal/view/status"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/view/status"
 )
 
 // Le direct public ne porte que « status », sur son propre bus.

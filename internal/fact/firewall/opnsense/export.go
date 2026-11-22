@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/firewall"
+	"github.com/ldesfontaine/kagu/internal/fact/firewall"
 )
 
 // Système → Configuration → Sauvegardes : la dernière version enregistrée de

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
 )
 
 // ListThresholds rend le réglage global et, pour une machine, ses

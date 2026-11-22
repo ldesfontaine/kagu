@@ -3,9 +3,9 @@ package server
 import (
 	"net/http"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/httpx"
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/hostinfo"
+	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 )
 
 // La correction de l'opérateur : le type et l'hôte de la machine. Vides, ils

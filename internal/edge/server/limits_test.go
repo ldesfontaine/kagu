@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/restic"
-	"github.com/ldesfontaine/opencloud/internal/kit/ratelimit"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/kit/ratelimit"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
 // listenLimitedForTest sert un http.Server sur une vraie boucle locale, via

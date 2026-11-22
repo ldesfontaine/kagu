@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/gesture/apitoken"
+	"github.com/ldesfontaine/kagu/internal/gesture/apitoken"
 )
 
 // La 008 garde les jetons d'API vivants, en lecture, avec leur identifiant,

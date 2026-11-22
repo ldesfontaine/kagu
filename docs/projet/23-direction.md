@@ -111,7 +111,7 @@ statut. Le **service déclaré** en est l'objet central.
 | Éditer sur place sondes et tâches | `internal/fact/probe`, `internal/domain/heartbeat`, API | Sans ça, chaque `apply` efface 90 jours d'historique ou change un jeton | Faible, prérequis de tout le reste. **Fait** (PR « édition sur place ») |
 | Annuaire : services, unités, projets, nature | migration, `internal/…` | Le composant de statut est public ; il ne peut pas porter l'image, la version, les chemins | Moyen ; un rapprochement conteneur → unité à chaque inventaire |
 | Suppressions en `restrict` + plan | migration, chaque suppression | La base refuse toute perte silencieuse | Moyen : chaque suppression écrit son plan |
-| `export` / `apply` | `cmd/opencloud`, API | Reproductibilité de l'annuaire | Moyen à fort : le diff et sa confirmation sont le vrai travail |
+| `export` / `apply` | `cmd/kagu`, API | Reproductibilité de l'annuaire | Moyen à fort : le diff et sa confirmation sont le vrai travail |
 | Pages de statut par projet | `internal/view/status`, front | La page globale ne sert à rien | Moyen ; la page actuelle devient une page. **Fait** (PR « une page de statut par projet », migration `034`) : plusieurs pages, chacune à `/statut/<slug>`, rangée dans un projet ou non ; la page d'avant devient la page `statut`, sans projet |
 | Labels `<préfixe>.*` lus par l'agent | `internal/kit/dockerapi`, `dockerwatch` | Rattacher ce qu'openCloud déploie sans ambiguïté ; préfixe tiré du paquet de constantes | Faible, **après** le fichier. **Fait** : annuaire 7/7 (lus, pas encore posés par un déploiement) |
 

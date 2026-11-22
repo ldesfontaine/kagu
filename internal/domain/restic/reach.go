@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Les délais de la sonde d'avant chaque sauvegarde : courts, car une cible

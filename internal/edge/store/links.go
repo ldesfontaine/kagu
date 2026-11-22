@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/link"
+	"github.com/ldesfontaine/kagu/internal/fact/link"
 )
 
 const linkColumns = `id, from_machine_id, from_key, to_machine_id, to_key, nature, proof, signal, port, first_seen_at, last_seen_at`

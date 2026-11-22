@@ -90,7 +90,7 @@ func TestGuardMigrationText_DownloadsAndChecksTheBinaryFirst(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"base=https://github.com/ldesfontaine/opencloud/releases/download/v0.0.2 &&",
+		"base=https://github.com/ldesfontaine/kagu/releases/download/v0.0.2 &&",
 		`curl -fLO "$base/opencloud-linux-$arch" -fLO "$base/SHA256SUMS" &&`,
 		"sha256sum -c --ignore-missing SHA256SUMS &&",
 		`install -m 0755 "opencloud-linux-$arch" /tmp/opencloud)`,

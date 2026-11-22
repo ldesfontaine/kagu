@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/alert"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
-	"github.com/ldesfontaine/opencloud/internal/kit/mail"
-	"github.com/ldesfontaine/opencloud/internal/kit/mail/smtptest"
+	"github.com/ldesfontaine/kagu/internal/domain/alert"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/mail"
+	"github.com/ldesfontaine/kagu/internal/kit/mail/smtptest"
 )
 
 // mailNotifier branche le notifieur sur un faux relais en STARTTLS.

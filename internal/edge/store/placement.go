@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/kit/hostinfo"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 )
 
 // memberSeparator sépare les disques d'un pool dans la colonne ; aucun nom de

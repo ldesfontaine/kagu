@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
 )
 
 const volumeInspect = `{"Id":"` + fixtureID + `","Name":"/web","Image":"sha256:abc","Config":{"Image":"alpine:3.20"},

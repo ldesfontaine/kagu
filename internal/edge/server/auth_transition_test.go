@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/auth"
-	"github.com/ldesfontaine/opencloud/internal/fact/auth/authtest"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/fact/auth/authtest"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
 // Un changement de l'accès met fin à tout ce que l'état d'avant avait

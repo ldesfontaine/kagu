@@ -3,7 +3,7 @@ package manifest
 import (
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
 )
 
 func (b *builder) planHeartbeats() {

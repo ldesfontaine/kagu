@@ -15,7 +15,7 @@ import (
 // « Les règles d'import »). Le rang se lit dans le chemin : la seule table est
 // ranks. Une exception se déclare dans layerExceptions, avec sa raison.
 
-const modulePath = "github.com/ldesfontaine/opencloud/"
+const modulePath = "github.com/ldesfontaine/kagu/"
 
 // ranks : famille → rang d'import ; un dossier ne s'importe que s'il est du
 // même rang ou plus bas.
@@ -205,20 +205,20 @@ func TestLayers_GuardCatchesItsFault(t *testing.T) {
 		rule   int
 	}{
 		{"import going up", "internal/kit/faulty/faulty.go", `package faulty
-import _ "github.com/ldesfontaine/opencloud/internal/fact/machine"
+import _ "github.com/ldesfontaine/kagu/internal/fact/machine"
 `, ruleImportRank},
 		{"kit importing another family", "internal/kit/faulty/faulty.go", `package faulty
-import _ "github.com/ldesfontaine/opencloud/internal/kit/refusal"
-import _ "github.com/ldesfontaine/opencloud/internal/edge/config"
+import _ "github.com/ldesfontaine/kagu/internal/kit/refusal"
+import _ "github.com/ldesfontaine/kagu/internal/edge/config"
 `, ruleImportRank},
 		{"agent importing the server", "internal/edge/agent/faulty.go", `package agent
-import _ "github.com/ldesfontaine/opencloud/internal/edge/server"
+import _ "github.com/ldesfontaine/kagu/internal/edge/server"
 `, ruleAgentOffEdge},
 		{"server sub-package importing the server", "internal/edge/server/faulty/faulty.go", `package faulty
-import _ "github.com/ldesfontaine/opencloud/internal/edge/server"
+import _ "github.com/ldesfontaine/kagu/internal/edge/server"
 `, ruleSubOfServer},
 		{"test kit imported outside a test", "internal/domain/faulty/faulty.go", `package faulty
-import _ "github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+import _ "github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 `, ruleTestKit},
 	}
 	for _, c := range cases {
@@ -238,7 +238,7 @@ import _ "github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
 	if packageFamilyFault("internal/stray") == "" || packageFamilyFault("internal/stray/pkg") == "" {
 		t.Error("package outside the families not caught")
 	}
-	if packageFamilyFault("internal/kit/refusal") != "" || packageFamilyFault("cmd/opencloud") != "" {
+	if packageFamilyFault("internal/kit/refusal") != "" || packageFamilyFault("cmd/kagu") != "" {
 		t.Error("a well-placed package was refused")
 	}
 

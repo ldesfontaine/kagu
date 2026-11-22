@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/ldesfontaine/opencloud/internal/edge/server/sse"
+	"github.com/ldesfontaine/kagu/internal/edge/server/sse"
 )
 
 const (

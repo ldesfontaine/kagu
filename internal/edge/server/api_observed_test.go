@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // observedOf rend, pour chaque conteneur, si l'API le dit observé, et le

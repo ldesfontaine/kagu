@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
 )
 
 const probeColumns = `p.id, p.name, p.kind, p.target, p.machine_id, COALESCE(m.name, ''),

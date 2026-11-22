@@ -4,8 +4,8 @@ import (
 	"net"
 	"slices"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/egress"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/egress"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Kind dit où tourne la machine : sur du matériel, dans une VM, dans un

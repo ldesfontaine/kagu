@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/gesture/apitoken"
-	"github.com/ldesfontaine/opencloud/internal/gesture/verb"
+	"github.com/ldesfontaine/kagu/internal/gesture/apitoken"
+	"github.com/ldesfontaine/kagu/internal/gesture/verb"
 )
 
 // Les tests hostiles de la non-suppression, couche 1 : un jeton à qui

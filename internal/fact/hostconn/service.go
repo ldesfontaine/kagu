@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/link"
+	"github.com/ldesfontaine/kagu/internal/fact/link"
 )
 
 // MaxSightingsPerMachine borne ce qu'une machine garde en mémoire : un agent

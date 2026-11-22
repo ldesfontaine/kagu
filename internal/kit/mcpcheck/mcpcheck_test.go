@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 var checkedAt = time.Date(2026, 10, 22, 9, 0, 0, 0, time.UTC)

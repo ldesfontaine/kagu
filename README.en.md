@@ -2,7 +2,7 @@
 
 [Français](README.md) · Contributing: see [AGENTS.md](AGENTS.md) and [docs/projet/](docs/projet/) (in French)
 
-[![ci](https://github.com/ldesfontaine/opencloud/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/ldesfontaine/opencloud/actions/workflows/ci.yml)
+[![ci](https://github.com/ldesfontaine/kagu/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/ldesfontaine/kagu/actions/workflows/ci.yml)
 
 **openCloud is self-hosted monitoring** that **declares** what should be
 running, **compares** it with what is, and performs a few named **actions**
@@ -13,7 +13,7 @@ status page, detected image updates, and a read-only API token for an AI agent,
 through mcp-maison. One Go binary, with SQLite and the web interface embedded.
 
 > **Maturity.** Version `v0.0.1`, pre-release. Linux amd64 and arm64
-> binaries are in the [v0.0.1 release](https://github.com/ldesfontaine/opencloud/releases/tag/v0.0.1),
+> binaries are in the [v0.0.1 release](https://github.com/ldesfontaine/kagu/releases/tag/v0.0.1),
 > or you build them. A fresh install has **no account**: it serves only the
 > first-setup screen, and whoever opens it first creates the account. Create it
 > before exposing the port beyond the machine.
@@ -49,7 +49,7 @@ documentation is in French.
 Needs Go 1.26.11+, Node.js 20.19+, `make` and `git`. Linux only.
 
 ```sh
-git clone https://github.com/ldesfontaine/opencloud.git
+git clone https://github.com/ldesfontaine/kagu.git
 cd opencloud
 make run          # builds bin/opencloud, writes dev/config.toml, starts on 127.0.0.1:8080
 ```

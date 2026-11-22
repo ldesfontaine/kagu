@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/mail"
+	"github.com/ldesfontaine/kagu/internal/kit/mail"
 )
 
 // La forme de l'identifiant du message (32 hexadécimaux) et de la frontière

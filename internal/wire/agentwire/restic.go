@@ -14,7 +14,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // Les ordres de restic. La cible lance rest-server en écriture seule, tient

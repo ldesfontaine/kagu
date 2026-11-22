@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/gesture/action"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/gesture/action"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // La borne des attentes de ces tests : large, elle ne sert qu'à ne pas bloquer

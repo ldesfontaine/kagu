@@ -2,7 +2,7 @@
 
 [English](README.en.md) · Contribuer : voir [AGENTS.md](AGENTS.md) et [docs/projet/](docs/projet/)
 
-[![ci](https://github.com/ldesfontaine/opencloud/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/ldesfontaine/opencloud/actions/workflows/ci.yml)
+[![ci](https://github.com/ldesfontaine/kagu/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/ldesfontaine/kagu/actions/workflows/ci.yml)
 
 **openCloud est une supervision auto-hébergée** qui **déclare** ce qui doit
 tourner, le **compare** à ce qui tourne, et fait quelques **gestes** nommés
@@ -14,7 +14,7 @@ en lecture pour un agent IA, par mcp-maison. Un seul binaire Go, avec SQLite et
 l'interface web embarqués.
 
 > **Maturité.** Version `v0.0.1`, pré-version. Les binaires Linux amd64 et
-> arm64 sont dans la [release v0.0.1](https://github.com/ldesfontaine/opencloud/releases/tag/v0.0.1),
+> arm64 sont dans la [release v0.0.1](https://github.com/ldesfontaine/kagu/releases/tag/v0.0.1),
 > ou se compilent. Une installation neuve n'a **pas de compte** : elle ne sert
 > que l'écran de première configuration, qui exige un code tiré sur la
 > machine : `sudo opencloud admin setup-code`.
@@ -66,7 +66,7 @@ Pour essayer sur votre poste. L'installation sur un serveur est dans
 Il faut Go 1.26.11 ou plus, Node.js 20.19 ou plus, `make` et `git`.
 
 ```sh
-git clone https://github.com/ldesfontaine/opencloud.git
+git clone https://github.com/ldesfontaine/kagu.git
 cd opencloud
 make build                      # compile le front puis le binaire : bin/opencloud
 ```

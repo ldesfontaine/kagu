@@ -1,7 +1,7 @@
 # openCloud — build, run, test, ci. Les outils sont épinglés par version ici
 # et nulle part ailleurs ; la CI appelle ces mêmes cibles.
 
-MODULE      := github.com/ldesfontaine/opencloud
+MODULE      := github.com/ldesfontaine/kagu
 VERSION     ?= v0.0.1
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 LDFLAGS     := -s -w -X $(MODULE)/internal/kit/version.number=$(VERSION) -X $(MODULE)/internal/kit/version.commit=$(COMMIT)
@@ -20,7 +20,7 @@ export CGO_ENABLED = 0
 
 # Le front compilé est embarqué par go:embed : il précède tout build ou test Go.
 build: front
-	go build -trimpath -ldflags '$(LDFLAGS)' -o bin/opencloud ./cmd/opencloud
+	go build -trimpath -ldflags '$(LDFLAGS)' -o bin/opencloud ./cmd/kagu
 
 # Les binaires publiés : amd64 et arm64, statiques, avec leurs sommes. Le tag
 # release refuse de compiler sans clé de secours (internal/kit/release/key_release.go).
@@ -33,8 +33,8 @@ release: front
 RELEASE_DIR ?= dist-release
 release-binaries:
 	rm -rf $(RELEASE_DIR) && mkdir -p $(RELEASE_DIR)
-	GOARCH=amd64 go build -tags release -buildvcs=false -trimpath -ldflags '$(LDFLAGS)' -o $(RELEASE_DIR)/opencloud-linux-amd64 ./cmd/opencloud
-	GOARCH=arm64 go build -tags release -buildvcs=false -trimpath -ldflags '$(LDFLAGS)' -o $(RELEASE_DIR)/opencloud-linux-arm64 ./cmd/opencloud
+	GOARCH=amd64 go build -tags release -buildvcs=false -trimpath -ldflags '$(LDFLAGS)' -o $(RELEASE_DIR)/opencloud-linux-amd64 ./cmd/kagu
+	GOARCH=arm64 go build -tags release -buildvcs=false -trimpath -ldflags '$(LDFLAGS)' -o $(RELEASE_DIR)/opencloud-linux-arm64 ./cmd/kagu
 	cd $(RELEASE_DIR) && sha256sum opencloud-linux-* > SHA256SUMS
 
 # npm ci ne rejoue que si le verrou a changé ; le premier verrou se produit

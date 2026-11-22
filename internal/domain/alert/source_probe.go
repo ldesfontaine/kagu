@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
 )
 
 // Les motifs qui rendent un certificat non vérifié, par un mot.

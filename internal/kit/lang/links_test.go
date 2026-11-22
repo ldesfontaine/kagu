@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/goldentest"
+	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
 )
 
 // Le banc du front (menuLinks.test.ts) relit ce fichier : chaque adresse doit

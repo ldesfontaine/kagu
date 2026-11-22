@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 func TestVolumeProducer_CopiesTheMountAsATarOnStdout(t *testing.T) {

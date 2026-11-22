@@ -5,7 +5,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/link"
+	"github.com/ldesfontaine/kagu/internal/fact/link"
 )
 
 // ErrNotDeduced : l'identifiant ne désigne aucune route déduite aujourd'hui

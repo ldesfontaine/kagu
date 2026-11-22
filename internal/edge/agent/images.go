@@ -3,7 +3,7 @@ package agent
 import (
 	"sync"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/update"
+	"github.com/ldesfontaine/kagu/internal/fact/update"
 )
 
 // images garde ce que la boucle des mises à jour a constaté entre deux

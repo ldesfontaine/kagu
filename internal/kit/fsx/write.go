@@ -8,7 +8,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // Un temporaire s'appelle « <nom>.tmp-<16 hexadécimaux> » : assez long pour

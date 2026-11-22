@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/wait"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/wait"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // La relance de rest-server : un délai qui double d'une seconde à une

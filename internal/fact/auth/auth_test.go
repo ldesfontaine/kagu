@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 	"golang.org/x/crypto/bcrypt"
 )
 

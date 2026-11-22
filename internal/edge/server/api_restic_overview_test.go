@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/backup"
-	"github.com/ldesfontaine/opencloud/internal/domain/restic"
-	"github.com/ldesfontaine/opencloud/internal/edge/server/agentapi"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/edge/server/agentapi"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Ce que Proxmox sauvegarde de lui-même se voit dès la déclaration de

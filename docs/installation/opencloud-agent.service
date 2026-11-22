@@ -5,7 +5,7 @@
 # opencloud-agent, son dossier, son binaire).
 [Unit]
 Description=openCloud (agent)
-Documentation=https://github.com/ldesfontaine/opencloud/blob/dev/docs/installation.md
+Documentation=https://github.com/ldesfontaine/kagu/blob/dev/docs/installation.md
 After=network-online.target docker.service
 Wants=network-online.target
 

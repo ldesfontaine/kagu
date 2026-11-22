@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/rollback"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/rollback"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // updateOutcome suit le marqueur d'une mise à jour du côté de l'agent : il la

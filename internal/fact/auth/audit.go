@@ -3,7 +3,7 @@ package auth
 import (
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
 // L'objet du journal : l'accès à l'interface, qui n'a qu'une instance.

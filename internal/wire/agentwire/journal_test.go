@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 )
 
 func TestJournalFields_EveryOrderKindDeclaresItsList(t *testing.T) {

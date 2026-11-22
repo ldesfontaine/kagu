@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/wait"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/wait"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // La section restic se relit toutes les dix minutes, et dès qu'un ordre ou

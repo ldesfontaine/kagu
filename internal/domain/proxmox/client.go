@@ -18,7 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/egress"
+	"github.com/ldesfontaine/kagu/internal/kit/egress"
 )
 
 const (

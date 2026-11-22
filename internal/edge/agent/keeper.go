@@ -4,10 +4,10 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/hostconn"
-	"github.com/ldesfontaine/opencloud/internal/fact/role"
-	"github.com/ldesfontaine/opencloud/internal/fact/systemdunits"
-	"github.com/ldesfontaine/opencloud/internal/kit/hostinfo"
+	"github.com/ldesfontaine/kagu/internal/fact/hostconn"
+	"github.com/ldesfontaine/kagu/internal/fact/role"
+	"github.com/ldesfontaine/kagu/internal/fact/systemdunits"
+	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 )
 
 // latestReport garde le dernier rapport d'une lecture de la machine et dit

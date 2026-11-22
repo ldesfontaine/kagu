@@ -1,6 +1,6 @@
 package agentwire
 
-import "github.com/ldesfontaine/opencloud/internal/kit/brand"
+import "github.com/ldesfontaine/kagu/internal/kit/brand"
 
 // BackupProduceParams sont les paramètres de backup.produce : quel producteur
 // lancer, sur quelle cible, sous quel préfixe nommer l'archive, pour quelle

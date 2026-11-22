@@ -3,7 +3,7 @@ package update
 import (
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/fact/container"
 )
 
 func TestCommand_ComposeOrPullOnly(t *testing.T) {

@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
-	"github.com/ldesfontaine/opencloud/web"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/web"
 )
 
 // Now est l'horloge figée des tests : « vu il y a » se calcule depuis elle.

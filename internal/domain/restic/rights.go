@@ -1,7 +1,7 @@
 package restic
 
 import (
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // RightState dit où en est un droit sur l'agent d'une machine.

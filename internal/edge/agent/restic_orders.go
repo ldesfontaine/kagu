@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"os/exec"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Les ordres restic. La préparation de la cible, ses utilisateurs et le lien

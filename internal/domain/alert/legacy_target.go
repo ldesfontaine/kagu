@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
 )
 
 // RedactProbeTargets retire le mot de passe de la cible que gardent les alertes

@@ -3,8 +3,8 @@ package action
 import (
 	"context"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // UpdateEnd est ce qu'une montée de version est devenue, pour le journal et

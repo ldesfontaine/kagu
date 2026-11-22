@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/module"
+	"github.com/ldesfontaine/kagu/internal/kit/module"
 )
 
 // La règle de présence de chaque module, en SQL : un prédicat sur la machine

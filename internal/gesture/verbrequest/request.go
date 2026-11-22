@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // State est où en est une demande. Seule « awaiting_confirmation » attend

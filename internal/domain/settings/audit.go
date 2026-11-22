@@ -3,8 +3,8 @@ package settings
 import (
 	"strconv"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
-	"github.com/ldesfontaine/opencloud/internal/kit/mail"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/mail"
 )
 
 // Les groupes de réglages que le journal nomme : l'objet d'un réglage est

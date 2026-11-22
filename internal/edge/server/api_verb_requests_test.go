@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/gesture/apitoken"
-	"github.com/ldesfontaine/opencloud/internal/gesture/verbrequest"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/gesture/apitoken"
+	"github.com/ldesfontaine/kagu/internal/gesture/verbrequest"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
 // callBearerBody est callBearerWith avec un corps JSON.

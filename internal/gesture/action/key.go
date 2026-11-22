@@ -11,9 +11,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/fsx"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // La clé du serveur signe les ordres. Elle vit dans server.key, à côté de

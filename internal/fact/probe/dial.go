@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/egress"
+	"github.com/ldesfontaine/kagu/internal/kit/egress"
 )
 
 // La sonde compose par la garde de sortie : elle résout elle-même, écarte

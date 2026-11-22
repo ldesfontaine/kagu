@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/rollback"
-	"github.com/ldesfontaine/opencloud/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/rollback"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 var rollbackNow = time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)

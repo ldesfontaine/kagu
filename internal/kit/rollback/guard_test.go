@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/brand"
-	"github.com/ldesfontaine/opencloud/internal/kit/wait/waittest"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
 var epoch = time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)

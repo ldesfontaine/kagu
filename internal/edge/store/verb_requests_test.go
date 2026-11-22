@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/gesture/verbrequest"
+	"github.com/ldesfontaine/kagu/internal/gesture/verbrequest"
 )
 
 // La 025 s'ajoute à une base qui a déjà ses jetons et ses machines : rien de

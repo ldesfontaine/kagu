@@ -3,7 +3,7 @@ package directory
 import (
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/link"
+	"github.com/ldesfontaine/kagu/internal/fact/link"
 )
 
 func routeService(id, machineID, name, publicURL string, provides ...Capability) Service {

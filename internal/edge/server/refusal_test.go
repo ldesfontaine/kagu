@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const refusalImportPath = "github.com/ldesfontaine/opencloud/internal/kit/refusal"
+const refusalImportPath = "github.com/ldesfontaine/kagu/internal/kit/refusal"
 
 // Chaque refus déclaré dans le code (refusal.Invalid, refusal.Conflict) a sa
 // clé dans chaque catalogue, et deux refus ne partagent jamais une clé : une

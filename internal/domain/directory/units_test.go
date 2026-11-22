@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
-	"github.com/ldesfontaine/opencloud/internal/fact/systemdunits"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/fact/systemdunits"
 )
 
 func running(name string) systemdunits.Unit {

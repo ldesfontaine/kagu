@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/egress"
+	"github.com/ldesfontaine/kagu/internal/kit/egress"
 )
 
 // Address est où une sonde compose : l'hôte à joindre et à vérifier, et le

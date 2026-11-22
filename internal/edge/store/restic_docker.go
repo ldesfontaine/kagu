@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/domain/restic"
 )
 
 // allServices : le filtre vide, tous les services déclarés.

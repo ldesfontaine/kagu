@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/fact/auth"
 )
 
 func TestAuthState_HeaderRoundTripsAndModeNoneClearsIt(t *testing.T) {

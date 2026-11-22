@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/netmap"
-	"github.com/ldesfontaine/opencloud/internal/kit/goldentest"
+	"github.com/ldesfontaine/kagu/internal/domain/netmap"
+	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
 )
 
 // Les jeux de démonstration de la carte Réseau : la forme d'un vrai réseau

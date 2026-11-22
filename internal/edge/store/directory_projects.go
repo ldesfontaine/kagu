@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/domain/directory"
-	"github.com/ldesfontaine/opencloud/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
 const projectColumns = `id, name, title, slug, announcement, language, published_at, created_at, updated_at`

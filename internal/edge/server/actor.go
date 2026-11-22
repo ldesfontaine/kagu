@@ -3,8 +3,8 @@ package server
 import (
 	"net/http"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/auth"
-	"github.com/ldesfontaine/opencloud/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
 // withOperatorActor pose l'opérateur dans le contexte, une fois la requête

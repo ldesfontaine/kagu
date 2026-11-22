@@ -15,7 +15,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 )
 
 // Le certificat de rest-server : auto-signé, ECDSA P-256, un an. Les sources

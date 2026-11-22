@@ -5,7 +5,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // LogSource sait ouvrir un journal sur sa machine : c'est l'agent, qui lit

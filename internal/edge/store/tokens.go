@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 const tokenColumns = `id, token_hash, token_prefix, name, machine_id, role, requested_capabilities, created_at, expires_at, consumed_at, agent_id` // #nosec G101 -- des noms de colonnes.

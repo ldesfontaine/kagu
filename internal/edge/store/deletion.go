@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/deletion"
+	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 )
 
 // planQuerier est satisfait par *sql.DB et *sql.Tx : un plan se lit seul

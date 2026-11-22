@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/ldesfontaine/opencloud/internal/kit/deletion"
-	"github.com/ldesfontaine/opencloud/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/deletion"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // L'identifiant stable de la machine openCloud : la ligne qu'elle a toujours
