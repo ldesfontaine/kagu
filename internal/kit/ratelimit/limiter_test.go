@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -83,5 +84,44 @@ func TestBySource_SharesOneBucketPerIPv6SixtyFour(t *testing.T) {
 	}
 	if !limiter.Allow("2001:db8:9:a::1") || !limiter.Allow("203.0.113.9") {
 		t.Fatal("another source must have its own bucket")
+	}
+}
+
+// Au plafond, une clé nouvelle est refusée, une clé déjà là passe, et un
+// seau oublié, balayé, libère sa place.
+func TestR_A2_15_ALimiterStopsAtItsCap(t *testing.T) {
+	now := time.Date(2026, 9, 13, 10, 0, 0, 0, time.UTC)
+	limiter := NewCapped(1, 5, testIdle, 2)
+	limiter.SetClock(func() time.Time { return now })
+	if !limiter.Allow("a") || !limiter.Allow("b") {
+		t.Fatal("keys under the cap must pass")
+	}
+	if limiter.Allow("c") {
+		t.Fatal("a new key passed at the cap")
+	}
+	if limiter.Size() != 2 {
+		t.Fatalf("size %d, want 2: a refused key must leave no bucket", limiter.Size())
+	}
+	if !limiter.Allow("a") {
+		t.Fatal("a key already there must keep passing at the cap")
+	}
+	// « a » et « b » deviennent oubliables ; le balayage forcé par la clé
+	// nouvelle, sans attendre la période, leur reprend la place.
+	now = now.Add(testIdle + time.Second)
+	if !limiter.Allow("c") {
+		t.Fatal("a forgotten bucket must free its place")
+	}
+	if limiter.Size() != 1 {
+		t.Fatalf("size %d, want 1 after the sweep", limiter.Size())
+	}
+}
+
+func TestR_A2_15_BySourceIsCappedAtMaxSources(t *testing.T) {
+	limiter := NewBySource(1, 1, testIdle)
+	for i := range MaxSources + 100 {
+		limiter.Allow(fmt.Sprintf("10.%d.%d.%d", i>>16, (i>>8)&255, i&255))
+	}
+	if size := limiter.Size(); size != MaxSources {
+		t.Fatalf("size %d, want %d", size, MaxSources)
 	}
 }

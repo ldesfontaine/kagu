@@ -238,6 +238,7 @@ type HeartbeatService interface {
 	Pause(ctx context.Context, id string) error
 	Resume(ctx context.Context, id string) error
 	Receive(ctx context.Context, token string, ping heartbeat.Ping) (heartbeat.Heartbeat, error)
+	IsKnownToken(ctx context.Context, token string) (bool, error)
 }
 
 // Ce que le serveur attend du composant statut : l'instantané public d'un

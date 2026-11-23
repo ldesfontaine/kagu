@@ -2,6 +2,7 @@ package heartbeat
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -395,6 +396,16 @@ func (s *Service) Resume(ctx context.Context, id string) error {
 	s.auditor.Record(ctx, heartbeatEvent(audit.HeartbeatResume, resumed))
 	s.changed(id)
 	return nil
+}
+
+// IsKnownToken dit si le jeton ouvre un moniteur : la lecture seule, pour
+// qu'un appelant ne retienne rien d'un jeton inventé avant d'écrire.
+func (s *Service) IsKnownToken(ctx context.Context, token string) (bool, error) {
+	_, err := s.store.GetHeartbeatByToken(ctx, token)
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // Receive applique un ping au moniteur de ce jeton : il repousse l'échéance
