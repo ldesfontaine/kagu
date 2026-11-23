@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
@@ -147,7 +148,7 @@ type Target struct {
 	MachineName string
 	// Destination : son dossier et l'état du droit de réception.
 	Path        string
-	Right       RightState
+	Right       agentpolicy.FitState
 	RightReason string
 	// Stockage : son nœud, son type, sa capacité et s'il répond.
 	Node   string
@@ -324,7 +325,7 @@ func planCovers(plan Plan, source Source) bool {
 		return source.Kind == KindDatabase
 	case plan.IsFirewallExport():
 		return source.Kind == KindFirewall && source.ID == plan.Selector
-	case plan.SourceKind == SourceAgent && plan.Producer == machine.ProducerProxmoxVzdump:
+	case plan.SourceKind == SourceAgent && plan.Producer == agentpolicy.ProducerProxmoxVzdump:
 		if source.Kind != KindVM && source.Kind != KindLXC || source.MachineID != plan.SourceMachineID {
 			return false
 		}
@@ -340,10 +341,11 @@ func (s *Service) targets(ctx context.Context, destinations []Destination, stora
 	for _, destination := range destinations {
 		target := Target{
 			Key: "destination:" + destination.ID, Kind: TargetDestination, Name: destination.Name,
-			MachineID: destination.MachineID, MachineName: destination.MachineName, Path: destination.Path, Right: RightUnknown,
+			MachineID: destination.MachineID, MachineName: destination.MachineName, Path: destination.Path, Right: agentpolicy.FitUnknown,
 		}
 		if machineStatus, err := s.machines.Get(ctx, destination.MachineID); err == nil {
-			target.Right, target.RightReason = rightOf(machineStatus, destination.Path)
+			right := receiveFit(machineStatus, destination.Path)
+			target.Right, target.RightReason = right.State, right.Reason
 		}
 		for _, plan := range plans {
 			if plan.DestinationID == destination.ID {

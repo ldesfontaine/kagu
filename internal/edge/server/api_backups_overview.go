@@ -9,8 +9,8 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -285,7 +285,7 @@ func protectionFix(protection restic.Protection, source restic.Source, recipient
 		return anchor.FixFor(name, nil)
 	}
 	params, err := json.Marshal(agentwire.BackupProduceParams{
-		Producer: machine.ProducerProxmoxVzdump, Target: strconv.Itoa(source.VMID), Recipient: recipient,
+		Producer: agentpolicy.ProducerProxmoxVzdump, Target: strconv.Itoa(source.VMID), Recipient: recipient,
 	})
 	if err != nil {
 		return anchor.FixFor(name, nil)
@@ -361,7 +361,7 @@ func overviewMachineToJSON(fit restic.MachineFit) overviewMachineJSON {
 		MachineID: fit.MachineID, MachineName: fit.MachineName, OS: fit.OS, Arch: fit.Arch, Online: fit.Online,
 		ResticAvailable: fit.ResticAvailable, IsTarget: fit.IsTarget,
 		ProxmoxHost: fit.ProxmoxHost, ProxmoxJobsUnknown: fit.ProxmoxJobsUnknown,
-		Rights: httpx.ConvertAll(fit.Rights, func(right restic.RightFit) overviewRightJSON {
+		Rights: httpx.ConvertAll(fit.Rights, func(right restic.RightView) overviewRightJSON {
 			return overviewRightJSON{Right: right.Right, State: string(right.State), Reason: right.Reason, Path: right.Path}
 		}),
 	}

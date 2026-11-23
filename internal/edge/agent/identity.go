@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
@@ -91,15 +92,21 @@ func (id Identity) ServerKeyFingerprint() string {
 // Capabilities rend les droits du fichier ; une liste illisible (fichier
 // modifié à la main) vaut observe seul, le plus étroit, comme un état mal
 // gardé.
-func (id Identity) Capabilities() []machine.Capability {
+func (id Identity) Capabilities() []agentpolicy.Capability {
 	if id.narrowed {
-		return []machine.Capability{{Name: machine.CapabilityObserve}}
+		return []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}}
 	}
-	capabilities, err := machine.ParseCapabilities(strings.Join(id.Rights, ","))
+	capabilities, err := agentpolicy.ParseCapabilities(strings.Join(id.Rights, ","))
 	if err != nil {
-		return []machine.Capability{{Name: machine.CapabilityObserve}}
+		return []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}}
 	}
 	return capabilities
+}
+
+// Policy rend ce que l'agent applique, tiré du fichier : la machine, la clé
+// épinglée, les droits (observe seul s'ils ne se lisent pas) et les ancres.
+func (id Identity) Policy() agentpolicy.Policy {
+	return agentpolicy.Policy{MachineID: id.MachineID, ServerKey: id.ServerKey, Rights: id.Capabilities(), Anchors: id.Anchors}
 }
 
 // AnchorState rend les ancres du fichier telles que l'agent les applique : un
@@ -109,10 +116,10 @@ func (id Identity) AnchorState() anchor.State {
 }
 
 // rightsOf écrit des droits sous la forme du fichier : une entrée par droit.
-func rightsOf(capabilities []machine.Capability) []string {
+func rightsOf(capabilities []agentpolicy.Capability) []string {
 	rights := make([]string, 0, len(capabilities))
 	for _, capability := range capabilities {
-		rights = append(rights, machine.FormatCapabilities([]machine.Capability{capability}))
+		rights = append(rights, agentpolicy.FormatCapabilities([]agentpolicy.Capability{capability}))
 	}
 	return rights
 }
@@ -124,7 +131,7 @@ var ErrNotEnrolled = errors.New("agent not enrolled: run with -server and send t
 var ErrTokenMissing = errors.New("no enrollment token on stdin")
 
 // NewIdentity tire une clé et un id ; rien n'est écrit avant l'enrôlement.
-func NewIdentity(server, pin string, language lang.Code, capabilities []machine.Capability) (Identity, error) {
+func NewIdentity(server, pin string, language lang.Code, capabilities []agentpolicy.Capability) (Identity, error) {
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return Identity{}, fmt.Errorf("generate key: %w", err)

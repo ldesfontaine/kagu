@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/judge"
 )
 
 const (
@@ -91,6 +92,15 @@ func order(seq int64) agentwire.OrderBody {
 		V: agentwire.OrderVersion, RunID: fmt.Sprintf("run-%d", seq), MachineID: orderMachineID, AgentID: orderAgentID, Kind: agentwire.KindAgentPing,
 		NotAfter: orderNow.Add(time.Minute).Unix(), Seq: seq,
 	}
+}
+
+// decodeOrder décode un ordre par le juge, avec le run et le rang du corps.
+func decodeOrder(body agentwire.OrderBody) (judgedOrder, error) {
+	order, err := judge.Decode(body)
+	if err != nil {
+		return judgedOrder{}, err
+	}
+	return judgedOrder{RunID: body.RunID, Seq: body.Seq, Order: order}, nil
 }
 
 // judgedOf décode un ordre comme le juge : ce que reçoit l'exécuteur de son
@@ -628,5 +638,36 @@ func TestR_A1_9_AV2AgentRefusesABodyWithoutVOrOfAnotherVersion(t *testing.T) {
 	// Le témoin : le même ordre en v2, sous l'étiquette v2, atteint l'exécuteur.
 	if result := signedUnder(agentwire.OrderVersion, versioned(agentwire.OrderVersion)); result.State != agentwire.ActionSucceeded || called[agentwire.KindAgentPing] != 1 {
 		t.Fatalf("the v2 order: %+v, called %v", result, called)
+	}
+}
+
+// L'agent juge l'agent visé et le rang à leur place parmi les contrôles de
+// judge.Judge : un ordre fautif deux fois est refusé pour la première faute,
+// dans l'ordre d'avant le juge unique.
+func TestOrderJudge_TheAgentChecksKeepTheirPlace(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(*agentwire.OrderBody)
+		reason string
+	}{
+		{"another machine and another agent", func(o *agentwire.OrderBody) {
+			o.MachineID, o.AgentID = "99999999-2222-4333-8444-555555555555", "agt_0000000000000002"
+		}, agentwire.ReasonWrongMachine},
+		{"another agent, past its deadline", func(o *agentwire.OrderBody) {
+			o.AgentID, o.NotAfter = "agt_0000000000000002", orderNow.Unix()
+		}, agentwire.ReasonWrongAgent},
+		{"past its deadline and replayed", func(o *agentwire.OrderBody) { o.NotAfter, o.Seq = orderNow.Unix(), 0 }, agentwire.ReasonExpired},
+		{"replayed, of an unknown kind", func(o *agentwire.OrderBody) { o.Seq, o.Kind = 0, "shell.exec" }, agentwire.ReasonReplayed},
+		{"replayed, without its right", func(o *agentwire.OrderBody) { o.Seq, o.Kind = 0, agentwire.KindAgentRollback }, agentwire.ReasonReplayed},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			b := newOrderBench(t)
+			body := order(1)
+			c.change(&body)
+			if result := b.send(t, body, b.private); result.State != agentwire.ActionRefused || result.Reason != c.reason {
+				t.Fatalf("result %+v, want refused %s", result, c.reason)
+			}
+		})
 	}
 }

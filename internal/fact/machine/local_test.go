@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
@@ -90,7 +91,7 @@ func TestOfferLocalEnrollment_UntilTheServerMachineHasAnAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if token.Name != "oc-host" || token.MachineID != "" || machine.FormatCapabilities(token.Capabilities) != "observe,probe.lan" {
+	if token.Name != "oc-host" || token.MachineID != "" || agentpolicy.FormatCapabilities(token.Capabilities) != "observe,probe.lan" {
 		t.Fatalf("offered token %+v", token)
 	}
 	again, sameToken, err := machines.OfferLocalEnrollment(ctx)

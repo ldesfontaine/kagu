@@ -18,6 +18,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
 	"github.com/ldesfontaine/kagu/internal/edge/store"
 	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -298,7 +299,7 @@ func TestCreateDestination_AcceptsWhileRightsAreUnreported(t *testing.T) {
 		t.Fatal(err)
 	}
 	overview, err := b.backups.Overview(context.Background())
-	if err != nil || len(overview.Destinations) != 1 || overview.Destinations[0].ID != destination.ID || overview.Destinations[0].Right != backup.RightUnknown {
+	if err != nil || len(overview.Destinations) != 1 || overview.Destinations[0].ID != destination.ID || overview.Destinations[0].Right != agentpolicy.FitUnknown {
 		t.Fatalf("overview %+v %v", overview, err)
 	}
 	if overview.Keyring != nil || len(overview.Plans) != 0 {

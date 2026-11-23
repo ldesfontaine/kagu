@@ -10,6 +10,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
 	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
@@ -21,7 +22,7 @@ const sourceID = "99999999-2222-4333-8444-555555555555"
 func agentPlan(subject, destinationID string) backup.PlanDefinition {
 	return backup.PlanDefinition{
 		Subject: subject, Name: "Machines virtuelles", SourceKind: backup.SourceAgent, SourceMachineID: sourceID,
-		Producer: machine.ProducerProxmoxVzdump, Selector: backup.SelectorAll, DestinationID: destinationID, Keep: 5,
+		Producer: agentpolicy.ProducerProxmoxVzdump, Selector: backup.SelectorAll, DestinationID: destinationID, Keep: 5,
 	}
 }
 
@@ -65,7 +66,7 @@ func TestPlanDefinition_Validate(t *testing.T) {
 		{"an agent plan called database", with(agent, func(d *backup.PlanDefinition) { d.Subject = "database" }), backup.ErrPlanInvalid},
 		{"an agent plan taking the prefix of the database", with(agent, func(d *backup.PlanDefinition) { d.Subject = "opencloud" }), backup.ErrPlanInvalid},
 		{"the database with a machine", with(database, func(d *backup.PlanDefinition) { d.SourceMachineID = sourceID }), backup.ErrPlanInvalid},
-		{"the database with a producer", with(database, func(d *backup.PlanDefinition) { d.Producer = machine.ProducerProxmoxVzdump }), backup.ErrPlanInvalid},
+		{"the database with a producer", with(database, func(d *backup.PlanDefinition) { d.Producer = agentpolicy.ProducerProxmoxVzdump }), backup.ErrPlanInvalid},
 		{"the database with a selector", with(database, func(d *backup.PlanDefinition) { d.Selector = backup.SelectorAll }), backup.ErrPlanInvalid},
 		{"a source of another kind", with(agent, func(d *backup.PlanDefinition) { d.SourceKind = "nfs" }), backup.ErrPlanInvalid},
 		{"no source", with(agent, func(d *backup.PlanDefinition) { d.SourceKind = "" }), backup.ErrPlanInvalid},
@@ -110,7 +111,7 @@ func TestSavePlan_AnAgentPlanIsStoredButNeedsItsSourceOnline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.SourceMachineID != sourceID || saved.SourceMachineName != "pve" || saved.Producer != machine.ProducerProxmoxVzdump ||
+	if saved.SourceMachineID != sourceID || saved.SourceMachineName != "pve" || saved.Producer != agentpolicy.ProducerProxmoxVzdump ||
 		saved.Selector != backup.SelectorAll || saved.Name != "Machines virtuelles" || saved.Keep != 5 {
 		t.Fatalf("saved %+v", saved)
 	}
@@ -142,7 +143,7 @@ func TestSavePlan_AnAgentPlanIsStoredButNeedsItsSourceOnline(t *testing.T) {
 		if event.Action == audit.BackupPlanUpdate && event.ObjectName == "pve-vm" {
 			found = true
 			if event.Details["source_kind"] != "agent" || event.Details["source_machine_id"] != sourceID ||
-				event.Details["producer"] != machine.ProducerProxmoxVzdump || event.Details["selector"] != "all" {
+				event.Details["producer"] != agentpolicy.ProducerProxmoxVzdump || event.Details["selector"] != "all" {
 				t.Errorf("details %v", event.Details)
 			}
 		}

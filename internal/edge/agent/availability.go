@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
@@ -213,23 +214,23 @@ func judgeRights(ctx context.Context, identity Identity, checks hostChecks) map[
 	}
 	for _, capability := range identity.Capabilities() {
 		switch capability.Name {
-		case machine.CapabilityAgentUpdate:
+		case agentpolicy.CapabilityAgentUpdate:
 			note(capability.Name, checks.agentUpdate())
-		case machine.CapabilityDockerDeploy, machine.CapabilityDockerUpdate:
+		case agentpolicy.CapabilityDockerDeploy, agentpolicy.CapabilityDockerUpdate:
 			note(capability.Name, dockerRightReason(ctx, checks, identity.Root()))
-		case machine.CapabilityBackupReceive, machine.CapabilityFilesWrite:
+		case agentpolicy.CapabilityBackupReceive, agentpolicy.CapabilityFilesWrite:
 			note(capability.Name, firstPathReason(checks, capability.Paths))
-		case machine.CapabilityBackupProduce:
+		case agentpolicy.CapabilityBackupProduce:
 			note(capability.Name, firstProducerReason(ctx, checks, capability.Paths))
-		case machine.CapabilityProxmoxPower, machine.CapabilityProxmoxSnapshot:
+		case agentpolicy.CapabilityProxmoxPower, agentpolicy.CapabilityProxmoxSnapshot:
 			note(capability.Name, checks.proxmoxToken())
-		case machine.CapabilityResticTarget:
+		case agentpolicy.CapabilityResticTarget:
 			note(capability.Name, resticTargetReason(checks, capability.Paths))
-		case machine.CapabilityResticProduce:
+		case agentpolicy.CapabilityResticProduce:
 			note(capability.Name, binaryReason(checks.findRestic, agentwire.ReasonResticMissing))
-		case machine.CapabilityResticDocker:
+		case agentpolicy.CapabilityResticDocker:
 			note(capability.Name, resticDockerReason(ctx, checks))
-		case machine.CapabilityResticVerify, machine.CapabilityResticBrowse, machine.CapabilityResticRestore:
+		case agentpolicy.CapabilityResticVerify, agentpolicy.CapabilityResticBrowse, agentpolicy.CapabilityResticRestore:
 			note(capability.Name, binaryReason(checks.findRestic, agentwire.ReasonResticMissing))
 		}
 	}
@@ -299,7 +300,7 @@ func firstProducerReason(ctx context.Context, checks hostChecks, producers []str
 // sait pas lancer manque : le fichier de l'agent n'en porte pas
 // (ParseCapabilities), mais un oubli ici ne doit pas le dire disponible.
 func producerReason(ctx context.Context, checks hostChecks, producer string) string {
-	if producer != machine.ProducerProxmoxVzdump {
+	if producer != agentpolicy.ProducerProxmoxVzdump {
 		return agentwire.ReasonProducerMissing
 	}
 	if _, err := checks.lookPath("sudo"); err != nil {

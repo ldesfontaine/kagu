@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
@@ -295,7 +295,7 @@ func AnchorOfReason(reason string) (string, bool) {
 // « anchor_*:<ancre> » avec un droit ou un type d'ancre connu.
 func IsReportedReason(reason string) bool {
 	if right, found := strings.CutPrefix(reason, ReasonRightMissing+":"); found {
-		return slices.Contains(machine.CapabilityNames(), right)
+		return slices.Contains(agentpolicy.CapabilityNames(), right)
 	}
 	if _, found := AnchorOfReason(reason); found {
 		return true

@@ -1,5 +1,5 @@
 import { useBackups } from "../api/backups";
-import { useT } from "../i18n/context";
+import { useRightNames, useT } from "../i18n/context";
 import { anchorHelpKey, anchorKindsFor, anchorLabelKey, withKeyringRecipient } from "../lib/anchors";
 import { alwaysGranted, capabilityLabelKey, offeredCapabilities, toggleRight, type RightsValues } from "../lib/machines";
 import "./AgentAnchors.scss";
@@ -21,6 +21,7 @@ export function RightsFields({
   proxmoxDetected: boolean;
 }) {
   const t = useT();
+  const rightNames = useRightNames();
   // La clé du trousseau de sauvegarde : cochée, backup.produce la propose comme
   // ancre de chiffrement, que l'opérateur peut corriger.
   const recipient = useBackups().data?.keyring?.recipient;
@@ -33,7 +34,7 @@ export function RightsFields({
     <>
       <Field label={t("machine.rights_label")} help={t("machine.rights_help")} tip={t("machine.rights_tip")}>
         <Checks>
-          {offeredCapabilities(proxmoxDetected, values.rights).map((name) => (
+          {offeredCapabilities(rightNames, proxmoxDetected, values.rights).map((name) => (
             <Checkbox
               key={name}
               label={t(capabilityLabelKey(name))}

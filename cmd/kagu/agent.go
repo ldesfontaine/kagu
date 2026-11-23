@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/ldesfontaine/kagu/internal/edge/agent"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
@@ -95,7 +96,7 @@ func runAgent(args []string) error {
 	}
 	// Les droits se jugent avant l'enrôlement : un droit mal écrit ne doit
 	// pas consommer le jeton.
-	capabilities, err := machine.ParseCapabilities(*rights)
+	capabilities, err := agentpolicy.ParseCapabilities(*rights)
 	if err != nil {
 		return &refusal{message: catalogs.For(code).Get("agent.rights_invalid")}
 	}
@@ -105,11 +106,11 @@ func runAgent(args []string) error {
 		return &refusal{message: catalogs.For(code).Format("agent.anchor_invalid", badAnchor.Flag, badAnchor.Max)}
 	}
 	// La racine aussi se juge avant l'enrôlement, pour la même raison.
-	if !machine.ValidCapabilityPath(*rootDir) {
+	if !agentpolicy.ValidCapabilityPath(*rootDir) {
 		return &refusal{message: catalogs.For(code).Get("agent.root_invalid")}
 	}
 	for _, binary := range []string{*resticBinary, *restServerBinary} {
-		if binary != "" && !machine.ValidCapabilityPath(binary) {
+		if binary != "" && !agentpolicy.ValidCapabilityPath(binary) {
 			return &refusal{message: catalogs.For(code).Get("agent.binary_invalid")}
 		}
 	}

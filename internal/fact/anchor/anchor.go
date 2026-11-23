@@ -19,6 +19,7 @@ import (
 
 	"filippo.io/age"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
@@ -34,9 +35,9 @@ const (
 // Kind est un type d'ancre.
 type Kind struct {
 	Name string
-	// Le droit d'agent dont l'ordre est borné par ce type : la ligne
-	// d'installation ne propose le drapeau que si ce droit est coché. Un test
-	// relit que c'est un droit connu.
+	// Le droit d'agent dont l'ordre est borné par ce type, par sa constante
+	// d'agentpolicy : la ligne d'installation ne propose le drapeau que si ce
+	// droit est coché.
 	Right string
 	// Le drapeau du premier lancement, sans tiret : plusieurs valeurs
 	// séparées par « , ».
@@ -59,7 +60,7 @@ var (
 // attendue n'est pas mise à jour.
 var kinds = []Kind{
 	{
-		Name: BackupRecipient, Right: "backup.produce", Flag: "backup-recipient", Max: 2, Valid: isAgeRecipient,
+		Name: BackupRecipient, Right: agentpolicy.CapabilityBackupProduce, Flag: "backup-recipient", Max: 2, Valid: isAgeRecipient,
 		Missing: refusal.Conflict("anchor.backup_recipient_missing",
 			"no age recipient is trusted on this machine: backup.produce would refuse every order"),
 		Outside: refusal.Conflict("anchor.backup_recipient_outside",
@@ -68,7 +69,7 @@ var kinds = []Kind{
 			"the age recipients this machine trusts cannot be read"),
 	},
 	{
-		Name: BackupGuest, Right: "backup.produce", Flag: "backup-guest", Max: 32, Valid: guestPattern.MatchString,
+		Name: BackupGuest, Right: agentpolicy.CapabilityBackupProduce, Flag: "backup-guest", Max: 32, Valid: guestPattern.MatchString,
 		Missing: refusal.Conflict("anchor.backup_guest_missing",
 			"no guest is trusted on this machine: backup.produce and restic.backup of a guest would refuse every order"),
 		Outside: refusal.Conflict("anchor.backup_guest_outside",
@@ -77,7 +78,7 @@ var kinds = []Kind{
 			"the guests this machine trusts cannot be read"),
 	},
 	{
-		Name: ResticTargetCert, Right: "restic.produce", Flag: "restic-target-cert", Max: 4, Valid: fingerprintPattern.MatchString,
+		Name: ResticTargetCert, Right: agentpolicy.CapabilityResticProduce, Flag: "restic-target-cert", Max: 4, Valid: fingerprintPattern.MatchString,
 		Missing: refusal.Conflict("anchor.restic_target_cert_missing",
 			"no restic target certificate is trusted on this machine: restic.provision would refuse every order"),
 		Outside: refusal.Conflict("anchor.restic_target_cert_outside",

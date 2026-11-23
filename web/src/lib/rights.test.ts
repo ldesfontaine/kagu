@@ -1,11 +1,15 @@
 import { expect, test } from "vitest";
 
-import type { Agent, Capability, Machine } from "../api/machines";
+import type { Agent, Capability, Machine, RightFit } from "../api/machines";
+import sessionGolden from "../../../internal/edge/server/testdata/session.golden.json";
 import { heldRights, holderOfRefusal, lacksSudo, reenrollPath, rightOfRefusal, unfitFor, wantedRightOf, withWantedRight } from "./rights";
 
 const t = (key: string, ...args: (string | number)[]) => [key, ...args].join("|");
 
-function agentWith(requested: string[], reported: { name: string; unavailable?: string }[] | null): NonNullable<Machine["agent"]> {
+// La liste fermée du serveur, telle que la session la rend.
+const rightNames = sessionGolden.rights;
+
+function agentWith(requested: string[], reported: { name: string; unavailable?: string }[] | null, fit: Record<string, RightFit> = {}): NonNullable<Machine["agent"]> {
   const capability = (name: string): Capability => ({ name, paths: [] });
   return {
     id: "a1",
@@ -19,6 +23,7 @@ function agentWith(requested: string[], reported: { name: string; unavailable?: 
     server_key_fingerprint: "",
     run_as: null,
     rollback_capable: true, anchors: { reported: false, kinds: [] },
+    fit,
   } satisfies Agent;
 }
 
@@ -29,11 +34,11 @@ test("reenrollPath : la fenêtre de la machine, avec le droit et le chemin à co
 });
 
 test("wantedRightOf : seul un droit de la liste fermée, hors observe, se coche", () => {
-  expect(wantedRightOf(new URLSearchParams("droit=docker.deploy"))).toEqual({ name: "docker.deploy", path: "" });
-  expect(wantedRightOf(new URLSearchParams("droit=backup.receive&chemin=/srv/b"))).toEqual({ name: "backup.receive", path: "/srv/b" });
-  expect(wantedRightOf(new URLSearchParams("droit=observe"))).toBeNull();
-  expect(wantedRightOf(new URLSearchParams("droit=rm -rf"))).toBeNull();
-  expect(wantedRightOf(new URLSearchParams(""))).toBeNull();
+  expect(wantedRightOf(rightNames, new URLSearchParams("droit=docker.deploy"))).toEqual({ name: "docker.deploy", path: "" });
+  expect(wantedRightOf(rightNames, new URLSearchParams("droit=backup.receive&chemin=/srv/b"))).toEqual({ name: "backup.receive", path: "/srv/b" });
+  expect(wantedRightOf(rightNames, new URLSearchParams("droit=observe"))).toBeNull();
+  expect(wantedRightOf(rightNames, new URLSearchParams("droit=rm -rf"))).toBeNull();
+  expect(wantedRightOf(rightNames, new URLSearchParams(""))).toBeNull();
 });
 
 test("withWantedRight : coche le droit sans doublon et ajoute son chemin à ceux qui y sont", () => {
@@ -62,8 +67,10 @@ test("heldRights : ce que l'agent a rapporté, sinon ce que son jeton demandait"
   expect(heldRights(agentWith(["observe", "agent.update"], [{ name: "observe" }])).map((right) => right.name)).toEqual(["observe"]);
 });
 
-test("unfitFor : une machine convient, ou dit pourquoi pas et où aller", () => {
-  const fit = { id: "m1", agent: agentWith([], [{ name: "observe" }, { name: "backup.receive" }]) };
+test("unfitFor : une machine convient, ou dit pourquoi pas et où aller, selon le verdict du serveur", () => {
+  const ok: RightFit = { state: "ok", reason: "" };
+  const missing: RightFit = { state: "missing", reason: "" };
+  const fit = { id: "m1", agent: agentWith([], [{ name: "observe" }, { name: "backup.receive" }], { "backup.receive": ok, "docker.deploy": missing }) };
   expect(unfitFor(t, fit, "backup.receive")).toBeNull();
 
   const noRight = unfitFor(t, fit, "docker.deploy");
@@ -74,12 +81,23 @@ test("unfitFor : une machine convient, ou dit pourquoi pas et où aller", () => 
   expect(noAgent?.reason).toBe("machine.fit_no_agent");
   expect(noAgent?.link.to).toBe("/machines/m2/reenroller");
 
-  const revoked = unfitFor(t, { id: "m3", agent: { ...agentWith([], [{ name: "backup.receive" }]), revoked_at: "2026-11-01T10:00:00Z" } }, "backup.receive");
+  const revoked = unfitFor(t, { id: "m3", agent: { ...agentWith([], [{ name: "backup.receive" }], { "backup.receive": missing }), revoked_at: "2026-11-01T10:00:00Z" } }, "backup.receive");
   expect(revoked?.reason).toBe("machine.fit_no_agent");
 
-  const unavailable = unfitFor(t, { id: "m4", agent: agentWith([], [{ name: "docker.deploy", unavailable: "docker_denied" }]) }, "docker.deploy");
+  const unavailable = unfitFor(t, { id: "m4", agent: agentWith([], [{ name: "docker.deploy" }], { "docker.deploy": { state: "unavailable", reason: "docker_denied" } }) }, "docker.deploy");
   expect(unavailable?.reason).toBe("machine.capability_unavailable_docker_denied");
   expect(unavailable?.link.to).toBe("/machines/m4");
+});
+
+test("unfitFor ne prend pas les droits demandés pour acquis (X-24) : seul le verdict du serveur compte", () => {
+  // Un agent muet dont le jeton demandait le droit : le serveur dit « inconnu »,
+  // l'écran le dit aussi, pas « permis ».
+  const silent = unfitFor(t, { id: "m5", agent: agentWith(["docker.deploy"], null, { "docker.deploy": { state: "unknown", reason: "" } }) }, "docker.deploy");
+  expect(silent?.reason).toBe("machine.fit_right_unknown");
+  expect(silent?.link.to).toBe("/machines/m5");
+  // Un droit demandé, mais que le serveur dit manquant : il manque.
+  const requestedOnly = { id: "m6", agent: agentWith(["docker.deploy"], [{ name: "observe" }], { "docker.deploy": { state: "missing", reason: "" } }) };
+  expect(unfitFor(t, requestedOnly, "docker.deploy")?.reason).toBe("machine.fit_right_missing|machine.capability_docker_deploy");
 });
 
 test("lacksSudo : un hôte Proxmox, ou un agent qui dit que sudo manque", () => {

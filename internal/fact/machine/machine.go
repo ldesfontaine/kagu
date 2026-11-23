@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
@@ -67,7 +68,7 @@ type Token struct {
 	Role Role
 	// Les droits demandés à l'émission ; vide pour un jeton d'avant les
 	// droits.
-	Capabilities []Capability
+	Capabilities []agentpolicy.Capability
 	CreatedAt    time.Time
 	ExpiresAt    time.Time
 	// Zéro tant que le jeton n'a pas servi.

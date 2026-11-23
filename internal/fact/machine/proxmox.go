@@ -1,6 +1,7 @@
 package machine
 
 import (
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
@@ -48,6 +49,6 @@ func ProxmoxTokenCommands() []string {
 
 // ProxmoxRights dit si la liste porte l'un des deux droits Proxmox : la page
 // du jeton montre alors les commandes.
-func ProxmoxRights(capabilities []Capability) bool {
-	return HasCapability(capabilities, CapabilityProxmoxPower) || HasCapability(capabilities, CapabilityProxmoxSnapshot)
+func ProxmoxRights(capabilities []agentpolicy.Capability) bool {
+	return agentpolicy.HasCapability(capabilities, agentpolicy.CapabilityProxmoxPower) || agentpolicy.HasCapability(capabilities, agentpolicy.CapabilityProxmoxSnapshot)
 }

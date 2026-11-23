@@ -46,6 +46,7 @@ function agent(over: Partial<Agent> = {}): Agent {
     server_key_fingerprint: "",
     run_as: null,
     rollback_capable: true, anchors: { reported: false, kinds: [] },
+    fit: {},
     ...over,
   };
 }

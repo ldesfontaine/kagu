@@ -3,6 +3,8 @@ package machine
 import (
 	"errors"
 	"testing"
+
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 )
 
 func TestParseRole_EmptyIsGenericAndUnknownIsRefused(t *testing.T) {
@@ -23,18 +25,27 @@ func TestParseRole_EmptyIsGenericAndUnknownIsRefused(t *testing.T) {
 func TestRolePreset_IsAValidListForEveryRole(t *testing.T) {
 	for _, role := range Roles() {
 		preset := RolePreset(role)
-		normalized, err := NormalizeCapabilities(preset)
+		normalized, err := agentpolicy.NormalizeCapabilities(preset)
 		if err != nil {
 			t.Fatalf("%s : préréglage refusé : %v", role, err)
 		}
-		if !SameCapabilities(normalized[1:], preset) {
+		if !agentpolicy.SameCapabilities(normalized[1:], preset) {
 			t.Errorf("%s : le préréglage doit déjà être rangé, observe exclu", role)
 		}
 	}
 }
 
 func TestRolePreset_AProxmoxMachineIsOfferedTheProxmoxRights(t *testing.T) {
-	if !HasCapability(RolePreset(RoleProxmox), CapabilityProxmoxPower) || HasCapability(RolePreset(RoleGeneric), CapabilityProxmoxPower) {
+	if !agentpolicy.HasCapability(RolePreset(RoleProxmox), agentpolicy.CapabilityProxmoxPower) || agentpolicy.HasCapability(RolePreset(RoleGeneric), agentpolicy.CapabilityProxmoxPower) {
 		t.Fatal("seul le rôle proxmox coche les droits proxmox.*")
+	}
+}
+
+// restic.verify n'est jamais donné par défaut.
+func TestRolePreset_NeverGrantsResticVerify(t *testing.T) {
+	for _, role := range Roles() {
+		if agentpolicy.HasCapability(RolePreset(role), agentpolicy.CapabilityResticVerify) {
+			t.Errorf("role %s grants restic.verify", role)
+		}
 	}
 }

@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/link"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // Les liens d'un service : ceux qui partent de ses instances et ceux qui y
@@ -123,7 +123,7 @@ func (s *Server) environmentRight(ctx context.Context, serviceID string) (*envir
 	right := "unknown"
 	switch {
 	case status.Agent.ReportedAt.IsZero():
-	case machine.HasCapability(status.Agent.Capabilities, machine.CapabilityObserveEnv):
+	case agentpolicy.HasCapability(status.Agent.Capabilities, agentpolicy.CapabilityObserveEnv):
 		right = "granted"
 	default:
 		right = "missing"

@@ -3,6 +3,7 @@ package machine
 import (
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
 
@@ -23,7 +24,7 @@ func machineEvent(action audit.Action, written Machine) audit.Event {
 func agentEvent(action audit.Action, machine Machine) audit.Event {
 	details := audit.Details{"machine_id": machine.ID, "hostname": machine.Hostname, "address": machine.Address}
 	if len(machine.Agent.Requested) > 0 {
-		details["capabilities"] = FormatCapabilities(machine.Agent.Requested)
+		details["capabilities"] = agentpolicy.FormatCapabilities(machine.Agent.Requested)
 	}
 	return audit.Event{Action: action, ObjectID: machine.Agent.ID, ObjectName: machine.Name, Details: details}
 }
@@ -33,7 +34,7 @@ func agentEvent(action audit.Action, machine Machine) audit.Event {
 // clé va changer. Jamais le jeton lui-même.
 func tokenEvent(issued Token) audit.Event {
 	expires := issued.ExpiresAt.UTC().Format(time.RFC3339)
-	capabilities := FormatCapabilities(issued.Capabilities)
+	capabilities := agentpolicy.FormatCapabilities(issued.Capabilities)
 	if issued.MachineID == "" {
 		return audit.Event{
 			Action: audit.EnrollmentTokenCreate, ObjectID: issued.ID, ObjectName: issued.Name,

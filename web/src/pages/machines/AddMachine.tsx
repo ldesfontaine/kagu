@@ -12,7 +12,7 @@ import { RightsFields } from "../../components/RightsFields";
 import { WizardBar } from "../../components/Wizard";
 import { useAction } from "../../hooks/useAction";
 import { useForm } from "../../hooks/useForm";
-import { useRoles, useT } from "../../i18n/context";
+import { useRightNames, useRoles, useT } from "../../i18n/context";
 import { anchorsOf } from "../../lib/anchors";
 import { capabilitiesOf, emptyMachineForm, isMachineFormModified, rolePatch, tokenPageState, type TokenPageState } from "../../lib/machines";
 import { EnrollFlow } from "./EnrollFlow";
@@ -26,6 +26,7 @@ import { EnrollFlow } from "./EnrollFlow";
 export function AddMachine() {
   const t = useT();
   const roles = useRoles();
+  const rightNames = useRightNames();
   const navigate = useNavigate();
   const form = useForm(emptyMachineForm);
   const { values, change } = form;
@@ -39,7 +40,7 @@ export function AddMachine() {
 
   const create = (event: FormEvent) => {
     event.preventDefault();
-    const rights = capabilitiesOf(values);
+    const rights = capabilitiesOf(rightNames, values);
     action.run(() => createMachineToken(values.name, values.role, rights, anchorsOf(values.anchors, values.rights)), {
       topic: "all",
       onDone: (created) => {

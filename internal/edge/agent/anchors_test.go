@@ -22,8 +22,8 @@ import (
 
 	"filippo.io/age"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/testkit"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -177,7 +177,7 @@ func TestAnchors_ATrustAddIsReadByTheRunningAgentAndSurvivesItsWrites(t *testing
 
 // everyRight : un agent qui porte tous les droits, pour qu'aucun ordre ne
 // s'arrête au droit.
-var everyRight = []string{"observe", "agent.update", "docker.deploy", "docker.update", "backup.receive=/srv/receive", "backup.produce=" + machine.ProducerProxmoxVzdump,
+var everyRight = []string{"observe", "agent.update", "docker.deploy", "docker.update", "backup.receive=/srv/receive", "backup.produce=" + agentpolicy.ProducerProxmoxVzdump,
 	"files.write=/srv/write", "proxmox.power", "proxmox.snapshot", "restic.target=/srv/restic", "restic.produce", "restic.docker", "restic.verify", "restic.browse", "restic.restore"}
 
 // Aucun genre d'ordre n'écrit une ancre : on envoie à chacun des paramètres et

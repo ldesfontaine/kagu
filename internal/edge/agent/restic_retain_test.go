@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -202,7 +202,7 @@ func TestResticRetain_ASourceCannotForget(t *testing.T) {
 	b := newResticBench(t, "restic.produce")
 	retain := agentwire.ResticRetainParams{User: resticUser, KeepDaily: 7}
 	secret := agentwire.ResticRetainSecret{RepoPassword: seededRepoPassword}
-	expectResult(t, b.runWithSecret(t, agentwire.KindResticRetain, retain, secret), agentwire.ActionRefused, agentwire.RightMissing(machine.CapabilityResticTarget))
+	expectResult(t, b.runWithSecret(t, agentwire.KindResticRetain, retain, secret), agentwire.ActionRefused, agentwire.RightMissing(agentpolicy.CapabilityResticTarget))
 
 	b.runner.restic.source.dialer = &refusingDialer{}
 	b.provision(t, "nas", 8000, mustCertificate(t))

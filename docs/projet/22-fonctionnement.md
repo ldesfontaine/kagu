@@ -354,6 +354,28 @@ exige (`Spec.Right`, au registre des genres d'`agentwire`, que le serveur
 et l'agent lisent tous deux), et l'agent refuse un ordre dont le droit n'est pas
 dans son fichier. Les changer, c'est ré-enrôler (décision 10, plus bas).
 
+Les noms de droits ne se définissent qu'**une fois**, dans
+`internal/fact/agentpolicy` (B-5 : `TestB5_RightNamesAreDefinedOnlyInAgentpolicy`) ;
+`machine`, `anchor` et le registre des genres les importent, le front les lit
+dans `/api/session` (`rights`, les 17 du tableau, dans leur ordre). Quatre noms
+de plus, `terminal.container`, `terminal.host`, `service.free`,
+`network.private`, ne se lisent que dans la politique (R-A3-10) : ni
+`identity.json` ni `-rights` ne les acceptent (`machine.capability_unknown`) ;
+aucun agent ne les porte encore. `agentpolicy` tient aussi les trois jeux
+(Observer, Gérer, Gérer en root, figés par `TestR_A3_7_ThreeSetsAndOnlyThree`)
+et les cinq groupes de l'onglet Droits (Voir, Déployer, Sauvegarder, Entrer,
+Réseau) ; aucun écran ne les montre encore.
+
+**« L'agent peut-il ce droit ? »** se tranche une fois, par
+`agentpolicy.Fit(statut, droit, valeur)` (appelé par `machine.Agent.Fit`) :
+`missing` pour un agent révoqué ou absent, `unknown` tant que l'agent n'a pas
+rapporté ses droits (ce que son jeton demandait n'y change rien), `missing`
+si le droit manque ou ne couvre pas la valeur (un chemin pour un droit borné,
+un producteur pour `backup.produce`), `unavailable` et sa raison quand son
+compte ne peut pas l'exercer, sinon `ok`. Déployer, recevoir une sauvegarde,
+restic et la fiche d'une machine (`agent.fit`, un verdict par droit connu) le
+lisent ; l'écran l'affiche sans le recalculer.
+
 | Droit | Portée | Ce qu'il permet |
 | --- | --- | --- |
 | `observe` | — | Mesurer la machine, lire son Docker, lancer ses sondes : les commandes d'observation, et l'ordre `agent.ping`, qui ne change rien. Toujours là, la case est cochée et grisée |
@@ -380,7 +402,7 @@ dans son fichier. Les changer, c'est ré-enrôler (décision 10, plus bas).
   (`observe,docker.update,files.write=/opt/site:/srv/workspace`) ; pour
   `backup.produce`, ce sont des noms de producteurs et non des chemins
   (`backup.produce=proxmox-vzdump`, `^[a-z0-9][a-z0-9-]{1,31}$`, un à quatre,
-  dans la liste fermée `machine.Producers`). Un chemin
+  dans la liste fermée `agentpolicy.Producers`). Un chemin
   est absolu, propre (`path.Clean`), fait de lettres, chiffres, `.`, `-`,
   `_`, `/`, jamais `/` seul : la ligne se colle sans guillemets. `observe`
   s'ajoute toujours ; les droits se rangent dans l'ordre du tableau, les
@@ -414,7 +436,7 @@ dans son fichier. Les changer, c'est ré-enrôler (décision 10, plus bas).
   sous l'agent). Un fichier illisible vaut `observe` seul, le plus étroit,
   **sans `probe.lan`** : le réseau local se ferme aussi. `backup.receive` se juge chemin par chemin : l'ordre nomme un dossier,
   l'agent le refuse (`path_outside_right`) s'il n'est pas celui du droit ou
-  l'un de ses sous-dossiers (`machine.CoversPath` : `/srv/backups2` n'est
+  l'un de ses sous-dossiers (`agentpolicy.CoversPath` : `/srv/backups2` n'est
   pas couvert par `/srv/backups`) ; sous le chemin du droit, un lien
   symbolique sur le chemin demandé est refusé de même. Écrire ailleurs que dans son état demande
   aussi à l'unité systemd de l'agent (`ReadWritePaths=`) : sans elle l'agent
@@ -539,7 +561,9 @@ dans son fichier. Les changer, c'est ré-enrôler (décision 10, plus bas).
   coche seul, le jeton neuf reste à créer.
 - **Un sélecteur de machine n'offre que celles qui conviennent** (#447) : la liste
   garde toutes les machines, celles qui ne conviennent pas sont grisées avec la
-  raison et un lien (`unfitFor`, `MachineSelect`, option `disabled` de `Select`) :
+  raison et un lien (`unfitFor`, `MachineSelect`, option `disabled` de `Select`),
+  selon le verdict que le serveur rend par droit (`agent.fit`) ; un agent qui
+  n'a pas encore rapporté ses droits est grisé (`machine.fit_right_unknown`) :
   destination (`backup.receive`), machine qui produit (`backup.produce`), machine
   qui sonde (un agent actif), destinations d'un plan (`unfitDestination`).
   Services, tâches, filtres et navigation entre machines ne demandent rien de la
@@ -1424,7 +1448,11 @@ fermée et vit dans le protocole (`agentwire.Kind`) : jamais une chaîne shell.
 4. **Il marque le run `sent`, puis le pousse** sur le flux : la réponse de
    l'agent trouve toujours un run envoyé. Un flux tombé ou une file pleine :
    le run finit `failed`, raison `undelivered`. L'API rend le run (`201`).
-5. **L'agent juge**, dans cet ordre, et refuse au premier écart : il a une
+5. **L'agent juge**, par `judge.Judge` (`internal/wire/judge`, le seul juge
+   d'un ordre signé, qui reçoit la politique et ne lit aucun fichier ; la
+   politique est tirée d'`identity.json` jusqu'à son fichier à elle), plus
+   l'agent visé et le rang, qu'il juge lui-même à leur place. Dans cet ordre,
+   il refuse au premier écart : il a une
    clé du serveur épinglée (`server_key_missing`) ; la signature est de cette
    clé, sur ces octets, sous l'étiquette v2 seule, vérifiée avant de lire un
    champ (`bad_signature` : un corps v1 signé sous la sienne ne passe pas) ;
@@ -1446,8 +1474,8 @@ fermée et vit dans le protocole (`agentwire.Kind`) : jamais une chaîne shell.
 
 **Le registre des genres** (`internal/wire/agentwire/registry.go`). Chaque
 genre d'ordre s'y déclare **une fois**, par une ligne `Define[P]` : le type
-de ses paramètres, son droit (une constante de `machine`, jamais une chaîne
-tapée ; `agentpolicy` la reprendra), le type de son secret s'il en porte un,
+de ses paramètres, son droit (une constante d'`agentpolicy`, jamais une
+chaîne ni une constante d'ailleurs : `TestR_A1_14_ARightOfTheRegistryIsAnAgentpolicyConstant`), le type de son secret s'il en porte un,
 les ancres qui le bornent et ses champs de journal. `OrderKinds`,
 le journal local et les ancres le lisent ; le serveur (`action.Service`,
 avant l'envoi) et l'agent (à la réception) y lisent le droit du genre, et
@@ -1755,7 +1783,7 @@ jusqu'au bout. La commande imprime la suite (`chown`, démarrer `serve`).
 
 **Les plans à source machine.** Un plan `agent` dit : la machine
 (`source_machine_id`, qui existe), le producteur (`proxmox-vzdump`, la seule
-valeur de la liste fermée `machine.Producers()`, la même que juge le droit `backup.produce`) et la sélection (`all`, ou des
+valeur de la liste fermée `agentpolicy.Producers()`, la même que juge le droit `backup.produce`) et la sélection (`all`, ou des
 identifiants séparés par des virgules comme `100,101`, 255 caractères au plus).
 La machine source d'un plan ne se supprime pas (`restrict`,
 `machine.has_backup_plans`) : on retire d'abord le plan.

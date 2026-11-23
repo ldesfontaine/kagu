@@ -113,6 +113,16 @@ export interface Agent {
   rollback_capable: boolean;
   // Les ancres de confiance locales que l'agent dit tenir.
   anchors: AgentAnchors;
+  // Par droit connu, le verdict du serveur : l'écran l'affiche sans le
+  // recalculer.
+  fit: Record<string, RightFit>;
+}
+
+// unknown : l'agent n'a pas encore rapporté ses droits, il jugera lui-même.
+// reason dit pourquoi un droit porté est unavailable.
+export interface RightFit {
+  state: "ok" | "missing" | "unavailable" | "unknown";
+  reason: string;
 }
 
 // L'état d'un type d'ancre sur une machine : des valeurs posées, rien de posé

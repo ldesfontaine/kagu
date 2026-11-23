@@ -3,6 +3,7 @@ package machine
 import (
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
@@ -23,7 +24,7 @@ type Agent struct {
 	RevokedAt time.Time
 	// Ce que l'agent rapporte de son fichier à l'ouverture de son flux ;
 	// vide tant qu'il n'a rien rapporté (un agent d'avant les droits).
-	Capabilities []Capability
+	Capabilities []agentpolicy.Capability
 	ReportedAt   time.Time
 	// Pourquoi un droit rapporté ne peut pas s'exercer sur la machine (une
 	// raison de UnavailableReasons, par nom de droit) ; vide quand tout est
@@ -35,7 +36,7 @@ type Agent struct {
 	RunAs *Account
 	// Ce que le jeton qui l'a enrôlé demandait ; vide pour un agent d'avant
 	// les droits.
-	Requested []Capability
+	Requested []agentpolicy.Capability
 	// L'empreinte de la clé du serveur que l'agent dit avoir épinglée ; vide
 	// tant qu'il n'a rien dit, ou s'il n'en a pas.
 	ServerKeyFingerprint string
@@ -84,13 +85,22 @@ func (a Agent) UnavailableReason(capability string) string {
 	return a.Unavailable[capability]
 }
 
+// Fit dit si l'agent peut exercer ce droit, avec cette valeur
+// (agentpolicy.Fit).
+func (a Agent) Fit(right, value string) agentpolicy.RightFit {
+	status := agentpolicy.AgentStatus{
+		Active: a.IsActive(), Reported: !a.ReportedAt.IsZero(), Rights: a.Capabilities, Unavailable: a.Unavailable,
+	}
+	return agentpolicy.Fit(status, right, value)
+}
+
 // CapabilitiesDiffer dit si le fichier de l'agent ne dit pas ce que le jeton
 // demandait. Rien à comparer tant que l'un des deux manque.
 func (a Agent) CapabilitiesDiffer() bool {
 	if len(a.Requested) == 0 || a.ReportedAt.IsZero() {
 		return false
 	}
-	return !SameCapabilities(a.Requested, a.Capabilities)
+	return !agentpolicy.SameCapabilities(a.Requested, a.Capabilities)
 }
 
 // Le préfixe rend un identifiant d'agent lisible dans un journal, jamais

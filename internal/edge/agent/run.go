@@ -18,6 +18,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/dockerwatch"
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/hostconn"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
@@ -71,7 +72,7 @@ type Options struct {
 	Language lang.Code
 	// Rights sont les droits que la commande d'installation donne
 	// (-rights) ; l'identité les garde ensuite. Vides : observe seul.
-	Rights []machine.Capability
+	Rights []agentpolicy.Capability
 	// ReleaseKeys sont les clés de version que ce binaire embarque ;
 	// HasReleaseKey est faux quand il n'en a pas (agent.update est alors refusé).
 	ReleaseKeys   release.Keys
@@ -176,7 +177,7 @@ func Run(ctx context.Context, opts Options) error {
 	docker := dockerapi.New(opts.DockerSocket)
 	// L'environnement des conteneurs ne se lit que par observe.env, lu une fois
 	// ici comme probe.lan : changer le droit, c'est ré-enrôler.
-	readEnvironment := machine.HasCapability(identity.Capabilities(), machine.CapabilityObserveEnv)
+	readEnvironment := agentpolicy.HasCapability(identity.Capabilities(), agentpolicy.CapabilityObserveEnv)
 	watcher := dockerwatch.New(docker, observed, dockerwatch.Options{Logger: opts.Logger, ReadEnvironment: readEnvironment})
 	go watcher.Run(ctx)
 	// Les images de la machine se vérifient contre leur registre, avec le
@@ -190,7 +191,7 @@ func Run(ctx context.Context, opts Options) error {
 	// Le réseau local ne s'ouvre aux sondes que par probe.lan, lu une fois
 	// ici : changer le droit, c'est ré-enrôler. Un état mal gardé n'a que
 	// observe, donc le ferme aussi.
-	allowLAN := machine.HasCapability(identity.Capabilities(), machine.CapabilityProbeLAN)
+	allowLAN := agentpolicy.HasCapability(identity.Capabilities(), agentpolicy.CapabilityProbeLAN)
 	prober := probe.NewRunner(checked, probe.NewChecker(opts.Roots, allowLAN), opts.Logger)
 	go prober.Run(ctx)
 	// Les ordres signés : jugés et exécutés à leur arrivée, leurs résultats
@@ -361,7 +362,7 @@ func loadOrEnroll(ctx context.Context, opts Options) (Identity, error) {
 // enroll tire l'identité, la présente avec le jeton, puis l'écrit avec l'id
 // que le serveur a retenu : un ré-enrôlement garde l'id de la machine.
 func enroll(ctx context.Context, opts Options) (Identity, error) {
-	rights, err := machine.NormalizeCapabilities(opts.Rights)
+	rights, err := agentpolicy.NormalizeCapabilities(opts.Rights)
 	if err != nil {
 		return Identity{}, err
 	}

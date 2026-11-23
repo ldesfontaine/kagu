@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
@@ -144,7 +144,7 @@ func TestRecord_RejectsAJournalBeyondTheProtocolLimits(t *testing.T) {
 }
 
 func TestRegistryRight_ADockerRollbackNeedsTheUpdateRight(t *testing.T) {
-	if spec, known := agentwire.SpecOf(agentwire.KindDockerRollback); !known || spec.Right != machine.CapabilityDockerUpdate {
+	if spec, known := agentwire.SpecOf(agentwire.KindDockerRollback); !known || spec.Right != agentpolicy.CapabilityDockerUpdate {
 		t.Fatalf("right %q %v", spec.Right, known)
 	}
 	if !agentwire.KindDockerRollback.IsOrder() {

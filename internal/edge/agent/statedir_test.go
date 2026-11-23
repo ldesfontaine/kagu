@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -434,7 +435,7 @@ func TestCheckStateDir_IdentityFileIsJudged(t *testing.T) {
 // redémarrage rend les droits.
 func TestRun_UnsafeStateKeepsObserveOnly(t *testing.T) {
 	b := newBench(t)
-	rights, err := machine.ParseCapabilities("docker.deploy")
+	rights, err := agentpolicy.ParseCapabilities("docker.deploy")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,7 +446,7 @@ func TestRun_UnsafeStateKeepsObserveOnly(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, enrolling) }()
 	granted := b.waitFor(t, "vps-brest-1", func(s machine.Status) bool {
-		return s.Online && machine.HasCapability(s.Agent.Capabilities, machine.CapabilityDockerDeploy)
+		return s.Online && agentpolicy.HasCapability(s.Agent.Capabilities, agentpolicy.CapabilityDockerDeploy)
 	})
 	cancel()
 	<-done
@@ -460,9 +461,9 @@ func TestRun_UnsafeStateKeepsObserveOnly(t *testing.T) {
 	defer cancel()
 	go func() { done <- Run(ctx, narrowed) }()
 	reported := b.waitFor(t, "vps-brest-1", func(s machine.Status) bool {
-		return s.Online && !s.Agent.ReportedAt.IsZero() && !machine.HasCapability(s.Agent.Capabilities, machine.CapabilityDockerDeploy)
+		return s.Online && !s.Agent.ReportedAt.IsZero() && !agentpolicy.HasCapability(s.Agent.Capabilities, agentpolicy.CapabilityDockerDeploy)
 	})
-	if machine.FormatCapabilities(reported.Agent.Capabilities) != "observe" || !reported.Agent.CapabilitiesDiffer() {
+	if agentpolicy.FormatCapabilities(reported.Agent.Capabilities) != "observe" || !reported.Agent.CapabilitiesDiffer() {
 		t.Fatalf("reported %+v", reported.Agent)
 	}
 	if !strings.Contains(logs.String(), "state dir is not safe, writing rights are off") || !strings.Contains(logs.String(), "/var/lib/opencloud is owned by uid 999") {
@@ -491,7 +492,7 @@ func TestOrderRunner_UnsafeStateRefusesWritingOrdersAndKeepsRightsOnDisk(t *test
 	deploy := order(1)
 	deploy.Kind = agentwire.KindDockerDeploy
 	result := b.send(t, deploy, b.private)
-	if result.State != agentwire.ActionRefused || result.Reason != agentwire.RightMissing(machine.CapabilityDockerDeploy) {
+	if result.State != agentwire.ActionRefused || result.Reason != agentwire.RightMissing(agentpolicy.CapabilityDockerDeploy) {
 		t.Fatalf("deploy %+v", result)
 	}
 	// observe reste : un ping passe, et son rang est réécrit dans le fichier.

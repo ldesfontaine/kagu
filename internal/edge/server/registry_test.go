@@ -4,26 +4,28 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
+	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/gesture/verb"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Un seul registre des gestes (brique B-5, R-A1-14) : les genres d'ordres
-// (agentwire), les droits qu'ils exigent (machine jusqu'à agentpolicy, T03-01)
-// et les verbes avec leur action d'audit (verb, audit) se croisent ici.
+// (agentwire), les droits qu'ils exigent (agentpolicy) et les verbes avec leur action d'audit (verb, audit) se croisent ici.
 
 // gestureLists sont les listes que le test croise.
 type gestureLists struct {
 	// Spec.Right de chaque genre du registre.
 	rights map[agentwire.Kind]string
-	// Les noms de droits connus : machine.CapabilityNames, puis agentpolicy.
+	// Les noms de droits connus d'agentpolicy.
 	knownRights []string
 	// Verb.Order, Verb.Right et Verb.Audit de chaque verbe, par identifiant.
 	verbOrders map[string]agentwire.Kind
@@ -67,7 +69,7 @@ func (l gestureLists) disagreements() []string {
 func currentGestureLists() gestureLists {
 	lists := gestureLists{
 		rights:       map[agentwire.Kind]string{},
-		knownRights:  machine.CapabilityNames(),
+		knownRights:  agentpolicy.Names(),
 		verbOrders:   map[string]agentwire.Kind{},
 		verbRights:   map[string]string{},
 		verbAudits:   map[string]audit.Action{},
@@ -100,9 +102,9 @@ func TestRegistry_ThreeListsAgree_SeesEachFault(t *testing.T) {
 	faults := map[string]func(*gestureLists){
 		"unknown kind": func(l *gestureLists) { l.verbOrders["agent.ping"] = "docker.purge" },
 		"right not the right of the kind": func(l *gestureLists) {
-			l.verbRights["agent.update"] = machine.CapabilityObserve
+			l.verbRights["agent.update"] = agentpolicy.CapabilityObserve
 		},
-		"right without an order": func(l *gestureLists) { l.verbRights["probe.pause"] = machine.CapabilityObserve },
+		"right without an order": func(l *gestureLists) { l.verbRights["probe.pause"] = agentpolicy.CapabilityObserve },
 		"unknown right": func(l *gestureLists) {
 			l.rights[agentwire.KindDockerDeploy] = "docker.deploi"
 		},
@@ -168,7 +170,7 @@ func TestRegistry_RightsAreNamedConstants(t *testing.T) {
 
 var registry = []Spec{
 	Define[DockerParams](KindDockerDeploy, "docker.deploy"),
-	agentwire.Define[DockerParams](KindDockerUpdate, machine.CapabilityDockerUpdate),
+	agentwire.Define[DockerParams](KindDockerUpdate, agentpolicy.CapabilityDockerUpdate),
 	DefineWithoutParams(KindAgentPing, "observe"),
 }
 `
@@ -182,6 +184,96 @@ var registry = []Spec{
 	}
 }
 
+// notAgentpolicyRights relève les déclarations de genre dont le droit n'est
+// pas une constante d'agentpolicy : une chaîne, une variable, la constante
+// d'un autre paquet.
+func notAgentpolicyRights(fileSet *token.FileSet, file *ast.File) (declared int, found []string) {
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok || len(call.Args) < 2 || !declaresAKind(call.Fun) {
+			return true
+		}
+		declared++
+		right, isSelector := call.Args[1].(*ast.SelectorExpr)
+		if !isSelector || !isIdent(right.X, "agentpolicy") || !strings.HasPrefix(right.Sel.Name, "Capability") {
+			found = append(found, fileSet.Position(call.Pos()).String())
+		}
+		return true
+	})
+	return declared, found
+}
+
+// R-A1-14 : le droit d'un genre est un nom défini par agentpolicy, jamais une
+// chaîne ni une constante d'ailleurs.
+func TestR_A1_14_ARightOfTheRegistryIsAnAgentpolicyConstant(t *testing.T) {
+	fileSet := token.NewFileSet()
+	file, err := parser.ParseFile(fileSet, filepath.Join(moduleRoot(), "internal", "wire", "agentwire", "registry.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	declared, found := notAgentpolicyRights(fileSet, file)
+	if declared != len(agentwire.OrderKinds()) {
+		t.Fatalf("%d declarations seen for %d kinds: the guard no longer sees the registry", declared, len(agentwire.OrderKinds()))
+	}
+	for _, at := range found {
+		t.Errorf("%s : le droit d'un genre est une constante d'agentpolicy", at)
+	}
+	const faulty = `package faulty
+
+var registry = []Spec{
+	Define[DockerParams](KindDockerDeploy, "docker.deploy"),
+	Define[DockerParams](KindDockerUpdate, machine.CapabilityDockerUpdate),
+	DefineWithoutParams(KindAgentRollback, updateRight),
+	DefineWithoutParams(KindAgentPing, agentpolicy.CapabilityObserve),
+}
+`
+	faultyFile, err := parser.ParseFile(fileSet, "faulty.go", faulty, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, found := notAgentpolicyRights(fileSet, faultyFile); len(found) != 3 {
+		t.Fatalf("the guard sees %v in a source with three rights from elsewhere", found)
+	}
+}
+
+// rightNameDefinition reconnaît la définition d'un nom de droit : le motif du
+// critère B-5 (fiche A3, §8), élargi à toute constante Capability….
+var rightNameDefinition = regexp.MustCompile(`\bCapability[A-Z]\w*\s*=`)
+
+const agentpolicyDir = "internal/fact/agentpolicy/"
+
+// B-5 : les noms de droits ne se définissent qu'une fois, dans agentpolicy ;
+// aucun alias ailleurs, tests compris.
+func TestB5_RightNamesAreDefinedOnlyInAgentpolicy(t *testing.T) {
+	inAgentpolicy := 0
+	err := filepath.WalkDir(filepath.Join(moduleRoot(), "internal"), func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".go") {
+			return err
+		}
+		content, err := os.ReadFile(path) // #nosec G304 -- le dépôt lui-même, parcouru par le test.
+		if err != nil {
+			return err
+		}
+		found := len(rightNameDefinition.FindAll(content, -1))
+		if strings.Contains(filepath.ToSlash(path), agentpolicyDir) {
+			inAgentpolicy += found
+		} else if found > 0 {
+			t.Errorf("%s : %d nom(s) de droit défini(s) hors d'agentpolicy", path, found)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inAgentpolicy != len(agentpolicy.Names()) {
+		t.Fatalf("%d definitions in agentpolicy for %d known rights: the guard no longer sees them", inAgentpolicy, len(agentpolicy.Names()))
+	}
+	alias := "const Capability" + "Observe = agentpolicy.Capability" + "Observe"
+	if !rightNameDefinition.MatchString(alias) {
+		t.Fatal("the guard does not see an alias")
+	}
+}
+
 // isAgentwireKind reconnaît le type agentwire.Kind.
 func isAgentwireKind(expr ast.Expr) bool {
 	selector, ok := expr.(*ast.SelectorExpr)
@@ -189,7 +281,7 @@ func isAgentwireKind(expr ast.Expr) bool {
 }
 
 // namesARight dit si un nœud nomme ou juge un droit d'agent : le champ Right
-// d'une déclaration, une constante machine.Capability…, machine.HasCapability.
+// d'une déclaration, une constante agentpolicy.Capability…, agentpolicy.HasCapability.
 func namesARight(node ast.Node) bool {
 	selector, ok := node.(*ast.SelectorExpr)
 	if !ok {
@@ -198,7 +290,7 @@ func namesARight(node ast.Node) bool {
 	if selector.Sel.Name == "Right" {
 		return true
 	}
-	return isIdent(selector.X, "machine") &&
+	return isIdent(selector.X, "agentpolicy") &&
 		(strings.HasPrefix(selector.Sel.Name, "Capability") || selector.Sel.Name == "HasCapability")
 }
 
@@ -265,23 +357,23 @@ func RightOf(kind agentwire.Kind) (string, bool) {
 	return spec.Right, known
 }
 
-func coversOrder(capabilities []machine.Capability, kind agentwire.Kind) bool {
+func coversOrder(capabilities []agentpolicy.Capability, kind agentwire.Kind) bool {
 	right, known := RightOf(kind)
-	return known && machine.HasCapability(capabilities, right)
+	return known && agentpolicy.HasCapability(capabilities, right)
 }
 
 func rightOfKind(kind agentwire.Kind) string {
 	switch kind {
 	case agentwire.KindDockerDeploy:
-		return machine.CapabilityDockerDeploy
+		return agentpolicy.CapabilityDockerDeploy
 	}
 	return ""
 }
 
-var rights = map[agentwire.Kind]string{agentwire.KindDockerUpdate: machine.CapabilityDockerUpdate}
+var rights = map[agentwire.Kind]string{agentwire.KindDockerUpdate: agentpolicy.CapabilityDockerUpdate}
 
 func RightOfMachine(target machine.Status, right string) bool {
-	return machine.HasCapability(target.Agent.Capabilities, right)
+	return agentpolicy.HasCapability(target.Agent.Capabilities, right)
 }
 
 func labelOf(kind agentwire.Kind) string { return string(kind) }

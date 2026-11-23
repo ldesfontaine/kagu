@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
@@ -167,7 +168,7 @@ func (s *Service) judgeMachine(target machine.Status, cache artifactCache) (Upda
 		return offer, release.Artifact{}, nil
 	}
 	offer.Available = true
-	if target.Agent.UnavailableReason(machine.CapabilityAgentUpdate) != "" {
+	if target.Agent.UnavailableReason(agentpolicy.CapabilityAgentUpdate) != "" {
 		offer.Reason = OfferRightUnavailable
 	}
 	return offer, artifact, nil
@@ -191,7 +192,7 @@ func (s *Service) machineReason(target machine.Status) string {
 	switch {
 	case !target.Online:
 		return OfferOffline
-	case !target.Agent.ReportedAt.IsZero() && !machine.HasCapability(target.Agent.Capabilities, machine.CapabilityAgentUpdate):
+	case !target.Agent.ReportedAt.IsZero() && !agentpolicy.HasCapability(target.Agent.Capabilities, agentpolicy.CapabilityAgentUpdate):
 		return OfferRightMissing
 	case !archPattern.MatchString(target.Arch):
 		return OfferArchUnknown

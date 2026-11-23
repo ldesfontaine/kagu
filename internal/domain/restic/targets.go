@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -120,15 +121,16 @@ func judgeTargetSetup(target machine.Status, setup TargetSetup) (TargetSetup, er
 	if setup.Port < 1 || setup.Port > 65535 {
 		return TargetSetup{}, ErrPortInvalid
 	}
-	right := RightOf(target, machine.CapabilityResticTarget)
+	right := target.Agent.Fit(agentpolicy.CapabilityResticTarget, "")
 	if err := judgeTargetRight(right); err != nil {
 		return TargetSetup{}, err
 	}
+	granted := targetDirOf(target.Agent)
 	if setup.Dir == "" {
-		setup.Dir = right.Path
+		setup.Dir = granted
 	}
 	// Tant que l'agent n'a rien rapporté, il jugera lui-même son dossier.
-	if right.State == RightOK && setup.Dir != right.Path {
+	if right.State == agentpolicy.FitOK && setup.Dir != granted {
 		return TargetSetup{}, ErrTargetDirOutsideRight
 	}
 	return setup, nil
@@ -157,13 +159,13 @@ func (s *Service) judgeFloor(ctx context.Context, machineID string, floor *agent
 }
 
 // judgeTargetRight : le droit restic.target, et rest-server présent.
-func judgeTargetRight(right RightFit) error {
+func judgeTargetRight(right agentpolicy.RightFit) error {
 	switch {
-	case right.State == RightMissing:
+	case right.State == agentpolicy.FitMissing:
 		return ErrTargetRightMissing
-	case right.State == RightUnavailable && right.Reason == agentwire.ReasonRestServerMissing:
+	case right.State == agentpolicy.FitUnavailable && right.Reason == agentwire.ReasonRestServerMissing:
 		return ErrRestServerMissing
-	case right.State == RightUnavailable:
+	case right.State == agentpolicy.FitUnavailable:
 		return ErrTargetRightUnavailable
 	}
 	return nil

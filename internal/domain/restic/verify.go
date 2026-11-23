@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -155,10 +156,10 @@ func (s *Service) startVerify(ctx context.Context, key repoKey) (Link, action.Ru
 
 // judgeVerifyRight : la cible tient restic.verify et sait l'exercer.
 func judgeVerifyRight(target machine.Status) error {
-	switch RightOf(target, machine.CapabilityResticVerify).State {
-	case RightOK, RightUnknown:
+	switch target.Agent.Fit(agentpolicy.CapabilityResticVerify, "").State {
+	case agentpolicy.FitOK, agentpolicy.FitUnknown:
 		return nil
-	case RightUnavailable:
+	case agentpolicy.FitUnavailable:
 		return ErrTargetVerifyUnavailable
 	}
 	return ErrTargetVerifyRightMissing

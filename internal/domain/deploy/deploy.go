@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
@@ -29,20 +30,6 @@ var (
 	ErrUnitPinnedDigest  = refusal.Conflict("deploy.unit_pinned_digest", "the unit pins an image digest of its current tag: remove it before changing version")
 )
 
-// RightState dit si l'agent de la machine porte le droit du prochain geste :
-// « unknown » tant qu'il n'a pas rapporté ses droits. « unavailable » : il le
-// porte, mais son compte ne peut pas l'exercer (Plan.RightReason dit
-// pourquoi). Le serveur l'affiche sans refuser le geste : le rapport date de
-// l'ouverture du flux, et l'agent refuse, avec la raison, au moment de l'ordre.
-type RightState string
-
-const (
-	RightOK          RightState = "ok"
-	RightMissing     RightState = "missing"
-	RightUnavailable RightState = "unavailable"
-	RightUnknown     RightState = "unknown"
-)
-
 // Plan est ce que l'opérateur lit avant de déployer : où le service ira, ce
 // qu'il y aura, et où il en est.
 type Plan struct {
@@ -57,8 +44,11 @@ type Plan struct {
 	// Vrai quand la machine est en ligne : un ordre ne part que par son flux.
 	MachineOnline bool
 	// Le droit du prochain geste : docker.deploy, puis docker.update. Avec
-	// « unavailable », la raison que l'agent a rapportée (agentwire).
-	Right       RightState
+	// « unavailable », la raison que l'agent a rapportée (agentwire). Le
+	// serveur l'affiche sans refuser le geste : le rapport date de
+	// l'ouverture du flux, et l'agent refuse, avec la raison, au moment de
+	// l'ordre.
+	Right       agentpolicy.FitState
 	RightReason string
 	// Le compose.yml que le prochain geste écrira, et les unités dont il
 	// monte un dossier de données.

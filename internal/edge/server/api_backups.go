@@ -9,6 +9,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 )
 
@@ -191,7 +192,7 @@ func (s *Server) createBackupDestination(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	s.writeAPI(w, http.StatusCreated, backupDestinationToJSON(backup.DestinationView{Destination: created, Right: backup.RightUnknown}))
+	s.writeAPI(w, http.StatusCreated, backupDestinationToJSON(backup.DestinationView{Destination: created, Right: agentpolicy.FitUnknown}))
 }
 
 func (s *Server) deleteBackupDestination(w http.ResponseWriter, r *http.Request) {

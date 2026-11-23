@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -209,7 +210,7 @@ func browseRefusal(reason string) error {
 	switch reason {
 	case agentwire.ReasonRepoEmpty:
 		return ErrBrowseRepoEmpty
-	case agentwire.RightMissing(machine.CapabilityResticBrowse), agentwire.RightMissing(machine.CapabilityResticTarget):
+	case agentwire.RightMissing(agentpolicy.CapabilityResticBrowse), agentwire.RightMissing(agentpolicy.CapabilityResticTarget):
 		return ErrTargetBrowseRightMissing
 	case action.ReasonTimeout, action.ReasonUndelivered, agentwire.ReasonExpired:
 		return ErrBrowseTimeout
@@ -219,10 +220,10 @@ func browseRefusal(reason string) error {
 
 // judgeBrowseRight : la cible tient restic.browse et sait l'exercer.
 func judgeBrowseRight(target machine.Status) error {
-	switch RightOf(target, machine.CapabilityResticBrowse).State {
-	case RightOK, RightUnknown:
+	switch target.Agent.Fit(agentpolicy.CapabilityResticBrowse, "").State {
+	case agentpolicy.FitOK, agentpolicy.FitUnknown:
 		return nil
-	case RightUnavailable:
+	case agentpolicy.FitUnavailable:
 		return ErrTargetBrowseUnavailable
 	}
 	return ErrTargetBrowseRightMissing

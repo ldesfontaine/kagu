@@ -18,7 +18,7 @@ import (
 	"filippo.io/age"
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 	"github.com/ldesfontaine/kagu/internal/kit/wait"
@@ -88,7 +88,7 @@ type produceTools struct {
 func newProduceTools(stateDir *os.Root) produceTools {
 	return produceTools{
 		stateDir:   stateDir,
-		producers:  map[string]producer{machine.ProducerProxmoxVzdump: newVzdumpProducer()},
+		producers:  map[string]producer{agentpolicy.ProducerProxmoxVzdump: newVzdumpProducer()},
 		freeBytes:  freeBytesUnder,
 		retryDelay: uploadRetryDelay,
 	}
@@ -104,15 +104,15 @@ type produceJob struct {
 // readBackupProduce juge l'ordre avant de l'accepter : le droit nomme ce
 // producteur, l'agent le connaît, et le reste est de la forme attendue. Un
 // ordre faux est refusé tout de suite, rien n'est lancé.
-func readBackupProduce(order judgedOrder, capabilities []machine.Capability, producers map[string]producer) (produceJob, *agentwire.ActionResult) {
+func readBackupProduce(order judgedOrder, capabilities []agentpolicy.Capability, producers map[string]producer) (produceJob, *agentwire.ActionResult) {
 	bad := &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	params, ok := order.Params.(agentwire.BackupProduceParams)
 	if !ok {
 		return produceJob{}, bad
 	}
-	if !machine.CoversProducer(capabilities, params.Producer) {
+	if !agentpolicy.CoversProducer(capabilities, params.Producer) {
 		return produceJob{}, &agentwire.ActionResult{
-			RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.RightMissing(machine.CapabilityBackupProduce),
+			RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.RightMissing(agentpolicy.CapabilityBackupProduce),
 		}
 	}
 	chosen, known := producers[params.Producer]

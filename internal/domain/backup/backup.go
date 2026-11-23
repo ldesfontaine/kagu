@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
@@ -146,23 +147,17 @@ type PlanDefinition struct {
 	Keep int
 }
 
-// RightState dit si l'agent d'une destination peut écrire dans son dossier :
-// « unknown » tant qu'il n'a pas rapporté ses droits. « unavailable » : il a le
-// droit, mais son compte ne peut pas l'exercer (DestinationView.RightReason
-// dit pourquoi) ; le serveur l'affiche sans refuser l'envoi, l'agent refuse au
-// moment de l'ordre, avec la raison.
-type RightState string
-
-const (
-	RightOK          RightState = "ok"
-	RightMissing     RightState = "missing"
-	RightUnavailable RightState = "unavailable"
-	RightUnknown     RightState = "unknown"
-)
+// receiveFit dit si l'agent de la machine peut écrire dans ce dossier
+// (backup.receive). « unavailable » : il a le droit, mais son compte ne peut
+// pas l'exercer ; le serveur l'affiche sans refuser l'envoi, l'agent refuse
+// au moment de l'ordre, avec la raison.
+func receiveFit(target machine.Status, path string) agentpolicy.RightFit {
+	return target.Agent.Fit(agentpolicy.CapabilityBackupReceive, path)
+}
 
 type DestinationView struct {
 	Destination
-	Right RightState
+	Right agentpolicy.FitState
 	// Avec « unavailable », la raison que l'agent a rapportée.
 	RightReason string
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
@@ -473,7 +474,7 @@ func scanMachine(row scanner) (machine.Machine, error) {
 	m.Agent.Anchors, _ = anchor.Parse(anchors.String)
 	// Une liste illisible en base ne se montre pas : il n'y a rien à comparer.
 	if requested.String != "" {
-		m.Agent.Requested, _ = machine.ParseCapabilities(requested.String)
+		m.Agent.Requested, _ = agentpolicy.ParseCapabilities(requested.String)
 	}
 	m.LastSeenAt = m.Agent.LastSeenAt
 	return m, nil
@@ -506,7 +507,7 @@ func attachCapabilities(ctx context.Context, q querier, machines []machine.Machi
 		return fmt.Errorf("list capabilities: %w", err)
 	}
 	defer rows.Close()
-	reported := map[string][]machine.Capability{}
+	reported := map[string][]agentpolicy.Capability{}
 	reportedAt := map[string]time.Time{}
 	unavailable := map[string]map[string]string{}
 	for rows.Next() {
@@ -521,7 +522,7 @@ func attachCapabilities(ctx context.Context, q querier, machines []machine.Machi
 			}
 			unavailable[agentID][name] = reason
 		}
-		capability := machine.Capability{Name: name}
+		capability := agentpolicy.Capability{Name: name}
 		if scope != "" {
 			capability.Paths = strings.Split(scope, ":")
 		}
@@ -539,7 +540,7 @@ func attachCapabilities(ctx context.Context, q querier, machines []machine.Machi
 		}
 		// Le même ordre que la liste fermée ; une ligne d'une version plus
 		// récente qu'on ne connaît pas reste telle quelle.
-		if normalized, err := machine.NormalizeCapabilities(capabilities); err == nil {
+		if normalized, err := agentpolicy.NormalizeCapabilities(capabilities); err == nil {
 			capabilities = normalized
 		}
 		agent.Capabilities = capabilities

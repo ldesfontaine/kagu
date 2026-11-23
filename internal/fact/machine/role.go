@@ -3,6 +3,7 @@ package machine
 import (
 	"slices"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
@@ -40,13 +41,13 @@ func ParseRole(text string) (Role, error) {
 
 // RolePreset rend les droits que le rôle coche d'avance. Ils se décochent :
 // ce que l'agent peut faire reste ce que l'opérateur a validé.
-func RolePreset(role Role) []Capability {
+func RolePreset(role Role) []agentpolicy.Capability {
 	switch role {
 	case RoleDocker:
-		return []Capability{{Name: CapabilityProbeLAN}, {Name: CapabilityDockerDeploy}, {Name: CapabilityDockerUpdate}}
+		return []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}, {Name: agentpolicy.CapabilityDockerDeploy}, {Name: agentpolicy.CapabilityDockerUpdate}}
 	case RoleProxmox:
-		return []Capability{{Name: CapabilityProbeLAN}, {Name: CapabilityProxmoxPower}, {Name: CapabilityProxmoxSnapshot}}
+		return []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}, {Name: agentpolicy.CapabilityProxmoxPower}, {Name: agentpolicy.CapabilityProxmoxSnapshot}}
 	default:
-		return []Capability{{Name: CapabilityProbeLAN}}
+		return []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}}
 	}
 }

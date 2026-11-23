@@ -2,9 +2,13 @@ import { expect, test } from "vitest";
 
 import type { Machine } from "../api/machines";
 import type { Translate } from "../i18n/context";
-import { backupProducer, canConfirmDeletion, capabilitiesOf, isArchived, liveMachines, offeredCapabilities, capabilityLabelKey, capabilityNames, describeAccount, describeCapability, describeUnavailable, emptyMachineForm, isMachineFormModified, isRightsModified, kindsByID, machineOption, machineSeen, machinesSubtitle, rightsFormOf, rolePatch, toggleRight, unavailableRights } from "./machines";
+import sessionGolden from "../../../internal/edge/server/testdata/session.golden.json";
+import { backupProducer, canConfirmDeletion, capabilitiesOf, isArchived, liveMachines, offeredCapabilities, capabilityLabelKey, describeAccount, describeCapability, describeUnavailable, emptyMachineForm, isMachineFormModified, isRightsModified, kindsByID, machineOption, machineSeen, machinesSubtitle, rightsFormOf, rolePatch, toggleRight, unavailableRights } from "./machines";
 
 const t: Translate = (key, ...args) => [key, ...args].join(":");
+
+// La liste fermée du serveur, telle que la session la rend.
+const rightNames = sessionGolden.rights;
 
 test("machinesSubtitle dit l'accueil sans machine, puis le compte et celles en ligne", () => {
   expect(machinesSubtitle(t, 0, 0)).toBe("overview.subtitle");
@@ -21,25 +25,25 @@ test("machineSeen : en ligne, vue à l'instant ; hors ligne, depuis son dernier 
 
 test("capabilitiesOf : les droits cochés dans l'ordre de la liste, avec leurs chemins, sans observe", () => {
   const values = { name: "vps", rights: ["files.write", "observe", "agent.update", "backup.receive"], backupPath: " /srv/backups ", writePaths: "/srv/a, ,/srv/b", resticPath: "", anchors: {} };
-  expect(capabilitiesOf(values)).toEqual([
+  expect(capabilitiesOf(rightNames, values)).toEqual([
     { name: "agent.update", paths: [] },
     { name: "backup.receive", paths: ["/srv/backups"] },
     { name: "files.write", paths: ["/srv/a", "/srv/b"] },
   ]);
-  expect(capabilitiesOf({ ...values, rights: [] })).toEqual([]);
+  expect(capabilitiesOf(rightNames, { ...values, rights: [] })).toEqual([]);
 });
 
 test("backup.produce : une case, sa portée est le producteur unique, sans champ à remplir", () => {
   const values = { name: "pve", rights: ["backup.produce"], backupPath: "", writePaths: "", resticPath: "", anchors: {} };
-  expect(capabilitiesOf(values)).toEqual([{ name: "backup.produce", paths: [backupProducer] }]);
+  expect(capabilitiesOf(rightNames, values)).toEqual([{ name: "backup.produce", paths: [backupProducer] }]);
   expect(backupProducer).toBe("proxmox-vzdump");
   expect(capabilityLabelKey("backup.produce")).toBe("machine.capability_backup_produce");
   // Il se range après backup.receive, comme le serveur.
-  expect(capabilityNames.indexOf("backup.produce")).toBe(capabilityNames.indexOf("backup.receive") + 1);
+  expect(rightNames.indexOf("backup.produce")).toBe(rightNames.indexOf("backup.receive") + 1);
   // Un agent qui l'a repart avec la case cochée, et la portée refaite.
   const form = rightsFormOf([{ name: "observe", paths: [] }, { name: "backup.produce", paths: [backupProducer] }]);
   expect(form.rights).toEqual(["backup.produce"]);
-  expect(capabilitiesOf(form)).toEqual([{ name: "backup.produce", paths: [backupProducer] }]);
+  expect(capabilitiesOf(rightNames, form)).toEqual([{ name: "backup.produce", paths: [backupProducer] }]);
   expect(describeUnavailable(t, "sudo_denied", null)).toBe("machine.capability_unavailable_sudo_denied");
 });
 
@@ -58,18 +62,18 @@ test("rightsFormOf : les droits d'un agent reviennent cochés, chemins compris, 
   ];
   const values = rightsFormOf(requested);
   expect(values).toEqual({ rights: ["agent.update", "files.write"], backupPath: "", writePaths: "/opt/site, /srv/workspace", resticPath: "", anchors: {} });
-  expect(capabilitiesOf(values)).toEqual(requested.slice(1));
+  expect(capabilitiesOf(rightNames, values)).toEqual(requested.slice(1));
 });
 
 test("probe.lan : coché dans le formulaire neuf, jamais coché pour un agent qui ne l'a pas demandé", () => {
   expect(emptyMachineForm.rights).toEqual(["probe.lan"]);
-  expect(capabilitiesOf(emptyMachineForm)).toEqual([{ name: "probe.lan", paths: [] }]);
+  expect(capabilitiesOf(rightNames, emptyMachineForm)).toEqual([{ name: "probe.lan", paths: [] }]);
   expect(capabilityLabelKey("probe.lan")).toBe("machine.capability_probe_lan");
   expect(rightsFormOf([{ name: "observe", paths: [] }]).rights).toEqual([]);
   const both = rightsFormOf([{ name: "observe", paths: [] }, { name: "probe.lan", paths: [] }, { name: "agent.update", paths: [] }]);
   expect(both.rights).toEqual(["probe.lan", "agent.update"]);
   // Décoché, il part de la requête : le serveur ne l'ajoute pas de lui-même.
-  expect(capabilitiesOf({ ...emptyMachineForm, rights: [] })).toEqual([]);
+  expect(capabilitiesOf(rightNames, { ...emptyMachineForm, rights: [] })).toEqual([]);
 });
 
 test("describeAccount : le nom et l'uid, l'uid seul sans nom, rien tant que l'agent n'a rien dit", () => {
@@ -105,21 +109,21 @@ test("unavailableRights : seuls les droits que le compte ne peut pas exercer, av
 });
 
 test("les droits Proxmox suivent files.write, sans chemin, et ne se proposent qu'à un hôte Proxmox reconnu", () => {
-  expect(capabilityNames.slice(-9, -6)).toEqual(["files.write", "proxmox.power", "proxmox.snapshot"]);
-  expect(capabilitiesOf({ rights: ["proxmox.snapshot", "proxmox.power"], backupPath: "", writePaths: "", resticPath: "", anchors: {} })).toEqual([
+  expect(rightNames.slice(-9, -6)).toEqual(["files.write", "proxmox.power", "proxmox.snapshot"]);
+  expect(capabilitiesOf(rightNames, { rights: ["proxmox.snapshot", "proxmox.power"], backupPath: "", writePaths: "", resticPath: "", anchors: {} })).toEqual([
     { name: "proxmox.power", paths: [] },
     { name: "proxmox.snapshot", paths: [] },
   ]);
-  expect(offeredCapabilities(false, [])).not.toContain("proxmox.power");
-  expect(offeredCapabilities(true, [])).toEqual([...capabilityNames]);
+  expect(offeredCapabilities(rightNames, false, [])).not.toContain("proxmox.power");
+  expect(offeredCapabilities(rightNames, true, [])).toEqual([...rightNames]);
   // Déjà coché, il reste visible pour être décoché, même si le rôle a disparu.
-  expect(offeredCapabilities(false, ["proxmox.snapshot"])).toEqual([...capabilityNames.filter((name) => name !== "proxmox.power")]);
+  expect(offeredCapabilities(rightNames, false, ["proxmox.snapshot"])).toEqual([...rightNames.filter((name) => name !== "proxmox.power")]);
   expect(capabilityLabelKey("proxmox.power")).toBe("machine.capability_proxmox_power");
 });
 
 test("les droits restic ferment la liste : la cible porte son seul dossier, la source aucun", () => {
-  expect(capabilityNames.slice(-6)).toEqual(["restic.target", "restic.produce", "restic.docker", "restic.verify", "restic.browse", "restic.restore"]);
-  expect(capabilitiesOf({ rights: ["restic.produce", "restic.target"], backupPath: "", writePaths: "", resticPath: " /srv/restic ", anchors: {} })).toEqual([
+  expect(rightNames.slice(-6)).toEqual(["restic.target", "restic.produce", "restic.docker", "restic.verify", "restic.browse", "restic.restore"]);
+  expect(capabilitiesOf(rightNames, { rights: ["restic.produce", "restic.target"], backupPath: "", writePaths: "", resticPath: " /srv/restic ", anchors: {} })).toEqual([
     { name: "restic.target", paths: ["/srv/restic"] },
     { name: "restic.produce", paths: [] },
   ]);
@@ -143,7 +147,7 @@ const sessionRoles = [
 test("rolePatch : choisir un rôle coche ses droits d'avance, tels que le serveur les dit", () => {
   expect(rolePatch("docker", sessionRoles)).toEqual({ role: "docker", rights: ["probe.lan", "docker.deploy", "docker.update"] });
   expect(rolePatch("generic", sessionRoles)).toEqual({ role: "generic", rights: ["probe.lan"] });
-  expect(capabilitiesOf({ ...emptyMachineForm, ...rolePatch("proxmox", sessionRoles) }).map((right) => right.name)).toEqual(["probe.lan", "proxmox.power", "proxmox.snapshot"]);
+  expect(capabilitiesOf(rightNames, { ...emptyMachineForm, ...rolePatch("proxmox", sessionRoles) }).map((right) => right.name)).toEqual(["probe.lan", "proxmox.power", "proxmox.snapshot"]);
 });
 
 test("rolePatch : un rôle que la session ne connaît pas ne coche rien", () => {
@@ -194,13 +198,13 @@ test("le type de chaque machine se retrouve par identifiant", () => {
 });
 
 test("observe.env : proposé à toute machine, jamais coché d'emblée ni par un rôle, envoyé sans chemin quand il l'est", () => {
-  expect(capabilityNames.slice(0, 3)).toEqual(["observe", "probe.lan", "observe.env"]);
-  expect(offeredCapabilities(false, [])).toContain("observe.env");
+  expect(rightNames.slice(0, 3)).toEqual(["observe", "probe.lan", "observe.env"]);
+  expect(offeredCapabilities(rightNames, false, [])).toContain("observe.env");
   expect(emptyMachineForm.rights).not.toContain("observe.env");
   for (const role of sessionRoles) {
     expect(role.capabilities).not.toContain("observe.env");
   }
-  expect(capabilitiesOf({ ...emptyMachineForm, rights: ["probe.lan", "observe.env"] })).toEqual([
+  expect(capabilitiesOf(rightNames, { ...emptyMachineForm, rights: ["probe.lan", "observe.env"] })).toEqual([
     { name: "probe.lan", paths: [] },
     { name: "observe.env", paths: [] },
   ]);

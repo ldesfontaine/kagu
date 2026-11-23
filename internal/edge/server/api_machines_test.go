@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -57,13 +58,13 @@ func TestInstallCommand_KeepsTheTokenOutOfEveryExecutedArgv(t *testing.T) {
 // Les droits cochés passent dans la ligne, lisibles et sans guillemets ;
 // observe seul ne s'écrit pas, c'est le défaut de l'agent.
 func TestInstallCommand_CarriesTheCheckedRights(t *testing.T) {
-	observeOnly := []machine.Capability{{Name: machine.CapabilityObserve}}
+	observeOnly := []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}}
 	if command := installCommand("https://x", "oc_abc", lang.French, observeOnly, nil); strings.Contains(command, "-rights") {
 		t.Fatalf("observe alone must not be written: %q", command)
 	}
-	checked, err := machine.NormalizeCapabilities([]machine.Capability{
-		{Name: machine.CapabilityFilesWrite, Paths: []string{"/srv/workspace", "/opt/site"}},
-		{Name: machine.CapabilityAgentUpdate},
+	checked, err := agentpolicy.NormalizeCapabilities([]agentpolicy.Capability{
+		{Name: agentpolicy.CapabilityFilesWrite, Paths: []string{"/srv/workspace", "/opt/site"}},
+		{Name: agentpolicy.CapabilityAgentUpdate},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +75,7 @@ func TestInstallCommand_CarriesTheCheckedRights(t *testing.T) {
 	}
 	// Le droit coché par défaut dans le formulaire s'écrit dans la ligne : seul
 	// observe seul s'omet.
-	local, err := machine.ParseCapabilities("probe.lan")
+	local, err := agentpolicy.ParseCapabilities("probe.lan")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +92,7 @@ const accountLines = 7
 // observe seul ; le binaire vient de /tmp pour une machine ordinaire et du
 // serveur pour la machine openCloud.
 func TestInstallPreparation_PreparesTheAccountAndOneFolderPerCheckedRight(t *testing.T) {
-	observeOnly := []machine.Capability{{Name: machine.CapabilityObserve}}
+	observeOnly := []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}}
 	plain := installPreparation(observeOnly, "v0.0.1", false)
 	want := strings.Join([]string{
 		"useradd --system --home-dir /var/lib/opencloud-agent --shell /usr/sbin/nologin opencloud-agent",
@@ -107,7 +108,7 @@ func TestInstallPreparation_PreparesTheAccountAndOneFolderPerCheckedRight(t *tes
 		t.Fatalf("observe alone prepares the account and the guard only:\n%s", plain)
 	}
 
-	rights, err := machine.ParseCapabilities("observe,docker.deploy,docker.update,backup.receive=/srv/backups,files.write=/opt/site:/srv/workspace,agent.update,probe.lan")
+	rights, err := agentpolicy.ParseCapabilities("observe,docker.deploy,docker.update,backup.receive=/srv/backups,files.write=/opt/site:/srv/workspace,agent.update,probe.lan")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +142,7 @@ func TestInstallPreparation_PreparesTheAccountAndOneFolderPerCheckedRight(t *tes
 // droit sous un dossier du compte se font sous le compte ; un dossier que root
 // donne est d'abord vérifié n'être pas un lien.
 func TestInstallPreparation_RootNeverActsOnWhatTheAccountControls(t *testing.T) {
-	rights, err := machine.ParseCapabilities("docker.deploy,backup.receive=/srv/backups/nightly,files.write=/srv/workspace/blog/static:/opt/site:/var/lib/opencloud-agent/extra")
+	rights, err := agentpolicy.ParseCapabilities("docker.deploy,backup.receive=/srv/backups/nightly,files.write=/srv/workspace/blog/static:/opt/site:/var/lib/opencloud-agent/extra")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +181,7 @@ func TestInstallPreparation_TheShellReadsExactlyTheWrittenWords(t *testing.T) {
 	if err != nil {
 		t.Skip("no sh")
 	}
-	rights, err := machine.ParseCapabilities("docker.deploy,backup.receive=/srv/back_ups-2.0,files.write=/a/b.c:/d_e/f-g:/srv/workspace/x")
+	rights, err := agentpolicy.ParseCapabilities("docker.deploy,backup.receive=/srv/back_ups-2.0,files.write=/a/b.c:/d_e/f-g:/srv/workspace/x")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +228,7 @@ func TestInstallPreparation_TheShellReadsExactlyTheWrittenWords(t *testing.T) {
 // avant les dossiers ; sans lui, rien de tout cela n'est écrit. La règle sudo
 // est un seul geste : écrite à côté, jugée par visudo, puis renommée.
 func TestInstallPreparation_ProduceAddsOneLinePerGestureAfterTheAccount(t *testing.T) {
-	rights, err := machine.ParseCapabilities("backup.receive=/srv/backups,backup.produce=proxmox-vzdump")
+	rights, err := agentpolicy.ParseCapabilities("backup.receive=/srv/backups,backup.produce=proxmox-vzdump")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +248,7 @@ func TestInstallPreparation_ProduceAddsOneLinePerGestureAfterTheAccount(t *testi
 		t.Errorf("the folders of the other rights come after: %q", folder)
 	}
 
-	others, err := machine.ParseCapabilities("docker.deploy,backup.receive=/srv/backups,files.write=/opt/site,agent.update,probe.lan")
+	others, err := agentpolicy.ParseCapabilities("docker.deploy,backup.receive=/srv/backups,files.write=/opt/site,agent.update,probe.lan")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +263,7 @@ func TestInstallPreparation_ProduceAddsOneLinePerGestureAfterTheAccount(t *testi
 // règle, un drop-in, sous /usr/local/sbin et /etc. Le seul dossier du compte
 // (produce/) se fait sous le compte.
 func TestInstallPreparation_ProduceRootOnlyWritesWhatIsRoots(t *testing.T) {
-	rights, err := machine.ParseCapabilities("backup.produce=proxmox-vzdump")
+	rights, err := agentpolicy.ParseCapabilities("backup.produce=proxmox-vzdump")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +294,7 @@ func TestInstallPreparation_ProduceTheShellWritesExactlyTheTexts(t *testing.T) {
 	if err != nil {
 		t.Skip("no cat")
 	}
-	rights, err := machine.ParseCapabilities("backup.produce=proxmox-vzdump")
+	rights, err := agentpolicy.ParseCapabilities("backup.produce=proxmox-vzdump")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,7 +370,7 @@ func TestInstallPreparation_ProduceTheSudoersRuleIsNeverPlacedWithoutVisudo(t *t
 	if err != nil {
 		t.Skip("no sh")
 	}
-	rights, err := machine.ParseCapabilities("backup.produce=proxmox-vzdump")
+	rights, err := agentpolicy.ParseCapabilities("backup.produce=proxmox-vzdump")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,9 +444,9 @@ func TestInstallPreparation_ProduceTheSudoersRuleIsNeverPlacedWithoutVisudo(t *t
 func TestInstallPreparation_HostilePathsNeverReachTheLines(t *testing.T) {
 	hostile := []string{"/srv/a;id", "/srv/$(id)", "/srv/a b", "/srv/`id`", "/srv/a\nid", "/srv/a'b", "/srv/a\"b", "/srv/a|id", "/srv/a&id", "/srv/a>b", "/srv/*", "/srv/../etc", "/", "srv/x", "/srv/a\\b", "/srv/~"}
 	for _, path := range hostile {
-		for _, name := range []string{machine.CapabilityBackupReceive, machine.CapabilityFilesWrite} {
-			raw := []machine.Capability{{Name: name, Paths: []string{path}}}
-			if _, err := machine.NormalizeCapabilities(raw); err == nil {
+		for _, name := range []string{agentpolicy.CapabilityBackupReceive, agentpolicy.CapabilityFilesWrite} {
+			raw := []agentpolicy.Capability{{Name: name, Paths: []string{path}}}
+			if _, err := agentpolicy.NormalizeCapabilities(raw); err == nil {
 				t.Errorf("%s=%q passes the normalization", name, path)
 			}
 			for _, local := range []bool{false, true} {
@@ -460,14 +461,14 @@ func TestInstallPreparation_HostilePathsNeverReachTheLines(t *testing.T) {
 	// quel, il n'ajoute aucune ligne ; à côté du vrai producteur, il ajoute les
 	// six gestes, dont aucun ne le nomme.
 	for _, producer := range []string{"proxmox-vzdump;id", "$(id)", "`id`", "proxmox-vzdump\nid", "proxmox-vzdump'", "proxmox-vzdump id", "/usr/bin/sh", "../etc"} {
-		raw := []machine.Capability{{Name: machine.CapabilityBackupProduce, Paths: []string{producer}}}
-		if _, err := machine.NormalizeCapabilities(raw); err == nil {
+		raw := []agentpolicy.Capability{{Name: agentpolicy.CapabilityBackupProduce, Paths: []string{producer}}}
+		if _, err := agentpolicy.NormalizeCapabilities(raw); err == nil {
 			t.Errorf("backup.produce=%q passes the normalization", producer)
 		}
 		if preparation := installPreparation(raw, "v0.0.1", false); strings.Count(preparation, "\n") != accountLines-1 || strings.Contains(preparation, producer) {
 			t.Errorf("backup.produce=%q reaches the preparation:\n%s", producer, preparation)
 		}
-		mixed := []machine.Capability{{Name: machine.CapabilityBackupProduce, Paths: []string{machine.ProducerProxmoxVzdump, producer}}}
+		mixed := []agentpolicy.Capability{{Name: agentpolicy.CapabilityBackupProduce, Paths: []string{agentpolicy.ProducerProxmoxVzdump, producer}}}
 		if preparation := installPreparation(mixed, "v0.0.1", false); strings.Count(preparation, "\n") != accountLines-1+6 || strings.Contains(preparation, producer) {
 			t.Errorf("backup.produce=proxmox-vzdump:%q reaches the preparation:\n%s", producer, preparation)
 		}
@@ -476,7 +477,7 @@ func TestInstallPreparation_HostilePathsNeverReachTheLines(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rights, err := machine.ParseCapabilities("docker.deploy,backup.receive=/srv/backups,files.write=/opt/site")
+	rights, err := agentpolicy.ParseCapabilities("docker.deploy,backup.receive=/srv/backups,files.write=/opt/site")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -593,7 +594,7 @@ func TestAPI_Reenroll_ChangesTheRightsOfTheAgent(t *testing.T) {
 		t.Fatalf("%d %+v", recorder.Code, response)
 	}
 	pending, _ := server.machines.PendingTokens(context.Background())
-	if len(pending) != 1 || machine.FormatCapabilities(pending[0].Capabilities) != "observe,agent.update" {
+	if len(pending) != 1 || agentpolicy.FormatCapabilities(pending[0].Capabilities) != "observe,agent.update" {
 		t.Fatalf("pending %+v", pending)
 	}
 	kept := callAPI(server.Server, http.MethodPost, path, map[string]any{})
@@ -607,12 +608,57 @@ func TestAPI_Reenroll_ChangesTheRightsOfTheAgent(t *testing.T) {
 	}
 }
 
+// L'API rend le verdict de chaque droit connu (F-6) : un agent qui n'a pas
+// parlé est inconnu quoi que son jeton demande, un droit porté mais
+// inexerçable dit sa raison, un agent révoqué n'a aucun droit.
+func TestAgentJSON_RendersTheFitOfEachRight(t *testing.T) {
+	requested, err := agentpolicy.ParseCapabilities("docker.deploy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	silent := machine.Agent{ID: "agt_1", Requested: requested}
+	reported := machine.Agent{ID: "agt_1", Capabilities: requested, ReportedAt: testNow, Unavailable: map[string]string{agentpolicy.CapabilityDockerDeploy: "docker_denied"}}
+	revoked := reported
+	revoked.RevokedAt = testNow
+	cases := []struct {
+		name  string
+		agent machine.Agent
+		want  fitJSON
+	}{
+		{"silent", silent, fitJSON{State: "unknown"}},
+		{"unavailable", reported, fitJSON{State: "unavailable", Reason: "docker_denied"}},
+		{"revoked", revoked, fitJSON{State: "missing"}},
+	}
+	for _, c := range cases {
+		fits := agentToJSON(c.agent).Fit
+		if got := fits[agentpolicy.CapabilityDockerDeploy]; got != c.want {
+			t.Errorf("%s: %+v, want %+v", c.name, got, c.want)
+		}
+		for _, right := range agentpolicy.Names() {
+			if _, rendered := fits[right]; !rendered {
+				t.Errorf("%s: no verdict for %s", c.name, right)
+			}
+		}
+	}
+}
+
+// R-A3-10 : un droit de la politique seule ne se coche pas à l'enrôlement.
+func TestAPI_CreateMachineToken_RefusesARightOfThePolicyOnly(t *testing.T) {
+	server := newTestServer(t)
+	for _, name := range []string{agentpolicy.CapabilityTerminalHost, agentpolicy.CapabilityServiceFree} {
+		refused := callAPI(server.Server, http.MethodPost, "/api/machines/tokens", map[string]any{"name": "vps-lyon-2", "capabilities": []map[string]any{{"name": name}}})
+		if refused.Code != http.StatusUnprocessableEntity || errorCode(t, refused) != "machine.capability_unknown" {
+			t.Errorf("%s: %d %s", name, refused.Code, refused.Body.String())
+		}
+	}
+}
+
 // Les droits cochés passent du formulaire à la ligne d'installation ; un
 // droit inconnu ou un chemin faux se refuse avec sa clé.
 func TestAPI_CreateMachineToken_PutsTheCheckedRightsInTheCommand(t *testing.T) {
 	server := newTestServer(t)
 	request := tokenRequest{Name: "vps-paris-1", Capabilities: []capabilityJSON{
-		{Name: machine.CapabilityBackupReceive, Paths: []string{"/srv/backups"}}, {Name: machine.CapabilityDockerUpdate},
+		{Name: agentpolicy.CapabilityBackupReceive, Paths: []string{"/srv/backups"}}, {Name: agentpolicy.CapabilityDockerUpdate},
 	}}
 	recorder := callAPI(server.Server, http.MethodPost, "/api/machines/tokens", request)
 	if recorder.Code != http.StatusCreated {
@@ -628,8 +674,8 @@ func TestAPI_CreateMachineToken_PutsTheCheckedRightsInTheCommand(t *testing.T) {
 		key        string
 	}{
 		{capabilityJSON{Name: "shell.exec"}, "machine.capability_unknown"},
-		{capabilityJSON{Name: machine.CapabilityFilesWrite, Paths: []string{"relative"}}, "machine.capability_path"},
-		{capabilityJSON{Name: machine.CapabilityBackupReceive}, "machine.capability_scope"},
+		{capabilityJSON{Name: agentpolicy.CapabilityFilesWrite, Paths: []string{"relative"}}, "machine.capability_path"},
+		{capabilityJSON{Name: agentpolicy.CapabilityBackupReceive}, "machine.capability_scope"},
 	} {
 		got := callAPI(server.Server, http.MethodPost, "/api/machines/tokens", tokenRequest{Name: "vps-lyon-2", Capabilities: []capabilityJSON{refused.capability}})
 		if got.Code != http.StatusUnprocessableEntity || errorCode(t, got) != refused.key {
@@ -642,7 +688,7 @@ func TestAPI_CreateMachineToken_PutsTheCheckedRightsInTheCommand(t *testing.T) {
 // gestes, un producteur inconnu ou une portée de chemin se refusent avec leur clé.
 func TestAPI_CreateMachineToken_ProduceRightReachesTheCommandAndThePreparation(t *testing.T) {
 	server := newTestServer(t)
-	request := tokenRequest{Name: "pve", Capabilities: []capabilityJSON{{Name: machine.CapabilityBackupProduce, Paths: []string{machine.ProducerProxmoxVzdump}}}}
+	request := tokenRequest{Name: "pve", Capabilities: []capabilityJSON{{Name: agentpolicy.CapabilityBackupProduce, Paths: []string{agentpolicy.ProducerProxmoxVzdump}}}}
 	recorder := callAPI(server.Server, http.MethodPost, "/api/machines/tokens", request)
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status %d: %s", recorder.Code, recorder.Body.String())
@@ -661,9 +707,9 @@ func TestAPI_CreateMachineToken_ProduceRightReachesTheCommandAndThePreparation(t
 		capability capabilityJSON
 		key        string
 	}{
-		{capabilityJSON{Name: machine.CapabilityBackupProduce, Paths: []string{"borg"}}, "machine.capability_producer"},
-		{capabilityJSON{Name: machine.CapabilityBackupProduce, Paths: []string{"/srv/backups"}}, "machine.capability_producer"},
-		{capabilityJSON{Name: machine.CapabilityBackupProduce}, "machine.capability_scope"},
+		{capabilityJSON{Name: agentpolicy.CapabilityBackupProduce, Paths: []string{"borg"}}, "machine.capability_producer"},
+		{capabilityJSON{Name: agentpolicy.CapabilityBackupProduce, Paths: []string{"/srv/backups"}}, "machine.capability_producer"},
+		{capabilityJSON{Name: agentpolicy.CapabilityBackupProduce}, "machine.capability_scope"},
 	} {
 		got := callAPI(server.Server, http.MethodPost, "/api/machines/tokens", tokenRequest{Name: "vps-lyon-2", Capabilities: []capabilityJSON{refused.capability}})
 		if got.Code != http.StatusUnprocessableEntity || errorCode(t, got) != refused.key {
@@ -760,7 +806,7 @@ func TestAPI_OfferLocalEnrollment_UntilTheOpenCloudMachineHasAnAgent(t *testing.
 // seulement quand le droit qu'elles bornent est coché : sans lui, l'agent ne
 // les lirait pour rien.
 func TestInstallCommand_CarriesTheAnchorsOfTheCheckedRights(t *testing.T) {
-	produce, err := machine.ParseCapabilities("backup.produce=proxmox-vzdump")
+	produce, err := agentpolicy.ParseCapabilities("backup.produce=proxmox-vzdump")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -778,7 +824,7 @@ func TestInstallCommand_CarriesTheAnchorsOfTheCheckedRights(t *testing.T) {
 	if command := installCommand("https://x", "oc_abc", lang.French, produce, nil); strings.Contains(command, " -backup-") {
 		t.Fatalf("no value, no flag: %q", command)
 	}
-	restic, _ := machine.ParseCapabilities("restic.produce")
+	restic, _ := agentpolicy.ParseCapabilities("restic.produce")
 	if command := installCommand("https://x", "oc_abc", lang.French, restic, anchors); !strings.HasSuffix(command, " -restic-target-cert "+strings.Repeat("ab", 32)) {
 		t.Fatalf("restic flag: %q", command)
 	}
