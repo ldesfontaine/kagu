@@ -203,6 +203,10 @@ func (s *Server) routes() []route {
 		{"DELETE", "/api/auth/sessions/{id}", s.closeOperatorSession},
 		{"POST", "/api/auth/sessions/actions/close-others", s.closeOtherSessions},
 		{"PUT", "/api/auth/password", s.changeAuthPassword},
+		{"POST", "/api/auth/reauth", s.reauth},
+		{"GET", "/api/auth/totp/proposal", s.proposeTOTP},
+		{"POST", "/api/auth/totp", s.enableTOTP},
+		{"DELETE", "/api/auth/totp", s.disableTOTP},
 		{"GET", "/api/audit", s.listAudit},
 		{"GET", "/api/audit/forwarding", s.auditForwarding},
 		{"GET", "/api/actions", s.listActions},
@@ -334,7 +338,9 @@ func (s *Server) verbHandler(verbID string, next http.HandlerFunc) http.HandlerF
 	return s.shapeVerbReply(verbID, next)
 }
 
-// Toute écriture sous /api passe par la garde même-origine ; les lectures
+// Un geste de niveau 4 lit son niveau au registre (verb.Default) et passe par
+// la redemande (requireFreshReauth), sous l'accès de l'opérateur : elle juge
+// la session qu'il a admise. Toute écriture sous /api passe par la garde même-origine ; les lectures
 // et les routes de l'agent, des pings et de la page publique n'en ont pas
 // besoin. L'accès de l'opérateur enveloppe le tout, avant la garde. Un flux
 // de l'opérateur a sa garde d'origine, jugée avant son accès : une page d'un
@@ -349,6 +355,9 @@ func (s *Server) mux() *http.ServeMux {
 		access := tokenAccessOf(route.method, route.pattern)
 		if access.verb != "" {
 			handler = s.verbHandler(access.verb, handler)
+		}
+		if gesture, found := verb.Default.ByRoute(route.method + " " + route.pattern); found && gesture.AsksReauth() {
+			handler = s.requireFreshReauth(handler)
 		}
 		if isAPI && route.method != http.MethodGet {
 			handler = s.requireSameOrigin(handler)

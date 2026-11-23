@@ -98,7 +98,7 @@ func signIn(server *Server, username, password string) string {
 	if err != nil {
 		return ""
 	}
-	opened, err := server.auth.Login(ctx, state, username, password, auth.SessionClient{})
+	opened, err := server.auth.Login(ctx, state, username, password, "", auth.SessionClient{})
 	if err != nil {
 		return ""
 	}

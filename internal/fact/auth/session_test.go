@@ -78,6 +78,17 @@ func (m *memoryStore) ListSessions(context.Context) ([]Session, error) {
 	return sessions, nil
 }
 
+func (m *memoryStore) RenewSessionToken(_ context.Context, id, tokenHash string, reauthAt time.Time) (bool, error) {
+	for index := range m.sessions {
+		if m.sessions[index].ID == id {
+			m.sessions[index].tokenHash = tokenHash
+			m.sessions[index].ReauthAt = reauthAt
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 const testPassword = "correct horse battery"
 
 // signedIn rend un service en native, son état, une horloge réglable et une
@@ -88,7 +99,7 @@ func signedIn(t *testing.T) (*Service, *memoryStore, State, *time.Time, OpenedSe
 	now := time.Unix(1_800_000_000, 0)
 	service.SetClock(func() time.Time { return now })
 	state := newNativeState(t, service)
-	opened, err := service.Login(context.Background(), state, "lucas", testPassword, SessionClient{Address: "2001:db8:1:2:3:4:5:6", UserAgent: "Firefox"})
+	opened, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{Address: "2001:db8:1:2:3:4:5:6", UserAgent: "Firefox"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,18 +136,18 @@ func TestLogin_RefusesWrongCredentialsAndOtherModes(t *testing.T) {
 	service, store, state, _, _ := signedIn(t)
 	ctx := context.Background()
 	for _, credentials := range [][2]string{{"lucas", "a wrong passphrase"}, {"other", testPassword}, {"", ""}} {
-		if _, err := service.Login(ctx, state, credentials[0], credentials[1], SessionClient{}); !errors.Is(err, ErrLoginFailed) {
+		if _, err := service.Login(ctx, state, credentials[0], credentials[1], "", SessionClient{}); !errors.Is(err, ErrLoginFailed) {
 			t.Fatalf("%q: %v, want ErrLoginFailed", credentials, err)
 		}
 	}
 	if len(store.sessions) != 1 {
 		t.Fatalf("%d sessions after the refusals", len(store.sessions))
 	}
-	if _, err := service.Login(ctx, none, "lucas", testPassword, SessionClient{}); !errors.Is(err, ErrStateChanged) {
+	if _, err := service.Login(ctx, none, "lucas", testPassword, "", SessionClient{}); !errors.Is(err, ErrStateChanged) {
 		t.Fatalf("stale state: %v", err)
 	}
 	other, _ := newTestService(t)
-	if _, err := other.Login(ctx, none, "lucas", testPassword, SessionClient{}); !errors.Is(err, ErrDisabled) {
+	if _, err := other.Login(ctx, none, "lucas", testPassword, "", SessionClient{}); !errors.Is(err, ErrDisabled) {
 		t.Fatalf("mode none: %v", err)
 	}
 }
@@ -144,7 +155,7 @@ func TestLogin_RefusesWrongCredentialsAndOtherModes(t *testing.T) {
 // Deux connexions donnent deux sessions et deux jetons : rien n'est repris.
 func TestLogin_DrawsAFreshSessionEachTime(t *testing.T) {
 	service, store, state, _, first := signedIn(t)
-	second, err := service.Login(context.Background(), state, "lucas", testPassword, SessionClient{})
+	second, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +195,7 @@ func TestResumeSession_RefusesAnotherAccountAndUnknownTokens(t *testing.T) {
 // Changer le mot de passe ferme les autres sessions, pas celle qui le change.
 func TestChangePassword_ClosesTheOtherSessions(t *testing.T) {
 	service, _, state, _, kept := signedIn(t)
-	other, err := service.Login(context.Background(), state, "lucas", testPassword, SessionClient{})
+	other, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +211,7 @@ func TestChangePassword_ClosesTheOtherSessions(t *testing.T) {
 // Le navigateur se garde nettoyé et borné.
 func TestLogin_BoundsTheUserAgent(t *testing.T) {
 	service, store, state, _, _ := signedIn(t)
-	if _, err := service.Login(context.Background(), state, "lucas", testPassword, SessionClient{UserAgent: "a\u202eb" + strings.Repeat("x", 500)}); err != nil {
+	if _, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{UserAgent: "a\u202eb" + strings.Repeat("x", 500)}); err != nil {
 		t.Fatal(err)
 	}
 	stored := store.sessions[1].UserAgent
@@ -265,7 +276,7 @@ func TestWatchSession_EndsWithEachDeathOfItsSession(t *testing.T) {
 	for name, die := range deaths {
 		t.Run(name, func(t *testing.T) {
 			service, _, state, _, watched := signedIn(t)
-			kept, err := service.Login(ctx, state, "lucas", testPassword, SessionClient{})
+			kept, err := service.Login(ctx, state, "lucas", testPassword, "", SessionClient{})
 			if err != nil {
 				t.Fatal(err)
 			}

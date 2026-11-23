@@ -153,8 +153,8 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `opencloud.db` | Le dernier constat sur chaque image d'une machine dans `image_checks` (issue, empreinte tirée, empreinte publiée, tag plus récent et son empreinte, type déduit) ; sur la fiche `containers`, ce que Compose dit du service (`compose_service`, `compose_dir`, `compose_file`). La politique de l'opérateur ne vit plus sur la fiche : elle est sur l'unité (`service_units.update_policy`) | Écrasé à chaque vérification ; purgé après 30 jours sans vérification ; la machine retirée emporte tout. Le dossier du projet Compose est un chemin de la machine, en clair |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les alertes dans `alerts` (type, gravité, objet et son nom recopié, machine, service déclaré, détails en JSON, dates dont le début du calme, la lecture (`acknowledged_at`), la dernière annonce (`notified_at`) et le rappel parti (`reminded_at`) ; l'objet et le service en clés étrangères `set null`), les canaux dans `alert_channels` (**URL et secret chiffrés** — le jeton du bot pour Matrix —, format, destinataires d'un e-mail ou salon Matrix dans `destination`, gravité minimale, `categories` : les familles reçues, séparées par des virgules, **vide = toutes**), les livraisons dans `alert_deliveries` (événement, essais, motif, code, heure de l'essai suivant, ou retenue par la limite du canal, ou tue par un silence), les silences dans `mutes` (cible en clé étrangère, type, fenêtre, motif, auteur, et `announce` avec `public_title` quand le silence s'annonce en maintenance) | Résolues purgées après 90 jours, livraisons avec leur alerte, canaux sans purge. Silences finis depuis plus de 90 jours purgés avec les alertes (au départ, puis une fois par jour) ; une machine (avec ses conteneurs), un service déclaré, une sonde ou une tâche retirée emporte ses silences par la clé étrangère (`cascade`), une pause ou un archivage les garde ; le plan de suppression les compte. **L'URL et le secret d'un canal sont chiffrés** (AES-256-GCM, clé du serveur, liés à leur ligne) : un webhook Discord, Slack ou ntfy porte son jeton dans le chemin de l'URL, c'est un secret autant que la clé de signature. Il faut pouvoir les rejouer au récepteur, un haché ne servirait à rien ; l'API ne renvoie jamais le secret. Pour Matrix, c'est le jeton d'accès du bot : le déconnecter du compte du bot le révoque |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les jetons d'API dans `api_tokens` (empreinte SHA-256, préfixe affiché, portée `read` ou `write`, nom, échéance de 30, 90 ou 365 jours ou aucune, dernier usage) et leurs verbes dans `api_token_verbs` (migration `016_api_token_verbs.sql` : un verbe du registre par ligne, aucune ligne : aucune action ; `ON DELETE CASCADE`), leur portée dans `api_tokens.machines_limited` et `guests_limited` et les tables `api_token_machines` et `api_token_guests` (migration `023_api_token_reach.sql` : « La portée d'un jeton »), et les demandes de verbe à confirmation que ces jetons déposent dans `verb_requests` (migration `025_verb_requests.sql` : « Les verbes à confirmation ») | Rien n'est en clair : une copie de la base n'ouvre rien. Révoquer **efface** la ligne, ses verbes, sa portée et ses demandes en attente ; purge des jetons échus toutes les 15 minutes ; 16 jetons au plus ; activer l'authentification de l'interface les efface tous |
-| Machine Kagu, `state_dir` | `opencloud.db` | L'accès de l'opérateur à l'interface dans `auth_settings` (une ligne) : le mode (`none`, `native`, `forward` ; une base en `basic` devient `native` à la migration `044`, même nom, même empreinte), l'identifiant, l'empreinte **bcrypt** du mot de passe (coût 12), le nom de l'en-tête d'identité du mode `forward` (`forward_header`), la date d'activation | Le mot de passe n'est jamais stocké ni renvoyé ; une copie de la base donne l'identifiant, pas l'accès. L'identité transmise par le SSO arrive avec chaque requête ; elle n'est stockée que dans la session qu'elle ouvre (`operator_sessions.identity`). `none` ne veut plus dire « ouvert » : aucun compte, l'installation attend sa première configuration ; une fois le compte créé, rien n'y ramène (R-A2-10). Root change le mot de passe ou le mode par le canal local (« Le canal local de root ») |
-| Machine Kagu, `state_dir` | `opencloud.db` | Les sessions de l'opérateur dans `operator_sessions` (migration `044`) : `id` (16 hexadécimaux, montré dans la liste et dans l'audit), `token_hash` (SHA-256 du jeton du cookie, `ident.HashToken`), `identity` (le compte, ou l'identité du SSO en `forward`), `created_at`, `seen_at` (écrit au plus une fois par minute), `expires_at` (fin absolue, 12 h), `reauth_at` (nul : la redemande viendra le poser), `source` (adresse au /64), `user_agent` (200 octets au plus, nettoyé) | Le jeton (256 bits) n'est jamais stocké : une copie de la base n'ouvre aucune session. Une session meurt à 2 h sans requête, à 12 h, à la déconnexion, quand le mot de passe change (les autres), quand root refait le mot de passe, change le mode ou ferme tout par le canal local (toutes), et en `forward` quand son cookie arrive sans la garde du mandataire ou avec une autre identité. Les mortes sont effacées quand on les présente, à chaque ouverture et à l'échéance d'une session qu'un flux attend |
+| Machine Kagu, `state_dir` | `opencloud.db` | L'accès de l'opérateur à l'interface dans `auth_settings` (une ligne) : le mode (`none`, `native`, `forward` ; une base en `basic` devient `native` à la migration `044`, même nom, même empreinte), l'identifiant, l'empreinte **bcrypt** du mot de passe (coût 12), le nom de l'en-tête d'identité du mode `forward` (`forward_header`), la date d'activation ; le code à six chiffres (migration `045`) : `totp_secret`, **chiffré** comme les autres secrets (clé du serveur, lié à sa ligne ; vide = aucun code), et `totp_last_step`, le dernier pas de 30 s servi | Le mot de passe n'est jamais stocké ni renvoyé ; une copie de la base donne l'identifiant, pas l'accès. Le secret du code ne sort jamais de `serve` (ni dans `GET /api/auth`, ni à l'audit, ni au journal) ; il disparaît quand le compte change (passage au SSO, autre compte), pas quand root refait le mot de passe. Qui a la base **et** `secret.key` fabrique des codes : c'est le coût du TOTP (A2 §7). L'identité transmise par le SSO arrive avec chaque requête ; elle n'est stockée que dans la session qu'elle ouvre (`operator_sessions.identity`). `none` ne veut plus dire « ouvert » : aucun compte, l'installation attend sa première configuration ; une fois le compte créé, rien n'y ramène (R-A2-10). Root change le mot de passe ou le mode par le canal local (« Le canal local de root ») |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les sessions de l'opérateur dans `operator_sessions` (migration `044`) : `id` (16 hexadécimaux, montré dans la liste et dans l'audit), `token_hash` (SHA-256 du jeton du cookie, `ident.HashToken`), `identity` (le compte, ou l'identité du SSO en `forward`), `created_at`, `seen_at` (écrit au plus une fois par minute), `expires_at` (fin absolue, 12 h), `reauth_at` (la dernière redemande réussie de cette session, nul sinon), `source` (adresse au /64), `user_agent` (200 octets au plus, nettoyé) | Le jeton (256 bits) n'est jamais stocké : une copie de la base n'ouvre aucune session. Une session meurt à 2 h sans requête, à 12 h, à la déconnexion, quand le mot de passe change (les autres), quand root refait le mot de passe, change le mode ou ferme tout par le canal local (toutes), et en `forward` quand son cookie arrive sans la garde du mandataire ou avec une autre identité. Les mortes sont effacées quand on les présente, à chaque ouverture et à l'échéance d'une session qu'un flux attend |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les réglages de l'opérateur dans `settings`, une seule ligne : la langue de l'interface ; le délai du rappel des alertes de danger (`danger_reminder_hours`, 12 par défaut, 0 le coupe) ; le relais d'e-mails (`mail_host`, `mail_port`, `mail_tls`, `mail_username`, `mail_from`, et **`mail_password` chiffré** : il faut le rejouer au relais, un haché ne servirait à rien ; l'API ne le renvoie jamais, `has_password` dit seulement qu'il y en a un) ; la fin de support (`lifecycle_disabled`, à 0 tant qu'elle est activée) | Chaque écrivain relit, modifie sa clé et réécrit dans une seule transaction : la langue et le relais changés en même temps survivent tous deux, même depuis deux processus. **Le mot de passe du relais est chiffré** comme les autres secrets saisis dans l'interface, lié à la ligne des réglages |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les seuils des alertes de ressources dans `alert_thresholds` (migration `037_alert_thresholds.sql`) : une ligne par ressource (`cpu`, `memory`, `disk`) et par périmètre, `machine_id` à NULL pour le réglage global ou la machine qu'elle surcharge (clé étrangère en `cascade`) ; seuil d'attention, seuil de danger, fenêtre en secondes (0 : la dernière lecture, le disque). Le seuil de retour n'est pas stocké | Deux index uniques partiels : une règle par ressource pour le global, une par machine et ressource. Les seuils du disque déjà réglés sous Paramètres passent au global à la migration, tels quels |
 | Machine Kagu, `state_dir` | `secret.key` | La clé qui chiffre les secrets ci-dessus : une ligne `key-v1:<id>:<clé>`, AES-256, 32 octets tirés au hasard, jamais en base. `<id>` est l'empreinte courte de la clé, inscrite aussi dans chaque chiffré ; le temps d'une rotation, le fichier porte plusieurs lignes (quatre au plus) : un chiffré s'ouvre avec la clé de son `<id>`, la première ligne scelle | Mode 0600, écriture atomique, refusée si un autre compte peut la lire. `serve` la crée au premier démarrage par une création exclusive (un lien dur d'un temporaire écrit et synchronisé : si le fichier existe, elle échoue) ; deux `serve` lancés ensemble sur une base neuve tirent chacun une clé, un seul gagne, l'autre relit la sienne. `opencloud secrets rotate` en tire une neuve et rescelle chaque secret, l'ancienne gardée sous `secret.key.rotated-<horodatage>` ; `opencloud secrets forget` remplace une clé perdue, l'ancienne gardée sous `secret.key.forgotten-<horodatage>`. **À sauvegarder à part, une fois** : sans elle, la base garde ses données mais perd ses secrets. `opencloud secrets forget` repart d'une clé neuve (voir `installation.md`) |
@@ -4712,6 +4712,68 @@ plus (R-A2-1) : un en-tête `Authorization: Basic` n'est lu par aucun mode.
   ordres). La contrepartie : le front, la langue et la version de Kagu
   (`GET /api/session`) se lisent sans session, comme en `none`, pour que la
   page de connexion s'affiche dans la langue réglée.
+
+  **Le code à six chiffres** (TOTP, R-A2-6, R-CNX-2,
+  `internal/fact/auth/totp.go`). Proposé, jamais imposé : sans lui, la
+  connexion ne demande que le mot de passe. L'algorithme est écrit dans le
+  dépôt sur `crypto/hmac` et SHA-1 (décision QA-09), tenu par les vecteurs
+  des RFC 4226 et 6238 : pas de 30 s, un pas de marge de part et d'autre,
+  comparaison en temps constant des trois codes valables. Un code ne sert
+  qu'une fois : `totp_last_step` garde le dernier pas servi, et la base ne
+  l'avance que s'il vient après (`ConsumeTOTPStep`, une seule requête) ; le
+  même code rejoué dans sa fenêtre, ou le code du pas d'avant, est refusé.
+  Pas de codes de secours : root est le secours (`admin reset-totp`).
+  - **Poser** : `GET /api/auth/totp/proposal` tire un secret de 160 bits
+    (base 32) et rend l'URI `otpauth://` et son QR code (image PNG en data
+    URI, `rsc.io/qr`, la seule dépendance ajoutée) ; rien n'est gardé.
+    `POST /api/auth/totp` `{secret, code}` garde le secret, scellé, si le
+    code en est un juste ; son pas est servi : il n'ouvre pas la connexion
+    qui suit. Refus `422 auth.totp_secret_invalid` (pas 160 bits),
+    `422 auth.totp_wrong`, `409 auth.totp_active`. La première configuration
+    le propose en marche 3 (« Activer », « Plus tard »), Réglages › Accès
+    aussi.
+  - **Retirer** : `DELETE /api/auth/totp` `{password}`, jugé par `Verify`
+    et le limiteur de la connexion ; faux, `403 auth.current_password_wrong`.
+  - **Se connecter** : après un mot de passe juste, sans code,
+    `401 auth.totp_required` sans session ; la page ouvre un second écran et
+    renvoie nom, mot de passe et code. Faux, échu ou déjà servi,
+    `401 auth.totp_wrong` (jamais lequel). Le mot de passe se juge avant le
+    code : un code juste avec un mot de passe faux ne dit rien.
+  - Les échecs comptés par compte (R-A2-16, cinq codes faux suspendent le
+    code) viennent avec T02-10 : d'ici là, seul le limiteur par adresse
+    freine les essais de code.
+
+  **La redemande du niveau 4** (R-A2-7, R-CNX-6, `internal/fact/auth/reauth.go`).
+  Le mux lit le niveau de chaque route au registre des gestes
+  (`verb.Default.ByRoute`, `Verb.AsksReauth`) : un geste de niveau 4 passe
+  par `requireFreshReauth`, sous l'accès de l'opérateur. En `native`, la
+  session de la requête doit avoir un `reauth_at` de moins de cinq minutes
+  (`auth.RequireFreshReauth`), sinon `403 auth.reauth_required` et rien ne
+  s'exécute. `reauth_at` d'une autre session ne vaut pas. En `forward`, rien
+  n'est redemandé : le SSO règle la fraîcheur de sa session (R-A2-8).
+  `POST /api/auth/reauth` `{password, code}` (code exigé s'il est actif ;
+  limiteur et file bcrypt de la connexion) pose `reauth_at` sur la session
+  et lui tire un **jeton neuf**, dans un cookie neuf : le jeton présenté
+  avant ne vaut plus (R-A2-3), l'identifiant reste, les flux et l'audit
+  suivent la session. Refus `403 auth.current_password_wrong`,
+  `auth.totp_required`, `auth.totp_wrong` ; `409 auth.no_password` en
+  `forward`. Côté écran, `ConfirmGesture` (mode `reauth`, brique B-4) est la
+  seule fenêtre : le client (`api/client.ts`) reçoit le `403`, la porte
+  d'accès ouvre la fenêtre (mot de passe, code s'il est actif ; en SSO, la
+  phrase `auth.reauth_sso` et rien à saisir), puis le geste se rejoue une
+  fois. Aucune route réelle n'est encore de niveau 4 (E4, D7, E5 viendront) :
+  les tests le prouvent sur un geste témoin inscrit au registre du test.
+  La contrepartie : une redemande coûte un bcrypt, et en `forward` un geste
+  de niveau 4 part sans rien retaper.
+
+  **Les gestes de l'accès au registre.** Changer le mot de passe, poser ou
+  retirer le code, fermer une session, fermer les autres sont de niveau 3
+  (`internal/gesture/verb/auth.go`) : aucun jeton, sans cible, avec leur
+  raison. `GET /api/session` ne donne au front que les verbes ouverts aux
+  jetons (la puce « MCP »). Fermer une session (la sienne, une de la liste,
+  les autres) s'écrit au journal (`auth.close_session`) ; le code posé,
+  retiré, ou retiré par root aussi (`auth.totp_enable`, `auth.totp_disable`,
+  `auth.totp_reset`), sans son secret.
 - **`forward`** (« SSO » dans l'interface et la documentation ; *mandataire* ne
   désigne que le reverse proxy de `trusted_proxies`) : Kagu derrière un
   SSO en amont qui authentifie (Authelia en `forwardAuth` de Traefik) et lui transmet l'identité dans
@@ -4963,6 +5025,7 @@ par le serveur de toute façon, par l'uid.
 | --- | --- | --- |
 | `setup-code` | `setup-code` | Tire le code de première configuration (ci-dessus) ; refusé une fois le compte créé |
 | `reset-password` | `reset-password` | Nouveau mot de passe, demandé deux fois sur le terminal (`/dev/tty`), sans écho, jamais sur l'entrée standard. Ferme **toutes** les sessions ; ne révoque pas les jetons d'API. Refusé en `forward` (pas de mot de passe) et sans compte (le compte se crée par la première configuration, avec un code) |
+| `reset-totp` | `reset-totp` | Retire le code à six chiffres (téléphone perdu) : le mot de passe seul ouvre de nouveau la session. Rien n'est demandé, les sessions restent. Refusé sans code actif (« rien à retirer »), en `forward` et sans compte. Audit `auth.totp_reset` |
 | `auth-mode native -username <nom>` | `auth-mode` | Passe à un compte, mot de passe demandé deux fois. Ferme toutes les sessions |
 | `auth-mode forward [-header Remote-User]` | `auth-mode` | Passe derrière le SSO, ou change l'en-tête en `forward`. Ferme toutes les sessions |
 | `sessions close-all` | `sessions/close-all` | Ferme toutes les sessions (un `WARN` au journal de `serve`, pas de ligne d'audit) |
@@ -4990,8 +5053,9 @@ compte. `reset-password` laisse vivre les jetons d'API : `tokens
 revoke-all` les coupe à part.
 
 **L'écran** le dit sans rien faire : Réglages › Accès a une ligne qui
-renvoie à `sudo opencloud admin reset-password` et `auth-mode` ; la page de
-connexion, à `reset-password` ; la page `401` du mode `forward`, à
+renvoie à `sudo opencloud admin reset-password` et `auth-mode`, et, code
+actif, à `reset-totp` ; la page de connexion, à `reset-password`, son second
+écran à `reset-totp` ; la page `401` du mode `forward`, à
 `auth-mode native -username <nom>`. La première configuration n'a plus de
 ligne « mot de passe perdu ».
 

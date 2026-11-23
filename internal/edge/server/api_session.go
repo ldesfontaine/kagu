@@ -148,7 +148,7 @@ func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 		Languages:    languages,
 		Certificates: certificateThresholds{Warning: probe.CertificateWarning, Danger: probe.CertificateDanger},
 		Thresholds:   resourceThresholdsToJSON(rules),
-		Verbs: httpx.ConvertAll(verb.Default.All(), func(offered verb.Verb) sessionVerb {
+		Verbs: httpx.ConvertAll(verb.Default.OpenToTokens(), func(offered verb.Verb) sessionVerb {
 			return sessionVerb{ID: offered.ID, Route: offered.Route}
 		}),
 		Roles: httpx.ConvertAll(machine.Roles(), func(offered machine.Role) sessionRole {

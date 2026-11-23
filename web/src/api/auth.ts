@@ -32,6 +32,9 @@ export interface AuthState {
   // seulement ; null quand la liste est vide (toute identité du mandataire)
   // et dans les autres modes.
   allowed_users: string[] | null;
+  // En native connecté, présent et vrai quand le code à six chiffres est
+  // actif : la redemande le demande aussi.
+  totp?: boolean;
 }
 
 // Un compte et son mot de passe, ou l'en-tête d'un mandataire ; dans les deux
@@ -55,9 +58,40 @@ export async function setup(body: AuthSetupRequest): Promise<AuthState> {
   return api.send<AuthState>(route("POST /api/auth/setup"), body);
 }
 
-// Ouvre une session : le serveur pose le cookie avec sa réponse.
-export async function login(username: string, password: string): Promise<AuthState> {
-  return api.send<AuthState>(route("POST /api/auth/login"), { username, password });
+// Ouvre une session : le serveur pose le cookie avec sa réponse. Le code est
+// vide au premier écran ; quand il est actif, le serveur le demande
+// (auth.totp_required) et la page ouvre le second.
+export async function login(username: string, password: string, code = ""): Promise<AuthState> {
+  return api.send<AuthState>(route("POST /api/auth/login"), { username, password, code });
+}
+
+// La redemande d'un geste de niveau 4 : le mot de passe, et le code s'il est
+// actif. Le serveur renouvelle le cookie de la session ; le geste se rejoue.
+export async function reauth(password: string, code: string): Promise<void> {
+  return api.send(route("POST /api/auth/reauth"), { password, code });
+}
+
+// Un secret tiré pour l'activation du code, que rien ne garde tant qu'un
+// premier code juste ne revient pas. qr_code est une image en data URI.
+export interface TOTPProposal {
+  secret: string;
+  uri: string;
+  qr_code: string;
+}
+
+// Une lecture à part, jamais relue par le direct : chaque lecture tire un
+// autre secret.
+export async function proposeTOTP(): Promise<TOTPProposal> {
+  return api.get<TOTPProposal>("/api/auth/totp/proposal");
+}
+
+export async function enableTOTP(secret: string, code: string): Promise<void> {
+  return api.send(route("POST /api/auth/totp"), { secret, code });
+}
+
+// Le serveur refuse (403) sans le mot de passe juste.
+export async function disableTOTP(password: string): Promise<void> {
+  return api.send(route("DELETE /api/auth/totp"), { password });
 }
 
 // Ferme la session courante ; le serveur efface le cookie.

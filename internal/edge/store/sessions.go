@@ -12,10 +12,10 @@ import (
 
 var _ auth.SessionStore = (*DB)(nil)
 
-const operatorSessionColumns = `id, identity, created_at, seen_at, expires_at, source, user_agent`
+const operatorSessionColumns = `id, identity, created_at, seen_at, expires_at, source, user_agent, reauth_at`
 
 // CreateSession écrit la session et l'empreinte de son jeton. reauth_at reste
-// nul : rien ne redemande encore le mot de passe (R-A2-7).
+// nul : la redemande le pose (RenewSessionToken, R-A2-7).
 func (db *DB) CreateSession(ctx context.Context, session auth.Session, tokenHash string) error {
 	_, err := db.sql.ExecContext(ctx, `
 		INSERT INTO operator_sessions (id, token_hash, identity, created_at, seen_at, expires_at, reauth_at, source, user_agent)
@@ -89,6 +89,21 @@ func (db *DB) DeleteDeadSessions(ctx context.Context, idleSince, now time.Time) 
 	return nil
 }
 
+// RenewSessionToken remplace le jeton de la session et pose reauth_at, d'une
+// seule écriture : l'ancien jeton cesse de valoir au moment où la redemande
+// prend effet.
+func (db *DB) RenewSessionToken(ctx context.Context, id, tokenHash string, reauthAt time.Time) (bool, error) {
+	result, err := db.sql.ExecContext(ctx, `UPDATE operator_sessions SET token_hash = ?, reauth_at = ? WHERE id = ?`, tokenHash, reauthAt.Unix(), id)
+	if err != nil {
+		return false, fmt.Errorf("renew operator session token: %w", err)
+	}
+	renewed, err := countAffected(result)
+	if err != nil {
+		return false, fmt.Errorf("renew operator session token: %w", err)
+	}
+	return renewed > 0, nil
+}
+
 // ListSessions rend les sessions, les plus récentes d'abord.
 func (db *DB) ListSessions(ctx context.Context) ([]auth.Session, error) {
 	rows, err := db.sql.QueryContext(ctx, `SELECT `+operatorSessionColumns+` FROM operator_sessions ORDER BY created_at DESC, id`)
@@ -110,12 +125,16 @@ func (db *DB) ListSessions(ctx context.Context) ([]auth.Session, error) {
 func scanOperatorSession(row scanner) (auth.Session, error) {
 	var session auth.Session
 	var createdAt, seenAt, expiresAt int64
-	err := row.Scan(&session.ID, &session.Identity, &createdAt, &seenAt, &expiresAt, &session.Source, &session.UserAgent)
+	var reauthAt sql.NullInt64
+	err := row.Scan(&session.ID, &session.Identity, &createdAt, &seenAt, &expiresAt, &session.Source, &session.UserAgent, &reauthAt)
 	if err != nil {
 		return auth.Session{}, err
 	}
 	session.CreatedAt = time.Unix(createdAt, 0)
 	session.SeenAt = time.Unix(seenAt, 0)
 	session.ExpiresAt = time.Unix(expiresAt, 0)
+	if reauthAt.Valid {
+		session.ReauthAt = time.Unix(reauthAt.Int64, 0)
+	}
 	return session, nil
 }

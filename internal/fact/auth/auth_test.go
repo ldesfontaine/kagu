@@ -19,6 +19,7 @@ type memoryStore struct {
 	state    State
 	code     SetupCode
 	sessions memorySessions
+	totp     TOTP
 }
 
 func (m *memoryStore) GetAuthState(context.Context) (State, error) {
@@ -32,6 +33,9 @@ func (m *memoryStore) SaveAuthStateIf(ctx context.Context, expected, next State,
 	current, _ := m.GetAuthState(ctx)
 	if !expected.Same(current) {
 		return false, nil
+	}
+	if next.Mode != ModeNative || next.Username != current.Username {
+		m.totp = TOTP{}
 	}
 	m.state = next
 	m.code = SetupCode{}

@@ -1,5 +1,14 @@
 import type { Page } from "@playwright/test";
 
+import { label } from "./catalog";
+
+// Le carré à scanner de la marche 3 : un PNG d'un pixel, et un secret inventé.
+const sampleTOTPProposal = {
+  secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+  uri: "otpauth://totp/Kagu:admin?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+  qr_code: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==",
+};
+
 // La première configuration, simulée côté navigateur : le serveur des données
 // fictives a déjà un compte. Le jeton et les commandes sont inventés (aucun
 // ne vaut quoi que ce soit) ; l'écran, lui, est le vrai.
@@ -10,6 +19,7 @@ export async function mockFirstSetup(page: Page, address: { local: boolean; sugg
   await page.route("**/api/auth/setup", (route) =>
     route.fulfill({ json: { mode: "native", username: "admin", enabled_at: new Date().toISOString(), password_min_length: 12, signed_in: true, allowed_users: null, api_tokens_revoked: 0 } }),
   );
+  await page.route("**/api/auth/totp/proposal", (route) => route.fulfill({ json: sampleTOTPProposal }));
   await page.route("**/api/machines/local-enrollment", (route) =>
     route.fulfill({
       status: 201,
@@ -31,11 +41,13 @@ export async function mockFirstSetup(page: Page, address: { local: boolean; sugg
 }
 
 // Crée le compte du formulaire de première configuration, avec un code
-// inventé : la route est simulée.
+// inventé : la route est simulée. La marche 3 (le code à six chiffres) est
+// passée par « Plus tard ».
 export async function createFirstAccount(page: Page): Promise<void> {
   await page.locator("#auth-setup-code").fill("12345678");
   await page.locator("#auth-username").fill("admin");
   await page.locator("#auth-password").fill("une-phrase-de-passe-de-test");
   await page.locator("#auth-confirm").fill("une-phrase-de-passe-de-test");
   await page.locator("form button[type=submit]").click();
+  await page.getByRole("button", { name: label("auth.totp_later") }).click();
 }

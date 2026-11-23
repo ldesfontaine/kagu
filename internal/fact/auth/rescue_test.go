@@ -9,7 +9,7 @@ import (
 // openSecondSession ouvre une autre session sous state : deux navigateurs.
 func openSecondSession(t *testing.T, service *Service, state State) {
 	t.Helper()
-	if _, err := service.Login(context.Background(), state, "lucas", testPassword, SessionClient{UserAgent: "Chromium"}); err != nil {
+	if _, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{UserAgent: "Chromium"}); err != nil {
 		t.Fatal(err)
 	}
 }

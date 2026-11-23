@@ -51,7 +51,7 @@ type refusingAuth struct {
 	err error
 }
 
-func (a refusingAuth) Login(context.Context, auth.State, string, string, auth.SessionClient) (auth.OpenedSession, error) {
+func (a refusingAuth) Login(context.Context, auth.State, string, string, string, auth.SessionClient) (auth.OpenedSession, error) {
 	return auth.OpenedSession{}, a.err
 }
 

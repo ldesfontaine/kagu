@@ -19,8 +19,21 @@ export class ApiError extends Error {
 }
 
 // Toute écriture part en JSON avec un corps, {} quand elle n'a rien à
-// dire : le serveur peut ainsi exiger ce type sans exception.
+// dire : le serveur peut ainsi exiger ce type sans exception. Un geste de
+// niveau 4 refusé faute de redemande ouvre la fenêtre de redemande, puis se
+// rejoue une fois si elle a réussi.
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  try {
+    return await send<T>(method, path, body);
+  } catch (failure) {
+    if (failure instanceof ApiError && isReauthRequired(failure) && reauthAsker !== null && (await reauthAsker())) {
+      return send<T>(method, path, body);
+    }
+    throw failure;
+  }
+}
+
+async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
   const init: RequestInit = { method, credentials: "same-origin" };
   // Toute écriture part en JSON, même sans rien à dire : le serveur refuse
   // une écriture qui n'en porte pas, c'est sa garde même-origine.
@@ -65,6 +78,27 @@ function announceSessionLost() {
   for (const listener of sessionLostListeners) {
     listener();
   }
+}
+
+// En native, un geste de niveau 4 sans mot de passe redonné depuis cinq
+// minutes répond 403 « auth.reauth_required » (R-A2-7). En SSO, jamais.
+function isReauthRequired(error: ApiError): boolean {
+  return error.status === 403 && error.code === "auth.reauth_required";
+}
+
+// Qui ouvre la fenêtre de redemande : la porte d'accès. Il rend vrai quand
+// la redemande a réussi, faux quand la personne a renoncé.
+type ReauthAsker = () => Promise<boolean>;
+
+let reauthAsker: ReauthAsker | null = null;
+
+export function onReauthRequired(asker: ReauthAsker): () => void {
+  reauthAsker = asker;
+  return () => {
+    if (reauthAsker === asker) {
+      reauthAsker = null;
+    }
+  };
 }
 
 async function errorPayload(response: Response): Promise<unknown> {

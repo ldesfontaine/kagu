@@ -158,6 +158,10 @@ GET /api/auth/sessions
 DELETE /api/auth/sessions/{id}
 POST /api/auth/sessions/actions/close-others
 PUT /api/auth/password
+POST /api/auth/reauth
+GET /api/auth/totp/proposal
+POST /api/auth/totp
+DELETE /api/auth/totp
 GET /api/audit
 GET /api/audit/forwarding
 GET /api/actions

@@ -26,9 +26,11 @@ func (ts *testServer) issueWriteToken(t *testing.T, name string, verbs ...string
 	return cleartext, token
 }
 
+// allVerbIDs rend les verbes qu'un jeton peut porter : ceux des niveaux 3 et
+// 4 lui sont fermés.
 func allVerbIDs() []string {
 	ids := []string{}
-	for _, v := range verb.Default.All() {
+	for _, v := range verb.Default.OpenToTokens() {
 		ids = append(ids, v.ID)
 	}
 	return ids
@@ -234,7 +236,7 @@ func TestVerbs_EveryOtherWriteRouteIsRefusedToAFullWriteToken(t *testing.T) {
 		if route.method == anyMethod || route.method == http.MethodGet || !strings.HasPrefix(route.pattern, "/api/") {
 			continue
 		}
-		if _, isVerb := verb.Default.ByRoute(route.method + " " + route.pattern); isVerb {
+		if offered, isVerb := verb.Default.ByRoute(route.method + " " + route.pattern); isVerb && offered.Token {
 			continue
 		}
 		checked++
@@ -415,7 +417,7 @@ func TestVerbs_CreateWriteTokenThroughTheAPI(t *testing.T) {
 	}
 	var list apiTokensResponse
 	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/settings/api-tokens", nil), &list)
-	if len(list.Tokens) != 1 || len(list.Tokens[0].Verbs) != 2 || len(list.Verbs) != len(verb.Default.All()) {
+	if len(list.Tokens) != 1 || len(list.Tokens[0].Verbs) != 2 || len(list.Verbs) != len(verb.Default.OpenToTokens()) {
 		t.Fatalf("list %+v", list)
 	}
 	// Le jeton créé par l'API agit, avec ses seuls verbes.

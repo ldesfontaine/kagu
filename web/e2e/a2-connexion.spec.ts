@@ -62,9 +62,9 @@ test("connexion : refus sans dire lequel, trop d'essais, puis la bonne ouvre l'i
   await expect(sideMenu(page)).toBeVisible();
   await expect(loginPage(page)).toHaveCount(0);
   expect(logins).toEqual([
-    { username: "lucas", password: "pas le bon mot de passe" },
-    { username: "lucas", password: "pas le bon mot de passe" },
-    { username: "lucas", password: "correct horse battery" },
+    { username: "lucas", password: "pas le bon mot de passe", code: "" },
+    { username: "lucas", password: "pas le bon mot de passe", code: "" },
+    { username: "lucas", password: "correct horse battery", code: "" },
   ]);
 });
 
@@ -203,6 +203,9 @@ test("première configuration native : le compte créé, l'interface s'ouvre san
       },
     });
   });
+  await page.route("**/api/auth/totp/proposal", (route) =>
+    route.fulfill({ json: { secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP", uri: "otpauth://totp/x", qr_code: "data:image/png;base64," } }),
+  );
   // La machine a déjà un agent : pas d'étape d'installation, l'interface s'ouvre.
   await page.route("**/api/machines/local-enrollment", (route) =>
     route.fulfill({ status: 409, json: { error: "machine.local_has_agent" } }),
@@ -217,6 +220,8 @@ test("première configuration native : le compte créé, l'interface s'ouvre san
   await page.locator("#auth-password").fill("une-phrase-de-passe-de-test");
   await page.locator("#auth-confirm").fill("une-phrase-de-passe-de-test");
   await page.locator("form button[type=submit]").click();
+  // La marche 3 propose le code à six chiffres ; il n'est jamais imposé.
+  await page.getByRole("button", { name: label("auth.totp_later") }).click();
 
   await expect(sideMenu(page)).toBeVisible();
   await expect(loginPage(page)).toHaveCount(0);

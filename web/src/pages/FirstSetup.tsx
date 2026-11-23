@@ -16,6 +16,7 @@ import { formatRemaining } from "../lib/time";
 import { AccessPage } from "./AccessPage";
 import { AccessCredentialsForm } from "./settings/AccessCredentialsForm";
 import { AccessForwardForm } from "./settings/AccessForwardForm";
+import { AccessTOTPEnrolment } from "./settings/AccessTOTPEnrolment";
 
 // Les deux façons de garder l'interface : la connexion native (un compte et
 // son mot de passe), ou le SSO qui transmet l'identité.
@@ -25,15 +26,18 @@ const setupModes = ["native", "forward"] as const;
 // création du compte : la porte d'accès (AccessGate) montre cet écran à la
 // place de l'interface.
 // En connexion native, la réponse pose le cookie de la première session ; en
-// mode SSO, la requête est déjà passée par lui. Puis la première étape de
-// l'installation : la ligne qui installe l'agent de cette machine, tant
-// qu'elle n'en a jamais eu ; sinon l'interface s'ouvre.
+// mode SSO, la requête est déjà passée par lui. En native, la marche 3
+// propose le code à six chiffres (06 §4.2), « Activer » ou « Plus tard » :
+// proposé, jamais imposé (R-CNX-2) ; en SSO, elle n'existe pas. Puis la
+// première étape de l'installation : la ligne qui installe l'agent de cette
+// machine, tant qu'elle n'en a jamais eu ; sinon l'interface s'ouvre.
 export function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: () => void }) {
   const t = useT();
   const action = useAction();
   const [mode, setMode] = useState<(typeof setupModes)[number]>("native");
   const [agentLine, setAgentLine] = useState<TokenResponse | null>(null);
   const [setupCode, setSetupCode] = useState("");
+  const [offerTOTP, setOfferTOTP] = useState(false);
 
   const showAgentLineOrOpen = (line: TokenResponse | null) => {
     if (line === null) {
@@ -43,13 +47,10 @@ export function FirstSetup({ state, onConfigured }: { state: AuthState; onConfig
     setAgentLine(line);
   };
   const createAccount = (username: string, password: string) => {
-    action.run(
-      async () => {
-        await setup({ setup_code: setupCode, mode: "native", username, password });
-        return agentLineOrNull();
-      },
-      { onDone: showAgentLineOrOpen },
-    );
+    action.run(() => setup({ setup_code: setupCode, mode: "native", username, password }), { onDone: () => setOfferTOTP(true) });
+  };
+  const continueToAgentLine = () => {
+    action.run(agentLineOrNull, { onDone: showAgentLineOrOpen });
   };
   const trustProxy = (header: string) => {
     action.run(
@@ -63,6 +64,18 @@ export function FirstSetup({ state, onConfigured }: { state: AuthState; onConfig
 
   if (agentLine !== null) {
     return <AgentLine line={agentLine} onContinue={onConfigured} />;
+  }
+  if (offerTOTP) {
+    return (
+      <AccessPage>
+        <Card className="form-card">
+          <CardHeader title={t("auth.totp_title")} />
+          <CardBody>
+            <AccessTOTPEnrolment onEnabled={continueToAgentLine} onLater={continueToAgentLine} />
+          </CardBody>
+        </Card>
+      </AccessPage>
+    );
   }
 
   return (

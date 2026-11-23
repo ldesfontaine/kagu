@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 
 import type { AuthState } from "../api/auth";
 import { ApiError } from "../api/client";
-import { accessLabel, isForwardInsecure, loginFailure, needsFirstSetup, needsSignIn, passwordFormError } from "./auth";
+import { accessLabel, asksTOTP, isForwardInsecure, loginFailure, needsFirstSetup, needsSignIn, passwordFormError, reauthConfirmOf } from "./auth";
 
 const unconfigured: AuthState = { mode: "none", username: "", enabled_at: null, password_min_length: 12, signed_in: false, allowed_users: null };
 const native: AuthState = {
@@ -76,4 +76,16 @@ test("isForwardInsecure ne parle que du mode mandataire que le serveur dit sans 
   expect(isForwardInsecure({ ...native, forward_insecure: true })).toBe(false);
   expect(isForwardInsecure(unconfigured)).toBe(false);
   expect(isForwardInsecure(null)).toBe(false);
+});
+
+test("la redemande ne demande rien en SSO, le code seulement quand le serveur le dit actif", () => {
+  expect(reauthConfirmOf(forward)).toEqual({ mode: "reauth", sso: true, code: false });
+  expect(reauthConfirmOf(native)).toEqual({ mode: "reauth", sso: false, code: false });
+  expect(reauthConfirmOf({ ...native, totp: true })).toEqual({ mode: "reauth", sso: false, code: true });
+});
+
+test("le second écran de la connexion s'ouvre sur le refus qui demande le code, et sur lui seul", () => {
+  expect(asksTOTP(new ApiError(401, "auth.totp_required"))).toBe(true);
+  expect(asksTOTP(new ApiError(401, "auth.login_failed"))).toBe(false);
+  expect(asksTOTP(null)).toBe(false);
 });

@@ -46,6 +46,7 @@ type Store interface {
 	SaveSetupCodeIfNone(ctx context.Context, code SetupCode, at time.Time) (bool, error)
 	RecordSetupCodeFailure(ctx context.Context) error
 	SessionStore
+	TOTPStore
 }
 
 type Service struct {
@@ -186,12 +187,8 @@ func (s *Service) ChangePassword(ctx context.Context, expected State, keepSessio
 	if current.Mode != ModeNative {
 		return State{}, ErrDisabled
 	}
-	matches, err := s.Verify(ctx, current, current.Username, currentPassword)
-	if err != nil {
+	if err := s.requirePassword(ctx, current, currentPassword); err != nil {
 		return State{}, err
-	}
-	if !matches {
-		return State{}, ErrCurrentPasswordWrong
 	}
 	hash, err := s.hashPassword(password)
 	if err != nil {
@@ -351,6 +348,19 @@ func (s *Service) Verify(ctx context.Context, state State, username, password st
 	usernameMatches := sameText(username, state.Username)
 	passwordMatches := bcrypt.CompareHashAndPassword([]byte(state.PasswordHash), []byte(password)) == nil
 	return usernameMatches && passwordMatches, nil
+}
+
+// requirePassword juge par Verify le mot de passe en vigueur, que redonne la
+// personne connectée : faux, ErrCurrentPasswordWrong.
+func (s *Service) requirePassword(ctx context.Context, state State, password string) error {
+	matches, err := s.Verify(ctx, state, state.Username, password)
+	if err != nil {
+		return err
+	}
+	if !matches {
+		return ErrCurrentPasswordWrong
+	}
+	return nil
 }
 
 // sameText compare deux textes en temps constant : les empreintes ont la même

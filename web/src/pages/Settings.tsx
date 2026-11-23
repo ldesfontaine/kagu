@@ -66,7 +66,7 @@ export function Settings() {
       <div className="settings-layout">
         <SettingsNav present={present} current={current} onPick={pick} />
         <div className="settings-main">
-          {access.data !== null && <AccessSection state={access.data} />}
+          {access.data !== null && <AccessSection state={access.data} reload={access.reload} />}
           {counts.data !== null && <ModulesSection modules={counts.data.modules} />}
           <NotificationsSection thresholds={thresholds.data} reloadThresholds={thresholds.reload} reminder={reminder.data} reloadReminder={reminder.reload} />
           {mail.data !== null && <MailSection settings={mail.data} reload={mail.reload} />}
