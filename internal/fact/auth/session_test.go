@@ -33,6 +33,15 @@ func (m *memoryStore) SessionByTokenHash(_ context.Context, tokenHash string) (S
 	return Session{}, false, nil
 }
 
+func (m *memoryStore) SessionByID(_ context.Context, id string) (Session, bool, error) {
+	for _, stored := range m.sessions {
+		if stored.ID == id {
+			return stored.Session, true, nil
+		}
+	}
+	return Session{}, false, nil
+}
+
 func (m *memoryStore) TouchSession(_ context.Context, id string, seenAt time.Time) error {
 	for index := range m.sessions {
 		if m.sessions[index].ID == id {
@@ -213,5 +222,160 @@ func TestSessions_ListsTheAliveOnesAndClosesByID(t *testing.T) {
 	}
 	if err := service.CloseSession(ctx, opened.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// isEnded dit si le canal d'une fin de session est fermé.
+func isEnded(ended <-chan struct{}) bool {
+	select {
+	case <-ended:
+		return true
+	default:
+		return false
+	}
+}
+
+func watch(t *testing.T, service *Service, id string) <-chan struct{} {
+	t.Helper()
+	ended, stop, err := service.WatchSession(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(stop)
+	return ended
+}
+
+// R-A2-12 : chaque mort d'une session ferme le canal que ses flux attendent ;
+// celui d'une autre session reste ouvert.
+func TestWatchSession_EndsWithEachDeathOfItsSession(t *testing.T) {
+	ctx := context.Background()
+	deaths := map[string]func(*Service, State, OpenedSession, OpenedSession) error{
+		"closed": func(service *Service, _ State, watched, _ OpenedSession) error {
+			return service.CloseSession(ctx, watched.ID)
+		},
+		"the others closed": func(service *Service, _ State, _, kept OpenedSession) error {
+			_, err := service.CloseOtherSessions(ctx, kept.ID)
+			return err
+		},
+		"the password changed": func(service *Service, state State, _, kept OpenedSession) error {
+			_, err := service.ChangePassword(ctx, state, kept.ID, testPassword, "another long passphrase")
+			return err
+		},
+	}
+	for name, die := range deaths {
+		t.Run(name, func(t *testing.T) {
+			service, _, state, _, watched := signedIn(t)
+			kept, err := service.Login(ctx, state, "lucas", testPassword, SessionClient{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ended, keptEnded := watch(t, service, watched.ID), watch(t, service, kept.ID)
+			if isEnded(ended) {
+				t.Fatal("the stream ended with its session alive")
+			}
+			if err := die(service, state, watched, kept); err != nil {
+				t.Fatal(err)
+			}
+			if !isEnded(ended) || isEnded(keptEnded) {
+				t.Fatalf("ended %v, kept ended %v", isEnded(ended), isEnded(keptEnded))
+			}
+		})
+	}
+	t.Run("authentication disabled", func(t *testing.T) {
+		service, _, state, _, watched := signedIn(t)
+		ended := watch(t, service, watched.ID)
+		if err := service.Disable(ctx, state); err != nil {
+			t.Fatal(err)
+		}
+		if !isEnded(ended) {
+			t.Fatal("a stream outlived the return to the first setup")
+		}
+	})
+}
+
+// Une session déjà morte, ou inconnue, rend un canal fermé ; morte, elle est
+// effacée. Un flux parti libère sa place : la fin d'une session qu'aucun flux
+// n'attend ne ferme rien.
+func TestWatchSession_ADeadSessionEndsAtOnce(t *testing.T) {
+	service, store, _, now, opened := signedIn(t)
+	if !isEnded(watch(t, service, "unknown")) {
+		t.Fatal("an unknown session is watched")
+	}
+	ended, stop, err := service.WatchSession(context.Background(), opened.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop()
+	if len(service.watches.byID) != 0 {
+		t.Fatalf("watches left %d", len(service.watches.byID))
+	}
+	*now = now.Add(SessionIdleTimeout)
+	if !isEnded(watch(t, service, opened.ID)) || len(store.sessions) != 0 {
+		t.Fatalf("a dead session is watched, %d sessions", len(store.sessions))
+	}
+	if isEnded(ended) {
+		t.Fatal("a stream that left was ended")
+	}
+}
+
+// forwardService rend un service en forward et une session ouverte pour lucas.
+func forwardService(t *testing.T) (*Service, *memoryStore, State, OpenedSession) {
+	t.Helper()
+	service, store := newTestService(t)
+	state, err := service.EnableForward(context.Background(), none, issueCode(t, service), DefaultForwardHeader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := service.OpenForwardSession(context.Background(), state, "lucas", SessionClient{Address: "192.0.2.7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return service, store, state, opened
+}
+
+// R-A2-17 : en forward, la session se reprend pour l'identité de l'en-tête ;
+// une autre identité la tue et le dit.
+func TestResumeForwardSession_AnotherIdentityKillsTheSession(t *testing.T) {
+	service, store, state, opened := forwardService(t)
+	ctx := context.Background()
+	if _, alive, err := service.ResumeForwardSession(ctx, state, opened.Token, "lucas"); err != nil || !alive {
+		t.Fatalf("same identity: %v %v", alive, err)
+	}
+	if _, alive, err := service.ResumeSession(ctx, state, opened.Token); err != nil || alive {
+		t.Fatalf("a forward session resumed as a native one: %v %v", alive, err)
+	}
+	ended := watch(t, service, opened.ID)
+	if _, alive, err := service.ResumeForwardSession(ctx, state, opened.Token, "mallory"); !errors.Is(err, ErrSessionIdentityChanged) || alive {
+		t.Fatalf("another identity: %v %v", alive, err)
+	}
+	if len(store.sessions) != 0 || !isEnded(ended) {
+		t.Fatalf("%d sessions, ended %v", len(store.sessions), isEnded(ended))
+	}
+	if _, alive, err := service.ResumeForwardSession(ctx, state, opened.Token, "lucas"); err != nil || alive {
+		t.Fatalf("the killed session came back: %v %v", alive, err)
+	}
+}
+
+// Une session forward ne s'ouvre que sous l'état qui a admis la requête, en
+// forward ; un cookie arrivé sans la preuve du mandataire tue sa session.
+func TestForwardSessions_OpenUnderForwardOnlyAndDieWithoutTheProof(t *testing.T) {
+	service, store, state, opened := forwardService(t)
+	ctx := context.Background()
+	if _, err := service.OpenForwardSession(ctx, none, "lucas", SessionClient{}); !errors.Is(err, ErrStateChanged) {
+		t.Fatalf("stale state: %v", err)
+	}
+	native, _, nativeState, _, _ := signedIn(t)
+	if _, err := native.OpenForwardSession(ctx, nativeState, "lucas", SessionClient{}); !errors.Is(err, ErrDisabled) {
+		t.Fatalf("native: %v", err)
+	}
+	if err := service.ClosePresentedSession(ctx, strings.Repeat("0", 64)); err != nil || len(store.sessions) != 1 {
+		t.Fatalf("an unknown token: %v, %d sessions", err, len(store.sessions))
+	}
+	ended := watch(t, service, opened.ID)
+	if err := service.ClosePresentedSession(ctx, opened.Token); err != nil || len(store.sessions) != 0 || !isEnded(ended) {
+		t.Fatalf("%v, %d sessions, ended %v", err, len(store.sessions), isEnded(ended))
+	}
+	if _, alive, _ := service.ResumeForwardSession(ctx, state, opened.Token, "lucas"); alive {
+		t.Fatal("the closed session came back")
 	}
 }

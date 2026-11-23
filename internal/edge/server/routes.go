@@ -292,6 +292,13 @@ func isStreamRoute(method, pattern string) bool {
 	return slices.Contains(streamRoutes, method+" "+pattern)
 }
 
+// isOperatorStreamRoute dit si la route est un flux de l'opérateur, gardé
+// par son origine : le flux public de la page de statut et celui de l'agent
+// n'ont pas de navigateur de l'opérateur derrière eux.
+func isOperatorStreamRoute(method, pattern string) bool {
+	return isStreamRoute(method, pattern) && isOperatorRoute(pattern)
+}
+
 func isTransferRoute(method, pattern string) bool {
 	return slices.Contains(transferRoutes, method+" "+pattern)
 }
@@ -330,7 +337,9 @@ func (s *Server) verbHandler(verbID string, next http.HandlerFunc) http.HandlerF
 
 // Toute écriture sous /api passe par la garde même-origine ; les lectures
 // et les routes de l'agent, des pings et de la page publique n'en ont pas
-// besoin. L'accès de l'opérateur enveloppe le tout, avant la garde. Ce qu'un
+// besoin. L'accès de l'opérateur enveloppe le tout, avant la garde. Un flux
+// de l'opérateur a sa garde d'origine, jugée avant son accès : une page d'un
+// autre site n'ouvre ni ne ferme aucune session. Ce qu'un
 // navigateur appelle avec l'état d'openCloud, /api, exige en plus un Host
 // reconnu, jugé avant tout le reste, authentification comprise.
 func (s *Server) mux() *http.ServeMux {
@@ -351,6 +360,9 @@ func (s *Server) mux() *http.ServeMux {
 			if route.pattern == frontPattern {
 				handler = s.openCompiledAssets(acting, handler)
 			}
+		}
+		if isOperatorStreamRoute(route.method, route.pattern) {
+			handler = s.requireStreamOrigin(handler)
 		}
 		if isAPI {
 			handler = s.requireKnownHost(handler)

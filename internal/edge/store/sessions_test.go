@@ -34,6 +34,12 @@ func TestOperatorSessions_RoundTrip(t *testing.T) {
 	if _, found, err := db.SessionByTokenHash(ctx, "unknown"); err != nil || found {
 		t.Fatalf("unknown hash found %v %v", found, err)
 	}
+	if got, found, err := db.SessionByID(ctx, "s1"); err != nil || !found || got != older {
+		t.Fatalf("by id %+v %v %v", got, found, err)
+	}
+	if _, found, err := db.SessionByID(ctx, "unknown"); err != nil || found {
+		t.Fatalf("unknown id found %v %v", found, err)
+	}
 	if err := db.TouchSession(ctx, "s1", at.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}

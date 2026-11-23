@@ -22,13 +22,22 @@ func openEvents(t *testing.T, server *testServer, lastEventID string) (func() st
 // le public, et rend un lecteur d'événements nommés.
 func openLive(t *testing.T, server *testServer, path, lastEventID string) (func() string, context.CancelFunc) {
 	t.Helper()
+	return openLiveAs(t, server, path, func(request *http.Request) {
+		if lastEventID != "" {
+			request.Header.Set("Last-Event-ID", lastEventID)
+		}
+	})
+}
+
+// openLiveAs ouvre le flux comme openLive ; shape pose ce qui authentifie la
+// requête (cookie, en-têtes du mandataire).
+func openLiveAs(t *testing.T, server *testServer, path string, shape func(*http.Request)) (func() string, context.CancelFunc) {
+	t.Helper()
 	liveServer := httptest.NewServer(server.Server)
 	t.Cleanup(liveServer.Close)
 	ctx, cancel := context.WithCancel(context.Background())
 	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, liveServer.URL+path, nil)
-	if lastEventID != "" {
-		request.Header.Set("Last-Event-ID", lastEventID)
-	}
+	shape(request)
 	resp, err := liveServer.Client().Do(request)
 	if err != nil {
 		cancel()

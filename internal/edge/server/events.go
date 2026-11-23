@@ -26,8 +26,14 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer s.eventTabs.Release()
-	// Le flux n'est jugé qu'à l'ouverture : si l'authentification a changé
-	// depuis, il se ferme au ping suivant et le navigateur revient se faire
-	// juger.
+	r, stop, err := s.bindStreamToSession(r)
+	if err != nil {
+		s.apiInternalError(w, r, err)
+		return
+	}
+	defer stop()
+	// Le flux se ferme à la mort de sa session ; si l'authentification a
+	// changé depuis l'ouverture, il se ferme au ping suivant. Le navigateur
+	// revient alors se faire juger.
 	sse.Stream(w, r, s.live.Subscribe(), func() bool { return s.authorizationLapsed(r) })
 }

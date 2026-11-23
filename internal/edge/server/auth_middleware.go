@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"errors"
 	"io"
 	"net/http"
 	"path"
@@ -22,8 +23,9 @@ import (
 // cookie que pose la connexion, session_cookie.go) garde tout ce que
 // l'opérateur appelle : l'API, le direct et les flux de journaux ; sans elle,
 // seules les routes qui servent à se connecter passent. En mode forward, les
-// mêmes routes exigent l'en-tête d'identité posé par un mandataire de
-// trusted_proxies. En mode none, l'installation attend sa première
+// mêmes routes exigent, à chaque requête, l'en-tête d'identité posé par un
+// mandataire de trusted_proxies ; la session qui s'y ajoute lie flux et audit,
+// sans jamais remplacer l'en-tête (R-A2-17). En mode none, l'installation attend sa première
 // configuration : seules les routes qui servent à créer le compte passent, et
 // la création exige le code que `admin setup-code` tire par la socket locale.
 // Un en-tête Authorization: Basic n'est lu par aucun mode (R-CNX-1).
@@ -51,6 +53,11 @@ type AuthService interface {
 	IssueSetupCode(ctx context.Context) (auth.IssuedSetupCode, error)
 	Login(ctx context.Context, expected auth.State, username, password string, client auth.SessionClient) (auth.OpenedSession, error)
 	ResumeSession(ctx context.Context, state auth.State, token string) (auth.Session, bool, error)
+	OpenForwardSession(ctx context.Context, expected auth.State, identity string, client auth.SessionClient) (auth.OpenedSession, error)
+	ResumeForwardSession(ctx context.Context, state auth.State, token, identity string) (auth.Session, bool, error)
+	ClosePresentedSession(ctx context.Context, token string) error
+	SessionAlive(ctx context.Context, id string) (bool, error)
+	WatchSession(ctx context.Context, id string) (<-chan struct{}, func(), error)
 	Sessions(ctx context.Context) ([]auth.Session, error)
 	CloseSession(ctx context.Context, id string) error
 	CloseOtherSessions(ctx context.Context, keepID string) (int, error)
@@ -142,10 +149,7 @@ func (s *Server) requireOperator(next http.HandlerFunc, beforeSignIn bool, acces
 		case auth.ModeNative:
 			s.admitSession(w, r, state, beforeSignIn, next)
 		case auth.ModeForward:
-			identity, ok := s.checkForward(w, r, state)
-			if ok {
-				s.admitOperator(w, r.WithContext(context.WithValue(r.Context(), forwardedIdentityKey{}, identity)), state, next)
-			}
+			s.admitForward(w, r, state, next)
 		default:
 			// Un mode inconnu dans la base : fermer plutôt que deviner.
 			s.logger.Error("interface authentication mode not supported", "mode", string(state.Mode))
@@ -247,18 +251,54 @@ func (s *Server) grantsAuthority(next http.HandlerFunc) http.HandlerFunc {
 
 // authorizationLapsed dit si un flux ouvert sur une route de l'opérateur ne
 // doit plus continuer : l'état d'authentification n'est plus celui qui l'a
-// autorisé, ou n'a pas pu être relu. Un flux hors des routes de l'opérateur
-// n'a rien à perdre.
+// autorisé, la session qui l'a ouvert est morte, ou l'un des deux n'a pas pu
+// être relu. Un flux hors des routes de l'opérateur n'a rien à perdre. La
+// mort d'une session ferme déjà ses flux (bindStreamToSession) ; ce jugement
+// au ping voit en plus une session effacée par un autre processus.
 func (s *Server) authorizationLapsed(r *http.Request) bool {
 	authorizing, ok := authorizingStateFrom(r.Context())
 	if !ok {
 		return false
 	}
 	current, err := s.auth.State(r.Context())
-	if err != nil {
+	if err != nil || !current.Same(authorizing) {
 		return true
 	}
-	return !current.Same(authorizing)
+	session, found := sessionFrom(r.Context())
+	if !found {
+		return false
+	}
+	alive, err := s.auth.SessionAlive(r.Context(), session.ID)
+	return err != nil || !alive
+}
+
+// bindStreamToSession rend la requête d'un flux dont le contexte prend fin
+// avec la session qui l'a ouvert (R-A2-12) : déconnexion, échéance, mot de
+// passe changé, autre identité. Le flux se ferme alors tout de suite, sans
+// attendre son ping. stop se diffère au départ du flux. Sans session, ou en
+// erreur, la requête est rendue telle quelle.
+func (s *Server) bindStreamToSession(r *http.Request) (*http.Request, func(), error) {
+	session, found := sessionFrom(r.Context())
+	if !found {
+		return r, func() {}, nil
+	}
+	ended, unwatch, err := s.auth.WatchSession(r.Context(), session.ID)
+	if err != nil {
+		return r, func() {}, err
+	}
+	ctx, cancel := context.WithCancel(r.Context())
+	go func() {
+		select {
+		case <-ended:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	stop := func() {
+		cancel()
+		unwatch()
+	}
+	return r.WithContext(ctx), stop, nil
 }
 
 // openCompiledAssets sert sans identifiants les fichiers du front compilé,
@@ -322,6 +362,59 @@ func (s *Server) admitSession(w http.ResponseWriter, r *http.Request, state auth
 		r = r.WithContext(context.WithValue(r.Context(), operatorSessionKey{}, session))
 	}
 	s.admitOperator(w, r, state, next)
+}
+
+// admitForward passe d'abord la garde du mandataire, à chaque requête, cookie
+// ou non (R-A2-17) : un cookie volé, présenté sans le mandataire ni son
+// secret, n'ouvre rien, et meurt. Ensuite seulement, la session est relue et
+// comparée à l'identité de l'en-tête ; une autre identité la tue, 401. Sans
+// session vivante, la requête admise en ouvre une.
+func (s *Server) admitForward(w http.ResponseWriter, r *http.Request, state auth.State, next http.HandlerFunc) {
+	identity, proven := s.checkForward(w, r, state)
+	if !proven {
+		// checkForward a répondu ; il reste à tuer le cookie présenté.
+		if err := s.auth.ClosePresentedSession(r.Context(), s.presentedSessionToken(r)); err != nil {
+			s.logger.Error("operator session not closed after a refused proxy proof", "error", err)
+		}
+		return
+	}
+	r = r.WithContext(context.WithValue(r.Context(), forwardedIdentityKey{}, identity))
+	session, resumed, err := s.auth.ResumeForwardSession(r.Context(), state, s.presentedSessionToken(r), identity)
+	if errors.Is(err, auth.ErrSessionIdentityChanged) {
+		clearSessionCookies(w)
+		s.writeForwardUnauthorized(w, r)
+		return
+	}
+	if err != nil {
+		s.apiInternalError(w, r, err)
+		return
+	}
+	if !resumed {
+		session, resumed, err = s.openForwardSession(w, r, state, identity)
+		if s.failed(w, r, err, nil) {
+			return
+		}
+	}
+	if resumed {
+		r = r.WithContext(context.WithValue(r.Context(), operatorSessionKey{}, session))
+	}
+	s.admitOperator(w, r, state, next)
+}
+
+// openForwardSession ouvre la session d'une requête admise par le mandataire
+// et pose son cookie. En HTTP clair hors de la boucle locale, aucune ne
+// s'ouvre (R-A2-4) : la garde du mandataire suffit à la requête.
+func (s *Server) openForwardSession(w http.ResponseWriter, r *http.Request, state auth.State, identity string) (auth.Session, bool, error) {
+	cookieName, canOpen := s.sessionCookieName(r)
+	if !canOpen {
+		return auth.Session{}, false, nil
+	}
+	opened, err := s.auth.OpenForwardSession(r.Context(), state, identity, sessionClientOf(r, s.clientAddress(r)))
+	if err != nil {
+		return auth.Session{}, false, err
+	}
+	setSessionCookie(w, cookieName, opened.Token)
+	return opened.Session, true, nil
 }
 
 // operatorSessionKey porte, dans le contexte de la requête, la session native
