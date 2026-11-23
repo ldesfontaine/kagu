@@ -379,3 +379,110 @@ func TestApplyCommand_CountsAgreeAndThousandsAreSeparated(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 }
+
+func TestR_A1_12_ACreationShowsEveryField(t *testing.T) {
+	plan := `{"language": "fr", "file_hash": "sha256:1a2b3c4d5e6f7a8b9c0d", "prune": false, "plan_hash": "sha256:p", "applicable": true,
+	  "summary": {"create": 1, "update": 0, "delete": 0, "unchanged": 0, "unmanaged": 0},
+	  "changes": [{"action": "create", "kind": "probe", "id": "", "name": "docker-api",
+	    "fields": [{"field": "runner", "before": "", "after": "opencloud"},
+	               {"field": "target", "before": "", "after": "http://127.0.0.1:2375/x"},
+	               {"field": "method", "before": "", "after": "GET"}], "notes": [], "carries": []}],
+	  "unmanaged": [], "problems": []}`
+	fake := &fakeServer{plans: []string{plan}, applies: []fakeAnswer{{http.StatusCreated, appliedAnswer}}}
+	out, err := runApplyCommand(t, fake, "n\n", true)
+	if exitCode(err) != 2 {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	question := strings.Index(out, "Appliquer ces changements ?")
+	for _, want := range []string{
+		"  + sonde docker-api\n",
+		"      runner : ∅ → opencloud\n",
+		"      target : ∅ → http://127.0.0.1:2375/x\n",
+		"      method : ∅ → GET\n",
+	} {
+		at := strings.Index(out, want)
+		if at < 0 || at > question {
+			t.Errorf("%q must be printed before the question:\n%s", want, out)
+		}
+	}
+}
+
+func TestR_A1_12_ServerTextIsPrintedStripped(t *testing.T) {
+	plan := `{"language": "fr", "file_hash": "sha256:x\u001b[31m\ny", "prune": false, "plan_hash": "sha256:p", "applicable": true,
+	  "summary": {"create": 1, "update": 1, "delete": 0, "unchanged": 0, "unmanaged": 0},
+	  "changes": [{"action": "create", "kind": "probe", "id": "", "name": "a\u001b[31mb\nc",
+	    "fields": [{"field": "target", "before": "", "after": "x\u001b[2Jy\nz"}], "notes": [], "carries": []},
+	    {"action": "update", "kind": "probe", "id": "00000000000000c1", "name": "ok",
+	    "fields": [{"field": "interval", "before": "1\u001b", "after": "2\n"}], "notes": [], "carries": []}],
+	  "unmanaged": [], "problems": []}`
+	fake := &fakeServer{plans: []string{plan}, applies: []fakeAnswer{{http.StatusCreated, appliedAnswer}}}
+	out, err := runApplyCommand(t, fake, "n\n", true)
+	if exitCode(err) != 2 {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if strings.ContainsRune(out, '\x1b') {
+		t.Errorf("an escape reached the terminal: %q", out)
+	}
+	if !strings.Contains(out, "Plan pour opencloud.yaml (sha256:x\ufffd[31m\ufffdy)\n") {
+		t.Errorf("the plan header must stay on one stripped line:\n%s", out)
+	}
+	for _, want := range []string{"  + sonde a\ufffd[31mb\ufffdc\n", "target : ∅ → x\ufffd[2Jy\ufffdz\n", "interval 1\ufffd → 2\ufffd\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestR_A1_12_ARefusedValueIsPrintedStripped(t *testing.T) {
+	refused := `{"language": "fr", "file_hash": "sha256:x", "prune": false, "plan_hash": "sha256:y", "applicable": false,
+	  "summary": {"create": 0, "update": 0, "delete": 0, "unchanged": 0, "unmanaged": 0}, "changes": [], "unmanaged": [],
+	  "problems": [{"key": "manifest.machine_unknown", "line": 12, "column": 0, "path": "p\u001b[31m", "value": "app\u001b[31m-3\n"}]}`
+	fake := &fakeServer{plans: []string{refused}, applies: []fakeAnswer{{http.StatusCreated, appliedAnswer}}}
+	out, err := runApplyCommand(t, fake, "o\n", true, "-yes")
+	if exitCode(err) != 2 || fake.applyCalls() != 0 {
+		t.Fatalf("exit %d, calls %d, %v", exitCode(err), fake.applyCalls(), err)
+	}
+	if strings.ContainsAny(out, "\x1b") || !strings.Contains(out, "app\ufffd[31m-3\ufffd") {
+		t.Errorf("a refused value must be printed stripped: %q", out)
+	}
+}
+
+func TestR_A1_12_CatalogFallbackIsPrintedStripped(t *testing.T) {
+	plan := `{"language": "fr", "file_hash": "sha256:x", "prune": false, "plan_hash": "sha256:p", "applicable": true,
+	  "summary": {"create": 1, "update": 0, "delete": 1, "unchanged": 0, "unmanaged": 0},
+	  "changes": [{"action": "create", "kind": "k\u001b[31m\nx", "id": "", "name": "a",
+	    "fields": [], "notes": ["n\u001b[31m\ny"], "carries": []},
+	    {"action": "delete", "kind": "probe", "id": "a1b2c3d4e5f60718", "name": "b", "fields": [], "notes": [],
+	     "carries": [{"what": "w\u001b[31m\nz", "count": 2}]}],
+	  "unmanaged": [], "problems": []}`
+	failed := `{"id": "apl_0123456789abcdef", "state": "failed", "done": 0, "error": "e\u001b[31m\nr", "error_object": "probe/p\u001b[31m",
+	  "summary": {"create": 1, "update": 0, "delete": 1, "unchanged": 0}}`
+	refusedFile := `{"language": "fr", "file_hash": "sha256:x", "prune": false, "plan_hash": "sha256:y", "applicable": false,
+	  "summary": {"create": 0, "update": 0, "delete": 0, "unchanged": 0, "unmanaged": 0}, "changes": [], "unmanaged": [],
+	  "problems": [{"key": "domain.k\u001b[31m\nx", "line": 3, "column": 0, "path": "", "value": ""}]}`
+	for name, run := range map[string]func() (string, error){
+		"plan and failed apply": func() (string, error) {
+			fake := &fakeServer{plans: []string{plan}, applies: []fakeAnswer{{http.StatusCreated, failed}}}
+			return runApplyCommand(t, fake, "o\n", true)
+		},
+		"refused file": func() (string, error) {
+			fake := &fakeServer{plans: []string{refusedFile}, applies: []fakeAnswer{{http.StatusCreated, appliedAnswer}}}
+			return runApplyCommand(t, fake, "o\n", true)
+		},
+	} {
+		out, err := run()
+		if err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+		text := out
+		if err != nil {
+			text += err.Error()
+		}
+		if strings.ContainsRune(text, '\x1b') {
+			t.Errorf("%s: an escape reached the terminal: %q", name, text)
+		}
+		if !strings.Contains(text, "\ufffd") {
+			t.Errorf("%s: nothing was stripped, the case proves nothing: %q", name, text)
+		}
+	}
+}
