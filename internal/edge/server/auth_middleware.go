@@ -51,7 +51,7 @@ type AuthService interface {
 	EnableBasic(ctx context.Context, expected auth.State, setupCode, username, password string) (auth.State, error)
 	EnableForward(ctx context.Context, expected auth.State, setupCode, header string) (auth.State, error)
 	IssueSetupCode(ctx context.Context) (auth.IssuedSetupCode, error)
-	ChangePassword(ctx context.Context, expected auth.State, password string) (auth.State, error)
+	ChangePassword(ctx context.Context, expected auth.State, currentPassword, password string) (auth.State, error)
 	Disable(ctx context.Context, expected auth.State) error
 }
 

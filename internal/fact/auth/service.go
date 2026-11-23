@@ -186,8 +186,10 @@ func (s *Service) EnableForward(ctx context.Context, expected State, setupCode, 
 	return next, nil
 }
 
-// ChangePassword garde l'identifiant et remplace l'empreinte.
-func (s *Service) ChangePassword(ctx context.Context, expected State, password string) (State, error) {
+// ChangePassword garde l'identifiant et remplace l'empreinte, si currentPassword
+// est celui en vigueur. Il est jugé par Verify (même file bcrypt bornée que la
+// connexion), avant tout hachage du nouveau.
+func (s *Service) ChangePassword(ctx context.Context, expected State, currentPassword, password string) (State, error) {
 	current, err := s.store.GetAuthState(ctx)
 	if err != nil {
 		return State{}, err
@@ -200,6 +202,13 @@ func (s *Service) ChangePassword(ctx context.Context, expected State, password s
 	}
 	if current.Mode != ModeBasic {
 		return State{}, ErrDisabled
+	}
+	matches, err := s.Verify(ctx, current, current.Username, currentPassword)
+	if err != nil {
+		return State{}, err
+	}
+	if !matches {
+		return State{}, ErrCurrentPasswordWrong
 	}
 	hash, err := s.hashPassword(password)
 	if err != nil {

@@ -5,12 +5,12 @@ import { SettingBlock, SettingFoot, SettingRow } from "../../components/SettingR
 import { usePasswordForm } from "../../hooks/usePasswordForm";
 import { useT } from "../../i18n/context";
 
-// Changer le mot de passe : deux lignes et le bouton principal de la section.
-// Il se joue contre la règle du serveur avant l'envoi, pour dire le refus sans
+// Changer le mot de passe : trois lignes et le bouton principal de la section.
+// Le mot de passe actuel est jugé par le serveur. Le reste se joue contre sa règle avant l'envoi, pour dire le refus sans
 // attendre. Il vit dans la carte de l'accès, avec ses lignes.
-export function AccessPasswordForm({ minLength, busy, onSubmit }: { minLength: number; busy: boolean; onSubmit: (password: string) => void }) {
+export function AccessPasswordForm({ minLength, busy, onSubmit }: { minLength: number; busy: boolean; onSubmit: (current: string, password: string) => void }) {
   const t = useT();
-  const { values, change, error, submit } = usePasswordForm(minLength, (valid) => onSubmit(valid.password));
+  const { values, change, error, submit } = usePasswordForm(minLength, (valid) => onSubmit(valid.current, valid.password));
   return (
     <form
       className="setting-stack"
@@ -22,6 +22,9 @@ export function AccessPasswordForm({ minLength, busy, onSubmit }: { minLength: n
       <div className="setting-subhead">
         <span className="card-t">{t("auth.change_title")}</span>
       </div>
+      <SettingRow label={t("auth.current_label")} htmlFor="auth-current" width="medium">
+        <Input id="auth-current" type="password" value={values.current} onChange={(event) => change("current", event.target.value)} autoComplete="current-password" required />
+      </SettingRow>
       <SettingRow label={t("auth.password_label")} description={t("auth.password_help", minLength)} htmlFor="auth-password" width="medium">
         <Input id="auth-password" type="password" value={values.password} onChange={(event) => change("password", event.target.value)} autoComplete="new-password" required />
       </SettingRow>

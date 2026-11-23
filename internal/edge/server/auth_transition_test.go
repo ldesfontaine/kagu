@@ -119,7 +119,7 @@ func (ts *testServer) resetAccount(t *testing.T) {
 func TestAuthTransition_AHeldPasswordChangeDoesNotOutliveAReset(t *testing.T) {
 	server := newTestServer(t)
 	attacker := "attacker chosen passphrase"
-	held := holdWrite(t, server, http.MethodPut, "/api/auth/password", `{"password":"`+attacker+`"}`)
+	held := holdWrite(t, server, http.MethodPut, "/api/auth/password", `{"current":"`+testPassword+`","password":"`+attacker+`"}`)
 	server.resetAccount(t)
 	if status := held.release(); status != http.StatusConflict {
 		t.Fatalf("held password change: status %d, want 409", status)
@@ -194,7 +194,7 @@ func TestRequireOperator_DoesNotReadTheBodyOfAnAnonymousWrite(t *testing.T) {
 	server := newFirstSetupServer(t)
 	server.enableBasic(t)
 	reading := make(chan struct{})
-	body := &signalingBody{ReadCloser: io.NopCloser(strings.NewReader(`{"password":"attacker chosen passphrase"}`)), reading: reading}
+	body := &signalingBody{ReadCloser: io.NopCloser(strings.NewReader(`{"current":"` + testPassword + `","password":"attacker chosen passphrase"}`)), reading: reading}
 	request := httptest.NewRequest(http.MethodPut, "/api/auth/password", body)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
@@ -298,7 +298,7 @@ func TestAuthTransition_PasswordDisableAndEnableAreRefusedUnderAChangedState(t *
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := server.operator.ChangePassword(ctx, current, "the operator's new passphrase"); err != nil {
+			if _, err := server.operator.ChangePassword(ctx, current, testPassword, "the operator's new passphrase"); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -307,7 +307,7 @@ func TestAuthTransition_PasswordDisableAndEnableAreRefusedUnderAChangedState(t *
 	t.Run("password", func(t *testing.T) {
 		server := newFirstSetupServer(t)
 		server.enableBasic(t)
-		requireStateChanged(t, staleWrite(t, server, server.changeAuthPassword, http.MethodPut, "/api/auth/password", `{"password":"attacker chosen passphrase"}`, "", changePassword(server)))
+		requireStateChanged(t, staleWrite(t, server, server.changeAuthPassword, http.MethodPut, "/api/auth/password", `{"current":"`+testPassword+`","password":"attacker chosen passphrase"}`, "", changePassword(server)))
 		if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, "the operator's new passphrase"); got.Code != http.StatusOK {
 			t.Fatalf("the operator's new password was replaced: %d", got.Code)
 		}

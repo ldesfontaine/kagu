@@ -70,6 +70,10 @@ var (
 	// En mode forward, c'est le SSO qui authentifie : il n'y a pas
 	// de mot de passe à changer.
 	ErrNoPassword = refusal.Conflict("auth.no_password", "auth: no password in this mode")
+	// Le mot de passe actuel, absent ou faux : changer le mot de passe ne se
+	// fait pas avec une session ouverte seule. Déclaré Invalid pour porter sa
+	// clé ; le serveur le rend en 403, pas en 422.
+	ErrCurrentPasswordWrong = refusal.Invalid("auth.current_password_wrong", "auth: current password wrong")
 	// L'état a changé entre l'instant où la requête a été autorisée et celui
 	// où elle aurait pris effet : elle ne s'applique pas.
 	ErrStateChanged = refusal.Conflict("auth.state_changed", "auth: state changed")
