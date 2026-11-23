@@ -2,12 +2,14 @@ package ping
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/kit/ratelimit"
 )
 
 func TestPing_ThreeFormsInGetAndPost_MoveTheJob(t *testing.T) {
@@ -170,8 +172,28 @@ func TestPing_TokenAtTheLimit_IsLookedUpLikeAnyOther(t *testing.T) {
 	if got := server.send(http.MethodGet, path, "", ""); got.Code != http.StatusNotFound {
 		t.Fatalf("status %d", got.Code)
 	}
-	if size := server.handler.tokenLimit.Size(); size != 1 {
-		t.Fatalf("byToken holds %d buckets, want 1", size)
+	if size := server.handler.tokenLimit.Size(); size != 0 {
+		t.Fatalf("byToken holds %d buckets for an unknown token, want 0", size)
+	}
+}
+
+// Critère A-5 : 10 000 pings à jetons inconnus, de 10 000 sources, ne
+// laissent aucun seau par jeton, et le seau par source s'arrête à son plafond.
+func TestR_A2_15_UnknownTokensLeaveNoBucket(t *testing.T) {
+	server := newBench(t)
+	const pings = 10000
+	for i := range pings {
+		peer := fmt.Sprintf("10.%d.%d.%d:4000", i>>16, (i>>8)&255, i&255)
+		path := fmt.Sprintf("/ping/hb_unknown%d", i)
+		if got := server.sendFrom(peer, path); got != http.StatusNotFound && got != http.StatusTooManyRequests {
+			t.Fatalf("ping %d: status %d", i, got)
+		}
+	}
+	if size := server.handler.tokenLimit.Size(); size != 0 {
+		t.Fatalf("byToken holds %d buckets after %d unknown tokens, want 0", size, pings)
+	}
+	if size := server.handler.sourceLimit.Size(); size > ratelimit.MaxSources {
+		t.Fatalf("bySource holds %d buckets, cap %d", size, ratelimit.MaxSources)
 	}
 }
 

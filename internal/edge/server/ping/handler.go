@@ -13,6 +13,8 @@ import (
 // Ce que les pings attendent du composant heartbeat : recevoir un ping.
 type HeartbeatReceiver interface {
 	Receive(ctx context.Context, token string, ping heartbeat.Ping) (heartbeat.Heartbeat, error)
+	// IsKnownToken dit si ce jeton ouvre un moniteur, sans rien écrire.
+	IsKnownToken(ctx context.Context, token string) (bool, error)
 }
 
 type Options struct {
@@ -39,7 +41,7 @@ func New(opts Options) *Handler {
 		heartbeats:    opts.Heartbeats,
 		clientAddress: opts.ClientAddress,
 		sourceLimit:   ratelimit.NewBySource(pingPerSourceRate, pingPerSourceBurst, pingIdle),
-		tokenLimit:    ratelimit.New(pingPerTokenRate, pingPerTokenBurst, pingIdle),
+		tokenLimit:    ratelimit.NewCapped(pingPerTokenRate, pingPerTokenBurst, pingIdle, maxPingTokenBuckets),
 	}
 	if opts.Clock != nil {
 		handler.sourceLimit.SetClock(opts.Clock)

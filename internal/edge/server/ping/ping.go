@@ -1,6 +1,7 @@
 package ping
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -26,26 +27,51 @@ const (
 	// en clair, dont le format n'a jamais été garanti. Au-delà, le jeton ne
 	// peut pas exister : il est refusé sans rien retenir.
 	maxPingTokenLength = 256
+	// Un seau par jeton reconnu : le plafond dépasse le nombre de moniteurs
+	// d'une machine Kagu.
+	maxPingTokenBuckets = 4096
 )
 
-// allowPing compte la requête sur les deux seaux, la source d'abord : un
-// jeton inconnu essayé en rafale s'arrête là, et son seau vide part au
-// balayage suivant.
+// admitPing rend le refus à répondre, ou nil si le ping peut s'écrire.
 //
-// Le seau par jeton est indexé par l'empreinte du jeton : le jeton vient de
-// l'URL, un anonyme l'invente, et sa clé reste en mémoire jusqu'au balayage.
-// Une empreinte pèse toujours la même chose, quelle que soit la requête. Un
-// jeton trop long ne crée aucun seau : il est compté sur la source seule, et
-// receivePing le refuse.
-func (h *Handler) allowPing(source, token string) bool {
+// Le seau par source compte d'abord : un jeton inconnu essayé en rafale
+// s'arrête là. Le seau par jeton ne compte qu'un jeton reconnu : le jeton
+// vient de l'URL, un anonyme l'invente, et un seau par jeton inventé
+// remplirait la mémoire. Il compte avant l'écriture, pour que la base soit
+// protégée : reconnaître, compter, puis écrire. Sa clé est l'empreinte du
+// jeton, qui pèse toujours la même chose.
+func (h *Handler) admitPing(ctx context.Context, source, token string) *pingRefusal {
 	if !h.sourceLimit.Allow(source) {
-		return false
+		return &tooManyPings
 	}
+	// Au-delà, le jeton ne peut pas exister : il est refusé sans rien lire.
 	if len(token) > maxPingTokenLength {
-		return true
+		return &unknownToken
 	}
-	return h.tokenLimit.Allow(ident.HashToken(token))
+	known, err := h.heartbeats.IsKnownToken(ctx, token)
+	if err != nil {
+		h.logger.Error("look up ping token", "error", err)
+		return &pingFailed
+	}
+	if !known {
+		return &unknownToken
+	}
+	if !h.tokenLimit.Allow(ident.HashToken(token)) {
+		return &tooManyPings
+	}
+	return nil
 }
+
+type pingRefusal struct {
+	status int
+	text   string
+}
+
+var (
+	tooManyPings = pingRefusal{http.StatusTooManyRequests, "too many pings"}
+	unknownToken = pingRefusal{http.StatusNotFound, "unknown token"}
+	pingFailed   = pingRefusal{http.StatusInternalServerError, "error"}
+)
 
 // GET ou POST /ping/{token} : la tâche a fini.
 func (h *Handler) finish(w http.ResponseWriter, r *http.Request) {
@@ -74,13 +100,11 @@ func (h *Handler) receivePing(w http.ResponseWriter, r *http.Request, ping heart
 	token := r.PathValue("token")
 	ping.Source = h.clientAddress(r)
 	ping.Method = r.Method
-	if !h.allowPing(ping.Source, token) {
-		w.Header().Set("Retry-After", httpx.RetryAfterSeconds)
-		h.writePing(w, http.StatusTooManyRequests, "too many pings")
-		return
-	}
-	if len(token) > maxPingTokenLength {
-		h.writePing(w, http.StatusNotFound, "unknown token")
+	if refusal := h.admitPing(r.Context(), ping.Source, token); refusal != nil {
+		if refusal.status == http.StatusTooManyRequests {
+			w.Header().Set("Retry-After", httpx.RetryAfterSeconds)
+		}
+		h.writePing(w, refusal.status, refusal.text)
 		return
 	}
 	if r.Method == http.MethodPost {

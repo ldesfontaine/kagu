@@ -131,7 +131,7 @@ Lignes sur `3e79bb1`. Tests lus, pas lancés.
 | A-2 | Fermé par TU-08 (PR #546) | `internal/server/auth_middleware.go:265-274`, `:277-287`, `:292-302` ; `internal/server/routes.go:347` ; `internal/server/server.go:651` | `internal/server/spa_test.go` `TestR_A2_13` |
 | A-3 | Ouvert | Toute demande ouvre `DeleteMachineDialog` (`web/src/components/VerbRequestsCard.tsx:63-69`) ; ni instantané ni chemin (`web/src/lib/verbRequests.ts:9-14`) | — |
 | A-4 | Fermé par TU-11 (PR #545) | `internal/verb/restic.go:28`, `:43` ; `internal/server/api_tokens.go:212-237` | `internal/server/api_token_restic_reach_test.go` `TestR_A4_11` |
-| A-5 | Ouvert | `internal/server/ping/ping.go:46` ; `internal/ratelimit/limiter.go:48` sans plafond de clés | — |
+| A-5 | Fermé par T02-05 | `internal/edge/server/ping/ping.go` (`admitPing`) ; `internal/kit/ratelimit/limiter.go` (`NewCapped`, `MaxSources`) | `internal/edge/server/ping` `TestR_A2_15_UnknownTokensLeaveNoBucket` ; `internal/kit/ratelimit` `TestR_A2_15_ALimiterStopsAtItsCap` |
 | A-6 | Ouvert | 16 places partagées, rien par jeton : `internal/server/api_containers.go:25`, `:299` | — |
 | B-F1 | Ouvert | `internal/agent/restic_restore.go:109-114`, puis `os.Rename` `:146`, sans rejuger `files.write` | — |
 | B-F2 | Ouvert | `internal/machine/sign.go:77-92` : casse et tirets libres | — |
