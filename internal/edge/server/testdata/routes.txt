@@ -151,7 +151,12 @@ GET /api/settings/mail
 PUT /api/settings/mail
 POST /api/settings/mail/actions/test
 GET /api/auth
-POST /api/auth/actions/enable
+POST /api/auth/setup
+POST /api/auth/login
+POST /api/auth/logout
+GET /api/auth/sessions
+DELETE /api/auth/sessions/{id}
+POST /api/auth/sessions/actions/close-others
 POST /api/auth/actions/disable
 PUT /api/auth/password
 GET /api/audit

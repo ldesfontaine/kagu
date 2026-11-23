@@ -97,7 +97,7 @@ func apiTokenFrom(ctx context.Context) (apitoken.Token, bool) {
 }
 
 // admitAPIToken juge un Bearer : une route que le jeton n'ouvre pas, 403 ; un
-// jeton inconnu, révoqué ou échu, 401 sous le limiteur des échecs Basic.
+// jeton inconnu, révoqué ou échu, 401 sous le limiteur des échecs de connexion.
 // Admis, la requête porte le jeton et l'acteur api:<id> ; aucune route
 // admise n'accorde d'autorité ni ne tient un flux, d'où pas d'état
 // d'authentification dans le contexte.
@@ -237,7 +237,7 @@ func (s *Server) machinesTargeted(r *http.Request, offered verb.Verb) ([]string,
 
 // onBehalfOf est la valeur de X-MCP-Maison-User : exactement une, sans
 // caractère de contrôle, bornée. Lue seulement sur une requête admise par
-// jeton ; sur Basic ou forward, ignorée.
+// jeton ; sur une session ou en forward, ignorée.
 func onBehalfOf(r *http.Request) string {
 	values := r.Header.Values(onBehalfOfHeader)
 	if len(values) != 1 {

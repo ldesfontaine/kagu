@@ -849,6 +849,8 @@ const auth = shape<AuthState>("AuthState", {
   header: optional(value),
   enabled_at: value,
   password_min_length: value,
+  signed_in: value,
+  session: optional(value),
   forward_insecure: optional(value),
   allowed_users: value,
 });

@@ -42,11 +42,11 @@ func TestSaveAuthStateIf_WritesOnlyFromTheExpectedState(t *testing.T) {
 	ctx := context.Background()
 	at := time.Unix(1_800_000_000, 0)
 	none := auth.State{Mode: auth.ModeNone}
-	basic := auth.State{Mode: auth.ModeBasic, Username: "lucas", PasswordHash: "empreinte", EnabledAt: at}
-	other := auth.State{Mode: auth.ModeBasic, Username: "autre", PasswordHash: "autre", EnabledAt: at}
+	native := auth.State{Mode: auth.ModeNative, Username: "lucas", PasswordHash: "empreinte", EnabledAt: at}
+	other := auth.State{Mode: auth.ModeNative, Username: "autre", PasswordHash: "autre", EnabledAt: at}
 
 	// Sans ligne, l'état stocké est « none ».
-	swapped, err := db.SaveAuthStateIf(ctx, none, basic, at)
+	swapped, err := db.SaveAuthStateIf(ctx, none, native, at)
 	if err != nil || !swapped {
 		t.Fatalf("first write: %v %v", swapped, err)
 	}
@@ -55,10 +55,10 @@ func TestSaveAuthStateIf_WritesOnlyFromTheExpectedState(t *testing.T) {
 		t.Fatalf("second write from the same state: %v %v", swapped, err)
 	}
 	got, err := db.GetAuthState(ctx)
-	if err != nil || !got.Same(basic) {
-		t.Fatalf("stored %+v %v, want %+v", got, err, basic)
+	if err != nil || !got.Same(native) {
+		t.Fatalf("stored %+v %v, want %+v", got, err, native)
 	}
-	swapped, err = db.SaveAuthStateIf(ctx, basic, none, at)
+	swapped, err = db.SaveAuthStateIf(ctx, native, none, at)
 	if err != nil || !swapped {
 		t.Fatalf("write from the stored state: %v %v", swapped, err)
 	}
@@ -93,8 +93,8 @@ func TestSetupCode_IsKeptCountedAndWipedByAnyStateChange(t *testing.T) {
 		t.Fatalf("the code row is in mode none: %+v %v", state, err)
 	}
 
-	basic := auth.State{Mode: auth.ModeBasic, Username: "lucas", PasswordHash: "h", EnabledAt: at}
-	if swapped, err := db.SaveAuthStateIf(ctx, auth.State{Mode: auth.ModeNone}, basic, at); err != nil || !swapped {
+	native := auth.State{Mode: auth.ModeNative, Username: "lucas", PasswordHash: "h", EnabledAt: at}
+	if swapped, err := db.SaveAuthStateIf(ctx, auth.State{Mode: auth.ModeNone}, native, at); err != nil || !swapped {
 		t.Fatal(swapped, err)
 	}
 	if wiped, err := db.GetSetupCode(ctx); err != nil || wiped.Hash != "" || wiped.Failures != 0 || !wiped.Expires.IsZero() {

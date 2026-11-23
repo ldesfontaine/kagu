@@ -2,34 +2,45 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
-func TestAuthBasic_AttemptBudget_IsSharedByAnIPv6SixtyFour(t *testing.T) {
+// callLogin joue POST /api/auth/login sur HTTPS depuis ce pair, comme le
+// navigateur de la page de connexion.
+func callLogin(server *Server, peer, username, password string) *httptest.ResponseRecorder {
+	body, _ := json.Marshal(authLoginRequest{Username: username, Password: password})
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(string(body)))
+	request.RemoteAddr = peer
+	request.TLS = &tls.ConnectionState{}
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(anonymousHeader, "1")
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func TestLogin_AttemptBudget_IsSharedByAnIPv6SixtyFour(t *testing.T) {
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
-	attempt := func(peer, password string) int {
-		request := httptest.NewRequest(http.MethodGet, "/api/counts", nil)
-		request.RemoteAddr = peer
-		request.SetBasicAuth(testUsername, password)
-		recorder := httptest.NewRecorder()
-		server.ServeHTTP(recorder, request)
-		return recorder.Code
-	}
+	server.enableNative(t)
 	for i := range authAttemptBurst {
-		if got := attempt("[2001:db8:1:2::1]:4000", "guess"); got != http.StatusUnauthorized {
-			t.Fatalf("attempt %d: status %d", i+1, got)
+		if got := callLogin(server.Server, "[2001:db8:1:2::1]:4000", testUsername, "guess"); got.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: status %d", i+1, got.Code)
 		}
 	}
-	if got := attempt("[2001:db8:1:2::2]:4000", testPassword); got != http.StatusTooManyRequests {
-		t.Fatalf("same /64: status %d, want 429", got)
+	if got := callLogin(server.Server, "[2001:db8:1:2::2]:4000", testUsername, testPassword); got.Code != http.StatusTooManyRequests {
+		t.Fatalf("same /64: status %d, want 429", got.Code)
 	}
-	if got := attempt("[2001:db8:1:3::1]:4000", testPassword); got != http.StatusOK {
-		t.Fatalf("another /64: status %d, want 200", got)
+	if got := callLogin(server.Server, "[2001:db8:1:3::1]:4000", testUsername, testPassword); got.Code != http.StatusOK {
+		t.Fatalf("another /64: status %d, want 200", got.Code)
 	}
 }
 
@@ -40,43 +51,45 @@ type refusingAuth struct {
 	err error
 }
 
-func (a refusingAuth) Verify(context.Context, auth.State, string, string) (bool, error) {
-	return false, a.err
+func (a refusingAuth) Login(context.Context, auth.State, string, string, auth.SessionClient) (auth.OpenedSession, error) {
+	return auth.OpenedSession{}, a.err
 }
 
-func TestAuthBasic_FullVerificationQueue_Is429WithRetryAfter(t *testing.T) {
+func TestLogin_FullVerificationQueue_Is429WithRetryAfter(t *testing.T) {
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
+	server.enableNative(t)
 	server.auth = refusingAuth{AuthService: server.operator, err: auth.ErrVerificationQueueFull}
-	recorder := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, "guess")
+	recorder := callLogin(server.Server, "192.0.2.1:1234", testUsername, "guess")
 	if recorder.Code != http.StatusTooManyRequests || recorder.Header().Get("Retry-After") == "" {
 		t.Fatalf("status %d, Retry-After %q", recorder.Code, recorder.Header().Get("Retry-After"))
 	}
-	if recorder.Header().Get("WWW-Authenticate") != "" {
-		t.Fatal("a full queue is not a refusal of the credentials: no Basic challenge")
+	if recorder.Header().Get("Set-Cookie") != "" {
+		t.Fatal("a full queue opened a session")
 	}
 }
 
-func TestAuthBasic_CanceledWait_IsNotAFailedLogin(t *testing.T) {
+func TestLogin_CanceledWait_IsNotAFailedLogin(t *testing.T) {
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
+	server.enableNative(t)
 	server.auth = refusingAuth{AuthService: server.operator, err: context.Canceled}
-	recorder := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, "guess")
+	recorder := callLogin(server.Server, "192.0.2.1:1234", testUsername, "guess")
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status %d, want 503", recorder.Code)
 	}
 }
 
-// Le test de bout en bout : l'opérateur dont les identifiants sont retenus
-// passe même quand la file des anonymes est pleine.
-func TestAuthBasic_RememberedOperator_PassesWhileTheQueueIsRefusing(t *testing.T) {
+// L'opérateur connecté passe même quand la file des connexions est pleine :
+// sa session ne repasse pas par bcrypt.
+func TestLogin_SignedInOperator_PassesWhileTheQueueIsRefusing(t *testing.T) {
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
-	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, testPassword); got.Code != http.StatusOK {
-		t.Fatalf("first login: status %d", got.Code)
-	}
+	server.enableNative(t)
+	token := signIn(server.Server, testUsername, testPassword)
 	server.auth = refusingAuth{AuthService: server.operator, err: auth.ErrVerificationQueueFull}
-	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, testPassword); got.Code != http.StatusOK {
-		t.Fatalf("remembered operator: status %d", got.Code)
+	request := httptest.NewRequest(http.MethodGet, "/api/counts", nil)
+	request.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: token})
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("signed-in operator: status %d", recorder.Code)
 	}
 }

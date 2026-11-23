@@ -61,8 +61,15 @@ func (db *DB) SaveAuthStateIf(ctx context.Context, expected, next auth.State, at
 }
 
 // writeAuthState efface aussi le code de première configuration : tout
-// changement d'état l'use, et un code ne survit pas à la désactivation.
+// changement d'état l'use, et un code ne survit pas à la désactivation. Un
+// retour au mode none efface les sessions, dans la même transaction : le
+// compte recréé ensuite n'hérite d'aucune.
 func writeAuthState(ctx context.Context, to execer, state auth.State, at time.Time) error {
+	if state.Mode == auth.ModeNone {
+		if _, err := to.ExecContext(ctx, `DELETE FROM operator_sessions`); err != nil {
+			return fmt.Errorf("save auth state: %w", err)
+		}
+	}
 	_, err := to.ExecContext(ctx, `
 		INSERT INTO auth_settings (id, mode, username, password_hash, forward_header, enabled_at, updated_at)
 		VALUES (1, ?, ?, ?, ?, ?, ?)

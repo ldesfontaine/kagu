@@ -10,6 +10,10 @@ import (
 // adresses de l'interface et les préfixes de l'annuaire en dépendent.
 const randomBytes = 8
 
+// secretBytes : 256 bits, le jeton d'une session (flux d'un agent, session de
+// l'opérateur).
+const secretBytes = 32
+
 // New tire un identifiant de seize hexadécimaux en minuscules.
 func New() (string, error) {
 	return NewSized(randomBytes)
@@ -17,14 +21,20 @@ func New() (string, error) {
 
 // NewSized tire un identifiant plus long ou plus court que New, pour les
 // formes que d'autres attendent (identifiant de transaction, de corrélation,
-// de message) : deux hexadécimaux en minuscules par octet. Jamais pour un
-// secret : un secret garde sa propre forme et sa propre garde.
+// de message) : deux hexadécimaux en minuscules par octet. Un jeton de session
+// passe par NewSecret ; les autres secrets gardent leur propre forme.
 func NewSized(bytes int) (string, error) {
 	raw := make([]byte, bytes)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(raw), nil
+}
+
+// NewSecret tire le jeton d'une session : 256 bits en hexadécimal minuscule.
+// C'est un secret : la base n'en garde que HashToken.
+func NewSecret() (string, error) {
+	return NewSized(secretBytes)
 }
 
 // HashToken est la seule forme d'un jeton que la base voit : SHA-256 en

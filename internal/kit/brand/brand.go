@@ -193,6 +193,16 @@ const (
 	APITokenScheme        = TokenPrefix + "k_" // #nosec G101 -- un préfixe, pas un secret.
 )
 
+// Les cookies de session de l'opérateur (A2, R-A2-3). Le nom porte le produit
+// en minuscules, pas ID : il est neuf, rien d'installé ne le connaît. Le
+// préfixe __Host- oblige le navigateur à ne l'accepter que Secure, sans
+// Domain, sur Path=/ ; le cookie local, sans Secure, sert le tunnel SSH en
+// HTTP sur la boucle locale.
+const (
+	SessionCookie      = "__Host-kagu_session"
+	LocalSessionCookie = "kagu_session_local"
+)
+
 // Début de l'empreinte de l'identifiant d'une machine, pour reconnaître
 // un agent installé sur la machine du serveur.
 const HostFingerprintPrefix = "opencloud-host:"

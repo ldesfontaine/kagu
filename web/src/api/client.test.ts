@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 
-import { api, ApiError, errorKey, failureOf, segment } from "./client";
+import { api, ApiError, errorKey, failureOf, onSessionLost, segment } from "./client";
 import { route } from "./routes";
 
 afterEach(() => {
@@ -98,4 +98,34 @@ test("un refus du serveur garde son code et son corps", () => {
 test("ce qui n'est pas un refus du serveur se dit comme une erreur interne", () => {
   expect(errorKey(failureOf(new TypeError("Failed to fetch")))).toBe("error.internal");
   expect(failureOf("x").status).toBe(0);
+});
+
+function answer(status: number, error: string) {
+  vi.stubGlobal("fetch", () => Promise.resolve(new Response(JSON.stringify({ error }), { status, headers: { "Content-Type": "application/json" } })));
+}
+
+test("une session morte (401 unauthorized) prévient qui l'écoute, une seule fois par réponse", async () => {
+  let lost = 0;
+  const stop = onSessionLost(() => {
+    lost += 1;
+  });
+  answer(401, "unauthorized");
+  await expect(api.get("/api/machines")).rejects.toMatchObject({ status: 401, code: "unauthorized" });
+  expect(lost).toBe(1);
+  stop();
+  await expect(api.get("/api/machines")).rejects.toThrow(ApiError);
+  expect(lost).toBe(1);
+});
+
+test("un mot de passe faux à la connexion n'est pas une session morte", async () => {
+  let lost = 0;
+  const stop = onSessionLost(() => {
+    lost += 1;
+  });
+  answer(401, "auth.login_failed");
+  await expect(api.send(route("POST /api/auth/login"), { username: "lucas", password: "faux" })).rejects.toMatchObject({ code: "auth.login_failed" });
+  answer(403, "unauthorized");
+  await expect(api.get("/api/machines")).rejects.toThrow(ApiError);
+  stop();
+  expect(lost).toBe(0);
 });

@@ -429,8 +429,8 @@ type Server struct {
 	deploy       Deployer
 	live         Live
 	logStreams   atomic.Int32
-	// Le limiteur de la racine, par source : les essais d'identifiants Basic
-	// et de jetons d'API.
+	// Le limiteur de la racine, par source : les connexions, les changements
+	// de mot de passe et les jetons d'API.
 	authLimit *ratelimit.BySource
 	// Le débit des gestes d'un jeton d'API, et celui de la trace de ses
 	// refus, par jeton (api_tokens.go).

@@ -196,7 +196,12 @@ func (s *Server) routes() []route {
 		{"PUT", "/api/settings/mail", s.setMailSettings},
 		{"POST", "/api/settings/mail/actions/test", s.testMailSettings},
 		{"GET", "/api/auth", s.getAuth},
-		{"POST", "/api/auth/actions/enable", s.enableAuth},
+		{"POST", "/api/auth/setup", s.setupAuth},
+		{"POST", "/api/auth/login", s.login},
+		{"POST", "/api/auth/logout", s.logout},
+		{"GET", "/api/auth/sessions", s.listOperatorSessions},
+		{"DELETE", "/api/auth/sessions/{id}", s.closeOperatorSession},
+		{"POST", "/api/auth/sessions/actions/close-others", s.closeOtherSessions},
 		{"POST", "/api/auth/actions/disable", s.disableAuth},
 		{"PUT", "/api/auth/password", s.changeAuthPassword},
 		{"GET", "/api/audit", s.listAudit},
@@ -342,7 +347,7 @@ func (s *Server) mux() *http.ServeMux {
 		}
 		if isOperatorRoute(route.pattern) {
 			acting := s.withOperatorActor(handler)
-			handler = s.requireOperator(acting, isFirstSetupRoute(route.method, route.pattern), access)
+			handler = s.requireOperator(acting, isBeforeSignInRoute(route.method, route.pattern), access)
 			if route.pattern == frontPattern {
 				handler = s.openCompiledAssets(acting, handler)
 			}

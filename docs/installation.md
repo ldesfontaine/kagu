@@ -482,9 +482,9 @@ page de statut a son adresse dessous (`/statut/client-a`, `/statut/docs`…),
 créée dans l'interface sans toucher à Traefik. `/statut` seul mène à la page
 s'il n'y en a qu'une, sinon répond 404 : une page ne dit jamais qu'une autre
 existe. Une page de statut charge aussi `/assets/…`, `/theme.js` et
-`/favicon.svg` : ils doivent rester joignables pour qu'un visiteur la voie. Ne cumulez pas
-le Basic de Traefik et celui de Kagu : un seul en-tête `Authorization`
-porte les deux.
+`/favicon.svg` : ils doivent rester joignables pour qu'un visiteur la voie. Le
+Basic de Traefik occupe l'en-tête `Authorization` : un jeton d'API
+(`Authorization: Bearer`) ne passerait plus.
 
 ## Authentification
 
@@ -493,9 +493,10 @@ neuve n'a pas de compte, et ne sert rien d'autre que l'écran de première
 configuration : l'interface, l'API, le direct et les journaux
 répondent `401` (`auth.setup_required`) tant que le compte n'existe pas. La
 page de statut, les pings et les agents gardent leur propre accès ; un jeton
-d'API lit l'API sans identifiants (voir [Brancher un agent IA](#brancher-un-agent-ia)). Deux modes : identifiant et mot de passe (HTTP Basic,
-ci-dessous), ou [un SSO qui authentifie](#derrière-un-sso-qui-authentifie)
-(Authelia). Le compte créé, le navigateur est connecté et l'interface s'ouvre.
+d'API lit l'API sans identifiants (voir [Brancher un agent IA](#brancher-un-agent-ia)). Deux modes : un compte, identifiant et mot de passe,
+avec une page de connexion (connexion native, ci-dessous), ou
+[un SSO qui authentifie](#derrière-un-sso-qui-authentifie) (Authelia). Le
+compte créé, le navigateur est connecté et l'interface s'ouvre.
 
 **La première configuration exige un code.** Tirez-le sur la machine
 Kagu, sous le compte du service ou en root (la commande parle au serveur
@@ -515,33 +516,41 @@ neuf. Créez le compte avant de publier le routeur Traefik, par un tunnel SSH
 vers l'adresse de `listen` :
 ```sh
 ssh -L 8080:127.0.0.1:8080 root@vps.example.org
-# puis, sur votre poste : http://127.0.0.1:8080
+# puis, sur votre poste : http://localhost:8080
 ```
+
+En HTTP clair, Kagu n'ouvre de session que sur la boucle locale (ce tunnel) ;
+ailleurs, il refuse (`auth.https_required`) : passez par HTTPS.
 
 **Ou par l'API**, depuis la machine, tant qu'aucun compte n'existe :
 
 ```sh
 curl -X POST -H 'Content-Type: application/json' \
   -d '{"setup_code":"12345678","username":"admin","password":"une phrase de 12 caractères ou plus"}' \
-  http://127.0.0.1:8080/api/auth/actions/enable
+  http://127.0.0.1:8080/api/auth/setup
 ```
 
 | Règle | Valeur |
 | --- | --- |
-| Mode | HTTP Basic, realm `Kagu`. Le navigateur demande les identifiants dans sa propre fenêtre |
+| Connexion | La page de connexion : nom, mot de passe. Elle ouvre une session ; le mot de passe ne voyage qu'à ce moment-là |
+| Session | Cookie `__Host-kagu_session` (`Secure`, `HttpOnly`, `SameSite=Strict`) sur HTTPS ; `kagu_session_local` sur le tunnel SSH (`http://localhost:8080`). Elle meurt après **2 h** sans requête, **12 h** au plus, à la déconnexion |
 | Identifiant | 1 à 64 caractères, sans `:` |
 | Mot de passe | 12 caractères au moins, 72 octets au plus ; haché en bcrypt |
 | Échecs | 10 d'un coup, puis un toutes les 6 s par adresse (en IPv6, par /64), `429` au-delà. La vérification lente fait la queue derrière neuf autres au plus : file pleine, `429` aussitôt |
 | Effet | Immédiat, sans redémarrage. Créer le compte révoque tous les jetons d'API : il n'y en a qu'après un `auth disable`, recréez ceux qui servent |
 
 Ce qui reste ouvert : la liste du [tableau ci-dessus](#une-authentification-basic-au-niveau-de-traefik).
-Le reste — l'interface, `/api/…`, le direct, les journaux — demande les
-identifiants, ou un jeton d'API pour les lectures qu'il ouvre. Une fois activée, l'API se
-lit avec `curl -u admin:… https://…/api/machines`.
+Le reste — `/api/…`, le direct, les journaux — demande une session, ou un
+jeton d'API pour les lectures qu'il ouvre ; `curl -u` ne sert plus à rien,
+un script lit l'API par un jeton.
 
-**Pas de déconnexion** : avec Basic, le navigateur garde les identifiants
-jusqu'à sa fermeture. HTTP Basic renvoie le mot de passe à chaque requête :
-**HTTPS obligatoire** dès que l'interface sort de la machine.
+**Sessions** : Paramètres → Accès liste les sessions ouvertes (navigateur,
+adresse, vue il y a), en ferme une, « Fermer les autres », « Se
+déconnecter ». Changer le mot de passe ferme toutes les autres sessions.
+
+**Mise à jour d'une installation en HTTP Basic** : le mode devient
+`native`, même identifiant, même mot de passe. Le navigateur affiche la page
+de connexion : retapez le même mot de passe. Les jetons d'API ne changent pas.
 
 **Mot de passe perdu** :
 
@@ -632,11 +641,11 @@ http:
 
 **Activer** : ouvrez Kagu par son nom public, connectez-vous à
 Authelia, puis, sur l'écran de première configuration, Mode « SSO en amont
-(Authelia, Authentik…) ». Une installation qui a déjà un compte Basic y revient
+(Authelia, Authentik…) ». Une installation qui a déjà un compte y revient
 par Paramètres → Accès → Zone de danger → Désactiver (ou `opencloud auth
 disable`). Le corps de l'API est
 `{"mode":"forward","header":"Remote-User"}` sur
-`POST /api/auth/actions/enable`. Comme en Basic, activer révoque tous les
+`POST /api/auth/setup`. Comme pour un compte, activer révoque tous les
 jetons d'API.
 
 **Installation déjà en `forward` sans secret** : Kagu ne coupe pas

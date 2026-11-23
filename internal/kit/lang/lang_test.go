@@ -188,7 +188,7 @@ func TestLoad_ExpandsPlaceholders(t *testing.T) {
 		if got := catalog.Get("app.name"); got != brand.ProductName {
 			t.Errorf("%s: app.name = %q, want %q", code, got, brand.ProductName)
 		}
-		for _, key := range []string{"auth.unauthorized", "auth.forward_unauthorized"} {
+		for _, key := range []string{"auth.forward_unauthorized"} {
 			if got := catalog.Get(key); !strings.Contains(got, brand.Command+" auth disable") {
 				t.Errorf("%s: %s = %q, want the command %q", code, key, got, brand.Command+" auth disable")
 			}

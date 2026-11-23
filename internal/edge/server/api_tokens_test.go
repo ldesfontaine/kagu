@@ -339,7 +339,7 @@ func TestAPIToken_OnBehalfOfIsIgnoredUnderBasic(t *testing.T) {
 	server := newTestServer(t)
 	request := httptest.NewRequest(http.MethodPut, "/api/settings/reminder", strings.NewReader(`{"hours": 6}`))
 	request.Header.Set(onBehalfOfHeader, "mallory")
-	request.SetBasicAuth(testUsername, testPassword)
+	signInRequest(server.Server, request, testUsername, testPassword)
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")
 	before := server.latestAuditID(t)

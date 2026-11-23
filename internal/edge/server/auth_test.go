@@ -23,10 +23,10 @@ const (
 	testPassword = "correct horse battery"
 )
 
-// enableBasic passe le serveur en mode basic, par le composant.
-func (ts *testServer) enableBasic(t *testing.T) {
+// enableNative passe le serveur en mode native, par le composant.
+func (ts *testServer) enableNative(t *testing.T) {
 	t.Helper()
-	if _, err := ts.operator.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, ts.operator), testUsername, testPassword); err != nil {
+	if _, err := ts.operator.EnableNative(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, ts.operator), testUsername, testPassword); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -59,8 +59,10 @@ func requireSetupRequired(t *testing.T, recorder *httptest.ResponseRecorder) {
 	}
 }
 
-// callAs joue une requête comme le front, avec ou sans identifiants Basic ;
-// sans, c'est un inconnu, même face au banc qui pose ceux de l'opérateur.
+// callAs joue une requête comme le front. Avec un identifiant et un mot de
+// passe, elle se connecte d'abord par le composant et porte le cookie de la
+// session ouverte ; s'ils sont faux, elle n'en porte aucun. Sans, c'est un
+// inconnu, même face au banc qui pose la session de l'opérateur.
 func callAs(server *Server, method, path, username, password string) *httptest.ResponseRecorder {
 	return callAsWithin(context.Background(), server, method, path, username, password)
 }
@@ -70,14 +72,37 @@ func callAs(server *Server, method, path, username, password string) *httptest.R
 func callAsWithin(ctx context.Context, server *Server, method, path, username, password string) *httptest.ResponseRecorder {
 	request := httptest.NewRequestWithContext(ctx, method, path, nil)
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	request.Header.Set(anonymousHeader, "1")
 	if username != "" || password != "" {
-		request.SetBasicAuth(username, password)
-	} else {
-		request.Header.Set(anonymousHeader, "1")
+		signInRequest(server, request, username, password)
 	}
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	return recorder
+}
+
+// signInRequest pose sur la requête le cookie d'une session ouverte avec ces
+// identifiants, aucun s'ils sont refusés ; le banc n'y ajoute rien.
+func signInRequest(server *Server, request *http.Request, username, password string) {
+	request.Header.Set(anonymousHeader, "1")
+	if token := signIn(server, username, password); token != "" {
+		request.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: token})
+	}
+}
+
+// signIn ouvre une session par le composant, sans passer par la route ni son
+// limiteur, et rend son jeton ; rien si la connexion est refusée.
+func signIn(server *Server, username, password string) string {
+	ctx := context.Background()
+	state, err := server.auth.State(ctx)
+	if err != nil {
+		return ""
+	}
+	opened, err := server.auth.Login(ctx, state, username, password, auth.SessionClient{})
+	if err != nil {
+		return ""
+	}
+	return opened.Token
 }
 
 // Un chemin concret pour chaque motif : les jokers deviennent « x ».
@@ -99,31 +124,32 @@ func concreteMethod(method string) string {
 	return method
 }
 
-// Chaque route de l'arbre est jugée : celles de l'opérateur répondent 401
-// avec le défi Basic, les autres ne le demandent jamais.
-func TestAuthBasic_GuardsEveryOperatorRouteAndLeavesTheOthersOpen(t *testing.T) {
+// Chaque route de l'arbre est jugée : sans session, celles de l'opérateur
+// répondent 401, sans défi Basic, hors des routes d'avant la connexion ; les
+// autres ne demandent jamais rien.
+func TestAuthNative_GuardsEveryOperatorRouteAndLeavesTheOthersOpen(t *testing.T) {
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
+	server.enableNative(t)
 	open := map[string]bool{}
 	for _, route := range server.routes() {
 		path := concretePath(route.pattern)
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		recorder := callAsWithin(ctx, server.Server, concreteMethod(route.method), path, "", "")
 		cancel()
+		if got := recorder.Header().Get("WWW-Authenticate"); strings.HasPrefix(got, "Basic") {
+			t.Errorf("%s %s: a Basic challenge %q", route.method, route.pattern, got)
+		}
 		if isOperatorRoute(route.pattern) {
-			if recorder.Code != http.StatusUnauthorized {
+			beforeSignIn := isBeforeSignInRoute(route.method, route.pattern)
+			if !beforeSignIn && recorder.Code != http.StatusUnauthorized {
 				t.Errorf("%s %s: status %d, want 401", route.method, route.pattern, recorder.Code)
 			}
-			if got := recorder.Header().Get("WWW-Authenticate"); got != `Basic realm="`+brand.ProductName+`", charset="UTF-8"` {
-				t.Errorf("%s %s: WWW-Authenticate %q", route.method, route.pattern, got)
+			if beforeSignIn && recorder.Code == http.StatusUnauthorized && errorCode(t, recorder) == codeUnauthorized {
+				t.Errorf("%s %s: a route of the sign-in refused without a session", route.method, route.pattern)
 			}
 			continue
 		}
 		open[route.pattern] = true
-		if recorder.Code == http.StatusUnauthorized && recorder.Header().Get("WWW-Authenticate") != "" &&
-			strings.HasPrefix(recorder.Header().Get("WWW-Authenticate"), "Basic") {
-			t.Errorf("%s %s: an open route asked for the operator's password", route.method, route.pattern)
-		}
 	}
 	checkOpenRoutes(t, open)
 }
@@ -154,10 +180,10 @@ func checkOpenRoutes(t *testing.T, open map[string]bool) {
 	}
 }
 
-func TestAuthBasic_RightCredentialsPassAndWrongPasswordIs401(t *testing.T) {
+func TestAuthNative_RightCredentialsPassAndWrongPasswordIs401(t *testing.T) {
 	servertest.RequireFront(t)
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
+	server.enableNative(t)
 	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, testPassword); got.Code != http.StatusOK {
 		t.Fatalf("right credentials: status %d", got.Code)
 	}
@@ -173,10 +199,10 @@ func TestAuthBasic_RightCredentialsPassAndWrongPasswordIs401(t *testing.T) {
 	}
 }
 
-func TestAuthBasic_StatusPageAndPingStayPublic(t *testing.T) {
+func TestAuthNative_StatusPageAndPingStayPublic(t *testing.T) {
 	servertest.RequireFront(t)
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
+	server.enableNative(t)
 	storetest.PublishedProject(t, server.db, "statut")
 	if got := callAs(server.Server, http.MethodGet, "/statut/statut", "", ""); got.Code != http.StatusOK {
 		t.Fatalf("/statut/statut: status %d", got.Code)
@@ -190,12 +216,12 @@ func TestAuthBasic_StatusPageAndPingStayPublic(t *testing.T) {
 }
 
 // La page de statut charge ses scripts, styles et icône par le fourre-tout
-// de l'interface : ils restent lisibles sans identifiants, la page de
-// l'interface elle-même non.
-func TestAuthBasic_StatusPageAssetsStayPublic(t *testing.T) {
+// de l'interface : ils restent lisibles sans session. Les pages de
+// l'interface aussi (elles montrent la connexion) ; ses données, non.
+func TestAuthNative_StatusPageAssetsStayPublic(t *testing.T) {
 	servertest.RequireFront(t)
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
+	server.enableNative(t)
 	assets, err := fs.Glob(server.app, "assets/*")
 	if err != nil || len(assets) == 0 {
 		t.Fatalf("no compiled assets: %v", err)
@@ -205,71 +231,47 @@ func TestAuthBasic_StatusPageAssetsStayPublic(t *testing.T) {
 			t.Fatalf("/%s: status %d", asset, got.Code)
 		}
 	}
-	for _, page := range []string{"/", "/index.html", "/machines"} {
-		if got := callAs(server.Server, http.MethodGet, page, "", ""); got.Code != http.StatusUnauthorized {
-			t.Fatalf("%s: status %d, want 401", page, got.Code)
+	for _, page := range []string{"/", "/machines"} {
+		if got := callAs(server.Server, http.MethodGet, page, "", ""); got.Code != http.StatusOK {
+			t.Fatalf("%s: status %d, want the page of the sign-in", page, got.Code)
 		}
+	}
+	if got := callAs(server.Server, http.MethodGet, "/api/counts", "", ""); got.Code != http.StatusUnauthorized {
+		t.Fatalf("/api/counts: status %d, want 401", got.Code)
 	}
 }
 
-// Le refus d'une page, affiché quand l'opérateur annule la fenêtre du
-// navigateur, dit comment rouvrir l'accès, dans la langue du navigateur.
-func TestAuthBasic_RefusedPageSaysHowToRecoverALostPassword(t *testing.T) {
+// Les échecs de connexion comptent par adresse : au-delà de la rafale, 429,
+// même avec le bon mot de passe ; une autre adresse n'est pas touchée.
+func TestLogin_FailuresAreRateLimitedPerAddress(t *testing.T) {
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
-	cases := map[string]string{
-		"fr-FR,fr;q=0.9,en;q=0.8": "Identifiants requis. Mot de passe perdu : opencloud auth disable -config <chemin de la config>",
-		"en-US,en;q=0.9":          "Credentials required. Lost password: opencloud auth disable -config <config path>",
-		"":                        "Credentials required. Lost password: opencloud auth disable -config <config path>",
-	}
-	for acceptLanguage, want := range cases {
-		request := httptest.NewRequest(http.MethodGet, "/machines", nil)
-		request.Header.Set("Accept-Language", acceptLanguage)
-		recorder := httptest.NewRecorder()
-		server.ServeHTTP(recorder, request)
-		if recorder.Code != http.StatusUnauthorized {
-			t.Fatalf("%q: status %d, want 401", acceptLanguage, recorder.Code)
-		}
-		if got := strings.TrimSpace(recorder.Body.String()); got != want {
-			t.Errorf("%q: body %q, want %q", acceptLanguage, got, want)
-		}
-	}
-}
-
-// Les échecs comptent par adresse : au-delà de la rafale, 429, même avec
-// le bon mot de passe ; une autre adresse n'est pas touchée.
-func TestAuthBasic_FailuresAreRateLimitedPerAddress(t *testing.T) {
-	server := newFirstSetupServer(t)
-	server.enableBasic(t)
-	attempt := func(address, password string) int {
-		request := httptest.NewRequest(http.MethodGet, "/api/counts", nil)
-		request.RemoteAddr = address + ":4000"
-		request.SetBasicAuth(testUsername, password)
-		recorder := httptest.NewRecorder()
-		server.ServeHTTP(recorder, request)
-		return recorder.Code
-	}
+	server.enableNative(t)
 	for i := range authAttemptBurst {
-		if got := attempt("203.0.113.9", "guess"); got != http.StatusUnauthorized {
-			t.Fatalf("attempt %d: status %d", i+1, got)
+		if got := callLogin(server.Server, "203.0.113.9:4000", testUsername, "guess"); got.Code != http.StatusUnauthorized || errorCode(t, got) != "auth.login_failed" {
+			t.Fatalf("attempt %d: status %d %s", i+1, got.Code, got.Body.String())
 		}
 	}
-	if got := attempt("203.0.113.9", testPassword); got != http.StatusTooManyRequests {
-		t.Fatalf("after the burst: status %d, want 429", got)
+	if got := callLogin(server.Server, "203.0.113.9:4000", testUsername, testPassword); got.Code != http.StatusTooManyRequests {
+		t.Fatalf("after the burst: status %d, want 429", got.Code)
 	}
-	if got := attempt("198.51.100.7", testPassword); got != http.StatusOK {
-		t.Fatalf("another address: status %d", got)
+	if got := callLogin(server.Server, "198.51.100.7:4000", testUsername, testPassword); got.Code != http.StatusOK {
+		t.Fatalf("another address: status %d", got.Code)
 	}
 }
 
-// Les identifiants vérifiés sont retenus : les requêtes suivantes ne
-// consomment ni hachage lent ni jeton de la limite.
-func TestAuthBasic_RememberedCredentialsDoNotCountAgainstTheLimit(t *testing.T) {
+// Une session ne repasse ni par le hachage lent ni par la limite : les
+// requêtes qui la portent ne comptent pas.
+func TestAuthNative_ASessionDoesNotCountAgainstTheLimit(t *testing.T) {
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
+	server.enableNative(t)
+	token := signIn(server.Server, testUsername, testPassword)
 	for i := range authAttemptBurst * 3 {
-		if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, testPassword); got.Code != http.StatusOK {
-			t.Fatalf("request %d: status %d", i+1, got.Code)
+		request := httptest.NewRequest(http.MethodGet, "/api/counts", nil)
+		request.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: token})
+		recorder := httptest.NewRecorder()
+		server.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("request %d: status %d", i+1, recorder.Code)
 		}
 	}
 }
@@ -282,16 +284,16 @@ func TestAuthAPI_EnableChangeDisable(t *testing.T) {
 		t.Fatalf("initial state %+v", state)
 	}
 
-	short := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: "short"})
+	short := callSetupAPI(server.Server, authSetupRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: "short"})
 	if short.Code != http.StatusUnprocessableEntity || errorCode(t, short) != "auth.password_too_short" {
 		t.Fatalf("short password: %d %s", short.Code, short.Body.String())
 	}
-	badName := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: "a:b", Password: testPassword})
+	badName := callSetupAPI(server.Server, authSetupRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: "a:b", Password: testPassword})
 	if badName.Code != http.StatusUnprocessableEntity || errorCode(t, badName) != "auth.username_invalid" {
 		t.Fatalf("bad username: %d %s", badName.Code, badName.Body.String())
 	}
 
-	enabled := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
+	enabled := callSetupAPI(server.Server, authSetupRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", enabled.Code, enabled.Body.String())
 	}
@@ -299,35 +301,42 @@ func TestAuthAPI_EnableChangeDisable(t *testing.T) {
 		t.Fatal("neither the hash nor the password leaves the process")
 	}
 	decodeAPI(t, enabled, &state)
-	if state.Mode != "basic" || state.Username != testUsername || state.EnabledAt == nil || !state.EnabledAt.Equal(testNow) {
+	if state.Mode != "native" || state.Username != testUsername || state.EnabledAt == nil || !state.EnabledAt.Equal(testNow) || !state.SignedIn || state.Session == "" {
 		t.Fatalf("enabled state %+v", state)
 	}
-	// Désormais l'API elle-même demande les identifiants.
-	if got := callAPI(server.Server, http.MethodGet, "/api/auth", nil); got.Code != http.StatusUnauthorized {
+	// Désormais l'API elle-même demande une session ; l'état d'accès reste
+	// lisible, sans le compte.
+	if got := callAPI(server.Server, http.MethodGet, "/api/counts", nil); got.Code != http.StatusUnauthorized {
 		t.Fatalf("after enabling, anonymous read: %d", got.Code)
+	}
+	state = authResponse{}
+	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/auth", nil), &state)
+	if state.Mode != "native" || state.SignedIn || state.Username != "" || state.EnabledAt != nil || state.Session != "" {
+		t.Fatalf("anonymous auth state %+v", state)
 	}
 
 	const newPassword = "another long passphrase"
-	changed := callBasicJSON(server.Server, http.MethodPut, "/api/auth/password", `{"current":"`+testPassword+`","password":"`+newPassword+`"}`, testPassword)
+	changed := callSignedInJSON(server.Server, http.MethodPut, "/api/auth/password", `{"current":"`+testPassword+`","password":"`+newPassword+`"}`, testPassword)
 	if changed.Code != http.StatusOK {
 		t.Fatalf("change: %d %s", changed.Code, changed.Body.String())
 	}
-	// L'ancien mot de passe, pourtant retenu en mémoire, ne vaut plus rien.
-	if got := callAs(server.Server, http.MethodGet, "/api/auth", testUsername, testPassword); got.Code != http.StatusUnauthorized {
+	// L'ancien mot de passe ne vaut plus rien.
+	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, testPassword); got.Code != http.StatusUnauthorized {
 		t.Fatalf("old password after change: %d", got.Code)
 	}
 	read := callAs(server.Server, http.MethodGet, "/api/auth", testUsername, newPassword)
 	if read.Code != http.StatusOK {
 		t.Fatalf("new password: %d", read.Code)
 	}
-	goldentest.Compare(t, filepath.Join("testdata", "auth.golden.json"), read.Body.String())
+	decodeAPI(t, read, &state)
+	goldentest.Compare(t, filepath.Join("testdata", "auth.golden.json"), strings.Replace(read.Body.String(), state.Session, "<session>", 1))
 
-	again := callBasicJSON(server.Server, http.MethodPost, "/api/auth/actions/enable", `{"username":"x","password":"`+newPassword+`"}`, newPassword)
+	again := callSetupAPI(server.Server, authSetupRequest{Username: "x", Password: newPassword})
 	if again.Code != http.StatusConflict || errorCode(t, again) != "auth.already_enabled" {
 		t.Fatalf("enable twice: %d %s", again.Code, again.Body.String())
 	}
 
-	disabled := callBasicJSON(server.Server, http.MethodPost, "/api/auth/actions/disable", `{}`, newPassword)
+	disabled := callSignedInJSON(server.Server, http.MethodPost, "/api/auth/actions/disable", `{}`, newPassword)
 	if disabled.Code != http.StatusOK {
 		t.Fatalf("disable: %d %s", disabled.Code, disabled.Body.String())
 	}
@@ -349,13 +358,13 @@ func TestAuthAPI_EnableRevokesEveryAPITokenAndPasswordChangeDoesNot(t *testing.T
 	second := server.issueAPIToken(t, "script")
 	server.rescue(t)
 
-	enabled := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
+	enabled := callSetupAPI(server.Server, authSetupRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", enabled.Code, enabled.Body.String())
 	}
-	var response authEnableResponse
+	var response authSetupResponse
 	decodeAPI(t, enabled, &response)
-	if response.Mode != "basic" || response.APITokensRevoked != 2 {
+	if response.Mode != "native" || response.APITokensRevoked != 2 {
 		t.Fatalf("response %+v", response)
 	}
 	for _, bearer := range []string{first, second} {
@@ -366,20 +375,20 @@ func TestAuthAPI_EnableRevokesEveryAPITokenAndPasswordChangeDoesNot(t *testing.T
 
 	// Un jeton créé après l'activation survit au changement de mot de
 	// passe et à la désactivation.
-	created := callBasicJSON(server.Server, http.MethodPost, "/api/settings/api-tokens", `{"name":"après"}`, testPassword)
+	created := callSignedInJSON(server.Server, http.MethodPost, "/api/settings/api-tokens", `{"name":"après"}`, testPassword)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create after: %d %s", created.Code, created.Body.String())
 	}
 	var after apiTokenCreated
 	decodeAPI(t, created, &after)
 	const newPassword = "another long passphrase"
-	if got := callBasicJSON(server.Server, http.MethodPut, "/api/auth/password", `{"current":"`+testPassword+`","password":"`+newPassword+`"}`, testPassword); got.Code != http.StatusOK {
+	if got := callSignedInJSON(server.Server, http.MethodPut, "/api/auth/password", `{"current":"`+testPassword+`","password":"`+newPassword+`"}`, testPassword); got.Code != http.StatusOK {
 		t.Fatalf("change: %d %s", got.Code, got.Body.String())
 	}
 	if got := callBearer(server.Server, "/api/counts", after.Token); got.Code != http.StatusOK {
 		t.Fatalf("password change revoked a token: %d", got.Code)
 	}
-	if got := callBasicJSON(server.Server, http.MethodPost, "/api/auth/actions/disable", `{}`, newPassword); got.Code != http.StatusOK {
+	if got := callSignedInJSON(server.Server, http.MethodPost, "/api/auth/actions/disable", `{}`, newPassword); got.Code != http.StatusOK {
 		t.Fatalf("disable: %d %s", got.Code, got.Body.String())
 	}
 	if _, err := server.apiTokens.Verify(context.Background(), after.Token); err != nil {
@@ -389,18 +398,16 @@ func TestAuthAPI_EnableRevokesEveryAPITokenAndPasswordChangeDoesNot(t *testing.T
 
 // La commande de secours écrit dans la base depuis un autre processus :
 // serve la suit à la requête suivante, sans redémarrer, en revenant à la
-// première configuration, et les identifiants qu'il avait retenus ne
-// rouvrent rien à la réactivation.
-func TestAuthBasic_DisableFromAnotherProcessTakesEffectWithoutRestart(t *testing.T) {
+// première configuration, et les sessions ouvertes avant ne rouvrent rien à la
+// réactivation.
+func TestAuthNative_DisableFromAnotherProcessTakesEffectWithoutRestart(t *testing.T) {
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
-	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, testPassword); got.Code != http.StatusOK {
+	server.enableNative(t)
+	before := signIn(server.Server, testUsername, testPassword)
+	if got := callWithSession(server.Server, "/api/counts", before); got.Code != http.StatusOK {
 		t.Fatalf("before: %d", got.Code)
 	}
-	rescue, err := auth.New(server.db, server.logger)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rescue := auth.New(server.db, server.logger)
 	current, err := rescue.State(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -409,19 +416,34 @@ func TestAuthBasic_DisableFromAnotherProcessTakesEffectWithoutRestart(t *testing
 		t.Fatal(err)
 	}
 	requireSetupRequired(t, callAs(server.Server, http.MethodGet, "/api/counts", "", ""))
-	if _, err := rescue.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, rescue), testUsername, "a brand new passphrase"); err != nil {
+	if _, err := rescue.EnableNative(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, rescue), testUsername, "a brand new passphrase"); err != nil {
 		t.Fatal(err)
 	}
 	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, testPassword); got.Code != http.StatusUnauthorized {
-		t.Fatalf("the remembered old password reopened the door: %d", got.Code)
+		t.Fatalf("the old password reopened the door: %d", got.Code)
+	}
+	if got := callWithSession(server.Server, "/api/counts", before); got.Code != http.StatusUnauthorized {
+		t.Fatalf("a session of the old account reopened the door: %d", got.Code)
 	}
 }
 
-// Le direct et les flux SSE passent avec les identifiants Basic, comme le
-// navigateur les renvoie de lui-même à la même origine.
-func TestAuthBasic_LiveStreamOpensWithCredentials(t *testing.T) {
+// callWithSession lit une route sous le cookie de session donné, sans rien
+// d'autre.
+func callWithSession(server *Server, path, token string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodGet, path, nil)
+	request.Header.Set(anonymousHeader, "1")
+	request.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: token})
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	return recorder
+}
+
+// Sur la boucle locale en HTTP (le tunnel SSH), la connexion pose le cookie
+// local ; le direct passe avec lui, comme le navigateur le renvoie de
+// lui-même à la même origine.
+func TestAuthNative_LiveStreamOpensWithTheSessionCookie(t *testing.T) {
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
+	server.enableNative(t)
 	liveServer := httptest.NewServer(server.Server)
 	t.Cleanup(liveServer.Close)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -435,15 +457,35 @@ func TestAuthBasic_LiveStreamOpensWithCredentials(t *testing.T) {
 	if anonymous.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("anonymous stream: %d", anonymous.StatusCode)
 	}
+	login, _ := http.NewRequestWithContext(ctx, http.MethodPost, liveServer.URL+"/api/auth/login",
+		strings.NewReader(`{"username":"`+testUsername+`","password":"`+testPassword+`"}`))
+	login.Header.Set("Content-Type", "application/json")
+	signedIn, err := liveServer.Client().Do(login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signedIn.Body.Close()
+	var local *http.Cookie
+	for _, cookie := range signedIn.Cookies() {
+		if cookie.Name == brand.LocalSessionCookie && cookie.Value != "" {
+			local = cookie
+		}
+	}
+	if signedIn.StatusCode != http.StatusOK || local == nil {
+		t.Fatalf("login on the loopback: %d %v", signedIn.StatusCode, signedIn.Header.Values("Set-Cookie"))
+	}
+	if local.Secure || !local.HttpOnly || local.SameSite != http.SameSiteStrictMode || local.Path != "/" {
+		t.Fatalf("local cookie %+v", local)
+	}
 	request, _ = http.NewRequestWithContext(ctx, http.MethodGet, liveServer.URL+"/api/events", nil)
-	request.SetBasicAuth(testUsername, testPassword)
+	request.AddCookie(&http.Cookie{Name: local.Name, Value: local.Value})
 	response, err := liveServer.Client().Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK || response.Header.Get("Content-Type") != "text/event-stream" {
-		t.Fatalf("stream with credentials: %d %q", response.StatusCode, response.Header.Get("Content-Type"))
+		t.Fatalf("stream with the session: %d %q", response.StatusCode, response.Header.Get("Content-Type"))
 	}
 }
 
@@ -497,7 +539,7 @@ func callForwardedJSON(server *Server, method, path, body, peer, header, identit
 	return recorder
 }
 
-// Le jumeau du test basic : depuis le mandataire mais sans identité, chaque
+// Le jumeau du test native : depuis le mandataire mais sans identité, chaque
 // route de l'opérateur répond 401 sans défi Basic ; les ouvertes répondent
 // exactement ce qu'elles répondent sans authentification.
 func TestAuthForward_GuardsEveryOperatorRouteAndLeavesTheOthersOpen(t *testing.T) {
@@ -619,7 +661,7 @@ func TestAuthForward_RefusedPageSaysToGoThroughTheProxy(t *testing.T) {
 func TestAuthAPI_EnableForwardRequiresTheIdentityFromATrustedProxy(t *testing.T) {
 	server := newFirstSetupServer(t)
 	server.trustedProxies = parsePrefixes(t, "192.0.2.0/24")
-	const enable = "/api/auth/actions/enable"
+	const enable = "/api/auth/setup"
 	const remoteUser = auth.DefaultForwardHeader
 
 	missing := callForwardedJSON(server.Server, http.MethodPost, enable, `{"mode":"forward"}`, trustedPeer, remoteUser, "")
@@ -653,7 +695,7 @@ func TestAuthAPI_EnableForwardRequiresTheIdentityFromATrustedProxy(t *testing.T)
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", enabled.Code, enabled.Body.String())
 	}
-	var response authEnableResponse
+	var response authSetupResponse
 	decodeAPI(t, enabled, &response)
 	if response.Mode != "forward" || response.Header != remoteUser || response.Username != testUsername ||
 		response.EnabledAt == nil || !response.EnabledAt.Equal(testNow) {
@@ -687,7 +729,7 @@ func TestAuthAPI_EnableForwardRequiresTheIdentityFromATrustedProxy(t *testing.T)
 }
 
 // Un en-tête choisi remplace Remote-User, et l'activation révoque les
-// jetons d'API comme en basic : tirés sous le compte, laissés par la commande
+// jetons d'API comme en native : tirés sous le compte, laissés par la commande
 // de secours.
 func TestAuthAPI_EnableForwardWithAnotherHeaderRevokesAPITokens(t *testing.T) {
 	server := newTestServer(t)
@@ -695,11 +737,11 @@ func TestAuthAPI_EnableForwardWithAnotherHeaderRevokesAPITokens(t *testing.T) {
 	server.issueAPIToken(t, "lecteur")
 	server.rescue(t)
 	const header = "X-Forwarded-User"
-	enabled := callForwardedJSON(server.Server, http.MethodPost, "/api/auth/actions/enable", `{"mode":"forward","setup_code":"`+authtest.SetupCode(t, server.operator)+`","header":"`+header+`"}`, trustedPeer, header, testUsername)
+	enabled := callForwardedJSON(server.Server, http.MethodPost, "/api/auth/setup", `{"mode":"forward","setup_code":"`+authtest.SetupCode(t, server.operator)+`","header":"`+header+`"}`, trustedPeer, header, testUsername)
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", enabled.Code, enabled.Body.String())
 	}
-	var response authEnableResponse
+	var response authSetupResponse
 	decodeAPI(t, enabled, &response)
 	if response.Header != header || response.APITokensRevoked != 1 {
 		t.Fatalf("response %+v", response)
@@ -714,11 +756,14 @@ func TestAuthAPI_EnableForwardWithAnotherHeaderRevokesAPITokens(t *testing.T) {
 	}
 }
 
-func callBasicJSON(server *Server, method, path, body, password string) *httptest.ResponseRecorder {
+// callSignedInJSON joue une écriture JSON du front, sous une session du compte
+// de test ouverte avec ce mot de passe ; sans session si la connexion est
+// refusée.
+func callSignedInJSON(server *Server, method, path, body, password string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")
-	request.SetBasicAuth(testUsername, password)
+	signInRequest(server, request, testUsername, password)
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	return recorder

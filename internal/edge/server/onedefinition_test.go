@@ -334,8 +334,7 @@ const identDir = "internal/kit/ident/"
 // hexadécimaux sans passer par ident, avec la raison. Clé : « fichier
 // fonction », fichier relatif au module.
 var secretDrawExceptions = map[string]string{
-	"internal/domain/restic/proxy.go Start":  "le jeton du mandataire local ouvre le dépôt à qui le connaît : un secret, pas un identifiant (128 bits, dans l'URL donnée à restic)",
-	"internal/fact/machine/sessions.go Open": "le jeton de session authentifie le flux d'un agent : un secret de 256 bits, pas un identifiant",
+	"internal/domain/restic/proxy.go Start": "le jeton du mandataire local ouvre le dépôt à qui le connaît : un secret, pas un identifiant (128 bits, dans l'URL donnée à restic)",
 }
 
 // handWrittenIdentifierDraws relève les fonctions qui appellent rand.Read puis
@@ -674,8 +673,7 @@ var (
 		"internal/kit/release/release.go":           1,
 	}
 	handDrawnIdentifierInventory = map[string]int{
-		"internal/domain/restic/proxy.go":   1,
-		"internal/fact/machine/sessions.go": 1,
+		"internal/domain/restic/proxy.go": 1,
 	}
 )
 

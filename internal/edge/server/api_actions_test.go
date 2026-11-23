@@ -70,7 +70,7 @@ func TestActions_PingIsSignedSentAndAnsweredThroughTheSignal(t *testing.T) {
 	if err := json.Unmarshal(got.Body.Bytes(), &sent); err != nil {
 		t.Fatal(err)
 	}
-	if sent.State != string(action.StateSent) || sent.Seq != 1 || sent.RequestedBy != "operator:"+testUsername {
+	if sent.State != string(action.StateSent) || sent.Seq != 1 || sent.RequestedBy != "operator:"+testSessionID {
 		t.Fatalf("run %+v", sent)
 	}
 
@@ -294,7 +294,7 @@ func TestActions_AgentUpdateOfferThenOrder(t *testing.T) {
 	if err := json.Unmarshal(got.Body.Bytes(), &sent); err != nil {
 		t.Fatal(err)
 	}
-	if sent.Kind != "agent.update" || sent.State != string(action.StateSent) || sent.RequestedBy != "operator:"+testUsername {
+	if sent.Kind != "agent.update" || sent.State != string(action.StateSent) || sent.RequestedBy != "operator:"+testSessionID {
 		t.Fatalf("run %+v", sent)
 	}
 	signed, err := agentwire.DecodeSignedOrder([]byte(readCommand(t, agentStream, agentwire.EventOrder)))

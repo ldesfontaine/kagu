@@ -34,9 +34,37 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   }
   if (!response.ok) {
     const payload = await errorPayload(response);
-    throw new ApiError(response.status, errorCode(payload), payload);
+    const failure = new ApiError(response.status, errorCode(payload), payload);
+    if (isSessionLost(failure)) {
+      announceSessionLost();
+    }
+    throw failure;
   }
   return (await response.json()) as T;
+}
+
+// Une session morte en cours d'usage (2 h sans geste, 12 h au plus) fait
+// répondre 401 « unauthorized » à toute route de l'opérateur. Un mot de
+// passe faux à la connexion a sa propre clé : il ne compte pas.
+function isSessionLost(error: ApiError): boolean {
+  return error.status === 401 && error.code === "unauthorized";
+}
+
+// Qui écoute la perte de la session : la porte d'accès, pour revenir à la
+// connexion sans que chaque page s'en occupe.
+const sessionLostListeners = new Set<() => void>();
+
+export function onSessionLost(listener: () => void): () => void {
+  sessionLostListeners.add(listener);
+  return () => {
+    sessionLostListeners.delete(listener);
+  };
+}
+
+function announceSessionLost() {
+  for (const listener of sessionLostListeners) {
+    listener();
+  }
 }
 
 async function errorPayload(response: Response): Promise<unknown> {

@@ -10,7 +10,7 @@ test("changer le mot de passe envoie l'actuel avec le nouveau, et rend le nombre
   const sent: { path: string; init: RequestInit }[] = [];
   vi.stubGlobal("fetch", (path: string, init: RequestInit) => {
     sent.push({ path, init });
-    return Promise.resolve(new Response(JSON.stringify({ mode: "basic", api_tokens: 2 }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    return Promise.resolve(new Response(JSON.stringify({ mode: "native", api_tokens: 2 }), { status: 200, headers: { "Content-Type": "application/json" } }));
   });
   const change = await changePassword("le-mot-de-passe-actuel", "un-mot-de-passe-long");
   expect(sent).toHaveLength(1);

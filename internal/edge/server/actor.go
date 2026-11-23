@@ -17,20 +17,30 @@ func (s *Server) withOperatorActor(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r)
 			return
 		}
-		next(w, r.WithContext(audit.WithActor(r.Context(), audit.Operator(operatorName(r)))))
+		next(w, r.WithContext(audit.WithActor(r.Context(), operatorActor(r))))
 	}
 }
 
-// operatorName est l'identité que l'authentification a vue : l'identifiant
-// Basic, ou l'en-tête du mandataire. À la première configuration, personne :
-// un en-tête Basic qu'aucun mode ne vérifie ne nomme pas l'opérateur. Ce nom
-// est indicatif, borné et sans caractère de contrôle.
+// operatorActor nomme l'opérateur par sa session en connexion native, le
+// compte en nom lisible ; par l'en-tête du mandataire en SSO.
+func operatorActor(r *http.Request) audit.Actor {
+	if session, found := sessionFrom(r.Context()); found {
+		return audit.OperatorSession(session.ID, operatorName(r))
+	}
+	return audit.Operator(operatorName(r))
+}
+
+// operatorName est l'identité que l'authentification a vue : le compte de la
+// session native, ou l'en-tête du mandataire. À la première configuration, ou
+// sans session, personne. Ce nom est indicatif, borné et sans caractère de
+// contrôle ; le journal d'audit nomme en plus la session (operatorActor).
 func operatorName(r *http.Request) string {
 	state, _ := authorizingStateFrom(r.Context())
 	name := ""
 	switch state.Mode {
-	case auth.ModeBasic:
-		name, _, _ = r.BasicAuth()
+	case auth.ModeNative:
+		session, _ := sessionFrom(r.Context())
+		name = session.Identity
 	case auth.ModeForward:
 		name = identityFrom(r.Context())
 	}

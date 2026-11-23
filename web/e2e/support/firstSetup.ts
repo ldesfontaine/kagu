@@ -5,9 +5,11 @@ import type { Page } from "@playwright/test";
 // ne vaut quoi que ce soit) ; l'écran, lui, est le vrai.
 export async function mockFirstSetup(page: Page, address: { local: boolean; suggestion: string } = { local: false, suggestion: "" }): Promise<void> {
   await page.route("**/api/auth", (route) =>
-    route.fulfill({ json: { mode: "none", username: "", enabled_at: null, password_min_length: 12, allowed_users: null } }),
+    route.fulfill({ json: { mode: "none", username: "", enabled_at: null, password_min_length: 12, signed_in: false, allowed_users: null } }),
   );
-  await page.route("**/api/auth/actions/enable", (route) => route.fulfill({ status: 204 }));
+  await page.route("**/api/auth/setup", (route) =>
+    route.fulfill({ json: { mode: "native", username: "admin", enabled_at: new Date().toISOString(), password_min_length: 12, signed_in: true, allowed_users: null, api_tokens_revoked: 0 } }),
+  );
   await page.route("**/api/machines/local-enrollment", (route) =>
     route.fulfill({
       status: 201,

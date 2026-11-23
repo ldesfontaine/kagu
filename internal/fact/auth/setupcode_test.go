@@ -28,7 +28,7 @@ func TestIssueSetupCode_GivesEightDigitsAndKeepsOnlyTheirHash(t *testing.T) {
 
 func TestIssueSetupCode_RefusedOnceAnAccountExists(t *testing.T) {
 	service, _ := newTestService(t)
-	if _, err := service.EnableBasic(context.Background(), none, issueCode(t, service), "lucas", "correct horse battery"); err != nil {
+	if _, err := service.EnableNative(context.Background(), none, issueCode(t, service), "lucas", "correct horse battery"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.IssueSetupCode(context.Background()); !errors.Is(err, ErrAlreadyEnabled) {
@@ -39,8 +39,8 @@ func TestIssueSetupCode_RefusedOnceAnAccountExists(t *testing.T) {
 func TestEnable_RefusesEveryWrongOrMissingCodeAndCreatesNothing(t *testing.T) {
 	ctx := context.Background()
 	for name, enable := range map[string]func(*Service, string) error{
-		"basic": func(service *Service, code string) error {
-			_, err := service.EnableBasic(ctx, none, code, "lucas", "correct horse battery")
+		"native": func(service *Service, code string) error {
+			_, err := service.EnableNative(ctx, none, code, "lucas", "correct horse battery")
 			return err
 		},
 		"forward": func(service *Service, code string) error {
@@ -74,15 +74,15 @@ func TestEnable_TheFifthWrongTryBurnsTheRightCodeToo(t *testing.T) {
 	service, store := newTestService(t)
 	issued := issueCodeIssued(t, service)
 	for try := 1; try <= MaxSetupCodeFailures; try++ {
-		_, err := service.EnableBasic(context.Background(), none, wrongCode(issued.Code), "lucas", "correct horse battery")
+		_, err := service.EnableNative(context.Background(), none, wrongCode(issued.Code), "lucas", "correct horse battery")
 		if !errors.Is(err, ErrSetupCodeWrong) {
 			t.Fatalf("try %d: %v", try, err)
 		}
 	}
-	if _, err := service.EnableBasic(context.Background(), none, issued.Code, "lucas", "correct horse battery"); !errors.Is(err, ErrSetupCodeUnusable) {
+	if _, err := service.EnableNative(context.Background(), none, issued.Code, "lucas", "correct horse battery"); !errors.Is(err, ErrSetupCodeUnusable) {
 		t.Fatalf("the right code after five failures: %v", err)
 	}
-	if store.state.Mode == ModeBasic {
+	if store.state.Mode == ModeNative {
 		t.Fatal("an account was created with a burnt code")
 	}
 }
@@ -94,7 +94,7 @@ func TestEnable_AnExpiredCodeIsRefusedFromItsExpiryInstant(t *testing.T) {
 	service.SetClock(func() time.Time { return now })
 	issued := issueCodeIssued(t, service)
 	now = start.Add(SetupCodeLifetime)
-	if _, err := service.EnableBasic(context.Background(), none, issued.Code, "lucas", "correct horse battery"); !errors.Is(err, ErrSetupCodeUnusable) {
+	if _, err := service.EnableNative(context.Background(), none, issued.Code, "lucas", "correct horse battery"); !errors.Is(err, ErrSetupCodeUnusable) {
 		t.Fatalf("got %v", err)
 	}
 }

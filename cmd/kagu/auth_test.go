@@ -31,7 +31,7 @@ func writeConfig(t *testing.T) (configPath, stateDir string) {
 	return configPath, stateDir
 }
 
-// enableIn active le mode basic comme le ferait serve, dans la même base.
+// enableIn active le mode native comme le ferait serve, dans la même base.
 func enableIn(t *testing.T, stateDir string) {
 	t.Helper()
 	root, err := openStateDir(stateDir)
@@ -44,12 +44,9 @@ func enableIn(t *testing.T, stateDir string) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	service, err := auth.New(db, slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatal(err)
-	}
+	service := auth.New(db, slog.New(slog.DiscardHandler))
 	service.SetHashCost(bcrypt.MinCost)
-	if _, err := service.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, service), "lucas", "correct horse battery"); err != nil {
+	if _, err := service.EnableNative(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, service), "lucas", "correct horse battery"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -62,7 +59,7 @@ func TestAuthCommand_StatusThenDisableReopensTheInterface(t *testing.T) {
 	if err := authCommand([]string{"status", "-config", configPath}, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "mode : basic") || !strings.Contains(out.String(), "identifiant : lucas") {
+	if !strings.Contains(out.String(), "mode : native") || !strings.Contains(out.String(), "identifiant : lucas") {
 		t.Fatalf("status: %q", out.String())
 	}
 	if strings.Contains(out.String(), "$2") {
@@ -104,10 +101,7 @@ func TestAuthCommand_StatusShowsTheForwardHeaderAndDisableReopens(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := auth.New(db, slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatal(err)
-	}
+	service := auth.New(db, slog.New(slog.DiscardHandler))
 	if _, err := service.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, service), "X-Forwarded-User"); err != nil {
 		t.Fatal(err)
 	}
@@ -162,10 +156,7 @@ func TestLogInterfaceAccess_WarnsAndNamesTheSetupCodeCommandWhileAwaitingSetup(t
 	defer db.Close()
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
-	service, err := auth.New(db, logger)
-	if err != nil {
-		t.Fatal(err)
-	}
+	service := auth.New(db, logger)
 
 	for _, listen := range []string{"127.0.0.1:8080", ":8080"} {
 		logs.Reset()
@@ -176,7 +167,7 @@ func TestLogInterfaceAccess_WarnsAndNamesTheSetupCodeCommandWhileAwaitingSetup(t
 	}
 
 	service.SetHashCost(bcrypt.MinCost)
-	if _, err := service.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, service), "lucas", "correct horse battery"); err != nil {
+	if _, err := service.EnableNative(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, service), "lucas", "correct horse battery"); err != nil {
 		t.Fatal(err)
 	}
 	logs.Reset()
@@ -200,10 +191,7 @@ func TestWarnIfForwardUnproven_SpeaksOnlyForForwardWithLoopbackAndNoSecret(t *te
 	defer db.Close()
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
-	service, err := auth.New(db, logger)
-	if err != nil {
-		t.Fatal(err)
-	}
+	service := auth.New(db, logger)
 	loopback := []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}
 	container := []netip.Prefix{netip.MustParsePrefix("172.18.0.2/32")}
 	speaks := func(trusted []netip.Prefix, hasSecret bool) bool {
@@ -245,10 +233,7 @@ func enableForwardIn(t *testing.T, stateDir string) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	service, err := auth.New(db, slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatal(err)
-	}
+	service := auth.New(db, slog.New(slog.DiscardHandler))
 	if _, err := service.EnableForward(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, service), auth.DefaultForwardHeader); err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +270,7 @@ func TestAuthCommand_StatusSaysWhoForwardUsersAdmits(t *testing.T) {
 	}
 }
 
-// En basic, la liste ne sert à rien : l'afficher laisserait croire qu'elle garde.
+// En native, la liste ne sert à rien : l'afficher laisserait croire qu'elle garde.
 func TestAuthCommand_StatusDoesNotShowForwardUsersOutsideForwardMode(t *testing.T) {
 	configPath, stateDir := writeConfig(t)
 	enableIn(t, stateDir)
@@ -297,7 +282,7 @@ func TestAuthCommand_StatusDoesNotShowForwardUsersOutsideForwardMode(t *testing.
 		t.Fatal(err)
 	}
 	if got := authStatusWith(t, configPath); strings.Contains(got, "identités admises") {
-		t.Fatalf("basic mode: %q", got)
+		t.Fatalf("native mode: %q", got)
 	}
 }
 

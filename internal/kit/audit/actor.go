@@ -11,8 +11,9 @@ import (
 type ActorKind string
 
 const (
-	// L'opérateur de l'interface, sous l'identité que l'authentification a
-	// vue (Basic ou en-tête du mandataire) ; vide sans authentification.
+	// L'opérateur de l'interface : nommé par sa session en connexion native
+	// (le compte en Label), par l'en-tête du mandataire en SSO ; vide sans
+	// authentification.
 	ActorOperator ActorKind = "operator"
 	// Un jeton d'API, nommé par son identifiant ; OnBehalfOf : pour qui
 	// mcp-maison dit appeler, indicatif.
@@ -56,6 +57,12 @@ const MaxLabelRunes = 80
 
 func Operator(identity string) Actor {
 	return Actor{Kind: ActorOperator, Name: identity}
+}
+
+// OperatorSession : l'opérateur d'une session native, nommé par elle ; le
+// compte est son nom lisible.
+func OperatorSession(sessionID, identity string) Actor {
+	return Actor{Kind: ActorOperator, Name: sessionID, Label: identity}
 }
 
 func API(tokenID, tokenName, onBehalfOf string) Actor {

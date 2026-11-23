@@ -46,6 +46,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/gesture/verbrequest"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/live"
 	"github.com/ldesfontaine/kagu/internal/view/status"
@@ -81,7 +82,9 @@ type testServer struct {
 	firewalls  *firewall.Service
 	state      *os.Root
 	// logs garde ce que le serveur a journalisé : le banc de non-fuite le lit.
-	logs      *logBuffer
+	logs *logBuffer
+	// Sérialise la pose de la session du banc (operatorToken).
+	sessionMu sync.Mutex
 	bus       *live.Bus
 	publicBus *live.Bus
 	db        *store.DB
@@ -90,34 +93,72 @@ type testServer struct {
 // Le serveur de test tourne sur le vrai composant machine et une vraie base
 // SQLite temporaire, avec la machine openCloud déjà en place. Il est
 // configuré comme une installation qui a passé sa première configuration : un
-// compte basic, dont les identifiants sont posés sur toute requête de
-// l'opérateur qui n'en porte pas, pour que les tests qui ne parlent pas de
-// l'accès n'aient pas à les écrire. Ceux qui en parlent partent de
+// compte natif, dont une session est posée sur toute requête de l'opérateur
+// qui n'en porte pas, pour que les tests qui ne parlent pas de l'accès
+// n'aient pas à se connecter. Ceux qui en parlent partent de
 // newFirstSetupServer.
 func newTestServer(t *testing.T) *testServer {
 	t.Helper()
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
-	server.handler = asOperator(server.handler)
+	server.enableNative(t)
+	server.handler = server.asOperator(server.handler)
 	return server
 }
 
 // anonymousHeader marque la requête d'un test qui joue un inconnu : le banc
-// n'y pose pas d'identifiants (voir callAs).
+// n'y pose pas de session (voir callAs).
 const anonymousHeader = "X-Test-Anonymous"
 
-// asOperator pose les identifiants du compte de test sur une requête qui n'en
-// porte aucun. Les routes ouvertes les ignorent ; une requête qui porte déjà
-// Authorization (un Bearer d'API, par exemple) garde la sienne.
-func asOperator(next http.Handler) http.Handler {
+// asOperator pose le cookie d'une session du compte de test sur une requête
+// qui ne porte ni Authorization (un Bearer d'API, par exemple) ni cookie. Les
+// routes ouvertes l'ignorent.
+func (ts *testServer) asOperator(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		anonymous := r.Header.Get(anonymousHeader) != ""
 		r.Header.Del(anonymousHeader)
-		if !anonymous && r.Header.Get("Authorization") == "" {
-			r.SetBasicAuth(testUsername, testPassword)
+		if !anonymous && r.Header.Get("Authorization") == "" && r.Header.Get("Cookie") == "" {
+			if token := ts.operatorToken(); token != "" {
+				r.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: token})
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// testSessionID et testSessionToken sont la session que le banc pose : fixes,
+// pour que les réponses figées qui nomment l'opérateur (operator:<session>)
+// le restent.
+const (
+	testSessionID    = "5e55105e55105e55"
+	testSessionToken = "7e57" + "000000000000000000000000000000000000000000000000000000000000"
+)
+
+// operatorToken rend le jeton de la session du banc, rouverte quand elle est
+// morte (accès désactivé puis recréé, autres sessions fermées) ; rien quand le
+// compte de test ne se connecte plus (mot de passe changé, autre mode), comme
+// Basic n'ouvrait plus rien.
+func (ts *testServer) operatorToken() string {
+	ts.sessionMu.Lock()
+	defer ts.sessionMu.Unlock()
+	ctx := context.Background()
+	state, err := ts.operator.State(ctx)
+	if err != nil || state.Mode != auth.ModeNative {
+		return ""
+	}
+	if _, alive, _ := ts.operator.ResumeSession(ctx, state, testSessionToken); alive {
+		return testSessionToken
+	}
+	if verified, err := ts.operator.Verify(ctx, state, testUsername, testPassword); err != nil || !verified {
+		return ""
+	}
+	if _, err := ts.db.DeleteSession(ctx, testSessionID); err != nil {
+		return ""
+	}
+	session := auth.Session{ID: testSessionID, Identity: testUsername, CreatedAt: testNow, SeenAt: testNow, ExpiresAt: testNow.Add(auth.SessionLifetime)}
+	if err := ts.db.CreateSession(ctx, session, ident.HashToken(testSessionToken)); err != nil {
+		return ""
+	}
+	return testSessionToken
 }
 
 // newFirstSetupServer est une installation neuve : mode none, aucun compte,
@@ -195,10 +236,7 @@ func newFirstSetupServer(t *testing.T) *testServer {
 	probes.SetAlerter(alerts)
 	apiTokens := apitoken.New(db, logger)
 	apiTokens.SetClock(func() time.Time { return testNow })
-	operator, err := auth.New(db, logger)
-	if err != nil {
-		t.Fatal(err)
-	}
+	operator := auth.New(db, logger)
 	operator.SetClock(func() time.Time { return testNow })
 	// Le coût minimal de bcrypt : le coût réel ferait durer chaque test.
 	operator.SetHashCost(bcrypt.MinCost)

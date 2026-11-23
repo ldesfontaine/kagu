@@ -17,15 +17,16 @@ const (
 	// Aucun compte : l'installation attend sa première configuration, et
 	// le serveur ne sert à l'opérateur que de quoi créer le compte.
 	ModeNone Mode = "none"
-	// HTTP Basic, identifiant et mot de passe choisis à l'activation.
-	ModeBasic Mode = "basic"
+	// Un compte et son mot de passe ; la connexion ouvre une session (R-A2-1).
+	// Une base d'avant, en « basic », devient native (migration 044).
+	ModeNative Mode = "native"
 	// Derrière un SSO en amont qui authentifie (Authelia) et transmet
 	// l'identité dans un en-tête ; cru seulement depuis trusted_proxies.
 	ModeForward Mode = "forward"
 )
 
 func Modes() []Mode {
-	return []Mode{ModeNone, ModeBasic, ModeForward}
+	return []Mode{ModeNone, ModeNative, ModeForward}
 }
 
 const (
@@ -79,8 +80,9 @@ var (
 	ErrStateChanged = refusal.Conflict("auth.state_changed", "auth: state changed")
 )
 
-// ValidateUsername : un mot lisible, sans « : » que Basic prend pour le
-// séparateur, ni caractère de contrôle ou espace en bord.
+// ValidateUsername : un mot lisible, sans « : » (que Basic prenait pour le
+// séparateur : un compte d'avant n'en a pas), ni caractère de contrôle ou
+// espace en bord.
 func ValidateUsername(username string) error {
 	length := utf8.RuneCountInString(username)
 	if length == 0 || length > MaxUsernameLength || !utf8.ValidString(username) {

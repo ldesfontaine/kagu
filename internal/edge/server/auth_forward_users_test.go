@@ -425,7 +425,7 @@ func TestForwardUsers_DuplicatesCollapse(t *testing.T) {
 // L'activation ne s'enferme pas dehors : même garde-fou que l'en-tête
 // absent, avec sa propre clé pour que la page dise quoi faire.
 func TestForwardUsers_EnablingFromAnUnlistedIdentityIsRefused(t *testing.T) {
-	const enable = "/api/auth/actions/enable"
+	const enable = "/api/auth/setup"
 	server := newFirstSetupServer(t)
 	server.trustedProxies = parsePrefixes(t, "192.0.2.0/24")
 	server.forwardUsers = forwardUserSet([]string{"lucas"})
@@ -456,7 +456,7 @@ func TestForwardUsers_EnablingFromAnUnlistedIdentityIsRefused(t *testing.T) {
 	if allowed.Code != http.StatusOK {
 		t.Fatalf("listed identity: %d %s", allowed.Code, allowed.Body.String())
 	}
-	var enabled authEnableResponse
+	var enabled authSetupResponse
 	decodeAPI(t, allowed, &enabled)
 	if enabled.Mode != "forward" || strings.Join(enabled.AllowedUsers, "|") != "lucas" {
 		t.Fatalf("enabled: %+v", enabled)
@@ -466,11 +466,11 @@ func TestForwardUsers_EnablingFromAnUnlistedIdentityIsRefused(t *testing.T) {
 func TestForwardUsers_NoListNeverBlocksTheActivation(t *testing.T) {
 	server := newFirstSetupServer(t)
 	server.trustedProxies = parsePrefixes(t, "192.0.2.0/24")
-	got := callForwardedJSON(server.Server, http.MethodPost, "/api/auth/actions/enable", `{"mode":"forward","setup_code":"`+authtest.SetupCode(t, server.operator)+`"}`, trustedPeer, auth.DefaultForwardHeader, "autre")
+	got := callForwardedJSON(server.Server, http.MethodPost, "/api/auth/setup", `{"mode":"forward","setup_code":"`+authtest.SetupCode(t, server.operator)+`"}`, trustedPeer, auth.DefaultForwardHeader, "autre")
 	if got.Code != http.StatusOK {
 		t.Fatalf("%d %s", got.Code, got.Body.String())
 	}
-	var enabled authEnableResponse
+	var enabled authSetupResponse
 	decodeAPI(t, got, &enabled)
 	if enabled.AllowedUsers != nil {
 		t.Fatalf("allowed_users %v, want null", enabled.AllowedUsers)
@@ -493,11 +493,11 @@ func TestForwardUsers_AuthStateShowsTheListInForwardModeOnly(t *testing.T) {
 	}
 
 	// Basic : la liste configurée ne garde rien, la page ne la montre pas.
-	basic := newTestServer(t)
-	basic.forwardUsers = forwardUserSet([]string{"lucas"})
-	got = callAPI(basic.Server, http.MethodGet, "/api/auth", nil)
+	native := newTestServer(t)
+	native.forwardUsers = forwardUserSet([]string{"lucas"})
+	got = callAPI(native.Server, http.MethodGet, "/api/auth", nil)
 	if got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"allowed_users":null`) || strings.Contains(got.Body.String(), "lucas\"]") {
-		t.Fatalf("basic: %d %s", got.Code, got.Body.String())
+		t.Fatalf("native: %d %s", got.Code, got.Body.String())
 	}
 
 	// None : idem.
@@ -509,7 +509,7 @@ func TestForwardUsers_AuthStateShowsTheListInForwardModeOnly(t *testing.T) {
 	}
 }
 
-// En basic, forward_users ne garde rien : un Basic juste passe, quelle que
+// En native, forward_users ne garde rien : une session passe, quelle que
 // soit la liste (elle ne vaut qu'en forward).
 func TestForwardUsers_TheListDoesNotTouchBasicMode(t *testing.T) {
 	server := newTestServer(t)

@@ -585,7 +585,7 @@ func TestAPIToken_PathVariantsDoNotWidenTheList(t *testing.T) {
 		{http.MethodGet, "/api/settings/mcp/"},
 		{http.MethodGet, "/api/settings/api-tokens"},
 		{http.MethodGet, "/api/auth"},
-		{http.MethodPost, "/api/auth/actions/enable"},
+		{http.MethodPost, "/api/auth/setup"},
 		{http.MethodPost, "/api/counts"},
 		{http.MethodGet, "/api/counts/"},
 		{http.MethodGet, "/api/events"},

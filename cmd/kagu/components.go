@@ -133,10 +133,7 @@ func buildComponents(cfg config.Config, stateDir *os.Root, db *store.DB, logger 
 	// Les demandes des verbes à confirmation : un jeton dépose, l'opérateur décide.
 	verbRequests := verbrequest.New(db, logger)
 	// L'accès de l'opérateur à l'interface : relu à chaque requête.
-	operator, err := auth.New(db, logger)
-	if err != nil {
-		return nil, err
-	}
+	operator := auth.New(db, logger)
 	// Le journal d'audit : chaque composant y écrit ses gestes, sous l'acteur
 	// que le contexte porte. Les alertes le purgent avec leur historique.
 	journal := audit.New(db, logger)

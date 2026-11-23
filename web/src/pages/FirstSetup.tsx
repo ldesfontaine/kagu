@@ -1,54 +1,37 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 
-import { enableAuth, signIn, useAuth, type AuthState } from "../api/auth";
+import { setup, type AuthState } from "../api/auth";
 import { offerLocalEnrollment, type TokenResponse } from "../api/machines";
 import { Button } from "../components/Button";
 import { Card, CardBody, CardHeader, Note } from "../components/Card";
 import { Failure } from "../components/Failure";
 import { Field, Input } from "../components/Field";
 import { InstallSteps } from "../components/InstallSteps";
-import { Brand } from "../components/Layout";
 import { PublicUrlNote } from "../components/PublicUrlNote";
 import { EnumSelect } from "../components/Select";
 import { useAction } from "../hooks/useAction";
 import { useChecklist } from "../hooks/useChecklist";
 import { useT } from "../i18n/context";
-import { needsFirstSetup } from "../lib/auth";
 import { formatRemaining } from "../lib/time";
+import { AccessPage } from "./AccessPage";
 import { AccessCredentialsForm } from "./settings/AccessCredentialsForm";
 import { AccessForwardForm } from "./settings/AccessForwardForm";
-import "./FirstSetup.scss";
 
-// Les deux façons de garder l'interface : un compte local, ou le mandataire
-// d'authentification qui transmet l'identité.
-const setupModes = ["basic", "forward"] as const;
+// Les deux façons de garder l'interface : la connexion native (un compte et
+// son mot de passe), ou le SSO qui transmet l'identité.
+const setupModes = ["native", "forward"] as const;
 
 // Tant qu'aucun compte n'existe, le serveur ne sert rien d'autre que la
-// création du compte : l'écran de première configuration tient la place de
-// l'interface. Rien ne s'affiche avant la réponse du serveur.
-export function FirstSetupGate({ children }: { children: ReactNode }) {
-  const access = useAuth();
-  if (access.data === null) {
-    return (
-      <main className="first-setup">
-        <Failure error={access.error} />
-      </main>
-    );
-  }
-  if (needsFirstSetup(access.data)) {
-    return <FirstSetup state={access.data} onConfigured={access.reload} />;
-  }
-  return children;
-}
-
-// Le compte créé, le front se présente avec ses identifiants : le navigateur
-// les retient. En mode mandataire, la requête est déjà passée par lui. Puis
-// la première étape de l'installation : la ligne qui installe l'agent de
-// cette machine, tant qu'elle n'en a jamais eu ; sinon l'interface s'ouvre.
-function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: () => void }) {
+// création du compte : la porte d'accès (AccessGate) montre cet écran à la
+// place de l'interface.
+// En connexion native, la réponse pose le cookie de la première session ; en
+// mode SSO, la requête est déjà passée par lui. Puis la première étape de
+// l'installation : la ligne qui installe l'agent de cette machine, tant
+// qu'elle n'en a jamais eu ; sinon l'interface s'ouvre.
+export function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: () => void }) {
   const t = useT();
   const action = useAction();
-  const [mode, setMode] = useState<(typeof setupModes)[number]>("basic");
+  const [mode, setMode] = useState<(typeof setupModes)[number]>("native");
   const [agentLine, setAgentLine] = useState<TokenResponse | null>(null);
   const [setupCode, setSetupCode] = useState("");
 
@@ -62,8 +45,7 @@ function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: (
   const createAccount = (username: string, password: string) => {
     action.run(
       async () => {
-        await enableAuth({ setup_code: setupCode, username, password });
-        await signIn(username, password);
+        await setup({ setup_code: setupCode, mode: "native", username, password });
         return agentLineOrNull();
       },
       { onDone: showAgentLineOrOpen },
@@ -72,7 +54,7 @@ function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: (
   const trustProxy = (header: string) => {
     action.run(
       async () => {
-        await enableAuth({ setup_code: setupCode, mode: "forward", header });
+        await setup({ setup_code: setupCode, mode: "forward", header });
         return agentLineOrNull();
       },
       { onDone: showAgentLineOrOpen },
@@ -84,9 +66,7 @@ function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: (
   }
 
   return (
-    <main className="first-setup">
-      <div className="first-setup-column">
-        <Brand />
+    <AccessPage>
         <Card className="form-card">
           <CardHeader title={t("auth.setup_title")} />
           <CardBody>
@@ -109,11 +89,10 @@ function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: (
             </Field>
             <Failure error={action.error} />
           </CardBody>
-          {mode === "basic" && <AccessCredentialsForm minLength={state.password_min_length} busy={action.busy} onSubmit={createAccount} />}
+          {mode === "native" && <AccessCredentialsForm minLength={state.password_min_length} busy={action.busy} onSubmit={createAccount} />}
           {mode === "forward" && <AccessForwardForm busy={action.busy} onSubmit={trustProxy} />}
         </Card>
-      </div>
-    </main>
+    </AccessPage>
   );
 }
 
@@ -136,9 +115,7 @@ function AgentLine({ line, onContinue }: { line: TokenResponse; onContinue: () =
   const installed = useChecklist();
   const expiresIn = formatRemaining(t, Date.parse(line.expires_at) - Date.now());
   return (
-    <main className="first-setup">
-      <div className="first-setup-column">
-        <Brand />
+    <AccessPage>
         <Card className="form-card">
           <CardHeader title={t("auth.setup_agent_title")} />
           <CardBody>
@@ -153,7 +130,6 @@ function AgentLine({ line, onContinue }: { line: TokenResponse; onContinue: () =
             </div>
           </CardBody>
         </Card>
-      </div>
-    </main>
+    </AccessPage>
   );
 }

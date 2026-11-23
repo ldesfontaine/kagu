@@ -22,13 +22,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const enablePath = "/api/auth/actions/enable"
+const enablePath = "/api/auth/setup"
 
 // enableWithCode joue la création du compte de la première configuration avec
 // le code donné.
 func enableWithCode(ts *testServer, code string) *httptest.ResponseRecorder {
-	return callAPI(ts.Server, http.MethodPost, enablePath,
-		authEnableRequest{SetupCode: code, Username: testUsername, Password: testPassword})
+	return callSetupAPI(ts.Server, authSetupRequest{SetupCode: code, Username: testUsername, Password: testPassword})
 }
 
 // issueOnSocket tire un code comme le fait `admin setup-code` : par la socket.
@@ -61,7 +60,7 @@ func requireRefusal(t *testing.T, recorder *httptest.ResponseRecorder, status in
 
 // R-A2-5 : le code a huit chiffres, vaut trente minutes, ne sert qu'une fois,
 // et brûle au cinquième essai faux, le bon compris. Sans code valable, rien
-// ne crée le compte, en basic comme en forward.
+// ne crée le compte, en native comme en forward.
 func TestR_A2_5(t *testing.T) {
 	now := testNow
 	newServer := func(t *testing.T) *testServer {
@@ -157,7 +156,7 @@ func TestR_A2_5(t *testing.T) {
 	t.Run("a rejected password does not spend the code", func(t *testing.T) {
 		ts := newServer(t)
 		issued := issueOnSocket(t, ts)
-		short := callAPI(ts.Server, http.MethodPost, enablePath, authEnableRequest{SetupCode: issued.Code, Username: testUsername, Password: "short"})
+		short := callSetupAPI(ts.Server, authSetupRequest{SetupCode: issued.Code, Username: testUsername, Password: "short"})
 		requireRefusal(t, short, http.StatusUnprocessableEntity, "auth.password_too_short")
 		if got := enableWithCode(ts, issued.Code); got.Code != http.StatusOK {
 			t.Fatalf("%d %s", got.Code, got.Body.String())
@@ -195,13 +194,10 @@ func TestR_A2_5(t *testing.T) {
 	t.Run("the code outlives a restart until it expires", func(t *testing.T) {
 		ts := newServer(t)
 		issued := issueOnSocket(t, ts)
-		restarted, err := auth.New(ts.db, ts.logger)
-		if err != nil {
-			t.Fatal(err)
-		}
+		restarted := auth.New(ts.db, ts.logger)
 		restarted.SetClock(func() time.Time { return testNow.Add(10 * time.Minute) })
 		restarted.SetHashCost(4)
-		if _, err := restarted.EnableBasic(context.Background(), auth.State{Mode: auth.ModeNone}, issued.Code, testUsername, testPassword); err != nil {
+		if _, err := restarted.EnableNative(context.Background(), auth.State{Mode: auth.ModeNone}, issued.Code, testUsername, testPassword); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -249,7 +245,7 @@ func TestR_CNX_3(t *testing.T) {
 
 	t.Run("the socket issues no code once an account exists", func(t *testing.T) {
 		ts := newFirstSetupServer(t)
-		ts.enableBasic(t)
+		ts.enableNative(t)
 		recorder := httptest.NewRecorder()
 		ts.ControlHandler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "http://control/control/admin/setup-code", nil))
 		requireRefusal(t, recorder, http.StatusConflict, "auth.already_enabled")
@@ -344,10 +340,7 @@ func TestR_A2_5_AuditNeverHoldsSetupCode(t *testing.T) {
 // « code brûlé » (le code n'est brûlé que par celle qui a gagné).
 func TestR_A2_5_OnlyOneActivationWins(t *testing.T) {
 	db := storetest.Open(t)
-	operator, err := auth.New(db, slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatal(err)
-	}
+	operator := auth.New(db, slog.New(slog.DiscardHandler))
 	operator.SetHashCost(bcrypt.MinCost)
 	ctx := context.Background()
 	none := auth.State{Mode: auth.ModeNone}
@@ -359,7 +352,7 @@ func TestR_A2_5_OnlyOneActivationWins(t *testing.T) {
 			for i := range contenders {
 				go func() {
 					<-start
-					_, err := operator.EnableBasic(ctx, none, code, fmt.Sprintf("user%d", i), testPassword)
+					_, err := operator.EnableNative(ctx, none, code, fmt.Sprintf("user%d", i), testPassword)
 					results <- err
 				}()
 			}

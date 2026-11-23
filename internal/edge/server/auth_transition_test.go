@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -101,7 +102,7 @@ func (h *heldWrite) release() int {
 // configuration : l'activation révoque aussi les jetons d'API.
 func enableBasicByAPI(t *testing.T, server *testServer) {
 	t.Helper()
-	recorder := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
+	recorder := callSetupAPI(server.Server, authSetupRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", recorder.Code, recorder.Body.String())
 	}
@@ -139,7 +140,7 @@ func TestAuthTransition_AHeldDisableDoesNotOutliveAReset(t *testing.T) {
 	if status := held.release(); status != http.StatusConflict {
 		t.Fatalf("held disable: status %d, want 409", status)
 	}
-	if state, _ := server.operator.State(context.Background()); state.Mode != auth.ModeBasic {
+	if state, _ := server.operator.State(context.Background()); state.Mode != auth.ModeNative {
 		t.Fatalf("the new account was disabled: %+v", state)
 	}
 }
@@ -177,7 +178,7 @@ func TestAuthTransition_AnyHeldWriteIsRefusedAfterAReset(t *testing.T) {
 // remplace pas le compte que l'autre vient de créer.
 func TestAuthTransition_AHeldFirstSetupLosesToTheOneThatFinished(t *testing.T) {
 	server := newFirstSetupServer(t)
-	held := holdWrite(t, server, http.MethodPost, "/api/auth/actions/enable", `{"username":"attacker","password":"attacker chosen passphrase"}`)
+	held := holdWrite(t, server, http.MethodPost, "/api/auth/setup", `{"username":"attacker","password":"attacker chosen passphrase"}`)
 	enableBasicByAPI(t, server)
 	if status := held.release(); status != http.StatusConflict {
 		t.Fatalf("held first setup: status %d, want 409", status)
@@ -192,7 +193,7 @@ func TestAuthTransition_AHeldFirstSetupLosesToTheOneThatFinished(t *testing.T) {
 // serveur un Mio par connexion.
 func TestRequireOperator_DoesNotReadTheBodyOfAnAnonymousWrite(t *testing.T) {
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
+	server.enableNative(t)
 	reading := make(chan struct{})
 	body := &signalingBody{ReadCloser: io.NopCloser(strings.NewReader(`{"current":"` + testPassword + `","password":"attacker chosen passphrase"}`)), reading: reading}
 	request := httptest.NewRequest(http.MethodPut, "/api/auth/password", body)
@@ -214,13 +215,13 @@ func TestRequireOperator_DoesNotReadTheBodyOfAnAnonymousWrite(t *testing.T) {
 // c'est toujours un 401, avec les bons c'est la réponse du handler.
 func TestRequireOperator_LeavesAnOversizedBodyToTheHandler(t *testing.T) {
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
+	server.enableNative(t)
 	put := func(authenticated bool) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(http.MethodPut, "/api/auth/password", strings.NewReader(strings.Repeat("a", maxRequestBody+1)))
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		if authenticated {
-			request.SetBasicAuth(testUsername, testPassword)
+			signInRequest(server.Server, request, testUsername, testPassword)
 		}
 		recorder := httptest.NewRecorder()
 		server.ServeHTTP(recorder, request)
@@ -246,6 +247,9 @@ func staleWrite(t *testing.T, server *testServer, handler http.HandlerFunc, meth
 	}
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
+	// Sur HTTPS, comme le navigateur : la première configuration n'ouvre pas
+	// de session en HTTP clair (R-A2-4), et ce n'est pas ce qu'on juge ici.
+	request.TLS = &tls.ConnectionState{}
 	request = request.WithContext(context.WithValue(request.Context(), authorizingStateKey{}, authorizing))
 	if id != "" {
 		request.SetPathValue("id", id)
@@ -298,7 +302,7 @@ func TestAuthTransition_PasswordDisableAndEnableAreRefusedUnderAChangedState(t *
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := server.operator.ChangePassword(ctx, current, testPassword, "the operator's new passphrase"); err != nil {
+			if _, err := server.operator.ChangePassword(ctx, current, "", testPassword, "the operator's new passphrase"); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -306,7 +310,7 @@ func TestAuthTransition_PasswordDisableAndEnableAreRefusedUnderAChangedState(t *
 
 	t.Run("password", func(t *testing.T) {
 		server := newFirstSetupServer(t)
-		server.enableBasic(t)
+		server.enableNative(t)
 		requireStateChanged(t, staleWrite(t, server, server.changeAuthPassword, http.MethodPut, "/api/auth/password", `{"current":"`+testPassword+`","password":"attacker chosen passphrase"}`, "", changePassword(server)))
 		if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, "the operator's new passphrase"); got.Code != http.StatusOK {
 			t.Fatalf("the operator's new password was replaced: %d", got.Code)
@@ -314,16 +318,16 @@ func TestAuthTransition_PasswordDisableAndEnableAreRefusedUnderAChangedState(t *
 	})
 	t.Run("disable", func(t *testing.T) {
 		server := newFirstSetupServer(t)
-		server.enableBasic(t)
+		server.enableNative(t)
 		requireStateChanged(t, staleWrite(t, server, server.disableAuth, http.MethodPost, "/api/auth/actions/disable", `{}`, "", changePassword(server)))
-		if state, _ := server.operator.State(ctx); state.Mode != auth.ModeBasic {
+		if state, _ := server.operator.State(ctx); state.Mode != auth.ModeNative {
 			t.Fatalf("the interface was reopened: %+v", state)
 		}
 	})
 	t.Run("enable", func(t *testing.T) {
 		server := newFirstSetupServer(t)
 		// Autorisée sous « none », arrivée sous forward : un autre état que le sien.
-		recorder := staleWrite(t, server, server.enableAuth, http.MethodPost, "/api/auth/actions/enable", `{"username":"lucas","password":"correct horse battery"}`, "", func() {
+		recorder := staleWrite(t, server, server.setupAuth, http.MethodPost, "/api/auth/setup", `{"username":"lucas","password":"correct horse battery"}`, "", func() {
 			if _, err := server.operator.EnableForward(ctx, auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, server.operator), auth.DefaultForwardHeader); err != nil {
 				t.Fatal(err)
 			}
@@ -349,7 +353,7 @@ func TestAuthTransition_OnlyOneOfTwoConcurrentActivationsWins(t *testing.T) {
 	for _, username := range []string{"first", "second"} {
 		go func() {
 			<-start
-			_, err := server.operator.EnableBasic(ctx, none, setupCode, username, testPassword)
+			_, err := server.operator.EnableNative(ctx, none, setupCode, username, testPassword)
 			results <- err
 		}()
 	}
@@ -403,7 +407,7 @@ func TestAuthTransition_TheActivationWaitsForAnAuthorityBeingGranted(t *testing.
 	setupCode := authtest.SetupCode(t, server.operator)
 	enabled := make(chan int)
 	go func() {
-		enabled <- callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: setupCode, Username: testUsername, Password: testPassword}).Code
+		enabled <- callSetupAPI(server.Server, authSetupRequest{SetupCode: setupCode, Username: testUsername, Password: testPassword}).Code
 	}()
 	// L'activation est en attente du verrou dès qu'un lecteur de plus ne
 	// peut plus le prendre.
@@ -447,7 +451,7 @@ func TestAuthTransition_AStreamLapsesWhenTheAuthenticationChanges(t *testing.T) 
 	if server.authorizationLapsed(stream) || server.authorizationLapsed(publicStream) {
 		t.Fatal("a stream lapsed with nothing changed")
 	}
-	server.enableBasic(t)
+	server.enableNative(t)
 	if !server.authorizationLapsed(stream) {
 		t.Fatal("a stream opened while the interface was open outlived the activation")
 	}
