@@ -93,7 +93,7 @@ func TestR_A1_13_ABrowseNameWithANewlineNeverReachesTheScreen(t *testing.T) {
 		{Name: "esc\x1b[2J", Kind: "dir"},
 		{Name: "b.txt", Kind: "file", Size: 3},
 	}}
-	got, err := browseOutcome(agentwire.ActionResult{State: agentwire.ActionSucceeded, Browse: &report})
+	got, err := browseOutcome(agentwire.ActionResult{State: agentwire.ActionSucceeded, Browse: &report}, "m-target")
 	if err != nil {
 		t.Fatalf("one bad name must not fail the whole browse: %v", err)
 	}

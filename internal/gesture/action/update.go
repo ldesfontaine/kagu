@@ -218,12 +218,12 @@ func (s *Service) versionReason(agentVersion string) string {
 
 // refusalOf rend l'erreur d'une offre qui ne tient pas : celles que l'API dit
 // déjà (hors ligne, droit, pas d'agent), sinon ErrUpdateUnavailable.
-func refusalOf(reason string) error {
+func refusalOf(reason, machineID string) error {
 	switch reason {
 	case OfferOffline:
 		return ErrMachineOffline
 	case OfferRightMissing:
-		return ErrRightMissing
+		return refusal.Missing(ErrRightMissing, agentpolicy.CapabilityAgentUpdate, machineID)
 	case OfferNoAgent:
 		return machine.ErrNoAgent
 	case OfferRollbackUnavailable:
@@ -247,7 +247,7 @@ func (s *Service) UpdateAgent(ctx context.Context, machineID string) (Run, error
 		return Run{}, err
 	}
 	if !offer.Available {
-		return Run{}, refusalOf(offer.Reason)
+		return Run{}, refusalOf(offer.Reason, machineID)
 	}
 	if err := s.refuseWhileUpdating(ctx); err != nil {
 		return Run{}, err

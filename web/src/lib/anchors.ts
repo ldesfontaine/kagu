@@ -1,4 +1,3 @@
-import type { ApiError } from "../api/client";
 import type { AgentAnchors, AnchorKind, Anchors } from "../api/machines";
 
 // Les ancres de confiance locales : des valeurs que seul l'administrateur de la
@@ -107,25 +106,4 @@ export function anchorOfReason(reason: string): { why: "missing" | "unreadable" 
     return null;
   }
   return { why: match[1] as "missing" | "unreadable" | "outside", name: match[2] ?? "" };
-}
-
-// La commande que le serveur joint au refus d'un ordre qu'une ancre ferait
-// refuser (le 409 de anchor.*) : à lancer en root sur la machine. null pour tout
-// autre refus.
-// exact : la commande pose la valeur de l'ordre ; sinon c'est « trust list »,
-// et l'écran renvoie à la fiche de la machine.
-export interface AnchorFixCommand {
-  command: string;
-  exact: boolean;
-}
-
-export function commandOfRefusal(error: ApiError | string | null | undefined): AnchorFixCommand | null {
-  if (error === null || error === undefined || typeof error === "string") {
-    return null;
-  }
-  const payload = error.payload;
-  if (typeof payload !== "object" || payload === null || !("command" in payload) || typeof payload.command !== "string" || payload.command === "") {
-    return null;
-  }
-  return { command: payload.command, exact: "command_exact" in payload && payload.command_exact === true };
 }

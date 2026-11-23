@@ -860,6 +860,10 @@ notify_no = "No"
 submit = "Declare the job"
 open = "Open the wizard"
 
+[visual.locked]
+title = "Locked action"
+text = "What the server attaches to the refusal: for a right, re-enrolling on the machine that must hold it; for an anchor, the command to run as root."
+
 [visual.modal]
 title = "Modal window"
 open = "Open a window"
@@ -4059,8 +4063,8 @@ link_secret_lost = "The passwords of this link were lost with the {product} key:
 
 [anchor]
 see_machine = "See what the agent holds (sheet, Agent tab)"
-cmd_list = "{agent_binary} agent trust list"
-cmd_add = "{agent_binary} agent trust add %s %s"
+cmd_list = "sudo {command} agent trust list"
+cmd_add = "sudo {command} agent trust add %s %s"
 title = "Trust anchors"
 subtitle = "What this machine’s administrator set themselves. No order from {product} can change them: without an anchor, the agent refuses the order it bounds."
 not_reported = "This agent does not report its anchors: it predates them and does not apply them. Update it."

@@ -162,7 +162,7 @@ func judgeVerifyRight(target machine.Status) error {
 	case agentpolicy.FitUnavailable:
 		return ErrTargetVerifyUnavailable
 	}
-	return ErrTargetVerifyRightMissing
+	return refusal.Missing(ErrTargetVerifyRightMissing, agentpolicy.CapabilityResticVerify, target.ID)
 }
 
 // followVerify attend la fin de l'ordre. Les comptes arrivent par le signal

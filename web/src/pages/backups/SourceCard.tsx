@@ -2,12 +2,11 @@ import { type ReactNode } from "react";
 
 import { type BackupMachine, type BackupOverview, type BackupProtection, type BackupSource } from "../../api/backups";
 import { reasonText } from "../../components/ActionsCard";
-import { AnchorFix } from "../../components/AnchorFix";
 import { Button } from "../../components/Button";
 import { TokenBox } from "../../components/Copy";
 import { Failure } from "../../components/Failure";
 import { Icon, type IconName } from "../../components/Icon";
-import { MissingRightButton } from "../../components/MissingRight";
+import { LockedAction } from "../../components/LockedAction";
 import { MoreMenu } from "../../components/MoreMenu";
 import { Pill } from "../../components/Pill";
 import { useNow } from "../../hooks/useNow";
@@ -15,7 +14,6 @@ import { useI18n, useT, type Translate } from "../../i18n/context";
 import { directHint, forgetView, pathReasonText, protectionReasonText, retentionView, scopeOf, sourceStatus, sourceSubtitle, sourceUnfit, statusTones, verifyBlockedBy, verifyView, type Unfitness } from "../../lib/backupOverview";
 import { firewallIdOf, newFirewallPlanPath, newPlanPath, newResticBackupPath, newTargetPath } from "../../lib/backups";
 import { missingSoftware } from "../../lib/resticInstall";
-import { holderOfRefusal, rightOfRefusal } from "../../lib/rights";
 import { ago, formatRemaining, formatWhen } from "../../lib/time";
 import { formatBytes } from "../../lib/units";
 import { DatabaseSetup } from "./DatabaseSetup";
@@ -124,7 +122,7 @@ function Unprotected({ source, overview }: { source: BackupSource; overview: Bac
       </dl>
       {missing.unfit?.install !== undefined && <InstallBlock software={missing.unfit.install.software} machine={missing.unfit.install.machine} />}
       <div className="backup-foot">
-        {missing.unfit?.right !== undefined && <MissingRightButton machineID={missing.unfit.right.machineID} right={missing.unfit.right.name} path={missing.unfit.right.path} short />}
+        {missing.unfit?.right !== undefined && <LockedAction fix={{ right: missing.unfit.right.name, machine: missing.unfit.right.machineID }} path={missing.unfit.right.path} short />}
         {missing.unfit?.right === undefined && missing.unfit?.link !== undefined && (
           <Button small to={missing.unfit.link.to}>
             {missing.unfit.link.label}
@@ -197,7 +195,7 @@ function ProtectionBlock({ source, protection, machines }: { source: BackupSourc
       <PartsBlock parts={source.parts} results={protection.parts} />
       <ProtectionFacts source={source} protection={protection} />
       <ProtectionState source={source} protection={protection} machines={machines} />
-      <Failure error={gestures.error} gesture={{ machineID: gestures.refusedHolder }} />
+      <Failure error={gestures.error} gesture={{ machineID: source.machine_id }} />
       {gestures.dialogs}
     </div>
   );
@@ -344,7 +342,7 @@ function VerifyFact({ protection, now }: { protection: BackupProtection; now: nu
           {blocked !== null && (
             <dd className="backup-item-sub backup-item-warn">
               {t(`backup.verify_right_${blocked}`, protection.target_machine_name)}{" "}
-              {blocked === "missing" && <MissingRightButton machineID={protection.target_machine_id} right="restic.verify" short />}
+              {blocked === "missing" && <LockedAction fix={{ right: "restic.verify", machine: protection.target_machine_id }} short />}
             </dd>
           )}
         </>
@@ -365,8 +363,6 @@ function upcoming(t: Translate, at: string, now: number): string {
 function ProtectionState({ source, protection, machines }: { source: BackupSource; protection: BackupProtection; machines: readonly BackupMachine[] }) {
   const t = useT();
   if (protection.state === "failed" || protection.state === "refused") {
-    const right = rightOfRefusal(protection.reason);
-    const machineID = holderOfRefusal(protection.reason, { source: source.machine_id, target: protection.target_machine_id });
     const missing = missingSoftware(protection.reason);
     const holder = machines.find((candidate) => candidate.machine_id === (missing === "rest-server" ? protection.target_machine_id : source.machine_id));
     return (
@@ -377,8 +373,7 @@ function ProtectionState({ source, protection, machines }: { source: BackupSourc
           </Pill>
           <span>{protectionReasonText(t, protection.reason, (reason) => reasonText(t, reason)) || t("backup.reason_unreported")}</span>
         </div>
-        {protection.fix_command !== undefined && protection.fix_command !== "" && <AnchorFix command={protection.fix_command} exact={protection.fix_exact === true} machineID={source.machine_id} />}
-        {right !== null && <MissingRightButton machineID={machineID} right={right} short />}
+        {protection.fix !== undefined && <LockedAction fix={protection.fix} short />}
         {missing !== null && holder !== undefined && <InstallBlock software={missing} machine={holder} />}
       </div>
     );

@@ -37,7 +37,6 @@ import {
 import { backupsPath, newTargetPathFor } from "../../lib/backups";
 import { isFormModified } from "../../lib/modal";
 import { missingSoftware, type MissingSoftware } from "../../lib/resticInstall";
-import { holderOfRefusal } from "../../lib/rights";
 import { formatBytes, percentOf } from "../../lib/units";
 import { InstallBlock } from "./InstallBlock";
 import { PartsBlock } from "./Parts";
@@ -91,10 +90,7 @@ function ResticDialog({ overview }: { overview: BackupOverview }) {
     };
     action.run(() => createResticBackup(source.machine_id, request), { topic: "backups", onDone: close });
   };
-  // Un refus de droit mène à la machine qui le manque : la cible pour
-  // restic.target, la source sinon.
   const refused = action.error === null ? "" : errorKey(action.error);
-  const gestureMachine = holderOfRefusal(refused, { source: source?.machine_id ?? "", target: values.target });
   // Un logiciel qui manque mène au même bloc que la carte : sur la cible pour
   // rest-server, sur la source pour restic.
   const missing = missingSoftware(refused);
@@ -110,7 +106,7 @@ function ResticDialog({ overview }: { overview: BackupOverview }) {
         submitIcon="archive"
         busy={action.busy}
         error={action.error}
-        errorGesture={gestureMachine === "" ? undefined : { machineID: gestureMachine }}
+        errorGesture={source === undefined ? undefined : { machineID: source.machine_id }}
         errorAside={missing !== null && lacking !== undefined ? <InstallBlock software={missing} machine={lacking} framed /> : undefined}
       />
     </Modal>

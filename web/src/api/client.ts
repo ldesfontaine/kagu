@@ -18,6 +18,17 @@ export class ApiError extends Error {
   }
 }
 
+// Ce qui lève un refus, tel que le serveur le joint (fix) : le droit qui
+// manque et la machine dont l'agent doit le tenir, et la ligne à lancer en
+// root sur elle. Pour une ancre, la ligne seule ; exact : elle pose la valeur
+// de l'ordre (sinon « trust list », et l'écran renvoie à la fiche).
+export interface RefusalFix {
+  right?: string;
+  machine?: string;
+  command?: string;
+  exact?: boolean;
+}
+
 // Toute écriture part en JSON avec un corps, {} quand elle n'a rien à
 // dire : le serveur peut ainsi exiger ce type sans exception. Un geste de
 // niveau 4 refusé faute de redemande ouvre la fenêtre de redemande, puis se

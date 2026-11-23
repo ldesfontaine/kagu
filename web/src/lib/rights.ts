@@ -1,3 +1,4 @@
+import type { ApiError, RefusalFix } from "../api/client";
 import type { Capability, Machine } from "../api/machines";
 import type { Translate } from "../i18n/context";
 import { detectedProxmox } from "./proxmox";
@@ -100,37 +101,17 @@ export function unfitFor(t: Translate, machine: Pick<Machine, "id" | "agent">, r
   return null;
 }
 
-// Les refus du serveur qui disent un droit manquant, avec le droit qu'ils
-// nomment ; les autres (action.right_missing) sont dits par l'écran qui sait
-// quel ordre il a envoyé.
-const refusalRights: Readonly<Record<string, string>> = {
-  "deploy.right_missing": "docker.deploy",
-  "backup.right_missing": "backup.receive",
-  "backup.source_right_missing": "backup.produce",
-  "restic.target_right_missing": "restic.target",
-  "restic.source_right_missing": "restic.produce",
-  "restic.source_vm_right_missing": "backup.produce",
-  "restic.source_docker_right_missing": "restic.docker",
-  "restic.target_verify_right_missing": "restic.verify",
-  "restic.target_browse_right_missing": "restic.browse",
-  "restic.source_restore_right_missing": "restic.restore",
-  "restic.restore_outside_right": "files.write",
-};
-
-export function rightOfRefusal(key: string): string | null {
-  return refusalRights[key] ?? null;
-}
-
-// Les droits que la cible d'une sauvegarde doit tenir ; les autres sont ceux de
-// la source. Un refus de droit se corrige sur la machine qui le manque.
-const targetRights: readonly string[] = ["restic.target", "restic.verify", "restic.browse"];
-
-// La machine à ré-enrôler pour un refus : la cible quand le droit nommé est de
-// la cible, la source sinon. Un seul endroit le décide pour la carte, son
-// geste et l'assistant.
-export function holderOfRefusal(key: string, machines: { source: string; target: string }): string {
-  const right = rightOfRefusal(key);
-  return right !== null && targetRights.includes(right) ? machines.target : machines.source;
+// Ce que le serveur joint à un refus pour le lever (fix) : le droit et sa
+// machine, ou la commande d'une ancre. null pour un refus qui n'en porte pas.
+export function fixOfRefusal(error: ApiError | string | null | undefined): RefusalFix | null {
+  if (error === null || error === undefined || typeof error === "string") {
+    return null;
+  }
+  const payload = error.payload;
+  if (typeof payload !== "object" || payload === null || !("fix" in payload) || typeof payload.fix !== "object" || payload.fix === null) {
+    return null;
+  }
+  return payload.fix as RefusalFix;
 }
 
 // La machine n'a pas sudo, ou on le tient pour acquis : un hôte Proxmox n'en a pas

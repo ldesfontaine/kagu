@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
@@ -21,12 +22,8 @@ const maxAPIBody = 64 << 10
 // traduit ; sinon un code court (not_found, bad_json, internal).
 type apiError struct {
 	Error string `json:"error"`
-	// La commande à lancer sur la machine pour lever le refus d'une ancre de
-	// confiance locale (anchor.Refused) ; absente pour les autres refus.
-	Command string `json:"command,omitempty"`
-	// La commande pose la valeur de l'ordre (faux : « trust list », l'écran
-	// renvoie alors à la fiche de la machine).
-	CommandExact bool `json:"command_exact,omitempty"`
+	// Ce qui lève un refus de droit ou d'ancre ; absent pour les autres.
+	Fix *fixJSON `json:"fix,omitempty"`
 	// La fin de la suspension du code, pour auth.totp_locked : la page de
 	// connexion dit « Code suspendu jusqu'à 14:32 ».
 	Until time.Time `json:"until,omitzero"`
@@ -103,17 +100,52 @@ func (s *Server) failed(w http.ResponseWriter, r *http.Request, err, notFound er
 			s.writeAPI(w, refusalStatus(err), deletionRefusalJSON{Error: key, Plan: deletionPlanToJSON(refused.Plan)})
 			return true
 		}
-		var anchored *anchor.Refused
-		if errors.As(err, &anchored) {
-			command, exact := anchored.Fix()
-			s.writeAPI(w, refusalStatus(err), apiError{Error: key, Command: command, CommandExact: exact})
-			return true
-		}
-		s.writeAPIError(w, refusalStatus(err), key)
+		s.writeAPI(w, refusalStatus(err), apiError{Error: key, Fix: fixOf(err)})
 		return true
 	}
 	s.apiInternalError(w, r, err)
 	return true
+}
+
+// fixJSON dit ce qui lève un refus (brique B-6), le même champ pour un droit
+// et pour une ancre : le droit qui manque et la machine dont l'agent doit le
+// tenir, et la ligne à lancer en root sur elle. Une ligne refusée par
+// R-A3-15 est absente : le refus part sans ligne. Pour une ancre, exact dit
+// que la ligne pose la valeur de l'ordre (faux : « trust list », l'écran
+// renvoie alors à la fiche de la machine).
+type fixJSON struct {
+	Right   string `json:"right,omitempty"`
+	Machine string `json:"machine,omitempty"`
+	Command string `json:"command,omitempty"`
+	Exact   bool   `json:"exact,omitempty"`
+}
+
+// fixOf rend ce qui lève le refus err ; nil pour un refus sans geste.
+func fixOf(err error) *fixJSON {
+	var anchored *anchor.Refused
+	if errors.As(err, &anchored) {
+		command, exact := anchored.Fix()
+		return anchorFixJSON("", command, exact)
+	}
+	if fix, ok := refusal.FixOf(err); ok {
+		return rightFixJSON(fix)
+	}
+	return nil
+}
+
+// rightFixJSON écrit la ligne grant du droit, sans valeur : celle d'un droit
+// borné (files.write=<chemin>) remplacerait les chemins déjà posés.
+func rightFixJSON(fix refusal.Fix) *fixJSON {
+	return &fixJSON{Right: fix.Right, Machine: fix.Machine, Command: agentpolicy.GrantLine(fix.Right, "")}
+}
+
+// anchorFixJSON rend la commande d'une ancre et la machine où la lancer, vide
+// quand le refus ne la dit pas ; nil sans commande.
+func anchorFixJSON(machineID, command string, exact bool) *fixJSON {
+	if command == "" {
+		return nil
+	}
+	return &fixJSON{Machine: machineID, Command: command, Exact: exact}
 }
 
 // refusalStatus rend le statut HTTP d'un refus : 409 s'il vient de l'état

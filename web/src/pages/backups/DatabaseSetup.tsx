@@ -2,7 +2,7 @@ import { deleteBackupDestination, useBackups, type BackupDestination, type Backu
 import { reasonText } from "../../components/ActionsCard";
 import { Button } from "../../components/Button";
 import { Failure } from "../../components/Failure";
-import { MissingRightButton } from "../../components/MissingRight";
+import { LockedAction } from "../../components/LockedAction";
 import { Pill } from "../../components/Pill";
 import { useAction } from "../../hooks/useAction";
 import { useNow } from "../../hooks/useNow";
@@ -62,7 +62,7 @@ export function DatabaseSetup() {
             <Pill small tone={rightTones[destination.right]}>
               {t(`backup.right_pill_${destination.right}`)}
             </Pill>
-            {destination.right === "missing" && <MissingRightButton machineID={destination.machine_id} right="backup.receive" path={destination.path} short />}
+            {destination.right === "missing" && <LockedAction fix={{ right: "backup.receive", machine: destination.machine_id }} path={destination.path} short />}
             <Button small variant="ghost" icon="x" disabled={action.busy} onClick={() => remove(destination)}>
               {t("backup.destination_delete")}
             </Button>

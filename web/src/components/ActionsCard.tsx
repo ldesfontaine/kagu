@@ -11,9 +11,8 @@ import { formatWhen } from "../lib/time";
 import { AgentGate } from "./AgentGate";
 import { Button } from "./Button";
 import { Card, CardBody, CardHeader, Empty, KeyValue, Note } from "./Card";
-import { AnchorFix } from "./AnchorFix";
+import { LockedAction } from "./LockedAction";
 import { Failure } from "./Failure";
-import { MissingRightButton } from "./MissingRight";
 import { Pill } from "./Pill";
 import { Table } from "./Table";
 
@@ -132,7 +131,6 @@ function ReenrollButton({ machineID }: { machineID: string }) {
 function RunRow({ run, now }: { run: ActionRun; now: number }) {
   const t = useT();
   const output = run.output.map((line) => line.line).join("\n");
-  const missing = missingRightOf(run.reason);
   return (
     <tr>
       <td>{formatWhen(run.requested_at, now)}</td>
@@ -140,20 +138,13 @@ function RunRow({ run, now }: { run: ActionRun; now: number }) {
       <td>
         <Pill tone={stateTones[run.state]}>{t(`action.state_${run.state}`)}</Pill>
         {run.reason !== "" && <div className="secondary">{reasonText(t, run.reason)}</div>}
-        {run.fix_command !== undefined && run.fix_command !== "" && <AnchorFix command={run.fix_command} exact={run.fix_exact === true} machineID={run.machine_id} />}
-        {missing !== null && run.machine_id !== null && <MissingRightButton machineID={run.machine_id} right={missing} />}
+        {run.fix !== undefined && <LockedAction fix={run.fix} />}
         {run.reason === "server_key_missing" && run.machine_id !== null && <ReenrollButton machineID={run.machine_id} />}
         {output !== "" && <pre className="secondary">{output}</pre>}
       </td>
       <td className="wide-only">{run.requested_by}</td>
     </tr>
   );
-}
-
-// Le droit qui manque quand l'agent a refusé l'ordre pour cela (right_missing:<droit>).
-function missingRightOf(reason: string): string | null {
-  const [code, right] = reason.split(":");
-  return code === "right_missing" && right !== undefined ? right : null;
 }
 
 // La raison d'un refus ; right_missing porte après « : » le droit qui manque.

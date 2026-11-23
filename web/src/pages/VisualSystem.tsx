@@ -13,6 +13,7 @@ import { ConfirmModal } from "../components/ConfirmModal";
 import { CardGrid, EntityCard } from "../components/EntityCard";
 import { Checkbox, Checks, Field, Input } from "../components/Field";
 import { Icon } from "../components/Icon";
+import { LockedAction } from "../components/LockedAction";
 import { Modal, ModalCancel } from "../components/Modal";
 import type { MenuAction } from "../components/MoreMenu";
 import { PageHead } from "../components/PageHead";
@@ -335,6 +336,20 @@ export function VisualSystem() {
           <section>
             <h2 className="side-label section-label">{t("visual.wizard.title")}</h2>
             <WizardSample />
+          </section>
+
+          <section>
+            <h2 className="side-label section-label">{t("visual.locked.title")}</h2>
+            <Card>
+              <CardBody>
+                <p className="secondary">{t("visual.locked.text")}</p>
+                <div className="stack gap-10">
+                  <LockedAction fix={{ right: "docker.deploy", machine: "demo" }} />
+                  <LockedAction fix={{ right: "files.write", machine: "demo" }} path="/srv/restore" short />
+                  <LockedAction fix={{ command: t("anchor.cmd_list"), machine: "demo" }} />
+                </div>
+              </CardBody>
+            </Card>
           </section>
 
           <section>

@@ -1,8 +1,9 @@
 import { expect, test } from "vitest";
 
+import { ApiError } from "../api/client";
 import type { Agent, Capability, Machine, RightFit } from "../api/machines";
 import sessionGolden from "../../../internal/edge/server/testdata/session.golden.json";
-import { heldRights, holderOfRefusal, lacksSudo, reenrollPath, rightOfRefusal, unfitFor, wantedRightOf, withWantedRight } from "./rights";
+import { fixOfRefusal, heldRights, lacksSudo, reenrollPath, unfitFor, wantedRightOf, withWantedRight } from "./rights";
 
 const t = (key: string, ...args: (string | number)[]) => [key, ...args].join("|");
 
@@ -52,14 +53,15 @@ test("withWantedRight : coche le droit sans doublon et ajoute son chemin à ceux
   expect(withWantedRight({ rights: [], backupPath: "", writePaths: "", resticPath: "/srv/old", anchors: {} }, { name: "restic.target", path: "/srv/restic" }).resticPath).toBe("/srv/restic");
 });
 
-test("rightOfRefusal : les refus qui nomment leur droit", () => {
-  expect(rightOfRefusal("backup.right_missing")).toBe("backup.receive");
-  expect(rightOfRefusal("backup.source_right_missing")).toBe("backup.produce");
-  expect(rightOfRefusal("deploy.right_missing")).toBe("docker.deploy");
-  expect(rightOfRefusal("restic.target_right_missing")).toBe("restic.target");
-  expect(rightOfRefusal("restic.source_right_missing")).toBe("restic.produce");
-  expect(rightOfRefusal("restic.source_vm_right_missing")).toBe("backup.produce");
-  expect(rightOfRefusal("action.right_missing")).toBeNull();
+test("fixOfRefusal : ce que le serveur joint au refus, sans table", () => {
+  const fix = { right: "docker.deploy", machine: "m1", command: "sudo x agent grant docker.deploy" };
+  expect(fixOfRefusal(new ApiError(409, "deploy.right_missing", { error: "deploy.right_missing", fix }))).toEqual(fix);
+  expect(fixOfRefusal(new ApiError(409, "anchor.backup_guest_missing", { fix: { command: "sudo x agent trust list" } }))).toEqual({ command: "sudo x agent trust list" });
+  // Un refus sans fix n'en a pas, même si sa clé dit un droit : le front ne le devine pas.
+  expect(fixOfRefusal(new ApiError(409, "backup.right_missing"))).toBeNull();
+  expect(fixOfRefusal(new ApiError(409, "x", { fix: null }))).toBeNull();
+  expect(fixOfRefusal("deploy.right_missing")).toBeNull();
+  expect(fixOfRefusal(null)).toBeNull();
 });
 
 test("heldRights : ce que l'agent a rapporté, sinon ce que son jeton demandait", () => {
@@ -107,13 +109,4 @@ test("lacksSudo : un hôte Proxmox, ou un agent qui dit que sudo manque", () => 
   expect(lacksSudo({ ...base, roles: [{ name: "proxmox_ve", version: "8.2" }] })).toBe(true);
   expect(lacksSudo({ ...base, agent: agentWith([], [{ name: "backup.produce", unavailable: "sudo_missing" }]) })).toBe(true);
   expect(lacksSudo({ ...base, agent: null })).toBe(false);
-});
-
-test("holderOfRefusal : un droit de la cible se corrige sur la cible, les autres sur la source", () => {
-  const machines = { source: "docker1", target: "pi" };
-  expect(holderOfRefusal("restic.target_right_missing", machines)).toBe("pi");
-  expect(holderOfRefusal("restic.target_verify_right_missing", machines)).toBe("pi");
-  expect(holderOfRefusal("restic.source_right_missing", machines)).toBe("docker1");
-  expect(holderOfRefusal("restic.source_docker_right_missing", machines)).toBe("docker1");
-  expect(holderOfRefusal("action.right_missing", machines)).toBe("docker1");
 });

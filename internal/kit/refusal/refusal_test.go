@@ -46,3 +46,25 @@ func TestError_KeepsTheSentinelBehaviour(t *testing.T) {
 		t.Fatalf("message: %q", errNameInvalid.Error())
 	}
 }
+
+// Un refus de droit reste la sentinelle qu'il instancie : même clé, même
+// statut, errors.Is la voit ; il porte en plus le droit et la machine.
+func TestMissing_KeepsItsSentinelAndCarriesItsFix(t *testing.T) {
+	errRightMissing := refusal.Conflict("thing.right_missing", "the agent may not do the thing")
+	refused := fmt.Errorf("do thing: %w", refusal.Missing(errRightMissing, "thing.do", "m1"))
+	if !errors.Is(refused, errRightMissing) {
+		t.Fatal("errors.Is must see the sentinel behind the instance")
+	}
+	if key, ok := refusal.KeyOf(refused); !ok || key != "thing.right_missing" || !refusal.IsConflict(refused) {
+		t.Fatalf("key: %q %v", key, ok)
+	}
+	if fix, ok := refusal.FixOf(refused); !ok || fix != (refusal.Fix{Right: "thing.do", Machine: "m1"}) {
+		t.Fatalf("fix: %+v %v", fix, ok)
+	}
+	if _, ok := refusal.FixOf(errRightMissing); ok {
+		t.Fatal("the sentinel names no machine")
+	}
+	if _, ok := refusal.FixOf(errNameTaken); ok {
+		t.Fatal("a refusal that is not about a right carries no fix")
+	}
+}

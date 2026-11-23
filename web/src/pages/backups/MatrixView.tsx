@@ -102,7 +102,7 @@ function ProtectionActions({ source, protection }: { source: BackupSource; prote
           </Button>
         ),
       )}
-      <Failure error={gestures.error} gesture={{ machineID: gestures.refusedHolder }} />
+      <Failure error={gestures.error} gesture={{ machineID: source.machine_id }} />
       {gestures.dialogs}
       <p className="secondary">{t(`backup.inspector_back_${protection.origin}`, protection.target_machine_name)}</p>
     </>

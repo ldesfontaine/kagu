@@ -120,7 +120,7 @@ export function UpdateCard({ container, directory, reload }: { container: Contai
         {plan.data !== null && offer !== null && <ServiceUpdateNote update={plan.data.last_update} />}
         {upgrade !== null && confirming && (
           <div className="update-confirm" role="group" aria-label={t("update.upgrade_to", upgrade.version)}>
-            <Failure error={upgrading.error} gesture={{ machineID: container.machine_id, right: "docker.update" }} />
+            <Failure error={upgrading.error} gesture={{ machineID: container.machine_id }} />
             <p>{t("update.upgrade_confirm", upgrade.unitName, upgrade.version, upgrade.serviceName, upgrade.machineName)}</p>
             <div className="update-confirm-actions">
               <AgentGate machineIDs={[container.machine_id]}>

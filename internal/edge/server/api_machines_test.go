@@ -867,14 +867,11 @@ func TestFailed_AnAnchorRefusalCarriesItsKeyAndCommand(t *testing.T) {
 	if !server.Server.failed(recorder, request, wrapped, nil) {
 		t.Fatal("a refusal is a failure")
 	}
-	var body struct {
-		Error   string `json:"error"`
-		Command string `json:"command"`
-	}
+	var body apiError
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if recorder.Code != http.StatusConflict || body.Error != "anchor.backup_guest_missing" || !strings.HasSuffix(body.Command, " agent trust add backup.guest 5012") {
+	if recorder.Code != http.StatusConflict || body.Error != "anchor.backup_guest_missing" || body.Fix == nil || !body.Fix.Exact || body.Fix.Command != "sudo "+brand.Command+" agent trust add backup.guest 5012" {
 		t.Fatalf("%d %+v", recorder.Code, body)
 	}
 }

@@ -40,7 +40,7 @@ export function AgentUpdate({ machineID, agent, updateLast, withoutSudo = false 
   };
   return (
     <>
-      <Failure error={action.error} gesture={{ machineID, right: "agent.update" }} />
+      <Failure error={action.error} gesture={{ machineID }} />
       <AgentUpdateState state={state} />
       <KeyValue
         label={t("machine.agent_rollback_capable")}
