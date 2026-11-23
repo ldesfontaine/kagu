@@ -157,7 +157,6 @@ POST /api/auth/logout
 GET /api/auth/sessions
 DELETE /api/auth/sessions/{id}
 POST /api/auth/sessions/actions/close-others
-POST /api/auth/actions/disable
 PUT /api/auth/password
 GET /api/audit
 GET /api/audit/forwarding

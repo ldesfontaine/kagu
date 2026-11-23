@@ -81,7 +81,7 @@ make build                      # compile le front puis le binaire : bin/openclo
 Une configuration minimale :
 
 ```sh
-mkdir -p dev/state
+mkdir -p dev                     # serve crée dev/state en 0700 ; ouvert, il refuse de démarrer
 cat > dev/config.toml <<EOF
 listen = "127.0.0.1:8080"
 state_dir = "$PWD/dev/state"

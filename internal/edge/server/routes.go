@@ -202,7 +202,6 @@ func (s *Server) routes() []route {
 		{"GET", "/api/auth/sessions", s.listOperatorSessions},
 		{"DELETE", "/api/auth/sessions/{id}", s.closeOperatorSession},
 		{"POST", "/api/auth/sessions/actions/close-others", s.closeOtherSessions},
-		{"POST", "/api/auth/actions/disable", s.disableAuth},
 		{"PUT", "/api/auth/password", s.changeAuthPassword},
 		{"GET", "/api/audit", s.listAudit},
 		{"GET", "/api/audit/forwarding", s.auditForwarding},

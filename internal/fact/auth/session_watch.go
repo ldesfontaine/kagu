@@ -10,11 +10,12 @@ import (
 // les flux des agents (machine.Session.Done) : la mort de la session le ferme
 // tout de suite, sans attendre le ping du flux. Toute mort passe par là :
 // déconnexion, fermeture depuis la liste, mot de passe changé, autre identité
-// en forward, cookie sans la preuve du mandataire, retour au mode none ; et
+// en forward, cookie sans la preuve du mandataire, canal local de root
+// (reset-password, auth-mode, sessions close-all) ; et
 // l'échéance, qu'un minuteur guette.
 //
-// Le registre est en mémoire : une session effacée par un autre processus
-// (`auth disable`) n'est vue qu'au ping, par SessionAlive.
+// Le registre est en mémoire : une session effacée hors de serve n'est vue
+// qu'au ping, par SessionAlive.
 
 // sessionWatch est la fin d'une session que des flux attendent.
 type sessionWatch struct {

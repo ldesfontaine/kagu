@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -19,35 +18,30 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
-const authUsage = `Usage : {command} auth <status|disable> [-config chemin]
+const authUsage = `Usage : {command} auth status [-config chemin]
 
   status    dit si l'interface est protégée, par quel identifiant ou
             derrière quel en-tête d'identité du SSO, et quelles
-            identités forward_users admet
-  disable   coupe l'authentification de l'interface (mot de passe oublié) :
-            elle revient à sa première configuration ; serve la suit à la
-            requête suivante, sans redémarrer. Le compte se recrée avec un
-            code neuf : {command} admin setup-code
+            identités forward_users admet. Refaire un accès perdu ou
+            changer de mode : sudo {command} admin
 `
 
-// opencloud auth : la porte de secours quand le mot de passe est perdu. Elle
-// écrit dans la base sous le compte du service : qui peut la lancer peut
-// déjà lire state_dir, elle n'ouvre rien de plus.
+// opencloud auth status : l'état de l'accès, lu dans la base sous le compte
+// du service. La commande ne change rien : refaire l'accès passe par
+// « admin », sur le canal local, à root seul.
 func runAuth(args []string) error {
 	return authCommand(args, os.Stdout)
 }
 
 func authCommand(args []string, out io.Writer) error {
-	if len(args) < 1 {
+	if len(args) < 1 || args[0] != "status" {
 		fmt.Fprint(os.Stderr, strings.ReplaceAll(authUsage, "{command}", brand.Command))
-		return &refusal{message: "sous-commande manquante"}
+		if len(args) < 1 {
+			return &refusal{message: "sous-commande manquante"}
+		}
+		return &refusal{message: "sous-commande inconnue : " + args[0]}
 	}
-	command := args[0]
-	if command != "status" && command != "disable" {
-		fmt.Fprint(os.Stderr, strings.ReplaceAll(authUsage, "{command}", brand.Command))
-		return &refusal{message: "sous-commande inconnue : " + command}
-	}
-	flags := flag.NewFlagSet("auth "+command, flag.ContinueOnError)
+	flags := flag.NewFlagSet("auth status", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
 	configPath := flags.String("config", config.DefaultPath, "chemin du fichier de configuration")
 	if err := flags.Parse(args[1:]); err != nil {
@@ -69,34 +63,7 @@ func authCommand(args []string, out io.Writer) error {
 		return err
 	}
 	defer db.Close()
-	access := auth.New(db, logger)
-	access.SetAuditor(audit.New(db, logger))
-	if command == "disable" {
-		return disableAuth(ctx, access, out)
-	}
-	return printAuthStatus(ctx, access, cfg.ForwardUsers, out)
-}
-
-func disableAuth(ctx context.Context, access *auth.Service, out io.Writer) error {
-	// Accès local direct à la base : l'état lu ici est celui que la
-	// commande désactive.
-	current, err := access.State(ctx)
-	if err != nil {
-		return err
-	}
-	err = access.Disable(ctx, current)
-	if errors.Is(err, auth.ErrStateChanged) {
-		return &refusal{message: "l'authentification a changé pendant la commande : relancez-la"}
-	}
-	if errors.Is(err, auth.ErrDisabled) {
-		_, writeErr := fmt.Fprintln(out, "L'authentification de l'interface était déjà désactivée.")
-		return writeErr
-	}
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(out, "Authentification de l'interface désactivée : l'interface revient à sa première configuration, qui exige un code. Tirez-le : sudo "+brand.Command+" admin setup-code")
-	return err
+	return printAuthStatus(ctx, auth.New(db, logger), cfg.ForwardUsers, out)
 }
 
 // printAuthStatus dit l'état de l'accès. forwardUsers est la liste de

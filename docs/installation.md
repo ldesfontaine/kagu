@@ -278,7 +278,9 @@ Lancées en root, elles peuvent créer `opencloud.db-wal` (ou `secret.key`) au
 nom de root si le service est arrêté, et `serve` ne pourrait plus écrire dans
 sa base. `export` et `apply` font exception : elles n'ouvrent pas la base,
 elles parlent au serveur qui tourne par sa socket, et peuvent se lancer en
-root (voir [Exporter l'annuaire](#exporter-lannuaire)).
+root (voir [Exporter l'annuaire](#exporter-lannuaire)). `admin` passe par la
+même socket et se lance **en root seulement** (`sudo opencloud admin …`,
+voir [Accès perdu](#accès-perdu--sudo-opencloud-admin)).
 
 ## Configuration
 
@@ -288,7 +290,7 @@ commenté : [`installation/config.toml`](installation/config.toml).
 | Clé | Défaut | Rôle |
 | --- | --- | --- |
 | `listen` | `127.0.0.1:8080` | Adresse d'écoute, `hôte:port`, en HTTP. Le seul port de Kagu |
-| `state_dir` | `/var/lib/opencloud` | La base `opencloud.db` (et `-wal`, `-shm`), réglages de l'interface compris, et le cache `lifecycle.json`. Créé en `0700` s'il manque |
+| `state_dir` | `/var/lib/opencloud` | La base `opencloud.db` (et `-wal`, `-shm`), réglages de l'interface compris, et le cache `lifecycle.json`. Créé en `0700` s'il manque ; ouvert au groupe ou aux autres, `serve` refuse de démarrer (`chmod 700 <state_dir>`) |
 | `public_url` | vide | L'adresse publique, par exemple `https://opencloud.example.org`. Voir ci-dessous |
 | `trusted_proxies` | `[]` | Les mandataires dont les en-têtes `X-Forwarded-*` sont crus, en CIDR |
 | `forward_secret_file` | vide | Mode `forward` : le fichier d'une ligne qui porte le secret partagé avec le mandataire (32 caractères au moins, illisible pour les autres comptes). Illisible, trop court ou trop ouvert, il arrête le démarrage. Voir [Derrière un SSO qui authentifie](#derrière-un-sso-qui-authentifie) |
@@ -499,8 +501,8 @@ avec une page de connexion (connexion native, ci-dessous), ou
 compte créé, le navigateur est connecté et l'interface s'ouvre.
 
 **La première configuration exige un code.** Tirez-le sur la machine
-Kagu, sous le compte du service ou en root (la commande parle au serveur
-par la socket de `state_dir`, qui doit tourner) :
+Kagu, en root (la commande parle au serveur par la socket de `state_dir` ;
+le serveur doit tourner) :
 
 ```sh
 sudo opencloud admin setup-code -config /etc/opencloud/config.toml
@@ -511,9 +513,9 @@ Huit chiffres, **trente minutes**, **un seul usage**, **cinq essais faux** au
 total : au cinquième, le code est brûlé, le bon compris ; un nouveau code
 remplace l'ancien. Il tient après un redémarrage de `serve`, jusqu'à son
 échéance. Saisissez-le sur la page de première configuration, avec le compte.
-Même après `opencloud auth disable`, le compte ne se recrée qu'avec un code
-neuf. Créez le compte avant de publier le routeur Traefik, par un tunnel SSH
-vers l'adresse de `listen` :
+Le compte créé, plus rien ne ramène à la première configuration. Créez le
+compte avant de publier le routeur Traefik, par un tunnel SSH vers l'adresse
+de `listen` :
 ```sh
 ssh -L 8080:127.0.0.1:8080 root@vps.example.org
 # puis, sur votre poste : http://localhost:8080
@@ -537,7 +539,7 @@ curl -X POST -H 'Content-Type: application/json' \
 | Identifiant | 1 à 64 caractères, sans `:` |
 | Mot de passe | 12 caractères au moins, 72 octets au plus ; haché en bcrypt |
 | Échecs | 10 d'un coup, puis un toutes les 6 s par adresse (en IPv6, par /64), `429` au-delà. La vérification lente fait la queue derrière neuf autres au plus : file pleine, `429` aussitôt |
-| Effet | Immédiat, sans redémarrage. Créer le compte révoque tous les jetons d'API : il n'y en a qu'après un `auth disable`, recréez ceux qui servent |
+| Effet | Immédiat, sans redémarrage. Créer le compte révoque tous les jetons d'API : une installation neuve n'en a aucun (sauf une base reprise d'ailleurs), recréez ceux qui servent |
 
 Ce qui reste ouvert : la liste du [tableau ci-dessus](#une-authentification-basic-au-niveau-de-traefik).
 Le reste — `/api/…`, le direct, les journaux — demande une session, ou un
@@ -552,19 +554,35 @@ déconnecter ». Changer le mot de passe ferme toutes les autres sessions.
 `native`, même identifiant, même mot de passe. Le navigateur affiche la page
 de connexion : retapez le même mot de passe. Les jetons d'API ne changent pas.
 
-**Mot de passe perdu** :
+### Accès perdu : `sudo opencloud admin`
 
-```sh
-runuser -u opencloud -- opencloud auth disable -config /etc/opencloud/config.toml
-runuser -u opencloud -- opencloud auth status  -config /etc/opencloud/config.toml
-# mode : none — aucun compte, l'interface attend sa première configuration
-```
+Mot de passe perdu, SSO en panne, passage d'un compte au SSO : tout se fait
+sur la machine Kagu, **en root**, serveur en marche. La commande parle à
+`serve` par la socket `state_dir/control.sock` ; `serve` juge l'uid du pair
+(voir [Exporter l'annuaire](#exporter-lannuaire) pour la socket). L'interface
+n'a plus de bouton « Désactiver », et rien ne ramène à la première
+configuration.
 
-`serve` suit à la requête suivante, sans redémarrer, et l'interface **revient
-à sa première configuration** : c'est voulu, la commande locale est la porte
-de secours. Rouvrez l'adresse (par le tunnel SSH, pour la même raison qu'au
-premier démarrage) et recréez le compte. Désactiver depuis Paramètres fait
-de même.
+| Geste | Effet |
+| --- | --- |
+| `sudo opencloud admin setup-code` | Tire le code de première configuration (ci-dessus). Refusé une fois le compte créé |
+| `sudo opencloud admin reset-password` | Demande le nouveau mot de passe deux fois, sur le terminal, sans écho (jamais sur l'entrée standard). Ferme **toutes** les sessions ; les jetons d'API restent. Refusé en mode `forward` (pas de mot de passe) et sans compte |
+| `sudo opencloud admin auth-mode native -username <nom>` | Passe à la connexion par compte (mot de passe demandé deux fois). Ferme toutes les sessions |
+| `sudo opencloud admin auth-mode forward [-header Remote-User]` | Passe derrière le SSO, ou change l'en-tête. Ferme toutes les sessions |
+| `sudo opencloud admin sessions close-all` | Ferme toutes les sessions |
+| `sudo opencloud admin tokens revoke-all` | Révoque tous les jetons d'API |
+
+Chaque geste accepte `-config /etc/opencloud/config.toml`. Serveur arrêté :
+« le serveur ne tourne pas ». Un autre compte que root : « Réservé à root »,
+avant toute saisie ; le serveur refuse de toute façon (`403`) tout pair
+dont l'uid n'est pas 0. `serve` suit à la requête suivante, sans
+redémarrer. Au journal d'audit, sous `uid:0` : tous les gestes sauf
+`sessions close-all`, qui n'écrit qu'un `WARN` au journal de `serve`.
+
+La contrepartie : qui perd root sur la machine Kagu n'a plus de secours, et
+`auth-mode forward` ne vérifie pas que le SSO pose l'en-tête. S'il ne le pose
+pas, l'interface refuse tout le monde ; `auth-mode native` rend un compte.
+`opencloud auth status` (sous le compte du service) dit le mode en cours.
 
 ### Derrière un SSO qui authentifie
 
@@ -641,9 +659,10 @@ http:
 
 **Activer** : ouvrez Kagu par son nom public, connectez-vous à
 Authelia, puis, sur l'écran de première configuration, Mode « SSO en amont
-(Authelia, Authentik…) ». Une installation qui a déjà un compte y revient
-par Paramètres → Accès → Zone de danger → Désactiver (ou `opencloud auth
-disable`). Le corps de l'API est
+(Authelia, Authentik…) ». Une installation qui a déjà un compte y passe
+sur la machine, en root : `sudo opencloud admin auth-mode forward` (voir
+[Accès perdu](#accès-perdu--sudo-opencloud-admin)), sans le garde-fou de
+l'en-tête que l'écran applique. Le corps de l'API est
 `{"mode":"forward","header":"Remote-User"}` sur
 `POST /api/auth/setup`. Comme pour un compte, activer révoque tous les
 jetons d'API.
@@ -689,10 +708,8 @@ cause. Activer le mode `forward` depuis une identité hors liste est refusé
 votre identité ou avec une faute de casse) : la sortie est la même que
 l'entrée. La page `403` et le `WARN` disent l'identité reçue ; corrigez
 `forward_users` dans `/etc/opencloud/config.toml` (ou videz-la), puis
-`systemctl restart opencloud`. `opencloud auth disable` n'en sort **pas** :
-l'interface revient à sa première configuration, mais réactiver le mode
-`forward` depuis une identité hors liste reste refusé, et en attendant toute
-identité que le SSO laisse passer peut créer le compte.
+`systemctl restart opencloud`. Ou, sans redémarrer, revenez à un compte :
+`sudo opencloud admin auth-mode native -username <nom>`.
 
 La contrepartie : retirer quelqu'un de la liste ne révoque pas les jetons
 d'API qu'il a tirés (Paramètres → Agent IA → Jetons d'API), et les groupes d'Authelia
@@ -728,12 +745,12 @@ curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: lucas' \
 # 200
 ```
 
-**SSO ou mandataire en panne ou mal réglé** : la même commande de secours rouvre
-l'accès.
+**SSO ou mandataire en panne ou mal réglé** : revenez à un compte, sur la
+machine, en root ([Accès perdu](#accès-perdu--sudo-opencloud-admin)).
 
 ```sh
-runuser -u opencloud -- opencloud auth disable -config /etc/opencloud/config.toml
-runuser -u opencloud -- opencloud auth status  -config /etc/opencloud/config.toml
+sudo opencloud admin auth-mode native -username <nom> -config /etc/opencloud/config.toml
+runuser -u opencloud -- opencloud auth status -config /etc/opencloud/config.toml
 ```
 
 La contrepartie : tout repose sur `trusted_proxies` juste, sur un
@@ -2073,7 +2090,7 @@ déploiement.
 
 | Où | Quoi | Perte |
 | --- | --- | --- |
-| Serveur, `state_dir` | `opencloud.db` (avec `-wal` et `-shm` tant qu'il tourne) | Tout : machines, historique, sondes, tâches, alertes, page de statut, réglages de l'interface (langue, seuils des alertes, rappel des alertes de danger, relais d'e-mails mot de passe compris, fin de support), jetons d'API et authentification, et le journal d'audit (Journal : qui a fait quoi, un an), que les canaux « Recevoir le journal » (Paramètres → Notifications → Canaux) reçoivent aussi : cochez-en un, une base effacée n'efface plus la trace. `opencloud auth disable` et `opencloud secrets forget` s'y inscrivent sous le compte qui les lance |
+| Serveur, `state_dir` | `opencloud.db` (avec `-wal` et `-shm` tant qu'il tourne) | Tout : machines, historique, sondes, tâches, alertes, page de statut, réglages de l'interface (langue, seuils des alertes, rappel des alertes de danger, relais d'e-mails mot de passe compris, fin de support), jetons d'API et authentification, et le journal d'audit (Journal : qui a fait quoi, un an), que les canaux « Recevoir le journal » (Paramètres → Notifications → Canaux) reçoivent aussi : cochez-en un, une base effacée n'efface plus la trace. `opencloud admin` s'y inscrit sous l'uid du pair de la socket (`uid:0`), `opencloud secrets forget` sous le compte qui la lance |
 | Serveur, `state_dir` | `secret.key` | La clé des secrets de la base : sans elle, la base garde ses données mais perd le mot de passe du relais, l'URL et le secret des canaux, les URL de ping, les jetons des hôtes Proxmox, les mots de passe des dépôts restic (voir [Clé perdue](#clé-perdue)) |
 | Serveur, `state_dir` | `server.key` | La clé qui signe les ordres aux agents, tirée au premier démarrage : chaque agent a épinglé sa moitié publique. Sans elle, `serve` en tire une neuve et **chaque agent refuse les ordres** (`bad_signature`) jusqu'à son ré-enrôlement ; l'observation continue. Qui l'a commande toutes les machines : même soin que `secret.key` |
 | Serveur | `/etc/opencloud/config.toml` | La configuration |
@@ -2153,9 +2170,16 @@ La commande **demande le fichier au serveur qui tourne**, par la socket
 `state_dir/control.sock` (0600, créée au démarrage de `serve`, retirée à son
 arrêt) : serveur arrêté, elle répond que le serveur ne tourne pas et sort en
 `1`. Sans `-o`, le fichier va sur la sortie standard. Un second `serve` sur le
-même `state_dir` n'a pas de socket (le premier garde la sienne), et `serve`
-n'ouvre la socket que si `state_dir` est fermé au groupe et aux autres. Le
-bouton « Exporter » de l'onglet Annuaire donne le même fichier.
+même `state_dir` n'a pas de socket (le premier garde la sienne) : un `WARN`,
+et il tourne sans elle. `state_dir` ouvert au groupe ou aux autres : `serve`
+**ne démarre pas** et dit `chmod 700 <state_dir>`. Le coût : un `serve` qui
+tournait avec un `state_dir` trop ouvert s'arrête à la mise à jour ; ce qu'on
+y gagne, c'est que le secours de root ([Accès
+perdu](#accès-perdu--sudo-opencloud-admin)) ne manque jamais en silence. La
+socket sert l'annuaire au compte du service ou à root, et les gestes
+`admin` à root seul : l'uid du pair, lu par le noyau (`SO_PEERCRED`), jamais
+son groupe. Le bouton « Exporter » de l'onglet Annuaire donne le même
+fichier.
 
 **Ce n'est pas une sauvegarde.** Le fichier ne contient ni historique, ni
 mesures, ni canaux, ni pages de statut, ni réglages, et aucun secret : un jeton
@@ -2657,6 +2681,6 @@ Les messages sont ceux que le binaire écrit, tels quels.
 | mcp-maison : `403 bad_host` | `OPENCLOUD_URL` vise un nom que `public_url` ne reconnaît pas | Mettre l'adresse IP de `listen` dans `OPENCLOUD_URL` |
 | mcp-maison : `groupe "opencloud" non chargé : OPENCLOUD_URL: https:// attendu (http:// : boucle locale ou IP privée seulement)` | `OPENCLOUD_URL` en `http://` sur un nom ou une IP publique | `OPENCLOUD_URL=http://<l'IP de listen>:<port>` (boucle locale ou IP privée), ou `https://` |
 | Mode `forward` : toute l'interface répond `401 {"error":"api_token.invalid"}` | Le mandataire transmet un `Authorization: Bearer` à Kagu (oauth2-proxy avec `--pass-authorization-header` ou `--set-authorization-header`) : un Bearer est jugé comme un jeton d'API, avant l'en-tête d'identité | Ne pas transmettre `Authorization` à Kagu ; seul l'en-tête d'identité compte |
-| Le navigateur redemande le mot de passe à chaque fois, ou `429` | Mauvais identifiants, puis limite des échecs ; ou file de vérification pleine (des tentatives anonymes en cours) | Attendre `Retry-After` et réessayer ; mot de passe perdu : `opencloud auth disable` |
+| Le navigateur redemande le mot de passe à chaque fois, ou `429` | Mauvais identifiants, puis limite des échecs ; ou file de vérification pleine (des tentatives anonymes en cours) | Attendre `Retry-After` et réessayer ; mot de passe perdu : `sudo opencloud admin reset-password` |
 | `sudo: command not found` | Debian minimal, installé sans `sudo` | En root, `runuser -u opencloud-agent -- …` à la place de `sudo -u opencloud-agent …` (la ligne d'installation de l'agent) ; sous le compte du serveur, `runuser -u opencloud -- …` |
 | Tous les utilisateurs bloqués ensemble en `429` | `trusted_proxies` absent : tout le monde a l'adresse de Traefik | Déclarer Traefik dans `trusted_proxies` |

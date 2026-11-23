@@ -68,6 +68,9 @@ var (
 	ErrPasswordTooShort = refusal.Invalid("auth.password_too_short", "auth: password too short")
 	ErrPasswordTooLong  = refusal.Invalid("auth.password_too_long", "auth: password too long")
 	ErrHeaderInvalid    = refusal.Invalid("auth.header_invalid", "auth: header name invalid")
+	ErrModeInvalid      = refusal.Invalid("auth.mode_invalid", "auth: mode must be native or forward")
+	// Le mode demandé est celui en vigueur : rien à changer.
+	ErrSameMode = refusal.Conflict("auth.same_mode", "auth: already in this mode")
 	// En mode forward, c'est le SSO qui authentifie : il n'y a pas
 	// de mot de passe à changer.
 	ErrNoPassword = refusal.Conflict("auth.no_password", "auth: no password in this mode")

@@ -34,7 +34,7 @@ func enableWithCode(ts *testServer, code string) *httptest.ResponseRecorder {
 func issueOnSocket(t *testing.T, ts *testServer) setupCodeResponse {
 	t.Helper()
 	recorder := httptest.NewRecorder()
-	ts.ControlHandler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "http://control"+strings.TrimPrefix(setupCodePath, "POST "), nil))
+	ts.ControlHandler().ServeHTTP(recorder, asRoot(httptest.NewRequest(http.MethodPost, "http://control/control/admin/setup-code", nil)))
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("issue on the socket: %d %s", recorder.Code, recorder.Body.String())
 	}
@@ -217,22 +217,6 @@ func TestR_CNX_3(t *testing.T) {
 		requireStillAwaitingSetup(t, ts)
 	})
 
-	t.Run("auth disable does not reopen the first setup to whoever reaches the port", func(t *testing.T) {
-		ts := newFirstSetupServer(t)
-		first := issueOnSocket(t, ts)
-		if got := enableWithCode(ts, first.Code); got.Code != http.StatusOK {
-			t.Fatalf("%d %s", got.Code, got.Body.String())
-		}
-		ts.rescue(t)
-		requireRefusal(t, enableWithCode(ts, ""), http.StatusUnprocessableEntity, "auth.setup_code_required")
-		requireRefusal(t, enableWithCode(ts, first.Code), http.StatusConflict, "auth.setup_code_unusable")
-		requireStillAwaitingSetup(t, ts)
-		second := issueOnSocket(t, ts)
-		if got := enableWithCode(ts, second.Code); got.Code != http.StatusOK {
-			t.Fatalf("%d %s", got.Code, got.Body.String())
-		}
-	})
-
 	t.Run("the page cannot ask for a code", func(t *testing.T) {
 		ts := newFirstSetupServer(t)
 		for _, path := range []string{"/control/admin/setup-code", "/api/control/admin/setup-code", "/api/auth/setup-code"} {
@@ -247,7 +231,7 @@ func TestR_CNX_3(t *testing.T) {
 		ts := newFirstSetupServer(t)
 		ts.enableNative(t)
 		recorder := httptest.NewRecorder()
-		ts.ControlHandler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "http://control/control/admin/setup-code", nil))
+		ts.ControlHandler().ServeHTTP(recorder, asRoot(httptest.NewRequest(http.MethodPost, "http://control/control/admin/setup-code", nil)))
 		requireRefusal(t, recorder, http.StatusConflict, "auth.already_enabled")
 	})
 
@@ -375,7 +359,8 @@ func TestR_A2_5_OnlyOneActivationWins(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := operator.Disable(ctx, state); err != nil {
+			// Retour à none par la base : aucun geste ne le fait plus.
+			if _, err := db.SaveAuthStateIf(ctx, state, none, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 		}

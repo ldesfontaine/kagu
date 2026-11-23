@@ -41,6 +41,7 @@ choses se sont vues dès le départ :
   control socket not opened, export and apply disabled`. Le README ne le dit
   pas : `opencloud export` / `apply` et le bouton **Exporter** du
   [Services](#t4--déclarer-un-service) tombent sans que la cause se lise à l'écran.
+  (Depuis T02-08, `serve` refuse de démarrer dans ce cas.)
 - `docs/installation.md` écrit `opencloud-v0.5.0` dans la préparation de
   l'agent et dit que c'est « la version que `opencloud version` affiche » ;
   le binaire affiche `v0.0.1`, et l'écran de première configuration écrit

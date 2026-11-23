@@ -13,7 +13,6 @@ export const writes = [
   "POST /api/auth/logout",
   "DELETE /api/auth/sessions/{id}",
   "POST /api/auth/sessions/actions/close-others",
-  "POST /api/auth/actions/disable",
   "PUT /api/auth/password",
   "PUT /api/settings/thresholds/{resource}",
   "PUT /api/settings/reminder",

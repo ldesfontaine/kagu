@@ -31,10 +31,10 @@ func (ts *testServer) enableNative(t *testing.T) {
 	}
 }
 
-// rescue fait ce que fait `opencloud auth disable` depuis un autre accès à
-// la base : l'installation revient à sa première configuration. Les jetons
-// d'API tirés sous le compte restent : c'est la seule façon d'en trouver à
-// l'activation.
+// rescue ramène la base à none sans passer par serve, comme une base
+// restaurée d'avant la première configuration : aucun geste de Kagu ne le
+// fait plus (R-A2-10). Les jetons d'API tirés sous le compte restent : c'est
+// la seule façon d'en trouver à l'activation.
 func (ts *testServer) rescue(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
@@ -42,8 +42,8 @@ func (ts *testServer) rescue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ts.operator.Disable(ctx, current); err != nil {
-		t.Fatal(err)
+	if swapped, err := ts.db.SaveAuthStateIf(ctx, current, auth.State{Mode: auth.ModeNone}, testNow); err != nil || !swapped {
+		t.Fatalf("back to none: %v %v", swapped, err)
 	}
 }
 
@@ -276,7 +276,7 @@ func TestAuthNative_ASessionDoesNotCountAgainstTheLimit(t *testing.T) {
 	}
 }
 
-func TestAuthAPI_EnableChangeDisable(t *testing.T) {
+func TestAuthAPI_EnableAndChange(t *testing.T) {
 	server := newFirstSetupServer(t)
 	var state authResponse
 	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/auth", nil), &state)
@@ -335,22 +335,11 @@ func TestAuthAPI_EnableChangeDisable(t *testing.T) {
 	if again.Code != http.StatusConflict || errorCode(t, again) != "auth.already_enabled" {
 		t.Fatalf("enable twice: %d %s", again.Code, again.Body.String())
 	}
-
-	disabled := callSignedInJSON(server.Server, http.MethodPost, "/api/auth/actions/disable", `{}`, newPassword)
-	if disabled.Code != http.StatusOK {
-		t.Fatalf("disable: %d %s", disabled.Code, disabled.Body.String())
-	}
-	// Désactiver ramène à la première configuration, pas à une interface
-	// ouverte : ni la lecture, ni une écriture, ni le changement de mot de
-	// passe ne passent.
-	requireSetupRequired(t, callAs(server.Server, http.MethodGet, "/api/counts", "", ""))
-	requireSetupRequired(t, callAPI(server.Server, http.MethodPost, "/api/auth/actions/disable", struct{}{}))
-	requireSetupRequired(t, callAPI(server.Server, http.MethodPut, "/api/auth/password", authPasswordRequest{Current: testPassword, Password: newPassword}))
 }
 
 // Activer l'authentification révoque tous les jetons d'API et dit combien.
-// Changer le mot de passe ou désactiver ne révoque rien. Les jetons sont
-// tirés sous le compte, puis la commande de secours ramène à la première
+// Changer le mot de passe, ou le refaire par root, ne révoque rien. Les
+// jetons sont tirés sous le compte, puis la base revient à la première
 // configuration : c'est là qu'une activation en trouve.
 func TestAuthAPI_EnableRevokesEveryAPITokenAndPasswordChangeDoesNot(t *testing.T) {
 	server := newTestServer(t)
@@ -374,7 +363,7 @@ func TestAuthAPI_EnableRevokesEveryAPITokenAndPasswordChangeDoesNot(t *testing.T
 	}
 
 	// Un jeton créé après l'activation survit au changement de mot de
-	// passe et à la désactivation.
+	// passe et à celui de root.
 	created := callSignedInJSON(server.Server, http.MethodPost, "/api/settings/api-tokens", `{"name":"après"}`, testPassword)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create after: %d %s", created.Code, created.Body.String())
@@ -388,42 +377,35 @@ func TestAuthAPI_EnableRevokesEveryAPITokenAndPasswordChangeDoesNot(t *testing.T
 	if got := callBearer(server.Server, "/api/counts", after.Token); got.Code != http.StatusOK {
 		t.Fatalf("password change revoked a token: %d", got.Code)
 	}
-	if got := callSignedInJSON(server.Server, http.MethodPost, "/api/auth/actions/disable", `{}`, newPassword); got.Code != http.StatusOK {
-		t.Fatalf("disable: %d %s", got.Code, got.Body.String())
+	if _, err := server.operator.ResetPassword(context.Background(), "a passphrase from root"); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := server.apiTokens.Verify(context.Background(), after.Token); err != nil {
-		t.Fatalf("disabling revoked a token: %v", err)
+		t.Fatalf("the reset revoked a token: %v", err)
 	}
 }
 
-// La commande de secours écrit dans la base depuis un autre processus :
-// serve la suit à la requête suivante, sans redémarrer, en revenant à la
-// première configuration, et les sessions ouvertes avant ne rouvrent rien à la
-// réactivation.
-func TestAuthNative_DisableFromAnotherProcessTakesEffectWithoutRestart(t *testing.T) {
+// Root refait le mot de passe par la socket : serve le suit à la requête
+// suivante, sans redémarrer ; l'ancien mot de passe et les sessions ouvertes
+// avant ne rouvrent rien (R-A2-2).
+func TestAuthNative_ResetPasswordOnTheSocketTakesEffectWithoutRestart(t *testing.T) {
 	server := newFirstSetupServer(t)
 	server.enableNative(t)
 	before := signIn(server.Server, testUsername, testPassword)
 	if got := callWithSession(server.Server, "/api/counts", before); got.Code != http.StatusOK {
 		t.Fatalf("before: %d", got.Code)
 	}
-	rescue := auth.New(server.db, server.logger)
-	current, err := rescue.State(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := rescue.Disable(context.Background(), current); err != nil {
-		t.Fatal(err)
-	}
-	requireSetupRequired(t, callAs(server.Server, http.MethodGet, "/api/counts", "", ""))
-	if _, err := rescue.EnableNative(context.Background(), auth.State{Mode: auth.ModeNone}, authtest.SetupCode(t, rescue), testUsername, "a brand new passphrase"); err != nil {
-		t.Fatal(err)
+	if got := callControl(server, "POST", "/control/admin/reset-password", `{"password":"a brand new passphrase"}`, 0); got.Code != http.StatusOK {
+		t.Fatalf("reset: %d %s", got.Code, got.Body.String())
 	}
 	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, testPassword); got.Code != http.StatusUnauthorized {
 		t.Fatalf("the old password reopened the door: %d", got.Code)
 	}
 	if got := callWithSession(server.Server, "/api/counts", before); got.Code != http.StatusUnauthorized {
-		t.Fatalf("a session of the old account reopened the door: %d", got.Code)
+		t.Fatalf("a session from before the reset reopened the door: %d", got.Code)
+	}
+	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, "a brand new passphrase"); got.Code != http.StatusOK {
+		t.Fatalf("the new password: %d", got.Code)
 	}
 }
 
@@ -632,14 +614,14 @@ func TestAuthForward_IdentityHeaderSentTwiceIsRefused(t *testing.T) {
 	}
 }
 
-// Le refus d'une page dit de passer par le mandataire, et comment rouvrir
-// l'accès, dans la langue du navigateur.
+// Le refus d'une page dit de passer par le mandataire, et comment root rend
+// un compte si le SSO tombe, dans la langue du navigateur.
 func TestAuthForward_RefusedPageSaysToGoThroughTheProxy(t *testing.T) {
 	server := newFirstSetupServer(t)
 	server.enableForward(t)
 	cases := map[string]string{
-		"fr-FR,fr;q=0.9": "Accès refusé : passez par le SSO. Pour rouvrir l'accès : opencloud auth disable -config <chemin de la config>",
-		"en-US,en;q=0.9": "Access denied: go through the SSO. To reopen access: opencloud auth disable -config <config path>",
+		"fr-FR,fr;q=0.9": "Accès refusé : passez par le SSO. SSO en panne : sur la machine " + brand.ProductName + ", sudo " + brand.Command + " admin auth-mode native -username <nom> rend un compte.",
+		"en-US,en;q=0.9": "Access denied: go through the SSO. SSO down: on the " + brand.ProductName + " machine, sudo " + brand.Command + " admin auth-mode native -username <name> brings back an account.",
 	}
 	for acceptLanguage, want := range cases {
 		request := httptest.NewRequest(http.MethodGet, "/machines", nil)
@@ -721,16 +703,11 @@ func TestAuthAPI_EnableForwardRequiresTheIdentityFromATrustedProxy(t *testing.T)
 	if again.Code != http.StatusConflict || errorCode(t, again) != "auth.already_enabled" {
 		t.Fatalf("enable twice: %d %s", again.Code, again.Body.String())
 	}
-	disabled := callForwardedJSON(server.Server, http.MethodPost, "/api/auth/actions/disable", `{}`, trustedPeer, remoteUser, testUsername)
-	if disabled.Code != http.StatusOK {
-		t.Fatalf("disable: %d %s", disabled.Code, disabled.Body.String())
-	}
-	requireSetupRequired(t, callAs(server.Server, http.MethodGet, "/api/counts", "", ""))
 }
 
 // Un en-tête choisi remplace Remote-User, et l'activation révoque les
-// jetons d'API comme en native : tirés sous le compte, laissés par la commande
-// de secours.
+// jetons d'API comme en native : tirés sous le compte, laissés par une base
+// revenue à none.
 func TestAuthAPI_EnableForwardWithAnotherHeaderRevokesAPITokens(t *testing.T) {
 	server := newTestServer(t)
 	server.trustedProxies = parsePrefixes(t, "192.0.2.0/24")

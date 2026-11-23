@@ -83,8 +83,8 @@ func (s *Service) SetHashCost(cost int) {
 	s.hashCost = cost
 }
 
-// State relit l'état dans la base à chaque appel : la commande de secours,
-// qui écrit depuis un autre processus, prend effet sans redémarrer serve.
+// State relit l'état dans la base à chaque appel : un changement de mode ou
+// de mot de passe prend effet à la requête suivante, sans redémarrer serve.
 func (s *Service) State(ctx context.Context) (State, error) {
 	return s.store.GetAuthState(ctx)
 }
@@ -211,28 +211,113 @@ func (s *Service) ChangePassword(ctx context.Context, expected State, keepSessio
 	return next, nil
 }
 
-// Disable rouvre l'interface et efface identifiant, empreinte et en-tête. La
-// première configuration qui suit exige un nouveau code (IssueSetupCode) :
-// rouvrir l'interface ne l'offre pas à qui atteint le port.
-func (s *Service) Disable(ctx context.Context, expected State) error {
+// ResetPassword refait le mot de passe du compte, sans demander l'ancien :
+// c'est le secours de root, par le canal local seulement (R-A2-10). Toutes
+// les sessions sont fermées (R-A2-2), et le nombre en est rendu.
+func (s *Service) ResetPassword(ctx context.Context, password string) (int, error) {
 	current, err := s.store.GetAuthState(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if !current.Same(expected) {
-		return ErrStateChanged
+	if current.Mode == ModeForward {
+		return 0, ErrNoPassword
+	}
+	if current.Mode != ModeNative {
+		return 0, ErrDisabled
+	}
+	hash, err := s.hashPassword(password)
+	if err != nil {
+		return 0, err
+	}
+	next := current
+	next.PasswordHash = hash
+	if err := s.replaceState(ctx, current, next); err != nil {
+		return 0, err
+	}
+	closed, err := s.closeAllSessions(ctx)
+	if err != nil {
+		return 0, err
+	}
+	s.logger.Warn("interface password reset on the local channel", "username", next.Username, "sessions_closed", closed)
+	s.auditor.Record(ctx, authEvent(audit.AuthResetPassword, next))
+	return closed, nil
+}
+
+// ModeChange est ce que root demande par le canal local : le mode visé, et
+// ce qu'il lui faut. Username et Password ne valent que pour native, Header
+// que pour forward.
+type ModeChange struct {
+	Mode     Mode
+	Header   string
+	Username string
+	Password string
+}
+
+// SetMode passe une installation déjà configurée d'un mode à l'autre, ou
+// change l'en-tête du SSO. Il ne ramène jamais à none : rien ne rouvre la
+// première configuration (R-A2-10). Toutes les sessions sont fermées :
+// elles ont été ouvertes sous l'ancien accès.
+func (s *Service) SetMode(ctx context.Context, change ModeChange) (State, int, error) {
+	current, err := s.store.GetAuthState(ctx)
+	if err != nil {
+		return State{}, 0, err
 	}
 	if current.Mode == ModeNone {
-		return ErrDisabled
+		return State{}, 0, ErrDisabled
 	}
-	if err := s.replaceState(ctx, expected, State{Mode: ModeNone}); err != nil {
-		return err
+	if changesNothing(current, change) {
+		return State{}, 0, ErrSameMode
 	}
-	// Le store a effacé les sessions avec l'état ; leurs flux se ferment.
-	s.watches.endAllBut("")
-	s.logger.Warn("interface authentication disabled", "previous_mode", string(current.Mode))
-	s.auditor.Record(ctx, authEvent(audit.AuthDisable, current))
-	return nil
+	next, err := s.stateFor(change)
+	if err != nil {
+		return State{}, 0, err
+	}
+	if err := s.replaceState(ctx, current, next); err != nil {
+		return State{}, 0, err
+	}
+	closed, err := s.closeAllSessions(ctx)
+	if err != nil {
+		return State{}, 0, err
+	}
+	s.logger.Warn("interface access mode changed on the local channel", "previous_mode", string(current.Mode), "mode", string(next.Mode), "sessions_closed", closed)
+	s.auditor.Record(ctx, authEvent(audit.AuthChangeMode, next))
+	return next, closed, nil
+}
+
+// changesNothing : de native à native, le mot de passe se refait par
+// ResetPassword ; de forward à forward, seul l'en-tête peut changer.
+func changesNothing(current State, change ModeChange) bool {
+	if current.Mode != change.Mode {
+		return false
+	}
+	return current.Mode == ModeNative || current.Header == change.Header
+}
+
+// stateFor juge la demande et rend l'état qu'elle écrirait.
+func (s *Service) stateFor(change ModeChange) (State, error) {
+	switch change.Mode {
+	case ModeNative:
+		if err := ValidateUsername(change.Username); err != nil {
+			return State{}, err
+		}
+		hash, err := s.hashPassword(change.Password)
+		if err != nil {
+			return State{}, err
+		}
+		return State{Mode: ModeNative, Username: change.Username, PasswordHash: hash, EnabledAt: s.now()}, nil
+	case ModeForward:
+		if err := ValidateHeader(change.Header); err != nil {
+			return State{}, err
+		}
+		return State{Mode: ModeForward, Header: change.Header, EnabledAt: s.now()}, nil
+	}
+	return State{}, ErrModeInvalid
+}
+
+// closeAllSessions ferme toutes les sessions et leurs flux (R-A2-12) :
+// aucune n'a l'identifiant vide.
+func (s *Service) closeAllSessions(ctx context.Context) (int, error) {
+	return s.closeOtherSessions(ctx, "")
 }
 
 // replaceState écrit next si l'état stocké vaut encore expected.

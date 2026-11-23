@@ -62,7 +62,9 @@ type AuthService interface {
 	CloseSession(ctx context.Context, id string) error
 	CloseOtherSessions(ctx context.Context, keepID string) (int, error)
 	ChangePassword(ctx context.Context, expected auth.State, keepSession, currentPassword, password string) (auth.State, error)
-	Disable(ctx context.Context, expected auth.State) error
+	ResetPassword(ctx context.Context, password string) (int, error)
+	SetMode(ctx context.Context, change auth.ModeChange) (auth.State, int, error)
+	CloseAllSessions(ctx context.Context) (int, error)
 }
 
 // codeAuthStateChanged est le refus d'une écriture autorisée sous un état
@@ -120,9 +122,9 @@ func isOperatorRoute(pattern string) bool {
 	return true
 }
 
-// requireOperator relit le mode à chaque requête : la commande de secours
-// `opencloud auth disable` écrit dans la base, et serve la suit sans
-// redémarrer ; l'installation revient alors à sa première configuration.
+// requireOperator relit le mode à chaque requête : root le change par le
+// canal local (`admin auth-mode`, `admin reset-password`), et la requête
+// suivante suit le nouvel état sans redémarrer.
 // beforeSignIn dit si la route est servie sans session, access ce qu'un jeton
 // d'API en obtient.
 func (s *Server) requireOperator(next http.HandlerFunc, beforeSignIn bool, access tokenAccess) http.HandlerFunc {
