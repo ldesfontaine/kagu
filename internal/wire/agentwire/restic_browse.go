@@ -4,6 +4,8 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 )
 
 // KindResticBrowse : la cible lit un dépôt qu'elle reçoit, pour l'explorateur
@@ -65,13 +67,14 @@ func IsSnapshotID(id string) bool {
 	return true
 }
 
-// IsBrowsePath : un chemin absolu normalisé, sans « .. », sans octet nul.
+// IsBrowsePath : un chemin absolu normalisé, sans « .. », sans caractère de
+// contrôle.
 func IsBrowsePath(path string) bool {
 	if path == "/" {
 		return true
 	}
 	if !strings.HasPrefix(path, "/") || len(path) > maxBrowsePathLen || strings.HasSuffix(path, "/") ||
-		strings.ContainsRune(path, 0) || strings.Contains(path, "//") {
+		untrusted.HasControl(path) || strings.Contains(path, "//") {
 		return false
 	}
 	for _, part := range strings.Split(path[1:], "/") {
@@ -123,6 +126,9 @@ type ResticBrowseReport struct {
 	Snapshots []BrowseSnapshot `json:"snapshots,omitempty"`
 	Entries   []BrowseEntry    `json:"entries,omitempty"`
 	Truncated bool             `json:"truncated,omitempty"`
+	// Rejected : les entrées dont le nom a été refusé. Le serveur le compte, il
+	// ne vient pas de la cible.
+	Rejected int `json:"-"`
 }
 
 func (r ResticBrowseReport) Validate() error {
@@ -147,10 +153,10 @@ func (r ResticBrowseReport) Validate() error {
 	return nil
 }
 
-// IsBrowseName : un nom de fichier, pas un chemin.
+// IsBrowseName : un nom de fichier, pas un chemin, sans caractère de contrôle.
 func IsBrowseName(name string) bool {
 	return name != "" && name != "." && name != ".." && len(name) <= maxBrowseNameLen &&
-		!strings.ContainsAny(name, "/\x00")
+		!strings.Contains(name, "/") && !untrusted.HasControl(name)
 }
 
 func isBrowseKind(kind string) bool {

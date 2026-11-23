@@ -96,7 +96,7 @@ func TestRestic_BrowseReturnsNamesToTheAskerAndKeepsNothing(t *testing.T) {
 	}
 }
 
-// Un rapport hors bornes n'est jamais cru ; une cible qui refuse ou échoue
+// Un rapport hors bornes n'est jamais cru (un nom refusé, lui, est seulement retiré) ; une cible qui refuse ou échoue
 // donne une raison fermée.
 func TestRestic_BrowseJudgesWhatTheTargetReports(t *testing.T) {
 	bench := readyResticBenchRights(t, browseRights)
@@ -106,7 +106,7 @@ func TestRestic_BrowseJudgesWhatTheTargetReports(t *testing.T) {
 		result agentwire.ActionResult
 		code   string
 	}{
-		{agentwire.ActionResult{State: agentwire.ActionSucceeded, Browse: &agentwire.ResticBrowseReport{Entries: []agentwire.BrowseEntry{{Name: "a/b", Kind: "file"}}}}, "restic.browse_failed"},
+		{agentwire.ActionResult{State: agentwire.ActionSucceeded, Browse: &agentwire.ResticBrowseReport{Entries: []agentwire.BrowseEntry{{Name: "a", Kind: "device"}}}}, "restic.browse_failed"},
 		{agentwire.ActionResult{State: agentwire.ActionFailed, Reason: agentwire.ReasonRepoEmpty}, "restic.browse_repo_empty"},
 		{agentwire.ActionResult{State: agentwire.ActionFailed, Reason: agentwire.ReasonResticFailed}, "restic.browse_failed"},
 	}

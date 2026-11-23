@@ -177,10 +177,32 @@ func browseOutcome(result agentwire.ActionResult) (agentwire.ResticBrowseReport,
 	if agentState(result.State) != StateSucceeded {
 		return agentwire.ResticBrowseReport{}, browseRefusal(agentReason(result.Reason))
 	}
-	if result.Browse == nil || result.Browse.Validate() != nil {
+	if result.Browse == nil {
 		return agentwire.ResticBrowseReport{}, ErrBrowseFailed
 	}
-	return *result.Browse, nil
+	report := withoutRefusedNames(*result.Browse)
+	if report.Validate() != nil {
+		return agentwire.ResticBrowseReport{}, ErrBrowseFailed
+	}
+	return report, nil
+}
+
+// withoutRefusedNames retire les entrées dont le nom est refusé et les compte :
+// un seul nom mauvais ne fait pas échouer tout le parcours. La liste d'origine
+// n'est pas touchée.
+func withoutRefusedNames(report agentwire.ResticBrowseReport) agentwire.ResticBrowseReport {
+	kept := make([]agentwire.BrowseEntry, 0, len(report.Entries))
+	for _, entry := range report.Entries {
+		if agentwire.IsBrowseName(entry.Name) {
+			kept = append(kept, entry)
+		}
+	}
+	report.Rejected = len(report.Entries) - len(kept)
+	if len(kept) == 0 {
+		kept = nil
+	}
+	report.Entries = kept
+	return report
 }
 
 func browseRefusal(reason string) error {

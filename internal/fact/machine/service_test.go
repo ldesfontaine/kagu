@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -570,6 +571,95 @@ func TestNoteRollbackVersions_OnlyASmallPositiveIntegerCounts(t *testing.T) {
 					t.Fatalf("%q stored %d, want %d", c.reported, got, c.want)
 				}
 			})
+		}
+	}
+}
+
+// R-A1-13 : ce que l'agent dit de lui à l'ouverture du flux passe par le
+// jugement ; une valeur refusée ne remplace pas celle qui est gardée, et le
+// refus se lit sur la machine jusqu'à ce que le champ soit redit valable.
+func TestR_A1_13_AReportedValueRefusedKeepsTheStoredOne(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	m, _ := h.enroll(t, "vps-paris-1")
+	if err := h.service.NoteSystem(ctx, m.ID, "Debian GNU/Linux 13"); err != nil {
+		t.Fatal(err)
+	}
+	session, err := h.service.Connect(ctx, m, "192.0.2.1", "v0.0.7", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.service.Disconnect(session)
+
+	for _, refused := range []string{"v1\x1b[2J", "v1\n", "v\u202e1", strings.Repeat("v", MaxSystemLength+1), "v\xff"} {
+		stored, _ := h.service.Get(ctx, m.ID)
+		session, err := h.service.Connect(ctx, stored.Machine, "192.0.2.1", refused, "", "", "")
+		if err != nil {
+			t.Fatalf("a refused version must not close the stream: %v", err)
+		}
+		h.service.Disconnect(session)
+		if err := h.service.NoteSystem(ctx, m.ID, "Debian\x1b[31m"); err != nil {
+			t.Fatal(err)
+		}
+		after, _ := h.service.Get(ctx, m.ID)
+		if after.Agent.Version != "v0.0.7" || after.OS != "Debian GNU/Linux 13" {
+			t.Fatalf("%q replaced a stored value: version %q, system %q", refused, after.Agent.Version, after.OS)
+		}
+		if !slices.Equal(after.ReportRejected, []string{ReportFieldSystem, ReportFieldVersion}) {
+			t.Fatalf("%q: rejected %v", refused, after.ReportRejected)
+		}
+	}
+
+	stored, _ := h.service.Get(ctx, m.ID)
+	session, err = h.service.Connect(ctx, stored.Machine, "192.0.2.1", "v0.0.8", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.service.Disconnect(session)
+	if err := h.service.NoteSystem(ctx, m.ID, "Debian GNU/Linux 14"); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := h.service.Get(ctx, m.ID)
+	if after.Agent.Version != "v0.0.8" || after.OS != "Debian GNU/Linux 14" || len(after.ReportRejected) != 0 {
+		t.Fatalf("a valid value must replace and clear the refusal: %+v", after)
+	}
+}
+
+// Un nom d'hôte, un système, une architecture ou une version refusés refusent
+// l'enrôlement avant le jeton : il reste utilisable.
+func TestEnroll_RefusesAFieldBeforeConsumingTheToken(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	cleartext, _, err := h.service.CreateToken(ctx, "vps-paris-1", RoleGeneric, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, _, _ := ed25519.GenerateKey(rand.Reader)
+	id, _ := NewID()
+	bad := []Enrollment{
+		{Hostname: "vps\x1b[2J"}, {Hostname: strings.Repeat("a", 300)}, {Hostname: "-vps"}, {Hostname: "vps_1"},
+		{Hostname: "vps", OS: "Debian\n12"}, {Hostname: "vps", Arch: "amd64\x00"}, {Hostname: "vps", AgentVersion: strings.Repeat("v", MaxSystemLength+1)},
+	}
+	for _, request := range bad {
+		request.MachineID, request.PublicKey, request.Token = id, public, cleartext
+		if _, err := h.service.Enroll(ctx, request); !errors.Is(err, ErrBadField) {
+			t.Fatalf("%+v: %v", request, err)
+		}
+	}
+	good := Enrollment{MachineID: id, PublicKey: public, Token: cleartext, Hostname: "vps.example.org", OS: "Debian 12", Arch: "amd64", AgentVersion: "v0.0.1"}
+	if _, err := h.service.Enroll(ctx, good); err != nil {
+		t.Fatalf("the token must still enroll: %v", err)
+	}
+}
+
+func TestIsHostname(t *testing.T) {
+	for host, want := range map[string]bool{
+		"vps": true, "vps-1.example.org": true, "1.2.3.4": true, strings.Repeat("a", 63): true,
+		"": false, "-a": false, "a-": false, "a..b": false, "a b": false, "a\nb": false, "a_b": false,
+		strings.Repeat("a", 64): false, strings.Repeat("a.", 127) + "a": false,
+	} {
+		if got := IsHostname(host); got != want {
+			t.Errorf("IsHostname(%q) = %v, want %v", host, got, want)
 		}
 	}
 }

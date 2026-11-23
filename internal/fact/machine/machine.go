@@ -50,6 +50,9 @@ type Machine struct {
 type Status struct {
 	Machine
 	Online bool
+	// Les champs que son agent a dits à l'ouverture du flux et que le serveur a
+	// refusés (ReportField…) : la valeur gardée est celle d'avant.
+	ReportRejected []string
 }
 
 // Token est un jeton d'enrôlement tel que la base le connaît : sans son clair.
@@ -97,6 +100,9 @@ var (
 	ErrTokenExpired  = errors.New("enrollment token expired")
 	ErrBadKey        = errors.New("public key must be 32 bytes")
 	ErrBadID         = errors.New("machine id must be a uuid")
+	// ErrBadField : un champ de l'enrôlement est refusé (nom d'hôte, système,
+	// architecture, version) ; le jeton reste valable.
+	ErrBadField = errors.New("enrollment field refused")
 	// ErrBadProof : la preuve n'a pas sa forme (aléa de la mauvaise taille).
 	ErrBadProof = errors.New("proof malformed")
 	// ErrReplayed : cette preuve a déjà ouvert un flux.
