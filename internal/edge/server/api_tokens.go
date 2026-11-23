@@ -330,8 +330,10 @@ type tokenVerbJSON struct {
 	Params  []string `json:"params"`
 	Body    []string `json:"body"`
 	Reverse string   `json:"reverse"`
-	// Confirm : le verbe ne s'exécute pas, il dépose une demande que
-	// l'opérateur confirme dans l'interface (réponse 202).
+	// Level : 1, le verbe s'exécute ; 2, il dépose une demande que
+	// l'opérateur confirme dans l'interface (réponse 202). Confirm le redit,
+	// déduit du niveau.
+	Level   int    `json:"level"`
 	Confirm bool   `json:"confirm"`
 	Label   string `json:"label"`
 	Summary string `json:"summary"`
@@ -399,14 +401,14 @@ func (s *Server) listTokenVerbs(w http.ResponseWriter, r *http.Request) {
 	}
 	catalog := s.catalogs.For(code)
 	verbs := []tokenVerbJSON{}
-	for _, offered := range verb.Default.All() {
+	for _, offered := range verb.Default.OpenToTokens() {
 		if !token.CanDo(offered.ID) {
 			continue
 		}
 		method, path, _ := strings.Cut(offered.Route, " ")
 		verbs = append(verbs, tokenVerbJSON{
 			ID: offered.ID, Method: method, Path: path, Params: orEmpty(offered.Params), Body: orEmpty(offered.Body),
-			Reverse: offered.Reverse, Confirm: offered.Confirm, Label: catalog.Get(offered.Label), Summary: catalog.Get(offered.Summary),
+			Reverse: offered.Reverse, Level: offered.Level, Confirm: offered.AsksConfirmation(), Label: catalog.Get(offered.Label), Summary: catalog.Get(offered.Summary),
 		})
 	}
 	s.writeAPI(w, http.StatusOK, tokenVerbsResponse{Scope: string(token.Scope), Verbs: verbs, Reach: tokenReachToJSON(token.Reach)})
@@ -456,13 +458,15 @@ type reachMachineJSON struct {
 	Name string `json:"name"`
 }
 
-// Un verbe offert à la création, avec ses clés de catalogue, son inverse, et
-// s'il demande une confirmation (alors il n'a pas d'inverse).
+// Un verbe offert à la création, avec ses clés de catalogue, son inverse, son
+// niveau, et s'il demande une confirmation (niveau 2, alors il n'a pas
+// d'inverse).
 type verbOfferJSON struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
 	Summary string `json:"summary"`
 	Reverse string `json:"reverse"`
+	Level   int    `json:"level"`
 	Confirm bool   `json:"confirm"`
 }
 
@@ -517,7 +521,10 @@ func apiTokenToJSON(token apitoken.Token) apiTokenJSON {
 }
 
 func verbOfferToJSON(offered verb.Verb) verbOfferJSON {
-	return verbOfferJSON{ID: offered.ID, Label: offered.Label, Summary: offered.Summary, Reverse: offered.Reverse, Confirm: offered.Confirm}
+	return verbOfferJSON{
+		ID: offered.ID, Label: offered.Label, Summary: offered.Summary, Reverse: offered.Reverse,
+		Level: offered.Level, Confirm: offered.AsksConfirmation(),
+	}
 }
 
 func (s *Server) listAPITokens(w http.ResponseWriter, r *http.Request) {
@@ -535,7 +542,7 @@ func (s *Server) listAPITokens(w http.ResponseWriter, r *http.Request) {
 		Tokens:    httpx.ConvertAll(tokens, apiTokenToJSON),
 		Limit:     apitoken.MaxTokens,
 		Lifetimes: apiTokenLifetimesJSON{Days: apitoken.Lifetimes(), DefaultDays: apitoken.DefaultDays},
-		Verbs:     httpx.ConvertAll(verb.Default.All(), verbOfferToJSON),
+		Verbs:     httpx.ConvertAll(verb.Default.OpenToTokens(), verbOfferToJSON),
 		Env:       apiTokenEnvJSON{MCPHost: host, OpenCloudURL: openCloudURL},
 	})
 }

@@ -1,5 +1,11 @@
 package verb
 
+import (
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
+)
+
 // Les gestes de mise à jour de l'agent d'une machine : mettre à jour et revenir
 // en arrière se défont l'un l'autre. Ni l'un ni l'autre ne signe ni n'importe
 // de version : le serveur n'envoie que sa propre version, déjà importée et
@@ -10,9 +16,11 @@ func init() {
 	Default.MustRegister(Verb{
 		ID: "agent.update", Route: "POST /api/machines/{id}/actions/update-agent", Params: []string{"id"}, Body: []string{}, Target: TargetMachine,
 		Label: "api_token.verb_agent_update", Summary: "api_token.verb_agent_update_text", Reverse: "agent.rollback",
+		Level: 1, Token: true, Order: agentwire.KindAgentUpdate, Right: machine.CapabilityAgentUpdate, Audit: audit.ActionOrder,
 	})
 	Default.MustRegister(Verb{
 		ID: "agent.rollback", Route: "POST /api/machines/{id}/actions/rollback-agent", Params: []string{"id"}, Body: []string{}, Target: TargetMachine,
 		Label: "api_token.verb_agent_rollback", Summary: "api_token.verb_agent_rollback_text", Reverse: "agent.update",
+		Level: 1, Token: true, Order: agentwire.KindAgentRollback, Right: machine.CapabilityAgentUpdate, Audit: audit.ActionOrder,
 	})
 }

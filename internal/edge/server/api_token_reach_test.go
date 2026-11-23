@@ -130,8 +130,12 @@ func requireInScope(t *testing.T, label string, got *httptest.ResponseRecorder) 
 // l'ordre est parti ou la sonde a changé d'état.
 var reachVerbsThatSucceed = map[string]bool{
 	"agent.ping": true, "probe.pause": true, "probe.resume": true, "job.pause": true, "job.resume": true,
-	"proxmox.vm.start": true, "proxmox.vm.shutdown": true, "proxmox.vm.snapshot": true, "proxmox.vm.snapshot_delete": true,
+	"proxmox.vm.start": true, "proxmox.vm.shutdown": true, "proxmox.vm.snapshot": true,
 }
+
+// Le verbe de niveau 2 passe sur un 202 : la demande est déposée, rien n'est
+// parti.
+var reachVerbsThatAsk = map[string]bool{"proxmox.vm.snapshot_delete": true}
 
 // Le garde-fou : chaque verbe du registre a une requête dans ce banc. Un
 // verbe ajouté sans cas ici, donc sans test de portée, fait échouer.
@@ -166,6 +170,9 @@ func TestReach_EveryActionRouteIsJudgedOnItsMachine(t *testing.T) {
 			requireInScope(t, "machine A", inScope)
 			if reachVerbsThatSucceed[offered.ID] && inScope.Code != http.StatusOK {
 				t.Errorf("machine A: %d %s, want 200", inScope.Code, inScope.Body.String())
+			}
+			if reachVerbsThatAsk[offered.ID] && inScope.Code != http.StatusAccepted {
+				t.Errorf("machine A: %d %s, want 202", inScope.Code, inScope.Body.String())
 			}
 
 			before := bench.latestAuditID(t)

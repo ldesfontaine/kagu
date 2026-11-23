@@ -90,9 +90,9 @@ func TestProxmoxVerbs_AStartByATokenIsAuditedAndShapedAsAVerb(t *testing.T) {
 	}
 }
 
-// Les trois autres gestes passent aussi par le jeton : le corps de
-// snapshot-delete (le nom de l'instantané) est lu comme pour l'opérateur.
-func TestProxmoxVerbs_ShutdownSnapshotAndDeleteGoThroughAToken(t *testing.T) {
+// L'arrêt et l'instantané passent aussi par le jeton ; la suppression d'un
+// instantané dépose une demande (TestR_A4_4_SnapshotDeleteFromATokenLeavesARequest).
+func TestProxmoxVerbs_ShutdownAndSnapshotGoThroughAToken(t *testing.T) {
 	server := proxmoxTokenBench(t)
 	bearer, _ := server.issueWriteToken(t, "agent", proxmoxVerbIDs...)
 	cases := []struct {
@@ -100,7 +100,6 @@ func TestProxmoxVerbs_ShutdownSnapshotAndDeleteGoThroughAToken(t *testing.T) {
 	}{
 		{runningVMID, "shutdown", "{}", "proxmox.vm.shutdown", "proxmox.vm.start"},
 		{runningVMID, "snapshot", "{}", "proxmox.vm.snapshot", "proxmox.vm.snapshot_delete"},
-		{stoppedVMID, "snapshot-delete", `{"snapshot":"oc-20261021-120000"}`, "proxmox.vm.snapshot_delete", "proxmox.vm.snapshot"},
 	}
 	for _, c := range cases {
 		got := postGuestVerb(server, bearer, c.vmid, c.gesture, c.body)
@@ -114,14 +113,61 @@ func TestProxmoxVerbs_ShutdownSnapshotAndDeleteGoThroughAToken(t *testing.T) {
 	}
 }
 
+// R-A4-4 : un instantané effacé ne revient pas, la suppression est de niveau
+// 2. Un jeton qui la porte dépose une demande (202 et son identifiant) et
+// aucun ordre ne part ; l'opérateur qui confirme envoie l'ordre, avec le nom
+// de l'instantané que le jeton a donné.
+func TestR_A4_4_SnapshotDeleteFromATokenLeavesARequest(t *testing.T) {
+	server := proxmoxTokenBench(t)
+	bearer, token := server.issueWriteToken(t, "agent", "proxmox.vm.snapshot_delete")
+	before := server.latestAuditID(t)
+
+	got := postGuestVerb(server, bearer, stoppedVMID, "snapshot-delete", `{"snapshot":"oc-20261021-120000"}`)
+
+	if got.Code != http.StatusAccepted {
+		t.Fatalf("snapshot-delete: %d %s", got.Code, got.Body.String())
+	}
+	var reply verbRequestReplyJSON
+	decodeAPI(t, got, &reply)
+	if reply.Verb != "proxmox.vm.snapshot_delete" || reply.RequestID == "" || reply.State != "awaiting_confirmation" {
+		t.Fatalf("reply %+v", reply)
+	}
+	if runs, err := server.db.ListActionRuns(context.Background(), action.Query{MachineID: pveID, Limit: 10}); err != nil || len(runs) != 0 {
+		t.Fatalf("an order left before the confirmation: %+v %v", runs, err)
+	}
+	events := server.auditSince(t, before)
+	if len(events) != 1 || events[0].Action != audit.VerbRequest || events[0].Actor.Name != token.ID {
+		t.Fatalf("audit %+v, want a single verb.request", events)
+	}
+
+	confirmed := server.confirmRequest(reply.RequestID)
+	if confirmed.Code != http.StatusCreated {
+		t.Fatalf("confirm: %d %s", confirmed.Code, confirmed.Body.String())
+	}
+	runs, err := server.db.ListActionRuns(context.Background(), action.Query{MachineID: pveID, Limit: 10})
+	if err != nil || len(runs) != 1 || runs[0].Kind != agentwire.KindProxmoxSnapshotDelete || !strings.Contains(string(runs[0].Params), "oc-20261021-120000") {
+		t.Fatalf("runs after confirmation %+v %v", runs, err)
+	}
+}
+
 // Un instantané qui n'est pas de ce produit est refusé par le serveur pour un
-// jeton comme pour l'opérateur, et le refus passe inchangé.
+// jeton comme pour l'opérateur : la demande se dépose, la confirmation rend le
+// refus inchangé, et aucun ordre ne part.
 func TestProxmoxVerbs_ASnapshotNotOursIsRefusedForAToken(t *testing.T) {
 	server := proxmoxTokenBench(t)
 	bearer, _ := server.issueWriteToken(t, "agent", "proxmox.vm.snapshot_delete")
 	got := postGuestVerb(server, bearer, stoppedVMID, "snapshot-delete", `{"snapshot":"avant-migration"}`)
-	if got.Code != http.StatusUnprocessableEntity || errorCode(t, got) != "proxmox.snapshot_invalid" {
+	if got.Code != http.StatusAccepted {
 		t.Fatalf("%d %s", got.Code, got.Body.String())
+	}
+	var reply verbRequestReplyJSON
+	decodeAPI(t, got, &reply)
+	confirmed := server.confirmRequest(reply.RequestID)
+	if confirmed.Code != http.StatusUnprocessableEntity || errorCode(t, confirmed) != "proxmox.snapshot_invalid" {
+		t.Fatalf("%d %s", confirmed.Code, confirmed.Body.String())
+	}
+	if runs, err := server.db.ListActionRuns(context.Background(), action.Query{MachineID: pveID, Limit: 10}); err != nil || len(runs) != 0 {
+		t.Fatalf("a refusal wrote runs: %v %v", runs, err)
 	}
 }
 
@@ -214,12 +260,14 @@ func TestProxmoxVerbs_TheServersOwnGuestIsNeverShutDownByAToken(t *testing.T) {
 	}
 }
 
-// Les quatre verbes sont au registre, dans l'ordre, par paires d'inverses, et
-// chaque route est exacte : un joker ou un autre mot reste un 404.
+// Les quatre verbes sont au registre, dans l'ordre, avec leur inverse :
+// start et shutdown se répondent, snapshot_delete défait snapshot sans en
+// avoir (niveau 2). Chaque route est exacte : un joker ou un autre mot reste
+// un 404.
 func TestProxmoxVerbs_AreRegisteredAsPairs(t *testing.T) {
 	want := map[string]string{
 		"proxmox.vm.start": "proxmox.vm.shutdown", "proxmox.vm.shutdown": "proxmox.vm.start",
-		"proxmox.vm.snapshot": "proxmox.vm.snapshot_delete", "proxmox.vm.snapshot_delete": "proxmox.vm.snapshot",
+		"proxmox.vm.snapshot": "proxmox.vm.snapshot_delete", "proxmox.vm.snapshot_delete": "",
 	}
 	for id, reverse := range want {
 		found, ok := verb.Default.Lookup(id)
@@ -252,6 +300,8 @@ type tokenVerbsReply struct {
 		Params  []string `json:"params"`
 		Body    []string `json:"body"`
 		Reverse string   `json:"reverse"`
+		Level   int      `json:"level"`
+		Confirm bool     `json:"confirm"`
 		Label   string   `json:"label"`
 		Summary string   `json:"summary"`
 	} `json:"verbs"`
@@ -301,7 +351,7 @@ func TestTokenVerbs_ATokenSeesOnlyItsVerbsWithTheContract(t *testing.T) {
 	}
 	deletion := reply.Verbs[2]
 	if deletion.Path != "/api/machines/{id}/proxmox/guests/{vmid}/actions/snapshot-delete" ||
-		strings.Join(deletion.Body, ",") != "snapshot" || deletion.Reverse != "proxmox.vm.snapshot" {
+		strings.Join(deletion.Body, ",") != "snapshot" || deletion.Reverse != "" || deletion.Level != 2 || !deletion.Confirm {
 		t.Fatalf("snapshot_delete %+v", deletion)
 	}
 	// Les textes sont ceux du catalogue du serveur, pas leurs clés.

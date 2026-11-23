@@ -25,8 +25,9 @@ type gestureLists struct {
 	rights map[agentwire.Kind]string
 	// Les noms de droits connus : machine.CapabilityNames, puis agentpolicy.
 	knownRights []string
-	// Verb.Order et Verb.Audit de chaque verbe, par identifiant (T02-02).
+	// Verb.Order, Verb.Right et Verb.Audit de chaque verbe, par identifiant.
 	verbOrders map[string]agentwire.Kind
+	verbRights map[string]string
 	verbAudits map[string]audit.Action
 	// audit.Actions.
 	knownActions []audit.Action
@@ -41,8 +42,18 @@ func (l gestureLists) disagreements() []string {
 		}
 	}
 	for id, kind := range l.verbOrders {
-		if _, known := l.rights[kind]; !known {
+		if kind == "" {
+			if l.verbRights[id] != "" {
+				found = append(found, "verbe "+id+" : droit "+l.verbRights[id]+" sans ordre")
+			}
+			continue
+		}
+		right, known := l.rights[kind]
+		switch {
+		case !known:
 			found = append(found, "verbe "+id+" : genre "+string(kind)+" hors du registre")
+		case l.verbRights[id] != right:
+			found = append(found, "verbe "+id+" : droit "+l.verbRights[id]+", le genre exige "+right)
 		}
 	}
 	for id, action := range l.verbAudits {
@@ -58,6 +69,7 @@ func currentGestureLists() gestureLists {
 		rights:       map[agentwire.Kind]string{},
 		knownRights:  machine.CapabilityNames(),
 		verbOrders:   map[string]agentwire.Kind{},
+		verbRights:   map[string]string{},
 		verbAudits:   map[string]audit.Action{},
 		knownActions: audit.Actions(),
 	}
@@ -65,30 +77,37 @@ func currentGestureLists() gestureLists {
 		spec, _ := agentwire.SpecOf(kind)
 		lists.rights[kind] = spec.Right
 	}
+	for _, offered := range verb.Default.All() {
+		lists.verbOrders[offered.ID] = offered.Order
+		lists.verbRights[offered.ID] = offered.Right
+		lists.verbAudits[offered.ID] = offered.Audit
+	}
 	return lists
 }
 
 func TestRegistry_ThreeListsAgree(t *testing.T) {
 	lists := currentGestureLists()
-	if len(lists.rights) == 0 || len(lists.knownActions) == 0 {
+	if len(lists.rights) == 0 || len(lists.knownActions) == 0 || len(lists.verbAudits) == 0 {
 		t.Fatal("an empty list: the test no longer sees the registry")
 	}
 	for _, disagreement := range lists.disagreements() {
 		t.Error(disagreement)
 	}
-	// verb.Verb n'a pas encore Order ni Audit : T02-02 les pose et remplit
-	// verbOrders et verbAudits ici. D'ici là, les verbes ne sont pas croisés.
-	t.Logf("%d verbes non croisés : verb.Verb n'a pas encore Order ni Audit (T02-02)", len(verb.Default.All()))
 }
 
 // Le témoin : chaque liste a sa faute, et chacune est vue.
 func TestRegistry_ThreeListsAgree_SeesEachFault(t *testing.T) {
 	faults := map[string]func(*gestureLists){
-		"unknown kind": func(l *gestureLists) { l.verbOrders["docker.purge"] = "docker.purge" },
+		"unknown kind": func(l *gestureLists) { l.verbOrders["agent.ping"] = "docker.purge" },
+		"right not the right of the kind": func(l *gestureLists) {
+			l.verbRights["agent.update"] = machine.CapabilityObserve
+		},
+		"right without an order": func(l *gestureLists) { l.verbRights["probe.pause"] = machine.CapabilityObserve },
 		"unknown right": func(l *gestureLists) {
 			l.rights[agentwire.KindDockerDeploy] = "docker.deploi"
 		},
-		"unknown audit action": func(l *gestureLists) { l.verbAudits["docker.deploy"] = "docker.deploi" },
+		"unknown audit action": func(l *gestureLists) { l.verbAudits["agent.ping"] = "docker.deploi" },
+		"no audit action":      func(l *gestureLists) { l.verbAudits["probe.pause"] = "" },
 	}
 	for name, fault := range faults {
 		lists := currentGestureLists()

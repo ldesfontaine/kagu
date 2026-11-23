@@ -8,7 +8,10 @@ import (
 )
 
 func valid() Verb {
-	return Verb{ID: "thing.start", Route: "POST /api/things/{id}/actions/start", Params: []string{"id"}, Target: TargetMachine, Label: "l", Summary: "s", Reverse: "thing.stop"}
+	return Verb{
+		ID: "thing.start", Route: "POST /api/things/{id}/actions/start", Params: []string{"id"}, Target: TargetMachine, Label: "l", Summary: "s", Reverse: "thing.stop",
+		Level: 1, Token: true,
+	}
 }
 
 func TestRegister_RefusesAVerbWithoutReverse(t *testing.T) {
@@ -20,10 +23,16 @@ func TestRegister_RefusesAVerbWithoutReverse(t *testing.T) {
 }
 
 func confirmable() Verb {
-	return Verb{ID: "thing.delete", Route: "DELETE /api/things/{id}", Params: []string{"id"}, Target: TargetMachine, Label: "l", Summary: "s", Confirm: true}
+	return Verb{ID: "thing.delete", Route: "DELETE /api/things/{id}", Params: []string{"id"}, Target: TargetMachine, Label: "l", Summary: "s", Level: 2, Token: true}
 }
 
-// Un verbe à confirmation remplace l'inverse par la confirmation : il n'en a
+// closed est un geste de niveau 3 : inscrit pour que son niveau se lise, fermé
+// aux jetons.
+func closed() Verb {
+	return Verb{ID: "thing.purge", Route: "DELETE /api/things/{id}/all", Params: []string{"id"}, Target: TargetMachine, Label: "l", Summary: "s", Level: 3, Reason: "r"}
+}
+
+// Un verbe de niveau 2 remplace l'inverse par la confirmation : il n'en a
 // pas, et sa route peut être un DELETE ou un PUT.
 func TestRegister_AcceptsAVerbToConfirmWithoutReverse(t *testing.T) {
 	registry := &Registry{}
@@ -55,8 +64,7 @@ func TestRegister_RefusesMalformedVerbsToConfirm(t *testing.T) {
 	}
 }
 
-// Un DELETE ne passe pas pour un verbe ordinaire : seule la confirmation
-// l'ouvre.
+// Un DELETE ne passe pas au niveau 1 : seul un niveau plus haut l'ouvre.
 func TestRegister_RefusesADeleteWithoutConfirmation(t *testing.T) {
 	v := valid()
 	v.Route = "DELETE /api/things/{id}"
@@ -67,7 +75,7 @@ func TestRegister_RefusesADeleteWithoutConfirmation(t *testing.T) {
 
 func TestDefault_MachineDeleteAsksForAConfirmation(t *testing.T) {
 	found, ok := Default.ByRoute("DELETE /api/machines/{id}")
-	if !ok || found.ID != "machine.delete" || !found.Confirm || found.Reverse != "" {
+	if !ok || found.ID != "machine.delete" || !found.AsksConfirmation() || found.Reverse != "" {
 		t.Fatalf("got %+v %v", found, ok)
 	}
 }
@@ -115,17 +123,18 @@ func TestCheck_CatchesAReverseThatDoesNotExist(t *testing.T) {
 	}
 }
 
-// Le garde-fou de la décision 19 : tout verbe offert déclare un inverse
-// qui existe, et l'inverse de l'inverse est le verbe lui-même.
+// Le garde-fou de la décision 19 : tout verbe de niveau 1 déclare un inverse
+// qui existe, et l'inverse de l'inverse est le verbe lui-même quand l'inverse
+// est lui aussi de niveau 1.
 func TestDefault_EveryVerbHasARealReverse(t *testing.T) {
 	if err := Default.Check(); err != nil {
 		t.Fatal(err)
 	}
 	for _, v := range Default.All() {
-		if v.Confirm {
+		back, _ := Default.Lookup(v.Reverse)
+		if v.Level != 1 || back.Level != 1 {
 			continue
 		}
-		back, _ := Default.Lookup(v.Reverse)
 		if back.Reverse != v.ID {
 			t.Errorf("%s -> %s -> %s: the reverse does not come back", v.ID, back.ID, back.Reverse)
 		}
@@ -212,5 +221,88 @@ func TestDefault_ResticVerbsThatReachTheTargetJudgeTheLink(t *testing.T) {
 		if !ok || found.Target != want {
 			t.Errorf("%s: target %q, want %q", id, found.Target, want)
 		}
+	}
+}
+
+// R-A4-1 : chaque geste du registre a un niveau, de 1 à 4 ; le niveau 0 est
+// une lecture (T11-01), et un niveau absent vaut 0 : refusé comme un inconnu.
+func TestR_A4_1_EveryRegisteredGestureHasALevel(t *testing.T) {
+	for _, v := range Default.All() {
+		if v.Level < 1 || v.Level > 4 {
+			t.Errorf("%s: level %d", v.ID, v.Level)
+		}
+	}
+	for _, level := range []int{0, -1, 5} {
+		v := valid()
+		v.Level = level
+		if err := (&Registry{}).Register(v); !errors.Is(err, ErrLevelInvalid) {
+			t.Errorf("level %d: got %v, want ErrLevelInvalid", level, err)
+		}
+	}
+}
+
+// R-A4-2 : un geste de niveau 3 ou 4 n'est jamais offert à un jeton, et dit
+// pourquoi. Il s'inscrit fermé, sans inverse, pour que son niveau se lise.
+func TestR_A4_2_RegisterRefusesALevelThreeOrFourOpenToAToken(t *testing.T) {
+	for _, level := range []int{3, 4} {
+		open := closed()
+		open.Level, open.Token = level, true
+		if err := (&Registry{}).Register(open); !errors.Is(err, ErrTokenLevel) {
+			t.Errorf("level %d open to a token: got %v, want ErrTokenLevel", level, err)
+		}
+		silent := closed()
+		silent.Level, silent.Reason = level, ""
+		if err := (&Registry{}).Register(silent); !errors.Is(err, ErrReasonMissing) {
+			t.Errorf("level %d without a reason: got %v, want ErrReasonMissing", level, err)
+		}
+		reversible := closed()
+		reversible.Level, reversible.Reverse = level, "thing.start"
+		if err := (&Registry{}).Register(reversible); !errors.Is(err, ErrConfirmReverse) {
+			t.Errorf("level %d with a reverse: got %v, want ErrConfirmReverse", level, err)
+		}
+		registry := &Registry{}
+		accepted := closed()
+		accepted.Level = level
+		if err := registry.Register(accepted); err != nil {
+			t.Errorf("level %d closed to tokens: %v", level, err)
+		}
+		if found, ok := registry.ByRoute(accepted.Route); !ok || found.Level != level || found.Token {
+			t.Errorf("level %d: route reads %+v %v", level, found, ok)
+		}
+	}
+	for _, v := range Default.All() {
+		if v.Level >= 3 && v.Token {
+			t.Errorf("%s: level %d open to a token", v.ID, v.Level)
+		}
+	}
+}
+
+// R-A4-4 : un verbe de niveau 1 nomme un inverse qui existe ; l'inverse peut
+// être de niveau 2. Un inverse qui ne rend pas l'état exact n'en est pas un :
+// supprimer un instantané passe au niveau 2, sans inverse.
+func TestR_A4_4_ALevelOneVerbNamesARegisteredReverse(t *testing.T) {
+	withoutReverse := valid()
+	withoutReverse.Reverse = ""
+	if err := (&Registry{}).Register(withoutReverse); !errors.Is(err, ErrNoReverse) {
+		t.Fatalf("level 1 without a reverse: got %v, want ErrNoReverse", err)
+	}
+	registry := &Registry{}
+	registry.MustRegister(valid())
+	if err := registry.Check(); !errors.Is(err, ErrUnknownReverse) {
+		t.Fatalf("unknown reverse: got %v, want ErrUnknownReverse", err)
+	}
+	stop := confirmable()
+	stop.ID, stop.Route = "thing.stop", "POST /api/things/{id}/actions/stop"
+	registry.MustRegister(stop)
+	if err := registry.Check(); err != nil {
+		t.Fatalf("a reverse of level 2: %v", err)
+	}
+	snapshot, _ := Default.Lookup("proxmox.vm.snapshot")
+	deletion, _ := Default.Lookup("proxmox.vm.snapshot_delete")
+	if snapshot.Level != 1 || snapshot.Reverse != deletion.ID || deletion.Level != 2 || deletion.Reverse != "" {
+		t.Fatalf("snapshot %+v, snapshot_delete %+v", snapshot, deletion)
+	}
+	if err := Default.Check(); err != nil {
+		t.Fatal(err)
 	}
 }
