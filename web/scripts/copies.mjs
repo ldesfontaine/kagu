@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const ceiling = 9;
+const ceiling = 8;
 
 const reportDirectory = mkdtempSync(join(tmpdir(), "copies-"));
 try {

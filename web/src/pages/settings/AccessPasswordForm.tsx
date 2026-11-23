@@ -1,27 +1,16 @@
-import { useState } from "react";
-
 import { Button } from "../../components/Button";
 import { Failure } from "../../components/Failure";
 import { Input } from "../../components/Field";
 import { SettingBlock, SettingFoot, SettingRow } from "../../components/SettingRow";
-import { useForm } from "../../hooks/useForm";
+import { usePasswordForm } from "../../hooks/usePasswordForm";
 import { useT } from "../../i18n/context";
-import { emptyCredentialsForm, passwordFormError } from "../../lib/auth";
 
 // Changer le mot de passe : deux lignes et le bouton principal de la section.
 // Il se joue contre la règle du serveur avant l'envoi, pour dire le refus sans
 // attendre. Il vit dans la carte de l'accès, avec ses lignes.
 export function AccessPasswordForm({ minLength, busy, onSubmit }: { minLength: number; busy: boolean; onSubmit: (password: string) => void }) {
   const t = useT();
-  const { values, change } = useForm(emptyCredentialsForm);
-  const [error, setError] = useState<string | null>(null);
-  const submit = () => {
-    const refusal = passwordFormError(values.password, values.confirmation, minLength);
-    setError(refusal);
-    if (refusal === null) {
-      onSubmit(values.password);
-    }
-  };
+  const { values, change, error, submit } = usePasswordForm(minLength, (valid) => onSubmit(valid.password));
   return (
     <form
       className="setting-stack"
