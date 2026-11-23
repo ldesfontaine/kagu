@@ -75,8 +75,9 @@ type TOTPStore interface {
 	// ClearTOTP retire le code ; dit s'il y en avait un.
 	ClearTOTP(ctx context.Context) (bool, error)
 	// ConsumeTOTPStep pose step comme dernier pas servi s'il vient après le
-	// précédent, d'un seul tenant ; dit s'il a écrit.
-	ConsumeTOTPStep(ctx context.Context, step int64) (bool, error)
+	// précédent et si le code n'est pas suspendu à at, d'un seul tenant ; il
+	// remet alors à zéro les codes faux. Dit s'il a écrit.
+	ConsumeTOTPStep(ctx context.Context, step int64, at time.Time) (bool, error)
 }
 
 // hotp est la valeur HOTP (RFC 4226 §5.3) du secret au compteur donné, en
@@ -255,6 +256,7 @@ func (s *Service) clearTOTP(ctx context.Context, state State, action audit.Actio
 	}
 	s.logger.Warn("interface code removed", "username", state.Username, "action", string(action))
 	s.auditor.Record(ctx, authEvent(action, state))
+	s.notifyUnlocked(ctx, state.Username)
 	return nil
 }
 
@@ -269,8 +271,10 @@ func (s *Service) TOTPActive(ctx context.Context) (bool, error) {
 
 // requireTOTP juge le code quand il est actif, et sert son pas : le même code
 // présenté encore dans sa fenêtre est refusé (R-A2-6). Sans code actif, rien
-// n'est demandé (R-CNX-2).
-func (s *Service) requireTOTP(ctx context.Context, code string) error {
+// n'est demandé (R-CNX-2). Un code qui n'est pas servi (faux, déjà servi ou
+// suspendu) se compte contre le compte (R-A2-16) ; source est l'adresse de la
+// requête. Suspendu, le code juste est refusé comme les autres.
+func (s *Service) requireTOTP(ctx context.Context, state State, code, source string) error {
 	current, err := s.store.GetTOTP(ctx)
 	if err != nil {
 		return err
@@ -285,19 +289,19 @@ func (s *Service) requireTOTP(ctx context.Context, code string) error {
 	if err != nil {
 		return fmt.Errorf("stored code secret: %w", err)
 	}
-	step, matches := matchTOTPStep(raw, code, s.now(), current.LastStep)
-	if !matches {
-		return ErrTOTPWrong
+	now := s.now()
+	if step, matches := matchTOTPStep(raw, code, now, current.LastStep); matches {
+		// Deux requêtes du même code en même temps : une seule sert le pas.
+		served, err := s.store.ConsumeTOTPStep(ctx, step, now)
+		if err != nil {
+			return err
+		}
+		if served {
+			s.notifyUnlocked(ctx, state.Username)
+			return nil
+		}
 	}
-	// Deux requêtes du même code en même temps : une seule sert le pas.
-	served, err := s.store.ConsumeTOTPStep(ctx, step)
-	if err != nil {
-		return err
-	}
-	if !served {
-		return ErrTOTPWrong
-	}
-	return nil
+	return s.refuseWrongTOTP(ctx, state, source)
 }
 
 // requireNative : le code et la redemande n'existent qu'en native ; en

@@ -76,6 +76,16 @@ trusted_proxies = ["127.0.0.1/32", "::1/128"]
 # (60 s). Par défaut 30.
 # write_timeout_seconds = 30
 
+# Les échecs comptés par compte, en plus du frein par adresse (R-A2-16) :
+# codes à six chiffres faux d'affilée qui suspendent le code (de 1 à 5 : la
+# base ne tient pas plus), minutes de suspension, mots de passe faux par heure
+# au-delà desquels le compte n'accepte plus qu'un essai toutes les N secondes,
+# toutes adresses confondues. Valeurs par défaut :
+# totp_max_failures = 5
+# totp_lock_minutes = 15
+# password_failures_per_hour = 20
+# password_pace_seconds = 30
+
 # Niveau du journal (JSON sur stderr) : debug, info, warn, error.
 # Vide (défaut) : info. En debug, chaque requête HTTP fait une ligne.
 log_level = "info"

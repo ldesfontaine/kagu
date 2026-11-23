@@ -11,7 +11,7 @@ import (
 // l'ancien jeton ne vaut plus, l'identifiant reste.
 func TestReauth_RenewsTheTokenAndStampsTheSession(t *testing.T) {
 	service, _, state, now, opened := signedIn(t)
-	token, err := service.Reauth(context.Background(), state, opened.ID, testPassword, "")
+	token, err := service.Reauth(context.Background(), state, opened.ID, "203.0.113.9", testPassword, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestRequireFreshReauth_FiveMinutesForThisSession(t *testing.T) {
 	if err := service.RequireFreshReauth(state, opened.Session); !errors.Is(err, ErrReauthRequired) {
 		t.Fatalf("never re-authenticated: got %v", err)
 	}
-	token, err := service.Reauth(context.Background(), state, opened.ID, testPassword, "")
+	token, err := service.Reauth(context.Background(), state, opened.ID, "203.0.113.9", testPassword, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestRequireFreshReauth_FiveMinutesForThisSession(t *testing.T) {
 // rien n'est posé sur la session.
 func TestReauth_Refusals(t *testing.T) {
 	service, _, state, now, opened := signedIn(t)
-	if _, err := service.Reauth(context.Background(), state, opened.ID, "a wrong passphrase", ""); !errors.Is(err, ErrCurrentPasswordWrong) {
+	if _, err := service.Reauth(context.Background(), state, opened.ID, "203.0.113.9", "a wrong passphrase", ""); !errors.Is(err, ErrCurrentPasswordWrong) {
 		t.Fatalf("wrong password: got %v", err)
 	}
 	proposal, _ := service.ProposeTOTP(context.Background(), state)
@@ -66,17 +66,17 @@ func TestReauth_Refusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	*now = now.Add(TOTPPeriod)
-	if _, err := service.Reauth(context.Background(), state, opened.ID, testPassword, ""); !errors.Is(err, ErrTOTPRequired) {
+	if _, err := service.Reauth(context.Background(), state, opened.ID, "203.0.113.9", testPassword, ""); !errors.Is(err, ErrTOTPRequired) {
 		t.Fatalf("no code: got %v", err)
 	}
-	if _, err := service.Reauth(context.Background(), state, opened.ID, testPassword, wrongCodeAt(t, proposal.Secret, *now)); !errors.Is(err, ErrTOTPWrong) {
+	if _, err := service.Reauth(context.Background(), state, opened.ID, "203.0.113.9", testPassword, wrongCodeAt(t, proposal.Secret, *now)); !errors.Is(err, ErrTOTPWrong) {
 		t.Fatalf("wrong code: got %v", err)
 	}
 	session, _, _ := service.ResumeSession(context.Background(), state, opened.Token)
 	if !session.ReauthAt.IsZero() {
 		t.Fatal("a refused re-authentication stamped the session")
 	}
-	if _, err := service.Reauth(context.Background(), state, opened.ID, testPassword, codeAt(t, proposal.Secret, *now)); err != nil {
+	if _, err := service.Reauth(context.Background(), state, opened.ID, "203.0.113.9", testPassword, codeAt(t, proposal.Secret, *now)); err != nil {
 		t.Fatalf("password and code: %v", err)
 	}
 }
@@ -84,7 +84,7 @@ func TestReauth_Refusals(t *testing.T) {
 // En forward, il n'y a pas de mot de passe à redonner : le SSO authentifie.
 func TestReauth_RefusedInForward(t *testing.T) {
 	service, _, state, opened := forwardService(t)
-	if _, err := service.Reauth(context.Background(), state, opened.ID, testPassword, ""); !errors.Is(err, ErrNoPassword) {
+	if _, err := service.Reauth(context.Background(), state, opened.ID, "203.0.113.9", testPassword, ""); !errors.Is(err, ErrNoPassword) {
 		t.Fatalf("got %v, want ErrNoPassword", err)
 	}
 }

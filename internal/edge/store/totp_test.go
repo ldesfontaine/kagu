@@ -58,7 +58,7 @@ func TestConsumeTOTPStep_OnlyForward(t *testing.T) {
 		step   int64
 		served bool
 	}{{100, false}, {99, false}, {101, true}, {101, false}, {103, true}} {
-		served, err := db.ConsumeTOTPStep(ctx, attempt.step)
+		served, err := db.ConsumeTOTPStep(ctx, attempt.step, time.Unix(1_000, 0))
 		if err != nil || served != attempt.served {
 			t.Errorf("step %d: served %v (%v), want %v", attempt.step, served, err, attempt.served)
 		}

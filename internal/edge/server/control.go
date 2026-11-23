@@ -36,6 +36,7 @@ func (s *Server) adminRoutes() []controlRoute {
 		{"POST " + adminPrefix + "setup-code", s.issueSetupCode},
 		{"POST " + adminPrefix + "reset-password", s.resetPassword},
 		{"POST " + adminPrefix + "reset-totp", s.resetTOTP},
+		{"POST " + adminPrefix + "unlock", s.unlockAccount},
 		{"POST " + adminPrefix + "auth-mode", s.setAuthMode},
 		{"POST " + adminPrefix + "sessions/close-all", s.closeAllSessions},
 		{"POST " + adminPrefix + "tokens/revoke-all", s.revokeAllAPITokens},

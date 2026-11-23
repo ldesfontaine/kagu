@@ -27,7 +27,8 @@ export type AlertKind =
   | "restore_test_stale"
   | "source_unprotected"
   | "target_full"
-  | "target_unreachable";
+  | "target_unreachable"
+  | "totp_locked";
 
 // Le catalogue fermé, dans l'ordre des écrans.
 export const alertKinds: readonly AlertKind[] = [
@@ -52,15 +53,17 @@ export const alertKinds: readonly AlertKind[] = [
   "source_unprotected",
   "target_full",
   "target_unreachable",
+  "totp_locked",
 ];
 
 export type AlertSeverity = "attention" | "danger";
 
 // Les familles d'alertes qu'un canal peut choisir de recevoir.
-export type AlertCategory = "machines" | "services" | "jobs" | "probes" | "backups" | "updates";
+export type AlertCategory = "machines" | "services" | "jobs" | "probes" | "backups" | "updates" | "access";
 type AlertStatus = "open" | "resolved";
-// Un service déclaré : l'objet d'une montée de version revenue en arrière.
-export type AlertObjectKind = "machine" | "container" | "heartbeat" | "probe" | "volume" | "backup" | "service";
+// Un service déclaré : l'objet d'une montée de version revenue en arrière ;
+// le compte de l'opérateur : celui d'un code suspendu.
+export type AlertObjectKind = "machine" | "container" | "heartbeat" | "probe" | "volume" | "backup" | "service" | "account";
 
 export interface AlertObject {
   kind: AlertObjectKind;
@@ -89,6 +92,8 @@ interface AlertDetails {
   target?: string;
   not_after?: string;
   since?: string;
+  // La fin de la suspension du code à six chiffres ; target est la source du dernier code faux.
+  until?: string;
   // La place libre d'une cible de sauvegardes.
   bytes?: number;
   // La version où un service est revenu ; target est celle qui n'a pas tenu.

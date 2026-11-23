@@ -44,6 +44,7 @@ var adminBodies = map[string]string{
 	"POST /control/admin/setup-code":         `{}`,
 	"POST /control/admin/reset-password":     `{"password":"a passphrase from root"}`,
 	"POST /control/admin/reset-totp":         `{}`,
+	"POST /control/admin/unlock":             `{}`,
 	"POST /control/admin/auth-mode":          `{"mode":"forward","header":"X-Forwarded-User"}`,
 	"POST /control/admin/sessions/close-all": `{}`,
 	"POST /control/admin/tokens/revoke-all":  `{}`,

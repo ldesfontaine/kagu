@@ -114,14 +114,14 @@ func (s *Service) Login(ctx context.Context, expected State, username, password,
 	if current.Mode != ModeNative {
 		return OpenedSession{}, ErrDisabled
 	}
-	matches, err := s.Verify(ctx, current, username, password)
+	matches, err := s.judgePassword(ctx, current, username, password)
 	if err != nil {
 		return OpenedSession{}, err
 	}
 	if !matches {
 		return OpenedSession{}, ErrLoginFailed
 	}
-	if err := s.requireTOTP(ctx, code); err != nil {
+	if err := s.requireTOTP(ctx, current, code, client.Address); err != nil {
 		return OpenedSession{}, err
 	}
 	return s.openSession(ctx, current.Username, client)

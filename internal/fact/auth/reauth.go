@@ -38,10 +38,11 @@ func (s *Service) RequireFreshReauth(state State, session Session) error {
 }
 
 // Reauth juge le mot de passe, puis le code s'il est actif, et pose
-// reauth_at sur la session sessionID. Son jeton est tiré à neuf et rendu pour
+// reauth_at sur la session sessionID ; source est l'adresse de la requête, que
+// l'alerte d'un code suspendu nomme. Son jeton est tiré à neuf et rendu pour
 // le cookie (R-A2-3) : celui présenté avant ne vaut plus. L'identifiant reste,
 // les flux et l'audit de la session la suivent.
-func (s *Service) Reauth(ctx context.Context, expected State, sessionID, password, code string) (string, error) {
+func (s *Service) Reauth(ctx context.Context, expected State, sessionID, source, password, code string) (string, error) {
 	current, err := s.store.GetAuthState(ctx)
 	if err != nil {
 		return "", err
@@ -55,7 +56,7 @@ func (s *Service) Reauth(ctx context.Context, expected State, sessionID, passwor
 	if err := s.requirePassword(ctx, current, password); err != nil {
 		return "", err
 	}
-	if err := s.requireTOTP(ctx, code); err != nil {
+	if err := s.requireTOTP(ctx, current, code, source); err != nil {
 		return "", err
 	}
 	token, err := ident.NewSecret()

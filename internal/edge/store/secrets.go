@@ -283,7 +283,7 @@ func (db *DB) ForgetSecrets(ctx context.Context, newToken func() (string, error)
 		}
 		// Le code à six chiffres se repose depuis les réglages ; d'ici là, le
 		// mot de passe seul ouvre la session.
-		if _, err := tx.ExecContext(ctx, `UPDATE auth_settings SET totp_secret = '', totp_last_step = 0`); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE auth_settings SET totp_secret = '', totp_last_step = 0, totp_failures = 0, totp_locked_until = NULL`); err != nil {
 			return fmt.Errorf("forget totp secret: %w", err)
 		}
 		// Un canal e-mail n'a ni URL ni secret : il n'a rien perdu, il reste actif.

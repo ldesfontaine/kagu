@@ -13,11 +13,13 @@ const (
 	CategoryProbes   Category = "probes"
 	CategoryBackups  Category = "backups"
 	CategoryUpdates  Category = "updates"
+	// L'accès de l'opérateur à l'interface : les échecs de connexion.
+	CategoryAccess Category = "access"
 )
 
 // Categories liste le catalogue, dans l'ordre des écrans.
 func Categories() []Category {
-	return []Category{CategoryMachines, CategoryServices, CategoryJobs, CategoryProbes, CategoryBackups, CategoryUpdates}
+	return []Category{CategoryMachines, CategoryServices, CategoryJobs, CategoryProbes, CategoryBackups, CategoryUpdates, CategoryAccess}
 }
 
 func isCategory(category Category) bool {
@@ -49,6 +51,7 @@ var categoryOfKind = map[Kind]Category{
 	KindTargetUnreachable:    CategoryBackups,
 	KindAgentRolledBack:      CategoryUpdates,
 	KindServiceRolledBack:    CategoryUpdates,
+	KindTOTPLocked:           CategoryAccess,
 }
 
 // CategoryOf rend la catégorie d'un type d'alerte ; un type inconnu n'en a

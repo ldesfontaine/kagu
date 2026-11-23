@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,10 +17,14 @@ import (
 
 // memoryStore tient l'état comme la base, sans elle.
 type memoryStore struct {
-	state    State
-	code     SetupCode
-	sessions memorySessions
-	totp     TOTP
+	// Les tests de concurrence appellent ChangeAccountFailures ensemble : la
+	// transaction de la base se joue ici par ce verrou.
+	failuresMu sync.Mutex
+	state      State
+	code       SetupCode
+	sessions   memorySessions
+	totp       TOTP
+	failures   AccountFailures
 }
 
 func (m *memoryStore) GetAuthState(context.Context) (State, error) {
@@ -36,6 +41,7 @@ func (m *memoryStore) SaveAuthStateIf(ctx context.Context, expected, next State,
 	}
 	if next.Mode != ModeNative || next.Username != current.Username {
 		m.totp = TOTP{}
+		m.failures = AccountFailures{}
 	}
 	m.state = next
 	m.code = SetupCode{}

@@ -24,15 +24,33 @@ func (m *memoryStore) EnableTOTPIfNone(_ context.Context, secret string, servedS
 func (m *memoryStore) ClearTOTP(context.Context) (bool, error) {
 	was := m.totp.Active()
 	m.totp = TOTP{}
+	m.failures.TOTP = TOTPFailures{}
 	return was, nil
 }
 
-func (m *memoryStore) ConsumeTOTPStep(_ context.Context, step int64) (bool, error) {
-	if !m.totp.Active() || step <= m.totp.LastStep {
+func (m *memoryStore) ConsumeTOTPStep(_ context.Context, step int64, at time.Time) (bool, error) {
+	m.failuresMu.Lock()
+	defer m.failuresMu.Unlock()
+	if !m.totp.Active() || step <= m.totp.LastStep || m.failures.TOTP.Locked(at) {
 		return false, nil
 	}
 	m.totp.LastStep = step
+	m.failures.TOTP = TOTPFailures{}
 	return true, nil
+}
+
+func (m *memoryStore) GetAccountFailures(context.Context) (AccountFailures, error) {
+	m.failuresMu.Lock()
+	defer m.failuresMu.Unlock()
+	return m.failures, nil
+}
+
+func (m *memoryStore) ChangeAccountFailures(_ context.Context, change func(AccountFailures) AccountFailures) (AccountFailures, AccountFailures, error) {
+	m.failuresMu.Lock()
+	defer m.failuresMu.Unlock()
+	before := m.failures
+	m.failures = change(before)
+	return before, m.failures, nil
 }
 
 // RFC 6238, annexe B : le secret ASCII « 12345678901234567890 », SHA-1, huit
@@ -188,6 +206,11 @@ func TestRequireTOTP_OneStepOfMargin(t *testing.T) {
 // lequel.
 func TestLogin_WithTOTP_AsksTheCodeAfterThePassword(t *testing.T) {
 	service, _, state, secret, now := withTOTP(t)
+	// Cinq entrées fausses d'affilée suspendraient le code : ce test juge leur
+	// forme, pas la suspension (R-A2-16).
+	limits := DefaultAccountLimits()
+	limits.TOTPFailures = MaxTOTPFailures + 1
+	service.SetAccountLimits(limits)
 	if _, err := service.Login(context.Background(), state, "lucas", "a wrong passphrase", codeAt(t, secret, *now), SessionClient{}); !errors.Is(err, ErrLoginFailed) {
 		t.Fatalf("wrong password with a right code: got %v, want ErrLoginFailed", err)
 	}

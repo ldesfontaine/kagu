@@ -86,6 +86,8 @@ func describe(catalog lang.Catalog, alert Alert, now time.Time, escape func(stri
 		return text(catalog, "cert_expired", nil, []any{details.Target, -daysUntil(details.NotAfter, now)})
 	case KindCertUntrusted:
 		return text(catalog, "cert_untrusted", nil, []any{details.Target, catalog.Get("alert.reason_" + details.Reason)})
+	case KindTOTPLocked:
+		return text(catalog, "totp_locked", nil, []any{details.Until.Local().Format("15:04"), details.Target})
 	case KindAgentRolledBack:
 		return text(catalog, "agent_rolled_back", nil, []any{machine, details.Target, catalog.Get("alert.rollback_cause_" + rollbackCauseOf(details))})
 	case KindServiceRolledBack:

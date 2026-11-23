@@ -47,6 +47,7 @@ type Store interface {
 	RecordSetupCodeFailure(ctx context.Context) error
 	SessionStore
 	TOTPStore
+	AccountStore
 }
 
 type Service struct {
@@ -55,6 +56,13 @@ type Service struct {
 	logger   *slog.Logger
 	now      func() time.Time
 	hashCost int
+	// Les seuils des échecs par compte, et les alertes qu'ils ouvrent.
+	limits  AccountLimits
+	alerter AccountAlerter
+	// L'instant du dernier essai de mot de passe admis, pour l'intervalle d'un
+	// compte ralenti (failures.go).
+	paceMu              sync.Mutex
+	lastPasswordAttempt time.Time
 
 	// Tire et vérifie le code de première configuration, un à la fois.
 	setupMu sync.Mutex
@@ -70,7 +78,7 @@ type Service struct {
 
 func New(store Store, logger *slog.Logger) *Service {
 	return &Service{
-		store: store, logger: logger, now: time.Now, hashCost: DefaultHashCost,
+		store: store, logger: logger, now: time.Now, hashCost: DefaultHashCost, limits: DefaultAccountLimits(),
 		verifying: make(chan struct{}, 1),
 	}
 }
@@ -350,10 +358,10 @@ func (s *Service) Verify(ctx context.Context, state State, username, password st
 	return usernameMatches && passwordMatches, nil
 }
 
-// requirePassword juge par Verify le mot de passe en vigueur, que redonne la
+// requirePassword juge par judgePassword le mot de passe en vigueur, que redonne la
 // personne connectée : faux, ErrCurrentPasswordWrong.
 func (s *Service) requirePassword(ctx context.Context, state State, password string) error {
-	matches, err := s.Verify(ctx, state, state.Username, password)
+	matches, err := s.judgePassword(ctx, state, state.Username, password)
 	if err != nil {
 		return err
 	}

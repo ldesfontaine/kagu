@@ -296,6 +296,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		key, _ := refusal.KeyOf(err)
 		s.apiRefuse(w, http.StatusUnauthorized, key)
 		return
+	case s.answeredAccountRefusal(w, err, http.StatusUnauthorized):
+		s.logger.Warn("interface sign-in refused by the account", "source", source, "error", err)
+		return
 	case errors.Is(err, auth.ErrVerificationQueueFull):
 		// Même réponse que le limiteur : l'attente de bcrypt est bornée, et
 		// l'opérateur qui retombe là réessaie après Retry-After.
@@ -459,7 +462,7 @@ func (s *Server) reauth(w http.ResponseWriter, r *http.Request) {
 	}
 	authorizing, _ := authorizingStateFrom(r.Context())
 	current, _ := sessionFrom(r.Context())
-	token, err := s.auth.Reauth(r.Context(), authorizing, current.ID, request.Password, request.Code)
+	token, err := s.auth.Reauth(r.Context(), authorizing, current.ID, s.clientAddress(r), request.Password, request.Code)
 	if !s.passwordAccepted(w, r, err) {
 		return
 	}
@@ -562,6 +565,8 @@ func (s *Server) passwordAccepted(w http.ResponseWriter, r *http.Request, err er
 		s.logger.Warn("interface password asked again: refused", "source", s.clientAddress(r), "error", err)
 		key, _ := refusal.KeyOf(err)
 		s.apiRefuse(w, http.StatusForbidden, key)
+	case s.answeredAccountRefusal(w, err, http.StatusForbidden):
+		s.logger.Warn("interface password asked again: refused by the account", "source", s.clientAddress(r), "error", err)
 	case errors.Is(err, auth.ErrVerificationQueueFull):
 		s.logger.Warn("interface verification queue full", "source", s.clientAddress(r))
 		httpx.WriteTooMany(w)
@@ -569,6 +574,38 @@ func (s *Server) passwordAccepted(w http.ResponseWriter, r *http.Request, err er
 		s.failed(w, r, err, nil)
 	}
 	return false
+}
+
+// answeredAccountRefusal répond au refus que le compte oppose (R-A2-16) et dit
+// s'il l'a fait : le code suspendu, avec l'heure de sa fin, sous le statut que
+// la route donne à un code faux ; le compte ralenti, en 429, quelle que soit
+// la route.
+func (s *Server) answeredAccountRefusal(w http.ResponseWriter, err error, lockedStatus int) bool {
+	switch {
+	case errors.Is(err, auth.ErrTOTPLocked):
+		key, _ := refusal.KeyOf(err)
+		refused := apiError{Error: key}
+		var locked *auth.TOTPLockedError
+		if errors.As(err, &locked) {
+			refused.Until = locked.Until.UTC()
+		}
+		s.writeAPI(w, lockedStatus, refused)
+	case errors.Is(err, auth.ErrAccountSlowed):
+		key, _ := refusal.KeyOf(err)
+		s.writeAPIError(w, http.StatusTooManyRequests, key)
+	default:
+		return false
+	}
+	return true
+}
+
+// unlockAccount remet à zéro les échecs du compte, le code suspendu comme le
+// compte ralenti : root, par la socket seulement (R-A2-16).
+func (s *Server) unlockAccount(w http.ResponseWriter, r *http.Request) {
+	if !s.readEmptyBody(w, r) {
+		return
+	}
+	s.finishAPIAction(w, r, s.auth.Unlock(r.Context()), nil)
 }
 
 // resetTOTP retire le code sans rien demander : root, par la socket seulement

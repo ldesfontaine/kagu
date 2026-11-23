@@ -2,7 +2,8 @@ import { expect, test } from "vitest";
 
 import type { AuthState } from "../api/auth";
 import { ApiError } from "../api/client";
-import { accessLabel, asksTOTP, isForwardInsecure, loginFailure, needsFirstSetup, needsSignIn, passwordFormError, reauthConfirmOf } from "./auth";
+import { accessLabel, asksTOTP, isForwardInsecure, loginFailure, needsFirstSetup, needsSignIn, passwordFormError, reauthConfirmOf, refusalArguments } from "./auth";
+import { formatWhen } from "./time";
 
 const unconfigured: AuthState = { mode: "none", username: "", enabled_at: null, password_min_length: 12, signed_in: false, allowed_users: null };
 const native: AuthState = {
@@ -88,4 +89,18 @@ test("le second écran de la connexion s'ouvre sur le refus qui demande le code,
   expect(asksTOTP(new ApiError(401, "auth.totp_required"))).toBe(true);
   expect(asksTOTP(new ApiError(401, "auth.login_failed"))).toBe(false);
   expect(asksTOTP(null)).toBe(false);
+});
+
+test("loginFailure rend le compte ralenti avec sa clé, pas le trop d'essais d'une adresse", () => {
+  const slowed = new ApiError(429, "auth.account_slowed");
+  expect(loginFailure(slowed)).toBe(slowed);
+});
+
+test("refusalArguments cite la fin de la suspension du code, et rien d'autre", () => {
+  const until = "2026-11-23T14:32:00Z";
+  const now = Date.parse("2026-11-23T14:20:00Z");
+  const locked = new ApiError(401, "auth.totp_locked", { error: "auth.totp_locked", until });
+  expect(refusalArguments(locked, now)).toEqual([formatWhen(until, now)]);
+  expect(refusalArguments(new ApiError(401, "auth.totp_locked"), now)).toEqual([]);
+  expect(refusalArguments(new ApiError(401, "auth.totp_wrong", { until }), now)).toEqual([]);
 });

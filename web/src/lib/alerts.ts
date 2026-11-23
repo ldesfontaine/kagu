@@ -21,7 +21,7 @@ import { daysUntil } from "./certificates";
 import { backupsPath } from "./backups";
 import { probePath } from "./probes";
 import { fromLocalInput } from "./status";
-import { formatClock, formatDuration, since } from "./time";
+import { formatClock, formatDuration, formatWhen, since } from "./time";
 
 // Ce qu'une alerte dit : le fait, la cause, puis ce qu'on peut faire. Les
 // mêmes clés que le canal, remplies ici avec les faits de l'API.
@@ -122,6 +122,8 @@ export function describeAlert(t: Translate, alert: Alert, now: number, threshold
       return lines(t, alert.kind, [], [object, machine]);
     case "target_full":
       return lines(t, alert.kind, [], [object, Math.floor((details.bytes ?? 0) / 2 ** 20), details.count ?? 0]);
+    case "totp_locked":
+      return lines(t, alert.kind, [], [details.until ? formatWhen(details.until, now) : "", details.target ?? ""]);
     case "target_unreachable":
       return {
         fact: t("alert.fact_target_unreachable"),
@@ -332,6 +334,8 @@ export function objectPath(object: AlertObject, machineID: string): string | nul
       return backupsPath;
     case "service":
       return `/services/annuaire/${object.id}`;
+    case "account":
+      return null;
   }
 }
 
@@ -505,6 +509,9 @@ function muteTargetOf(alert: Pick<Alert, "kind" | "object" | "machine_id" | "mac
     case "service":
       return { kind: alert.kind, targetKind: "service", targetID: alert.object.id, targetName: "" };
   }
+  if (alert.object.kind === "account") {
+    return { kind: alert.kind, targetKind: "", targetID: "", targetName: "" };
+  }
   return { kind: alert.kind, targetKind: alert.object.kind, targetID: alert.object.id, targetName: alert.object.name };
 }
 
@@ -518,7 +525,7 @@ export function mutePathOf(alert: Pick<Alert, "kind" | "object" | "machine_id" |
 // Les listes fermées du formulaire d'un canal, dans son ordre.
 export const channelFormats: readonly ChannelFormat[] = ["json", "text", "discord", "slack", "email", "matrix"];
 export const alertSeverities: readonly AlertSeverity[] = ["attention", "danger"];
-export const alertCategories: readonly AlertCategory[] = ["machines", "services", "jobs", "probes", "backups", "updates"];
+export const alertCategories: readonly AlertCategory[] = ["machines", "services", "jobs", "probes", "backups", "updates", "access"];
 
 // Le formulaire d'un canal. Le secret (ou le jeton d'un bot Matrix) ne
 // revient jamais du serveur : le champ part vide, et vide il garde celui
