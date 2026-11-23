@@ -49,11 +49,11 @@ func runAgent(args []string) error {
 		return runAgentTrust(args[1:], os.Stdout, openControllingTerminal, os.Geteuid())
 	}
 	flags := flag.NewFlagSet("agent", flag.ContinueOnError)
-	server := flags.String("server", "", "adresse d'"+brand.ProductName+", premier lancement seulement")
+	server := flags.String("server", "", "adresse de "+brand.ProductName+", premier lancement seulement")
 	// -token n'existe que pour être refusé avec une phrase claire, plutôt que
 	// l'erreur générique d'un drapeau inconnu.
 	flags.String("token", "", "refusé : le jeton se lit sur l'entrée standard")
-	pin := flags.String("pin", "", "empreinte SHA-256 du certificat d'"+brand.ProductName+", s'il est auto-signé")
+	pin := flags.String("pin", "", "empreinte SHA-256 du certificat de "+brand.ProductName+", s'il est auto-signé")
 	language := flags.String("lang", string(lang.Default), "langue des messages, premier lancement seulement")
 	rights := flags.String("rights", "", "droits cochés à l'installation, premier lancement seulement (observe par défaut)")
 	rootDir := flags.String("root-dir", brand.WorkspaceRoot, "racine des services déployés, premier lancement seulement")

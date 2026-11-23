@@ -2,7 +2,7 @@ import { useT } from "../i18n/context";
 import { Note } from "./Card";
 import { TokenBox } from "./Copy";
 
-// Ce que dit un écran qui écrit une adresse d'{product} (commande d'une
+// Ce que dit un écran qui écrit une adresse de {product} (commande d'une
 // machine, URL de ping) quand cette adresse paraît locale. Un essai local
 // est prévu : la note est neutre. Elle ne vire au rouge que si la page, elle,
 // est publique (suggestion non vide) : c'est un public_url mal réglé, et la
