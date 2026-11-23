@@ -73,17 +73,19 @@ func TestRoutes_EveryWriteHasAScreenCallerOrAReason(t *testing.T) {
 	}
 }
 
-// Le registre des verbes est figé dans testdata/verbs.golden.json : le front
-// y lit les verbes (dans l'ordre du registre) pour prouver que chacun a son geste d'écran.
+// Le registre des verbes est figé dans testdata/verbs.golden.json, avec le
+// niveau de chacun : le front y lit les verbes (dans l'ordre du registre) pour
+// prouver que chacun a son geste d'écran.
 func TestVerbs_RegistryMatchesGoldenFile(t *testing.T) {
 	type entry struct {
 		ID      string `json:"id"`
 		Route   string `json:"route"`
 		Reverse string `json:"reverse"`
+		Level   int    `json:"level"`
 	}
 	entries := []entry{}
 	for _, offered := range verb.Default.All() {
-		entries = append(entries, entry{offered.ID, offered.Route, offered.Reverse})
+		entries = append(entries, entry{offered.ID, offered.Route, offered.Reverse, offered.Level})
 	}
 	body, err := json.Marshal(map[string][]entry{"verbs": entries})
 	if err != nil {

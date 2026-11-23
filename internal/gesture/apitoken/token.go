@@ -139,7 +139,8 @@ var (
 // MaxGuestID est le plus grand numéro d'invité que Proxmox attribue.
 const MaxGuestID = 999999999
 
-// verbsOf juge les verbes cochés : connus, sans doublon, triés. Une portée
+// verbsOf juge les verbes cochés : connus et ouverts aux jetons (un geste de
+// niveau 3 ou 4 est refusé comme un inconnu), sans doublon, triés. Une portée
 // read n'en porte aucun, et le dit plutôt que de les ignorer en silence.
 func verbsOf(scope Scope, requested []string) ([]string, error) {
 	if len(requested) == 0 {
@@ -150,7 +151,7 @@ func verbsOf(scope Scope, requested []string) ([]string, error) {
 	}
 	verbs := make([]string, 0, len(requested))
 	for _, id := range requested {
-		if _, known := verb.Default.Lookup(id); !known {
+		if offered, known := verb.Default.Lookup(id); !known || !offered.Token {
 			return nil, ErrVerbUnknown
 		}
 		if !slices.Contains(verbs, id) {

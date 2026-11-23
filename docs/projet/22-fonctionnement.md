@@ -4983,7 +4983,8 @@ configuration seule est servie.
 | Jeton `write` qui ne porte pas le verbe de la route | `403 api_token.verb_forbidden`, journalisé (`api_token.deny`) |
 | Jeton `write` qui porte le verbe, trop vite | `429` avec `Retry-After` (« Le débit d'un jeton ») |
 | Jeton `write` qui porte le verbe | La route de l'opérateur s'exécute, telle quelle ; la réponse prend la forme du contrat des verbes |
-| Jeton `write` qui porte un verbe **à confirmation** | Rien ne s'exécute : une demande est déposée, `202` (« Les verbes à confirmation ») |
+| Jeton `write` qui porte un verbe **à confirmation** (niveau 2) | Rien ne s'exécute : une demande est déposée, `202` (« Les verbes à confirmation ») |
+| Tout jeton, route d'un geste de niveau 3 ou 4 | `403 api_token.route_forbidden`, même s'il porte l'identifiant du geste (R-A4-2) |
 
 Le dernier usage du jeton est noté **au plus une fois par minute** : mcp-maison
 peut enchaîner les lectures. Le `Host` de la requête est jugé comme celui de
@@ -5017,32 +5018,52 @@ toute écriture qui n'est pas un verbe (section suivante).
 
 Un **verbe** est un geste que l'opérateur coche sur un jeton `write`
 (décision 19, `23-direction.md`). Le registre (`internal/gesture/verb`) est une liste
-fermée : chaque verbe a un identifiant stable, la **route d'opérateur** qu'il
-ouvre, un libellé et une phrase de catalogue (`fr` et `en`) et **son verbe
-inverse**. Un verbe sans inverse ne peut pas être enregistré (`verb.Register`
-le refuse, `Check` vérifie que chaque inverse existe, un test le tient), à une
-exception : le **verbe à confirmation** (`Verb.Confirm`), qui n'a pas d'inverse
-parce qu'il n'agit jamais seul. Il remplace l'inverse par la confirmation de
-l'opérateur (« Les verbes à confirmation »).
+fermée : chaque geste a un identifiant stable, la **route d'opérateur** qu'il
+ouvre, un libellé et une phrase de catalogue (`fr` et `en`), **son niveau**
+(`Verb.Level`, 1 à 4), le genre d'ordre qu'il envoie (`Order`) et le droit
+d'agent que ce genre exige (`Right`), vides s'il n'envoie rien, son action
+d'audit (`Audit`) et s'il est ouvert aux jetons (`Token`).
 
-| Verbe | Route d'opérateur | Inverse |
+| Niveau | Ce qu'en fait un jeton | Ce que `verb.Register` exige |
 | --- | --- | --- |
-| `agent.ping` | `POST /api/machines/{id}/actions/ping` | lui-même (idempotent) |
-| `probe.pause` | `POST /api/probes/{id}/actions/pause` | `probe.resume` |
-| `probe.resume` | `POST /api/probes/{id}/actions/resume` | `probe.pause` |
-| `job.pause` | `POST /api/jobs/{id}/actions/pause` | `job.resume` |
-| `job.resume` | `POST /api/jobs/{id}/actions/resume` | `job.pause` |
-| `agent.update` | `POST /api/machines/{id}/actions/update-agent` | `agent.rollback` |
-| `agent.rollback` | `POST /api/machines/{id}/actions/rollback-agent` | `agent.update` |
-| `proxmox.vm.start` | `POST /api/machines/{id}/proxmox/guests/{vmid}/actions/start` | `proxmox.vm.shutdown` |
-| `proxmox.vm.shutdown` | `POST /api/machines/{id}/proxmox/guests/{vmid}/actions/shutdown` | `proxmox.vm.start` |
-| `proxmox.vm.snapshot` | `POST /api/machines/{id}/proxmox/guests/{vmid}/actions/snapshot` | `proxmox.vm.snapshot_delete` |
-| `proxmox.vm.snapshot_delete` | `POST /api/machines/{id}/proxmox/guests/{vmid}/actions/snapshot-delete` (corps `{"snapshot":"oc-…"}`) | `proxmox.vm.snapshot` |
-| `machine.delete` | `DELETE /api/machines/{id}` | aucun : **à confirmation** |
-| `restic.backup.run` | `POST /api/machines/{id}/restic-backups/{backup}/actions/run` | lui-même (sans purge) |
-| `restic.backup.verify` | `POST /api/machines/{id}/restic-backups/{backup}/actions/verify` | lui-même |
-| `restic.backup.browse` | `POST /api/machines/{id}/restic-backups/{backup}/actions/browse` | lui-même |
-| `restic.backup.restore` | `POST /api/machines/{id}/restic-backups/{backup}/actions/restore` | aucun : **à confirmation** |
+| 1 | Il agit, s'il porte le verbe et si la cible est dans sa portée | Un inverse (`ErrNoReverse`) ; `Check` vérifie qu'il existe, il peut être de niveau 2 (R-A4-4) ; une route `POST` |
+| 2 | Il dépose une demande (« Les verbes à confirmation ») | Aucun inverse (`ErrConfirmReverse`) ; `POST`, `PUT` ou `DELETE` ; une machine pour cible |
+| 3, 4 | `403 api_token.route_forbidden`, sans exception (R-A4-2) | `Token` faux (`ErrTokenLevel`), une raison, clé de catalogue (`Reason`, `ErrReasonMissing`), aucun inverse. Aucun geste n'y est encore inscrit : la redemande (T02-09) lira le niveau d'une route par `ByRoute` |
+
+Un niveau 0, absent ou hors de 1 à 4 est refusé (`ErrLevelInvalid`) : une
+lecture n'est pas un geste du registre (T11-01). Un geste fermé aux jetons
+n'ouvre pas sa route (`tokenAccessOf`), ne s'offre pas à la création
+(`OpenToTokens`) et s'y refuse (`api_token.verb_unknown`). « À confirmation »
+n'est plus un champ : c'est le niveau 2 (`Verb.AsksConfirmation`), et le JSON
+des verbes (`/api/settings/api-tokens`, `/api/token/verbs`) porte `level` et
+`confirm` qui s'en déduit. Les genres, les droits et les actions d'audit des
+verbes se croisent avec `agentwire` et `audit` dans
+`TestRegistry_ThreeListsAgree` ; un droit qui n'est pas celui de son genre y
+échoue.
+
+| Verbe | Route d'opérateur | Niveau | Inverse | Ordre | Audit |
+| --- | --- | --- | --- | --- | --- |
+| `agent.ping` | `POST /api/machines/{id}/actions/ping` | 1 | lui-même (idempotent) | `agent.ping` | `action.order` |
+| `probe.pause` | `POST /api/probes/{id}/actions/pause` | 1 | `probe.resume` | — | `probe.pause` |
+| `probe.resume` | `POST /api/probes/{id}/actions/resume` | 1 | `probe.pause` | — | `probe.resume` |
+| `job.pause` | `POST /api/jobs/{id}/actions/pause` | 1 | `job.resume` | — | `heartbeat.pause` |
+| `job.resume` | `POST /api/jobs/{id}/actions/resume` | 1 | `job.pause` | — | `heartbeat.resume` |
+| `agent.update` | `POST /api/machines/{id}/actions/update-agent` | 1 | `agent.rollback` | `agent.update` | `action.order` |
+| `agent.rollback` | `POST /api/machines/{id}/actions/rollback-agent` | 1 | `agent.update` | `agent.rollback` | `action.order` |
+| `proxmox.vm.start` | `POST /api/machines/{id}/proxmox/guests/{vmid}/actions/start` | 1 | `proxmox.vm.shutdown` | `proxmox.vm.start` | `machine.proxmox_guest` |
+| `proxmox.vm.shutdown` | `POST /api/machines/{id}/proxmox/guests/{vmid}/actions/shutdown` | 1 | `proxmox.vm.start` | `proxmox.vm.shutdown` | `machine.proxmox_guest` |
+| `proxmox.vm.snapshot` | `POST /api/machines/{id}/proxmox/guests/{vmid}/actions/snapshot` | 1 | `proxmox.vm.snapshot_delete` | `proxmox.vm.snapshot` | `machine.proxmox_guest` |
+| `proxmox.vm.snapshot_delete` | `POST /api/machines/{id}/proxmox/guests/{vmid}/actions/snapshot-delete` (corps `{"snapshot":"oc-…"}`) | 2 | aucun : **à confirmation** | `proxmox.vm.snapshot_delete` | `machine.proxmox_guest` |
+| `machine.delete` | `DELETE /api/machines/{id}` | 2 | aucun : **à confirmation** | — | `machine.delete` |
+| `restic.backup.run` | `POST /api/machines/{id}/restic-backups/{backup}/actions/run` | 1 | lui-même (sans purge) | `restic.backup` | `restic_backup.run` |
+| `restic.backup.verify` | `POST /api/machines/{id}/restic-backups/{backup}/actions/verify` | 1 | lui-même | `restic.verify` | `restic_backup.verify` |
+| `restic.backup.browse` | `POST /api/machines/{id}/restic-backups/{backup}/actions/browse` | 1 | lui-même | `restic.browse` | `restic_backup.browse` |
+| `restic.backup.restore` | `POST /api/machines/{id}/restic-backups/{backup}/actions/restore` | 2 | aucun : **à confirmation** | `restic.restore` | `restic_backup.restore` |
+
+Un verbe qui envoie un ordre s'audite aussi sous `action.order`, écrit par
+`internal/gesture/action` ; `Audit` nomme la ligne propre du geste quand elle
+existe, `action.order` sinon. Le droit de chaque ordre est celui du registre
+des genres (« Les droits d'un agent »).
 
 **Les verbes restic d'un jeton : quatre, et aucun n'écrit un plan** (cadrage
 #366, ticket #374). Un jeton lance une sauvegarde (sans purge), vérifie un
@@ -5071,10 +5092,15 @@ Les quatre verbes Proxmox agissent **sur des machines** : l'ordre part à
 l'agent de l'hôte, qui appelle l'API locale de Proxmox avec son jeton étroit
 (décision 18). L'arrêt est toujours propre, jamais forcé ; le serveur refuse
 d'arrêter la machine qui l'héberge (`proxmox.self_target`) ; la suppression ne
-touche qu'un instantané `oc-…` créé par ce produit. Coût : un agent qui éteint
-une VM la coupe pour ses utilisateurs jusqu'au `start` qui la rallume, et
-`snapshot_delete` retire pour de bon un point de retour que `snapshot` ne
-recrée pas à l'identique. Le débit du jeton borne la vitesse, pas ces effets.
+touche qu'un instantané `oc-…` créé par ce produit. Un instantané effacé ne
+revient pas : `snapshot` en crée un autre, pas le même. `snapshot_delete` est
+donc de niveau 2 (R-A4-4) : un jeton qui le porte dépose une demande (`202`),
+aucun ordre ne part avant que l'opérateur la confirme. Coût : un agent qui
+éteint une VM la coupe pour ses utilisateurs jusqu'au `start` qui la rallume ;
+un agent qui veut faire le ménage de ses instantanés attend l'opérateur, et la
+carte « Gestes à confirmer » montre encore cette demande comme une
+suppression de machine jusqu'à T11-06 (A-3). Le débit du jeton borne la
+vitesse, pas ces effets.
 
 `alert.acknowledge` (« Marquer comme lue » à l'écran) n'est **pas** offert : rien ne remet une alerte en non lue, il
 reste réservé à l'opérateur. Contrepartie du choix : une reprise peut échouer
@@ -5247,14 +5273,15 @@ vide comprise : celles-là).
 
 ### Les verbes à confirmation
 
-Un geste qui ne se défait pas (supprimer une machine) est **aussi un verbe**,
-mais un jeton ne l'exécute jamais : il demande, l'opérateur décide dans
-l'interface (décision Q1 de la refonte). `ErrNoReverse` ne vaut plus que pour
-les verbes ordinaires ; la confirmation remplace l'inverse comme garde-fou.
+Un geste qui ne se défait pas (supprimer une machine, un instantané) est
+**aussi un verbe**, de niveau 2, mais un jeton ne l'exécute jamais : il
+demande, l'opérateur décide dans l'interface (décision Q1 de la refonte).
+`ErrNoReverse` ne vaut que pour le niveau 1 ; la confirmation remplace
+l'inverse comme garde-fou.
 
 | Règle | Comment |
 | --- | --- |
-| Le registre | `verb.Verb.Confirm` : pas d'inverse (`ErrConfirmReverse` sinon), une route `POST`, `PUT` ou `DELETE` sous `/api/`, et une machine pour cible (`ErrConfirmTarget` : le serveur ne sait nommer que la machine dans la demande) |
+| Le registre | `verb.Verb.Level` 2 (`AsksConfirmation`) : pas d'inverse (`ErrConfirmReverse` sinon), une route `POST`, `PUT` ou `DELETE` sous `/api/`, et une machine pour cible (`ErrConfirmTarget` : le serveur ne sait nommer que la machine dans la demande) |
 | Le premier verbe | `machine.delete`, `DELETE /api/machines/{id}`, corps `{keep_history}` (« Supprimer une machine ») : sans, la machine et son historique partent ; avec, elle est archivée |
 | La demande | Un jeton qui porte le verbe, admis comme pour tout verbe (portée, débit), ne fait rien : `internal/edge/server/api_verb_requests.go` (`askConfirmation`) écrit une ligne `verb_requests` et répond `202 {verb, request_id, state: "awaiting_confirmation", expires_at}`. L'opérateur qui appelle la même route par son bouton passe, lui, par le handler tel quel |
 | Le corps | Vide, ou un objet JSON dont les champs sont ceux que le verbe déclare ; sinon `400 bad_json`. Gardé tel quel, clés triées |

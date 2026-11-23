@@ -1,5 +1,11 @@
 package verb
 
+import (
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
+)
+
 // Default est la liste que le serveur et la création d'un jeton partagent.
 // Un chantier qui ouvre de nouveaux gestes (l'hyperviseur, par exemple)
 // ajoute un fichier de ce paquet qui appelle Default.MustRegister dans un
@@ -14,22 +20,27 @@ func newDefault() *Registry {
 	registry.MustRegister(Verb{
 		ID: "agent.ping", Route: "POST /api/machines/{id}/actions/ping", Params: []string{"id"}, Body: []string{}, Target: TargetMachine,
 		Label: "api_token.verb_agent_ping", Summary: "api_token.verb_agent_ping_text", Reverse: "agent.ping",
+		Level: 1, Token: true, Order: agentwire.KindAgentPing, Right: machine.CapabilityObserve, Audit: audit.ActionOrder,
 	})
 	registry.MustRegister(Verb{
 		ID: "probe.pause", Route: "POST /api/probes/{id}/actions/pause", Params: []string{"id"}, Body: []string{}, Target: TargetProbe,
 		Label: "api_token.verb_probe_pause", Summary: "api_token.verb_probe_pause_text", Reverse: "probe.resume",
+		Level: 1, Token: true, Audit: audit.ProbePause,
 	})
 	registry.MustRegister(Verb{
 		ID: "probe.resume", Route: "POST /api/probes/{id}/actions/resume", Params: []string{"id"}, Body: []string{}, Target: TargetProbe,
 		Label: "api_token.verb_probe_resume", Summary: "api_token.verb_probe_resume_text", Reverse: "probe.pause",
+		Level: 1, Token: true, Audit: audit.ProbeResume,
 	})
 	registry.MustRegister(Verb{
 		ID: "job.pause", Route: "POST /api/jobs/{id}/actions/pause", Params: []string{"id"}, Body: []string{}, Target: TargetJob,
 		Label: "api_token.verb_job_pause", Summary: "api_token.verb_job_pause_text", Reverse: "job.resume",
+		Level: 1, Token: true, Audit: audit.HeartbeatPause,
 	})
 	registry.MustRegister(Verb{
 		ID: "job.resume", Route: "POST /api/jobs/{id}/actions/resume", Params: []string{"id"}, Body: []string{}, Target: TargetJob,
 		Label: "api_token.verb_job_resume", Summary: "api_token.verb_job_resume_text", Reverse: "job.pause",
+		Level: 1, Token: true, Audit: audit.HeartbeatResume,
 	})
 	return registry
 }

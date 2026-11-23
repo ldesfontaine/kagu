@@ -6,19 +6,28 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
-// Verb est un geste que l'opérateur peut cocher sur un jeton. Route est le
+// Verb est un geste inscrit au registre, avec son niveau (A4). Route est le
 // motif enregistré de la route d'opérateur qu'il ouvre, « POST /api/... » ;
-// Label et Summary sont des clés de catalogue (fr et en). Reverse est le
-// verbe qui défait celui-ci : obligatoire, sauf pour un verbe à confirmation.
-// Confirm marque un geste qui ne se défait pas : un jeton qui l'appelle n'agit
-// jamais, il dépose une demande que l'opérateur confirme dans l'interface
-// (internal/gesture/verbrequest). Un tel verbe n'a pas d'inverse, et sa route peut
-// être un POST, un PUT ou un DELETE. Params sont les segments {…} du chemin, dans
-// l'ordre ; Target dit ce que le segment {id} désigne, pour juger la portée
-// d'un jeton ; Body les champs JSON que la route attend. Ils sont déclarés et
-// non déduits : le client d'un jeton les lit tels quels, sans parser de texte.
+// Label et Summary sont des clés de catalogue (fr et en). Params sont les
+// segments {…} du chemin, dans l'ordre ; Target dit ce que le segment {id}
+// désigne, pour juger la portée d'un jeton ; Body les champs JSON que la route
+// attend. Ils sont déclarés et non déduits : le client d'un jeton les lit tels
+// quels, sans parser de texte.
+//
+// Level dit ce qu'un jeton en fait (R-A4-2) : au niveau 1 il agit, et Reverse
+// nomme le verbe qui le défait ; au niveau 2 il dépose une demande que
+// l'opérateur confirme dans l'interface (internal/gesture/verbrequest), et le
+// geste n'a pas d'inverse ; aux niveaux 3 et 4, il est refusé : Token est
+// faux, et Reason dit pourquoi (une clé de catalogue). Order est le genre
+// d'ordre que le geste envoie, Right le droit d'agent qu'il exige (celui du
+// genre), vides si le geste n'envoie rien. Audit est l'action sous laquelle
+// le geste s'écrit. Ces trois-là se croisent avec agentwire et audit dans
+// TestRegistry_ThreeListsAgree (internal/edge/server).
 type Verb struct {
 	ID      string
 	Route   string
@@ -28,7 +37,18 @@ type Verb struct {
 	Label   string
 	Summary string
 	Reverse string
-	Confirm bool
+	Level   int
+	Token   bool
+	Reason  string
+	Order   agentwire.Kind
+	Right   string
+	Audit   audit.Action
+}
+
+// AsksConfirmation dit si un jeton qui appelle le geste dépose une demande
+// au lieu d'agir : c'est le niveau 2.
+func (v Verb) AsksConfirmation() bool {
+	return v.Level == 2
 }
 
 // Target dit ce que le segment {id} d'un verbe désigne : la machine dont
@@ -67,10 +87,13 @@ func PathParams(route string) []string {
 
 var (
 	ErrIDInvalid      = errors.New("verb: id invalid")
-	ErrRouteInvalid   = errors.New("verb: route must be a POST on /api/, or a POST, PUT or DELETE for a verb to confirm")
+	ErrRouteInvalid   = errors.New("verb: route must be a POST on /api/, or a POST, PUT or DELETE above level 1")
 	ErrCatalogMissing = errors.New("verb: label and summary keys are required")
-	ErrNoReverse      = errors.New("verb: a verb without a reverse cannot be registered unless it asks for a confirmation")
-	ErrConfirmReverse = errors.New("verb: a verb to confirm has no reverse")
+	ErrLevelInvalid   = errors.New("verb: level must be 1, 2, 3 or 4")
+	ErrTokenLevel     = errors.New("verb: a gesture of level 3 or 4 is never open to a token")
+	ErrReasonMissing  = errors.New("verb: a gesture of level 3 or 4 says why it is closed to tokens")
+	ErrNoReverse      = errors.New("verb: a verb of level 1 names its reverse")
+	ErrConfirmReverse = errors.New("verb: a gesture above level 1 has no reverse")
 	ErrParamsMismatch = errors.New("verb: params do not match the route path")
 	ErrTargetInvalid  = errors.New("verb: target must be machine, probe, job or restic_link, and the route must carry {id}")
 	ErrDuplicate      = errors.New("verb: already registered")
@@ -84,12 +107,15 @@ type Registry struct {
 	verbs []Verb
 }
 
-// Register ajoute un verbe. Il ne vérifie pas que l'inverse existe déjà :
+// Register ajoute un geste. Il ne vérifie pas que l'inverse existe déjà :
 // deux verbes se répondent, l'un des deux vient forcément en premier. C'est
 // Check qui le tranche, une fois tout enregistré.
 func (r *Registry) Register(v Verb) error {
 	if !idPattern.MatchString(v.ID) {
 		return fmt.Errorf("%w: %q", ErrIDInvalid, v.ID)
+	}
+	if err := checkLevel(v); err != nil {
+		return fmt.Errorf("%w: %s", err, v.ID)
 	}
 	if !routeAllowed(v) {
 		return fmt.Errorf("%w: %q", ErrRouteInvalid, v.Route)
@@ -97,15 +123,9 @@ func (r *Registry) Register(v Verb) error {
 	if v.Label == "" || v.Summary == "" {
 		return fmt.Errorf("%w: %s", ErrCatalogMissing, v.ID)
 	}
-	if v.Confirm && v.Reverse != "" {
-		return fmt.Errorf("%w: %s", ErrConfirmReverse, v.ID)
-	}
-	if !v.Confirm && v.Reverse == "" {
-		return fmt.Errorf("%w: %s", ErrNoReverse, v.ID)
-	}
 	// Le serveur ne sait nommer, dans la demande, que la machine visée ; un
 	// autre objet s'ajoute avec le premier verbe qui le vise.
-	if v.Confirm && v.Target != TargetMachine {
+	if v.AsksConfirmation() && v.Target != TargetMachine {
 		return fmt.Errorf("%w: %s", ErrConfirmTarget, v.ID)
 	}
 	if !slices.Equal(v.Params, PathParams(v.Route)) {
@@ -124,6 +144,26 @@ func (r *Registry) Register(v Verb) error {
 	return nil
 }
 
+// checkLevel juge le niveau et ce qu'il exige (R-A4-2, R-A4-4) : le niveau 1
+// nomme son inverse, les autres n'en ont pas ; les niveaux 3 et 4 sont fermés
+// aux jetons et disent pourquoi. Le niveau 0 est une lecture, pas un geste du
+// registre : comme un niveau absent, il est refusé.
+func checkLevel(v Verb) error {
+	switch {
+	case v.Level < 1 || v.Level > 4:
+		return ErrLevelInvalid
+	case v.Level >= 3 && v.Token:
+		return ErrTokenLevel
+	case v.Level >= 3 && v.Reason == "":
+		return ErrReasonMissing
+	case v.Level == 1 && v.Reverse == "":
+		return ErrNoReverse
+	case v.Level > 1 && v.Reverse != "":
+		return ErrConfirmReverse
+	}
+	return nil
+}
+
 // MustRegister est Register pour le câblage au démarrage : une erreur est
 // un défaut du code, pas une entrée à refuser.
 func (r *Registry) MustRegister(v Verb) {
@@ -132,11 +172,11 @@ func (r *Registry) MustRegister(v Verb) {
 	}
 }
 
-// routeAllowed dit si la route est de la forme que le verbe permet : un POST
-// sur /api/, ou, pour un verbe à confirmation, aussi un PUT ou un DELETE.
+// routeAllowed dit si la route est de la forme que le geste permet : un POST
+// sur /api/, ou, au-dessus du niveau 1, aussi un PUT ou un DELETE.
 func routeAllowed(v Verb) bool {
 	methods := []string{"POST"}
-	if v.Confirm {
+	if v.Level > 1 {
 		methods = append(methods, "PUT", "DELETE")
 	}
 	return slices.ContainsFunc(methods, func(method string) bool {
@@ -144,11 +184,11 @@ func routeAllowed(v Verb) bool {
 	})
 }
 
-// Check vérifie que chaque inverse est un verbe enregistré. Un verbe à
-// confirmation n'en a pas.
+// Check vérifie que l'inverse de chaque verbe de niveau 1 est un verbe
+// enregistré (R-A4-4) ; il peut être de niveau 2. Au-dessus, il n'y en a pas.
 func (r *Registry) Check() error {
 	for _, v := range r.verbs {
-		if v.Confirm {
+		if v.Level != 1 {
 			continue
 		}
 		if _, found := r.Lookup(v.Reverse); !found {
@@ -173,6 +213,18 @@ func (r *Registry) ByRoute(route string) (Verb, bool) {
 		return Verb{}, false
 	}
 	return r.verbs[index], true
+}
+
+// OpenToTokens rend les verbes qu'un jeton peut porter, dans l'ordre
+// d'enregistrement : ceux des niveaux 1 et 2 ouverts aux jetons.
+func (r *Registry) OpenToTokens() []Verb {
+	var open []Verb
+	for _, v := range r.verbs {
+		if v.Token {
+			open = append(open, v)
+		}
+	}
+	return open
 }
 
 // All rend une copie, dans l'ordre d'enregistrement.

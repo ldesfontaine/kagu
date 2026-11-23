@@ -25,14 +25,15 @@ export interface APIToken {
 }
 
 // Un verbe offert à la création : label et summary sont des clés de
-// catalogue, reverse l'identifiant du verbe qui le défait. Un verbe à
-// confirmation n'a pas d'inverse : le jeton dépose une demande, l'opérateur
-// la confirme.
+// catalogue, reverse l'identifiant du verbe qui le défait, level son niveau
+// (1 ou 2). Un verbe de niveau 2 (confirm, déduit par le serveur) n'a pas
+// d'inverse : le jeton dépose une demande, l'opérateur la confirme.
 export interface VerbOffer {
   id: string;
   label: string;
   summary: string;
   reverse: string;
+  level: number;
   confirm: boolean;
 }
 

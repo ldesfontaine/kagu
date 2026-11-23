@@ -297,10 +297,10 @@ func isAPITokenRoute(method, pattern string) bool {
 }
 
 // tokenAccess dit ce qu'un jeton d'API peut faire d'une route : la lire
-// (liste fermée apiTokenRoutes), ou la déclencher par un verbe du registre.
-// Une route qui n'est ni l'un ni l'autre lui est fermée, quelle que soit sa
-// portée : c'est la liste blanche, une route ajoutée plus tard l'est par
-// défaut.
+// (liste fermée apiTokenRoutes), ou la déclencher par un verbe du registre
+// ouvert aux jetons. Une route qui n'est ni l'un ni l'autre lui est fermée,
+// quelle que soit sa portée : c'est la liste blanche, une route ajoutée plus
+// tard l'est par défaut, et un geste de niveau 3 ou 4 l'est toujours (R-A4-2).
 type tokenAccess struct {
 	read bool
 	verb string
@@ -308,16 +308,16 @@ type tokenAccess struct {
 
 func tokenAccessOf(method, pattern string) tokenAccess {
 	access := tokenAccess{read: isAPITokenRoute(method, pattern)}
-	if found, ok := verb.Default.ByRoute(method + " " + pattern); ok {
+	if found, ok := verb.Default.ByRoute(method + " " + pattern); ok && found.Token {
 		access.verb = found.ID
 	}
 	return access
 }
 
-// verbHandler fait répondre un verbe à un jeton : l'exécution et sa réponse
-// reformulée, ou, pour un verbe à confirmation, la demande déposée.
+// verbHandler fait répondre un verbe à un jeton : au niveau 1, l'exécution et
+// sa réponse reformulée ; au niveau 2, la demande déposée.
 func (s *Server) verbHandler(verbID string, next http.HandlerFunc) http.HandlerFunc {
-	if offered, _ := verb.Default.Lookup(verbID); offered.Confirm {
+	if offered, _ := verb.Default.Lookup(verbID); offered.AsksConfirmation() {
 		return s.askConfirmation(offered, next)
 	}
 	return s.shapeVerbReply(verbID, next)

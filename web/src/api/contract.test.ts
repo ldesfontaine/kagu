@@ -830,7 +830,7 @@ const apiTokens = shape<APITokensState>("APITokensState", {
   machines: shape("ReachMachine", { id: value, name: value }),
   limit: value,
   lifetimes: shape("APITokensState.lifetimes", { days: value, default_days: value }),
-  verbs: shape("VerbOffer", { id: value, label: value, summary: value, reverse: value, confirm: value }),
+  verbs: shape("VerbOffer", { id: value, label: value, summary: value, reverse: value, level: value, confirm: value }),
   env: shape("APITokensState.env", { mcp_host: value, opencloud_url: value }),
 });
 

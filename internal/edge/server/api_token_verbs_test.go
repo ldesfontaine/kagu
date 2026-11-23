@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -266,11 +267,12 @@ func TestVerbs_EveryOtherWriteRouteIsRefusedToAFullWriteToken(t *testing.T) {
 }
 
 // Seuls les POST d'action sont des verbes que le jeton exécute. Une
-// suppression n'est un verbe qu'à confirmation : le jeton ne la fait jamais.
+// suppression n'est un verbe qu'au-dessus du niveau 1 : le jeton ne la fait
+// jamais.
 func TestVerbs_RegistryHoldsOnlyActionPostsOrVerbsToConfirm(t *testing.T) {
 	for _, v := range verb.Default.All() {
 		method, pattern, _ := strings.Cut(v.Route, " ")
-		if v.Confirm {
+		if v.Level > 1 {
 			if method == http.MethodGet {
 				t.Errorf("%s: a read cannot ask for a confirmation", v.ID)
 			}
@@ -282,7 +284,8 @@ func TestVerbs_RegistryHoldsOnlyActionPostsOrVerbsToConfirm(t *testing.T) {
 	}
 }
 
-// Les clés de catalogue d'un verbe existent dans les deux langues.
+// Les clés de catalogue d'un verbe existent dans les deux langues, la raison
+// d'un geste fermé aux jetons comprise.
 func TestVerbs_CatalogKeysExistInEveryLanguage(t *testing.T) {
 	server := newTestServer(t)
 	for _, code := range []string{"fr", "en"} {
@@ -291,7 +294,11 @@ func TestVerbs_CatalogKeysExistInEveryLanguage(t *testing.T) {
 			t.Fatalf("catalog %s: %d", code, got.Code)
 		}
 		for _, v := range verb.Default.All() {
-			for _, key := range []string{v.Label, v.Summary} {
+			keys := []string{v.Label, v.Summary}
+			if v.Reason != "" {
+				keys = append(keys, v.Reason)
+			}
+			for _, key := range keys {
 				if !strings.Contains(got.Body.String(), `"`+key+`"`) {
 					t.Errorf("%s: %s missing in %s", v.ID, key, code)
 				}
@@ -489,5 +496,71 @@ func TestVerbs_OperatorKeepsItsOwnReply(t *testing.T) {
 	created := server.createProbeVia(t, probeRequest{Name: "site", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID})
 	if got := callAPI(server.Server, http.MethodPost, "/api/probes/"+created.ID+"/actions/pause", map[string]any{}); got.Code != http.StatusNoContent {
 		t.Fatalf("operator pause: %d %s", got.Code, got.Body.String())
+	}
+}
+
+// registryWith rend un registre fait de base, plus un geste.
+func registryWith(t *testing.T, base *verb.Registry, extra verb.Verb) *verb.Registry {
+	t.Helper()
+	registry := &verb.Registry{}
+	for _, offered := range base.All() {
+		registry.MustRegister(offered)
+	}
+	if err := registry.Register(extra); err != nil {
+		t.Fatal(err)
+	}
+	return registry
+}
+
+// useRegistry remplace le registre par défaut le temps du test.
+func useRegistry(t *testing.T, registry *verb.Registry) {
+	t.Helper()
+	previous := verb.Default
+	verb.Default = registry
+	t.Cleanup(func() { verb.Default = previous })
+}
+
+// R-A4-2 : un geste de niveau 3 ou 4 est refusé à tout jeton, sans exception.
+// Le geste ici est relevé au niveau 3 après l'émission d'un jeton qui le
+// portait encore au niveau 2 : le jeton reçoit 403, la route ne s'exécute pas,
+// et le geste ne s'offre plus à la création.
+func TestR_A4_2_ATokenGetsForbiddenOnALevelThreeOrFour(t *testing.T) {
+	base := verb.Default
+	for _, level := range []int{3, 4} {
+		gesture := verb.Verb{
+			ID: "machine.update_last", Route: "PUT /api/machines/{id}/update-last", Params: []string{"id"}, Body: []string{"update_last"},
+			Target: verb.TargetMachine, Label: "api_token.verb_machine_delete", Summary: "api_token.verb_machine_delete_text",
+			Level: 2, Token: true, Audit: audit.MachineUpdateLast,
+		}
+		lowered := registryWith(t, base, gesture)
+		gesture.Level, gesture.Token, gesture.Reason = level, false, "api_token.verb_machine_delete_text"
+		raised := registryWith(t, base, gesture)
+
+		useRegistry(t, raised)
+		server := newTestServer(t)
+		server.enroll(t, "vps-paris-1", remoteID)
+		useRegistry(t, lowered)
+		bearer, _ := server.issueWriteToken(t, "plein", gesture.ID)
+		useRegistry(t, raised)
+		before := server.latestAuditID(t)
+
+		got := callBearerBody(server.Server, http.MethodPut, "/api/machines/"+remoteID+"/update-last", bearer, `{"update_last":true}`)
+
+		if got.Code != http.StatusForbidden || errorCode(t, got) != codeAPITokenRouteForbidden {
+			t.Errorf("level %d: %d %s, want 403 %s", level, got.Code, got.Body.String(), codeAPITokenRouteForbidden)
+		}
+		if events := server.auditSince(t, before); len(events) != 0 {
+			t.Errorf("level %d: the route ran: %+v", level, events)
+		}
+		if _, _, err := server.apiTokens.Create(context.Background(), apitoken.Request{Name: "neuf", Scope: apitoken.ScopeWrite, Verbs: []string{gesture.ID}}); !errors.Is(err, apitoken.ErrVerbUnknown) {
+			t.Errorf("level %d: a token was issued with it: %v", level, err)
+		}
+		var offers apiTokensResponse
+		decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/settings/api-tokens", nil), &offers)
+		for _, offered := range offers.Verbs {
+			if offered.ID == gesture.ID {
+				t.Errorf("level %d: offered at creation", level)
+			}
+		}
 	}
 }

@@ -183,8 +183,8 @@ func (s *Server) confirmVerbRequest(w http.ResponseWriter, r *http.Request) {
 	var replay *http.Request
 	var handler http.HandlerFunc
 	_, err := s.verbRequests.Confirm(r.Context(), r.PathValue("id"), func(id string) bool {
-		_, found := verb.Default.Lookup(id)
-		return found
+		offered, found := verb.Default.Lookup(id)
+		return found && offered.Token
 	}, func(request verbrequest.Request) (holding bool, err error) {
 		replay, handler, holding, err = s.prepareReplay(r, request)
 		return holding, err
