@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/module"
 )
 
@@ -155,7 +156,7 @@ func TestEnroll_TheTokenRoleBecomesTheMachineRole(t *testing.T) {
 	if err := db.InsertToken(ctx, token); err != nil {
 		t.Fatal(err)
 	}
-	enrolled, err := db.Enroll(ctx, machine.HashToken(cleartext), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(cleartext), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +167,7 @@ func TestEnroll_TheTokenRoleBecomesTheMachineRole(t *testing.T) {
 		t.Fatal(err)
 	}
 	again := issueToken(t, db, "pve-1", enrolled.ID, now)
-	reenrolled, err := db.Enroll(ctx, machine.HashToken(again), candidate(t), newAgent(t, now), now)
+	reenrolled, err := db.Enroll(ctx, ident.HashToken(again), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}

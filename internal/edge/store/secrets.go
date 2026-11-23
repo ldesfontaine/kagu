@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/seal"
 )
 
@@ -239,7 +239,7 @@ func (db *DB) writeHeartbeatToken(ctx context.Context, to execer, id, token stri
 		return nil, fmt.Errorf("seal heartbeat token: %w", err)
 	}
 	return to.ExecContext(ctx, `UPDATE heartbeats SET token_sealed = ?, token_lookup = ? WHERE id = ?`,
-		sealed, heartbeat.HashToken(token), id)
+		sealed, ident.HashToken(token), id)
 }
 
 // Forgotten dit ce que ForgetSecrets a vidé.

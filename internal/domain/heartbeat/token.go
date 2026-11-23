@@ -2,9 +2,7 @@ package heartbeat
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base32"
-	"encoding/hex"
 	"strings"
 )
 
@@ -17,7 +15,7 @@ const (
 
 // NewToken tire le secret de l'URL de ping. La base le garde chiffré
 // (token_sealed), car la page du moniteur doit pouvoir le réafficher ;
-// HashToken sert à le chercher (token_lookup).
+// ident.HashToken sert à le chercher (token_lookup).
 func NewToken() (string, error) {
 	raw := make([]byte, tokenBytes)
 	if _, err := rand.Read(raw); err != nil {
@@ -25,12 +23,4 @@ func NewToken() (string, error) {
 	}
 	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw)
 	return tokenScheme + strings.ToLower(encoded), nil
-}
-
-// HashToken est la forme du jeton qu'on cherche en base : le chiffré change à
-// chaque écriture, l'empreinte non. Un SHA-256 simple suffit, le jeton tire
-// 128 bits et l'empreinte ne dépend d'aucune clé.
-func HashToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // Les bornes du débit sur /ping : par IP source résolue, pour freiner
@@ -43,7 +44,7 @@ func (h *Handler) allowPing(source, token string) bool {
 	if len(token) > maxPingTokenLength {
 		return true
 	}
-	return h.tokenLimit.Allow(heartbeat.HashToken(token))
+	return h.tokenLimit.Allow(ident.HashToken(token))
 }
 
 // GET ou POST /ping/{token} : la tâche a fini.

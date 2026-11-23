@@ -14,6 +14,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/sampler"
 	"github.com/ldesfontaine/kagu/internal/kit/seal"
 )
@@ -118,7 +119,7 @@ func TestEnroll_UnderLocalID_AdoptsTheRowLeftWithoutAgent(t *testing.T) {
 	local := candidate(t)
 	local.ID = machine.LocalID
 	token := issueToken(t, db, "oc-host", "", now)
-	adopted, err := db.Enroll(ctx, machine.HashToken(token), local, newAgent(t, now), now)
+	adopted, err := db.Enroll(ctx, ident.HashToken(token), local, newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +127,7 @@ func TestEnroll_UnderLocalID_AdoptsTheRowLeftWithoutAgent(t *testing.T) {
 		t.Fatalf("adopted %+v", adopted)
 	}
 	twin := issueToken(t, db, "twin", "", now)
-	if _, err := db.Enroll(ctx, machine.HashToken(twin), local, newAgent(t, now), now); !errors.Is(err, machine.ErrLocalAgentActive) {
+	if _, err := db.Enroll(ctx, ident.HashToken(twin), local, newAgent(t, now), now); !errors.Is(err, machine.ErrLocalAgentActive) {
 		t.Fatalf("a second agent under LocalID: %v", err)
 	}
 	if pending, _ := db.ListPendingTokens(ctx, now); len(pending) != 1 || pending[0].Name != "twin" {
@@ -134,7 +135,7 @@ func TestEnroll_UnderLocalID_AdoptsTheRowLeftWithoutAgent(t *testing.T) {
 	}
 	// Sans ligne, l'agent du serveur la crée, au nom du jeton.
 	fresh := openTestDB(t)
-	created, err := fresh.Enroll(ctx, machine.HashToken(issueToken(t, fresh, "oc-host", "", now)), local, newAgent(t, now), now)
+	created, err := fresh.Enroll(ctx, ident.HashToken(issueToken(t, fresh, "oc-host", "", now)), local, newAgent(t, now), now)
 	if err != nil || created.ID != machine.LocalID || created.Name != "oc-host" {
 		t.Fatalf("created %+v %v", created, err)
 	}
@@ -161,7 +162,7 @@ func TestEnroll_ConsumesTheTokenAndCreatesTheMachine(t *testing.T) {
 	wanted := candidate(t)
 
 	agent := newAgent(t, now)
-	enrolled, err := db.Enroll(ctx, machine.HashToken(token), wanted, agent, now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(token), wanted, agent, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +179,7 @@ func TestEnroll_ConsumesTheTokenAndCreatesTheMachine(t *testing.T) {
 	if len(pending) != 0 {
 		t.Fatalf("token still pending: %+v", pending)
 	}
-	if _, err := db.Enroll(ctx, machine.HashToken(token), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrTokenConsumed) {
+	if _, err := db.Enroll(ctx, ident.HashToken(token), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrTokenConsumed) {
 		t.Fatalf("second use: %v", err)
 	}
 }
@@ -188,19 +189,19 @@ func TestEnroll_ClassifiesEveryFailure(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
 
-	if _, err := db.Enroll(ctx, machine.HashToken("oc_nope"), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrTokenNotFound) {
+	if _, err := db.Enroll(ctx, ident.HashToken("oc_nope"), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrTokenNotFound) {
 		t.Errorf("unknown: %v", err)
 	}
 	expired := issueToken(t, db, "old", "", now.Add(-2*time.Hour))
-	if _, err := db.Enroll(ctx, machine.HashToken(expired), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrTokenExpired) {
+	if _, err := db.Enroll(ctx, ident.HashToken(expired), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrTokenExpired) {
 		t.Errorf("expired: %v", err)
 	}
 	first := issueToken(t, db, "same-name", "", now)
-	if _, err := db.Enroll(ctx, machine.HashToken(first), candidate(t), newAgent(t, now), now); err != nil {
+	if _, err := db.Enroll(ctx, ident.HashToken(first), candidate(t), newAgent(t, now), now); err != nil {
 		t.Fatal(err)
 	}
 	second := issueToken(t, db, "same-name", "", now)
-	if _, err := db.Enroll(ctx, machine.HashToken(second), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrNameTaken) {
+	if _, err := db.Enroll(ctx, ident.HashToken(second), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrNameTaken) {
 		t.Errorf("name taken: %v", err)
 	}
 	// Le jeton refusé pour un nom pris n'est pas consommé : l'opérateur peut
@@ -228,7 +229,7 @@ func TestEnroll_SameTokenConcurrently_OnlyOneWins(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := db.Enroll(ctx, machine.HashToken(token), candidate(t), newAgent(t, now), now); err == nil {
+			if _, err := db.Enroll(ctx, ident.HashToken(token), candidate(t), newAgent(t, now), now); err == nil {
 				mu.Lock()
 				wins++
 				mu.Unlock()
@@ -246,7 +247,7 @@ func TestEnroll_WithMachineID_ReplacesTheKeyAndKeepsTheID(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
 	first := issueToken(t, db, "vps-lyon-2", "", now)
-	original, err := db.Enroll(ctx, machine.HashToken(first), candidate(t), newAgent(t, now), now)
+	original, err := db.Enroll(ctx, ident.HashToken(first), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +259,7 @@ func TestEnroll_WithMachineID_ReplacesTheKeyAndKeepsTheID(t *testing.T) {
 	replacement := candidate(t)
 	later := now.Add(30 * time.Minute)
 	agent := newAgent(t, later)
-	reenrolled, err := db.Enroll(ctx, machine.HashToken(again), replacement, agent, later)
+	reenrolled, err := db.Enroll(ctx, ident.HashToken(again), replacement, agent, later)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +286,7 @@ func TestDeleteMachine_CascadesItsAgentsAndTokens(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
 	token := issueToken(t, db, "gone", "", now)
-	enrolled, err := db.Enroll(ctx, machine.HashToken(token), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(token), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +325,7 @@ func TestDeleteToken_OnlyWhilePending(t *testing.T) {
 	if err := db.DeleteToken(ctx, pending[0].ID); !errors.Is(err, machine.ErrTokenNotFound) {
 		t.Fatalf("second delete: %v", err)
 	}
-	if _, err := db.Enroll(ctx, machine.HashToken(cleartext), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrTokenNotFound) {
+	if _, err := db.Enroll(ctx, ident.HashToken(cleartext), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrTokenNotFound) {
 		t.Fatalf("cancelled token still enrolls: %v", err)
 	}
 }
@@ -334,7 +335,7 @@ func TestRecordConnection_UpdatesAddressVersionAndLastSeen(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
 	token := issueToken(t, db, "seen", "", now)
-	enrolled, err := db.Enroll(ctx, machine.HashToken(token), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(token), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +377,7 @@ func TestDeleteMachine_IsHeldBackByItsHeartbeatsUntilDetached(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 	cleartext := issueToken(t, db, "vps", "", now)
-	enrolled, err := db.Enroll(ctx, machine.HashToken(cleartext), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(cleartext), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,7 +421,7 @@ func TestPurgeSamples_AndDeleteMachine_TakeTheDisksAlong(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
 	cleartext := issueToken(t, db, "vps", "", now)
-	enrolled, err := db.Enroll(ctx, machine.HashToken(cleartext), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(cleartext), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +464,7 @@ func TestRecordConnection_ReplacesTheReportedRights(t *testing.T) {
 	if err := db.InsertToken(ctx, token); err != nil {
 		t.Fatal(err)
 	}
-	enrolled, err := db.Enroll(ctx, machine.HashToken(cleartext), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(cleartext), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -507,7 +508,7 @@ func TestRecordConnection_KeepsTheAccountAndReplacesTheReasons(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
 	token := issueToken(t, db, "account", "", now)
-	enrolled, err := db.Enroll(ctx, machine.HashToken(token), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(token), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -577,7 +578,7 @@ func TestRevokeAgent_CancelsThePendingReenrollTokens(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
 	token := issueToken(t, db, "revoked", "", now)
-	enrolled, err := db.Enroll(ctx, machine.HashToken(token), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(token), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}

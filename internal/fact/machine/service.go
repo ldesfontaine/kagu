@@ -17,6 +17,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 const (
@@ -398,7 +399,7 @@ func (s *Service) Enroll(ctx context.Context, request Enrollment) (Machine, erro
 		CreatedAt: now,
 	}
 	agent := Agent{ID: agentID, PublicKey: request.PublicKey, Version: request.AgentVersion, EnrolledAt: now}
-	machine, err := s.store.Enroll(ctx, HashToken(request.Token), candidate, agent, now)
+	machine, err := s.store.Enroll(ctx, ident.HashToken(request.Token), candidate, agent, now)
 	if err != nil {
 		return Machine{}, err
 	}

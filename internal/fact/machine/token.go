@@ -2,13 +2,12 @@ package machine
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base32"
-	"encoding/hex"
 	"strings"
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 const (
@@ -32,7 +31,7 @@ func NewToken(name, machineID string) (string, Token, error) {
 	}
 	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw)
 	cleartext := tokenScheme + strings.ToLower(encoded)
-	hash := HashToken(cleartext)
+	hash := ident.HashToken(cleartext)
 	token := Token{
 		ID:        hash[:tokenIDLength],
 		Hash:      hash,
@@ -42,12 +41,6 @@ func NewToken(name, machineID string) (string, Token, error) {
 		Role:      RoleGeneric,
 	}
 	return cleartext, token, nil
-}
-
-// HashToken est la seule forme du jeton que la base voit.
-func HashToken(cleartext string) string {
-	sum := sha256.Sum256([]byte(cleartext))
-	return hex.EncodeToString(sum[:])
 }
 
 // Masked est tout ce qu'une page peut montrer d'un jeton déjà émis.

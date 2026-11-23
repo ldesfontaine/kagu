@@ -16,6 +16,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // Un faux magasin en mémoire : le vrai est testé chez lui, et le service
@@ -330,7 +331,7 @@ func TestCreateToken_RefusesABadName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cleartext) < 40 || token.Prefix != cleartext[:9] || token.Hash != HashToken(cleartext) {
+	if len(cleartext) < 40 || token.Prefix != cleartext[:9] || token.Hash != ident.HashToken(cleartext) {
 		t.Fatalf("token %q %+v", cleartext, token)
 	}
 }

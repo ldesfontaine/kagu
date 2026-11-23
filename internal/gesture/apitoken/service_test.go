@@ -218,7 +218,7 @@ func TestVerify_NotesTheLastUseAtMostOncePerMinute(t *testing.T) {
 	cleartext, token, _ := service.Create(ctx, apitoken.Request{Name: "lecteur"})
 	lastUsed := func() time.Time {
 		t.Helper()
-		stored, err := db.GetAPIToken(ctx, ident.HashSecret(cleartext))
+		stored, err := db.GetAPIToken(ctx, ident.HashToken(cleartext))
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/domain/directory"
-	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
 	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/view/manifest"
 )
 
@@ -179,7 +179,7 @@ func TestExport_NeverWritesASecret(t *testing.T) {
 	text := string(b.export(t))
 	secrets := []string{
 		pingSecret, "hb_bbbbbbbbbbbbbbbbbbbbbbbbbb", // gitleaks:allow -- faux secret de test
-		heartbeat.HashToken(pingSecret), heartbeat.HashToken("hb_bbbbbbbbbbbbbbbbbbbbbbbbbb"), // gitleaks:allow -- faux secret de test
+		ident.HashToken(pingSecret), ident.HashToken("hb_bbbbbbbbbbbbbbbbbbbbbbbbbb"), // gitleaks:allow -- faux secret de test
 		"hb_", "/ping/",
 	}
 	for _, secret := range secrets {

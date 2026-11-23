@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/seal"
 )
 
@@ -23,7 +24,7 @@ func TestHeartbeatToken_IsSealedAndFoundByItsLookup(t *testing.T) {
 	if sealed := text(t, db, `SELECT token_sealed FROM heartbeats`); !seal.IsSealed(sealed) {
 		t.Fatalf("jeton en clair : %q", sealed)
 	}
-	if lookup := text(t, db, `SELECT token_lookup FROM heartbeats`); lookup != heartbeat.HashToken("hb_first") {
+	if lookup := text(t, db, `SELECT token_lookup FROM heartbeats`); lookup != ident.HashToken("hb_first") {
 		t.Fatalf("token_lookup = %q", lookup)
 	}
 	if found, err := db.GetHeartbeatByToken(ctx, "hb_first"); err != nil || found.ID != "job1" || found.Token != "hb_first" {

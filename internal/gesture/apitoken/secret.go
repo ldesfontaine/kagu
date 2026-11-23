@@ -37,7 +37,7 @@ func newSecret() (generated, error) {
 	}
 	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw)
 	cleartext := scheme + strings.ToLower(encoded)
-	hash := ident.HashSecret(cleartext)
+	hash := ident.HashToken(cleartext)
 	return generated{
 		cleartext: cleartext,
 		hash:      hash,
