@@ -25,7 +25,7 @@ import (
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/sirupsen/logrus"
 
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
@@ -223,7 +223,7 @@ func isEnvText(text string) bool {
 // Compose. Les refus d'avant les écritures ne laissent rien derrière eux ; un
 // échec entre la création du dossier et Compose le retire.
 func (t dockerTools) deployService(ctx context.Context, job dockerJob) ([]agentwire.OutputLine, error) {
-	if !machine.ValidCapabilityPath(job.root) {
+	if !agentpolicy.ValidCapabilityPath(job.root) {
 		return nil, failWith(agentwire.ReasonPathUnwritable, fmt.Errorf("services root %q is not a clean absolute path", job.root))
 	}
 	// Avant tout : le compte de l'agent a-t-il la socket et la racine ? Sinon

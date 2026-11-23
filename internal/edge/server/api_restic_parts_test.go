@@ -11,8 +11,8 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/directory"
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -90,7 +90,7 @@ func TestRestic_AServiceTakesItsVolumesAndItsDatabases(t *testing.T) {
 	if parts := bench.serviceSource(t, overview, bench.serviceID).Parts; !slices.Equal(parts, want) {
 		t.Fatalf("parts %+v, want %+v", parts, want)
 	}
-	if !machineHasRight(overview, resticSourceID, machine.CapabilityResticDocker) {
+	if !machineHasRight(overview, resticSourceID, agentpolicy.CapabilityResticDocker) {
 		t.Fatalf("restic.docker is not in the rights of the source: %+v", overview.Machines)
 	}
 	got := callAPI(bench.Server, http.MethodPost, "/api/machines/"+resticSourceID+"/restic-backups", map[string]any{

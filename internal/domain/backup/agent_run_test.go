@@ -19,6 +19,7 @@ import (
 	"filippo.io/age"
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -492,7 +493,7 @@ func TestRunNow_OnlyAKnownReasonReachesTheLastError(t *testing.T) {
 		want   string
 	}{
 		{"a failure of the producer", agentwire.ActionFailed, agentwire.ReasonProducerFailed, "backup.target_failed:100:producer_failed"},
-		{"a refusal for a right", agentwire.ActionRefused, agentwire.RightMissing(machine.CapabilityBackupProduce), "backup.target_failed:100:right_missing:backup.produce"},
+		{"a refusal for a right", agentwire.ActionRefused, agentwire.RightMissing(agentpolicy.CapabilityBackupProduce), "backup.target_failed:100:right_missing:backup.produce"},
 		{"a right that is not one", agentwire.ActionRefused, "right_missing:rm -rf", "backup.target_failed:100:unknown"},
 		{"a sentence of the agent", agentwire.ActionFailed, "vzdump exploded with swordfish", "backup.target_failed:100:unknown"},
 		{"a reason carrying a separator", agentwire.ActionFailed, "disk_full:101:x", "backup.target_failed:100:unknown"},

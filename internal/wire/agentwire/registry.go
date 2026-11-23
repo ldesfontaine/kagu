@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // Spec est un genre d'ordre, déclaré une fois (R-A1-1) : le type de ses
@@ -17,8 +17,7 @@ import (
 // registre ; aucune autre table ne dit ces faits d'un genre.
 type Spec struct {
 	Kind Kind
-	// Un nom de droit de machine.CapabilityNames, toujours par sa constante
-	// (agentpolicy le reprendra à l'étape 3).
+	// Un nom de droit d'agentpolicy, toujours par sa constante (R-A1-14).
 	Right string
 	// Les ancres qui bornent ce genre, et la valeur de l'ordre que chacune juge.
 	Anchors []AnchorCheck
@@ -128,39 +127,39 @@ func newSpec(kind Kind, right string, decode func([]byte) (any, error), options 
 // sont pas : elles ne sont pas signées. agent.server_key y reste, droit
 // observe, tant que la rotation de clé l'envoie (A3).
 var registry = []Spec{
-	DefineWithoutParams(KindAgentPing, machine.CapabilityObserve),
-	Define[AgentUpdateParams](KindAgentUpdate, machine.CapabilityAgentUpdate, Journal("version", "parcel")),
-	DefineWithoutParams(KindAgentRollback, machine.CapabilityAgentUpdate),
-	Define[ServerKeyParams](KindServerKey, machine.CapabilityObserve, Journal("public_key")),
-	Define[BackupReceiveParams](KindBackupReceive, machine.CapabilityBackupReceive, Journal("parcel", "path")),
-	Define[BackupPruneParams](KindBackupPrune, machine.CapabilityBackupReceive, Journal("path", "prefix", "keep")),
-	Define[BackupProduceParams](KindBackupProduce, machine.CapabilityBackupProduce,
+	DefineWithoutParams(KindAgentPing, agentpolicy.CapabilityObserve),
+	Define[AgentUpdateParams](KindAgentUpdate, agentpolicy.CapabilityAgentUpdate, Journal("version", "parcel")),
+	DefineWithoutParams(KindAgentRollback, agentpolicy.CapabilityAgentUpdate),
+	Define[ServerKeyParams](KindServerKey, agentpolicy.CapabilityObserve, Journal("public_key")),
+	Define[BackupReceiveParams](KindBackupReceive, agentpolicy.CapabilityBackupReceive, Journal("parcel", "path")),
+	Define[BackupPruneParams](KindBackupPrune, agentpolicy.CapabilityBackupReceive, Journal("path", "prefix", "keep")),
+	Define[BackupProduceParams](KindBackupProduce, agentpolicy.CapabilityBackupProduce,
 		Journal("producer", "target", "prefix", "recipient", "parcel"),
 		Anchored(anchor.BackupRecipient, func(params BackupProduceParams) string { return params.Recipient }),
 		Anchored(anchor.BackupGuest, func(params BackupProduceParams) string { return params.Target })),
-	Define[DockerParams](KindDockerDeploy, machine.CapabilityDockerDeploy, Journal("service_id", "project"), WithSecret[DockerSecret]()),
-	Define[DockerParams](KindDockerUpdate, machine.CapabilityDockerUpdate, Journal("service_id", "project"), WithSecret[DockerSecret]()),
-	Define[DockerRollbackParams](KindDockerRollback, machine.CapabilityDockerUpdate, Journal("project")),
-	Define[ProxmoxGuestParams](KindProxmoxStart, machine.CapabilityProxmoxPower, Journal("vmid", "type")),
-	Define[ProxmoxGuestParams](KindProxmoxShutdown, machine.CapabilityProxmoxPower, Journal("vmid", "type")),
-	Define[ProxmoxGuestParams](KindProxmoxSnapshot, machine.CapabilityProxmoxSnapshot, Journal("vmid", "type", "snapshot")),
-	Define[ProxmoxGuestParams](KindProxmoxSnapshotDelete, machine.CapabilityProxmoxSnapshot, Journal("vmid", "type", "snapshot")),
-	Define[ResticTargetSetupParams](KindResticTargetSetup, machine.CapabilityResticTarget, Journal("listen", "port")),
-	Define[ResticUserAddParams](KindResticUserAdd, machine.CapabilityResticTarget, Journal("user"), WithSecret[ResticUserSecret]()),
-	Define[ResticUserRemoveParams](KindResticUserRemove, machine.CapabilityResticTarget, Journal("user")),
-	Define[ResticProvisionParams](KindResticProvision, machine.CapabilityResticProduce,
+	Define[DockerParams](KindDockerDeploy, agentpolicy.CapabilityDockerDeploy, Journal("service_id", "project"), WithSecret[DockerSecret]()),
+	Define[DockerParams](KindDockerUpdate, agentpolicy.CapabilityDockerUpdate, Journal("service_id", "project"), WithSecret[DockerSecret]()),
+	Define[DockerRollbackParams](KindDockerRollback, agentpolicy.CapabilityDockerUpdate, Journal("project")),
+	Define[ProxmoxGuestParams](KindProxmoxStart, agentpolicy.CapabilityProxmoxPower, Journal("vmid", "type")),
+	Define[ProxmoxGuestParams](KindProxmoxShutdown, agentpolicy.CapabilityProxmoxPower, Journal("vmid", "type")),
+	Define[ProxmoxGuestParams](KindProxmoxSnapshot, agentpolicy.CapabilityProxmoxSnapshot, Journal("vmid", "type", "snapshot")),
+	Define[ProxmoxGuestParams](KindProxmoxSnapshotDelete, agentpolicy.CapabilityProxmoxSnapshot, Journal("vmid", "type", "snapshot")),
+	Define[ResticTargetSetupParams](KindResticTargetSetup, agentpolicy.CapabilityResticTarget, Journal("listen", "port")),
+	Define[ResticUserAddParams](KindResticUserAdd, agentpolicy.CapabilityResticTarget, Journal("user"), WithSecret[ResticUserSecret]()),
+	Define[ResticUserRemoveParams](KindResticUserRemove, agentpolicy.CapabilityResticTarget, Journal("user")),
+	Define[ResticProvisionParams](KindResticProvision, agentpolicy.CapabilityResticProduce,
 		Journal("target", "host", "port", "user"), WithSecret[ResticProvisionSecret](),
 		Anchored(anchor.ResticTargetCert, func(params ResticProvisionParams) string { return PEMFingerprint(params.Certificate) })),
-	Define[ResticBackupParams](KindResticBackup, machine.CapabilityResticProduce,
+	Define[ResticBackupParams](KindResticBackup, agentpolicy.CapabilityResticProduce,
 		Journal("target", "scope", "vmid", "guest_type", "service", "force_relay"),
 		AnchoredWhen(anchor.BackupGuest,
 			func(params ResticBackupParams) bool { return params.Scope == ResticScopeVM },
 			func(params ResticBackupParams) string { return strconv.Itoa(params.VMID) })),
-	Define[ResticRetainParams](KindResticRetain, machine.CapabilityResticTarget,
+	Define[ResticRetainParams](KindResticRetain, agentpolicy.CapabilityResticTarget,
 		Journal("user", "keep_last", "keep_daily", "keep_weekly", "keep_monthly", "keep_yearly"), WithSecret[ResticRetainSecret]()),
-	Define[ResticVerifyParams](KindResticVerify, machine.CapabilityResticVerify, Journal("user"), WithSecret[ResticVerifySecret]()),
-	Define[ResticBrowseParams](KindResticBrowse, machine.CapabilityResticBrowse, Journal("user", "snapshot", "path"), WithSecret[ResticBrowseSecret]()),
-	Define[ResticRestoreParams](KindResticRestore, machine.CapabilityResticRestore, Journal("target", "snapshot", "path", "stamp")),
+	Define[ResticVerifyParams](KindResticVerify, agentpolicy.CapabilityResticVerify, Journal("user"), WithSecret[ResticVerifySecret]()),
+	Define[ResticBrowseParams](KindResticBrowse, agentpolicy.CapabilityResticBrowse, Journal("user", "snapshot", "path"), WithSecret[ResticBrowseSecret]()),
+	Define[ResticRestoreParams](KindResticRestore, agentpolicy.CapabilityResticRestore, Journal("target", "snapshot", "path", "stamp")),
 }
 
 // SpecOf rend la déclaration d'un genre ; faux pour un genre hors du registre.

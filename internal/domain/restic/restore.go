@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -77,16 +78,16 @@ func (s *Service) Restore(ctx context.Context, sourceID, id string, request Rest
 // judgeRestore : la source tient restic.restore et sait l'exercer, et
 // files.write couvre la destination.
 func judgeRestore(source machine.Status, destination string) error {
-	switch RightOf(source, machine.CapabilityResticRestore).State {
-	case RightOK:
-	case RightUnknown:
+	switch source.Agent.Fit(agentpolicy.CapabilityResticRestore, "").State {
+	case agentpolicy.FitOK:
+	case agentpolicy.FitUnknown:
 		return nil
-	case RightUnavailable:
+	case agentpolicy.FitUnavailable:
 		return ErrSourceRestoreUnavailable
 	default:
 		return ErrSourceRestoreRightMissing
 	}
-	if !machine.CoversPath(source.Agent.Capabilities, machine.CapabilityFilesWrite, destination) {
+	if !agentpolicy.CoversPath(source.Agent.Capabilities, agentpolicy.CapabilityFilesWrite, destination) {
 		return ErrRestoreOutsideRight
 	}
 	return nil

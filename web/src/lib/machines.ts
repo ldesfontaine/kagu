@@ -89,38 +89,18 @@ export function tokenPageState(token: TokenResponse, rights: Capability[]): Toke
   return { ...token, rights };
 }
 
-// La liste fermée du serveur (machine.CapabilityNames), dans son ordre.
-export const capabilityNames = [
-  "observe",
-  "probe.lan",
-  "observe.env",
-  "agent.update",
-  "docker.deploy",
-  "docker.update",
-  "backup.receive",
-  "backup.produce",
-  "files.write",
-  "proxmox.power",
-  "proxmox.snapshot",
-  "restic.target",
-  "restic.produce",
-  "restic.docker",
-  "restic.verify",
-  "restic.browse",
-  "restic.restore",
-] as const;
-
 // Les droits qui agissent sur les invités d'un hôte Proxmox, sans chemin.
 const proxmoxRights: readonly string[] = ["proxmox.power", "proxmox.snapshot"];
 
-// Les droits que le formulaire propose : ceux de Proxmox seulement quand
-// l'agent a reconnu un hôte Proxmox VE sur la machine. Un droit déjà coché
-// reste, pour pouvoir le décocher si le rôle a disparu.
-export function offeredCapabilities(proxmoxDetected: boolean, checked: string[]): string[] {
-  return capabilityNames.filter((name) => proxmoxDetected || !proxmoxRights.includes(name) || checked.includes(name));
+// Les droits que le formulaire propose, parmi ceux de la session
+// (useRightNames) : ceux de Proxmox seulement quand l'agent a reconnu un hôte
+// Proxmox VE sur la machine. Un droit déjà coché reste, pour pouvoir le
+// décocher si le rôle a disparu.
+export function offeredCapabilities(rightNames: readonly string[], proxmoxDetected: boolean, checked: string[]): string[] {
+  return rightNames.filter((name) => proxmoxDetected || !proxmoxRights.includes(name) || checked.includes(name));
 }
 
-// Le seul producteur de sauvegardes que le serveur connaisse (machine.Producers) :
+// Le seul producteur de sauvegardes que le serveur connaisse (agentpolicy.Producers) :
 // la portée de backup.produce est fixée, la case suffit.
 export const backupProducer = "proxmox-vzdump";
 
@@ -137,10 +117,11 @@ export function toggleRight(rights: string[], name: string): string[] {
   return rights.includes(name) ? rights.filter((right) => right !== name) : [...rights, name];
 }
 
-// Le corps de la requête : chaque droit coché, avec ses chemins pour un droit
-// borné. Le serveur ajoute observe et juge les chemins.
-export function capabilitiesOf(values: RightsValues): Capability[] {
-  return capabilityNames
+// Le corps de la requête : chaque droit coché, dans l'ordre de la session
+// (useRightNames), avec ses chemins pour un droit borné. Le serveur ajoute
+// observe et juge les chemins.
+export function capabilitiesOf(rightNames: readonly string[], values: RightsValues): Capability[] {
+  return rightNames
     .filter((name) => name !== alwaysGranted && values.rights.includes(name))
     .map((name) => ({ name, paths: pathsOf(name, values) }));
 }

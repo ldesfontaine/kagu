@@ -1,4 +1,4 @@
-package machine
+package agentpolicy
 
 import (
 	"path"
@@ -9,78 +9,9 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
-// Les droits d'un agent : cochés à l'émission du jeton, écrits par la ligne
-// d'installation dans le fichier de l'agent, rapportés par lui à chaque
-// ouverture de flux, et appliqués par l'agent : un ordre dont le droit n'est
-// pas dans son fichier est refusé (agentwire.Spec.Right dit lequel). observe est
-// toujours là. Les changer, c'est ré-enrôler avec d'autres droits.
-// probe.lan et observe.env sont les seuls droits qu'aucun ordre n'exige : ce
-// sont des bornes de l'observation, que l'agent applique à ses propres
-// lectures. observe.env, refusé par défaut, ouvre la lecture de l'environnement
-// des conteneurs (étude services-modèle §2.4) ; sans lui, l'agent ne le lit pas.
-const (
-	CapabilityObserve       = "observe"
-	CapabilityProbeLAN      = "probe.lan"
-	CapabilityObserveEnv    = "observe.env"
-	CapabilityAgentUpdate   = "agent.update"
-	CapabilityDockerDeploy  = "docker.deploy"
-	CapabilityDockerUpdate  = "docker.update"
-	CapabilityBackupReceive = "backup.receive"
-	CapabilityBackupProduce = "backup.produce"
-	CapabilityFilesWrite    = "files.write"
-	// Les gestes sur les invités Proxmox, par le jeton local de l'agent de
-	// l'hôte (décision 18) : démarrer et arrêter proprement ; créer et
-	// supprimer ses propres instantanés.
-	CapabilityProxmoxPower    = "proxmox.power"
-	CapabilityProxmoxSnapshot = "proxmox.snapshot"
-	// La cible restic : l'agent lance rest-server en écriture seule sur le
-	// dossier des dépôts, le chemin du droit, et y applique la rétention
-	// (restic.retain), jamais sous le plancher qu'il tient. La source : l'agent lance restic
-	// vers une cible liée, sans chemin (le dossier d'un service est sous sa
-	// racine, un invité passe par backup.produce).
-	CapabilityResticTarget  = "restic.target"
-	CapabilityResticProduce = "restic.produce"
-	// Sauvegarder les volumes et les bases Docker d'un service : l'agent lit
-	// un volume par le conteneur qui le monte (docker cp) et lance l'outil de
-	// dump d'une base dans son conteneur (docker exec). Équivaut à la socket
-	// Docker qu'il a déjà ; refusé par défaut, coché par machine. Il ne lit
-	// jamais l'environnement du conteneur : le mot de passe de la base reste
-	// dans le conteneur.
-	CapabilityResticDocker = "restic.docker"
-	// Vérifier les dépôts reçus : restic check, puis la relecture d'un
-	// échantillon de fichiers de chaque dernier instantané. L'agent déchiffre
-	// du contenu en mémoire, rien n'est écrit sur son disque ; il détient déjà
-	// le mot de passe du dépôt pour la rétention, mais ce droit le dit en
-	// clair. Demande restic.target. Refusé par défaut, coché par machine.
-	CapabilityResticVerify = "restic.verify"
-	// Parcourir les dépôts reçus : la cible lit les NOMS, tailles et dates des
-	// fichiers d'un instantané et les rend à l'écran qui les demande (l'explorateur
-	// de la page Sauvegardes). Rien du contenu, rien n'est écrit ni restauré ;
-	// le serveur ne garde pas les noms. Demande restic.target. Refusé par
-	// défaut, coché par machine : les noms de fichiers sont déjà une donnée.
-	CapabilityResticBrowse = "restic.browse"
-	// Restaurer sur la machine source un fichier ou un dossier d'un instantané,
-	// À CÔTÉ de l'original (<chemin>.restaure-<horodatage>), jamais par-dessus et
-	// sans rien supprimer. Le droit n'a pas de chemin : où l'agent peut écrire est
-	// borné par files.write, que la destination doit couvrir (et par l'unité
-	// systemd). Refusé par défaut, coché par machine.
-	CapabilityResticRestore = "restic.restore"
-)
-
-// CapabilityNames rend la liste fermée, dans l'ordre où elle s'affiche :
-// chaque droit a son libellé dans les catalogues.
-func CapabilityNames() []string {
-	return []string{
-		CapabilityObserve, CapabilityProbeLAN, CapabilityObserveEnv, CapabilityAgentUpdate, CapabilityDockerDeploy,
-		CapabilityDockerUpdate, CapabilityBackupReceive, CapabilityBackupProduce, CapabilityFilesWrite,
-		CapabilityProxmoxPower, CapabilityProxmoxSnapshot, CapabilityResticTarget, CapabilityResticProduce, CapabilityResticDocker,
-		CapabilityResticVerify, CapabilityResticBrowse, CapabilityResticRestore,
-	}
-}
-
 // Capability est un droit et, pour un droit borné, les chemins qu'il couvre.
 // Pour backup.produce, ce sont des noms de producteurs et non des chemins
-// (produce.go).
+// (producer.go).
 type Capability struct {
 	Name  string
 	Paths []string
@@ -91,11 +22,11 @@ const (
 	// « = » et de ses chemins séparés par « : ». Aucun de ces signes ni
 	// espace dans un chemin : la ligne d'installation la porte sans
 	// guillemets, l'en-tête de l'agent aussi.
-	capabilitySeparator = ","
-	scopeSeparator      = "="
-	pathSeparator       = ":"
-	maxCapabilityPaths  = 8
-	maxCapabilityText   = 2048
+	RightSeparator     = ","
+	ScopeSeparator     = "="
+	pathSeparator      = ":"
+	maxCapabilityPaths = 8
+	maxCapabilityText  = 2048
 )
 
 var capabilityPathPattern = regexp.MustCompile(`^/[A-Za-z0-9._/-]{1,254}$`)
@@ -207,14 +138,14 @@ func FormatCapabilities(capabilities []Capability) string {
 	for _, capability := range capabilities {
 		items = append(items, formatCapability(capability))
 	}
-	return strings.Join(items, capabilitySeparator)
+	return strings.Join(items, RightSeparator)
 }
 
 func formatCapability(capability Capability) string {
 	if len(capability.Paths) == 0 {
 		return capability.Name
 	}
-	return capability.Name + scopeSeparator + strings.Join(capability.Paths, pathSeparator)
+	return capability.Name + ScopeSeparator + strings.Join(capability.Paths, pathSeparator)
 }
 
 // ParseCapabilities lit la forme texte et la normalise. Un texte vide vaut
@@ -224,12 +155,12 @@ func ParseCapabilities(text string) ([]Capability, error) {
 		return nil, ErrCapabilityScope
 	}
 	var capabilities []Capability
-	for item := range strings.SplitSeq(text, capabilitySeparator) {
+	for item := range strings.SplitSeq(text, RightSeparator) {
 		item = strings.TrimSpace(item)
 		if item == "" {
 			continue
 		}
-		name, scope, hasScope := strings.Cut(item, scopeSeparator)
+		name, scope, hasScope := strings.Cut(item, ScopeSeparator)
 		capability := Capability{Name: name}
 		if hasScope {
 			capability.Paths = strings.Split(scope, pathSeparator)

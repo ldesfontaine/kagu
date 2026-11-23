@@ -8,6 +8,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
@@ -73,7 +74,7 @@ func (d PlanDefinition) validateAgentSource() error {
 	if d.Producer == ProducerOPNsense {
 		return d.validateFirewallExport()
 	}
-	if !slices.Contains(machine.Producers(), d.Producer) {
+	if !slices.Contains(agentpolicy.Producers(), d.Producer) {
 		return ErrProducerUnknown
 	}
 	if d.Selector != SelectorAll && (len(d.Selector) > MaxSelector || !selectorPattern.MatchString(d.Selector)) {

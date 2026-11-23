@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 )
 
 var testReportedAt = time.Unix(1_800_000_000, 0)
@@ -14,26 +16,26 @@ var testReportedAt = time.Unix(1_800_000_000, 0)
 func TestCreateToken_CarriesTheCheckedRightsAndReenrollKeepsThem(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
-	checked := []Capability{{Name: CapabilityFilesWrite, Paths: []string{"/srv/workspace"}}, {Name: CapabilityDockerDeploy}}
+	checked := []agentpolicy.Capability{{Name: agentpolicy.CapabilityFilesWrite, Paths: []string{"/srv/workspace"}}, {Name: agentpolicy.CapabilityDockerDeploy}}
 	cleartext, token, err := h.service.CreateToken(ctx, "vps-paris-1", RoleGeneric, checked)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := FormatCapabilities(token.Capabilities); got != "observe,docker.deploy,files.write=/srv/workspace" {
+	if got := agentpolicy.FormatCapabilities(token.Capabilities); got != "observe,docker.deploy,files.write=/srv/workspace" {
 		t.Fatalf("token rights %q", got)
 	}
-	if _, _, err := h.service.CreateToken(ctx, "vps-lyon-2", RoleGeneric, []Capability{{Name: "shell.exec"}}); !errors.Is(err, ErrCapabilityUnknown) {
+	if _, _, err := h.service.CreateToken(ctx, "vps-lyon-2", RoleGeneric, []agentpolicy.Capability{{Name: "shell.exec"}}); !errors.Is(err, agentpolicy.ErrCapabilityUnknown) {
 		t.Fatalf("unknown right: %v", err)
 	}
 	enrolled := h.enrollWith(t, cleartext)
-	if !SameCapabilities(enrolled.Agent.Requested, token.Capabilities) {
+	if !agentpolicy.SameCapabilities(enrolled.Agent.Requested, token.Capabilities) {
 		t.Fatalf("the agent must know what its token asked: %+v", enrolled.Agent)
 	}
 	_, again, err := h.service.CreateReenrollToken(ctx, enrolled.ID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !SameCapabilities(again.Capabilities, token.Capabilities) {
+	if !agentpolicy.SameCapabilities(again.Capabilities, token.Capabilities) {
 		t.Fatalf("re-enroll rights %+v", again.Capabilities)
 	}
 }
@@ -43,7 +45,7 @@ func TestCreateToken_CarriesTheCheckedRightsAndReenrollKeepsThem(t *testing.T) {
 func TestConnect_RecordsTheReportedRightsAndTheGapShows(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
-	cleartext, _, err := h.service.CreateToken(ctx, "vps-paris-1", RoleGeneric, []Capability{{Name: CapabilityAgentUpdate}})
+	cleartext, _, err := h.service.CreateToken(ctx, "vps-paris-1", RoleGeneric, []agentpolicy.Capability{{Name: agentpolicy.CapabilityAgentUpdate}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +54,7 @@ func TestConnect_RecordsTheReportedRightsAndTheGapShows(t *testing.T) {
 		t.Fatal(err)
 	}
 	status, _ := h.service.Get(ctx, enrolled.ID)
-	if FormatCapabilities(status.Agent.Capabilities) != "observe" || !status.Agent.CapabilitiesDiffer() {
+	if agentpolicy.FormatCapabilities(status.Agent.Capabilities) != "observe" || !status.Agent.CapabilitiesDiffer() {
 		t.Fatalf("after a report without agent.update: %+v", status.Agent)
 	}
 	if _, err := h.service.Connect(ctx, enrolled, "192.0.2.1", "v0.0.2", "observe,agent.update", "", "", ""); err != nil {
@@ -66,7 +68,7 @@ func TestConnect_RecordsTheReportedRightsAndTheGapShows(t *testing.T) {
 		t.Fatalf("unreadable rights must not refuse the stream: %v", err)
 	}
 	status, _ = h.service.Get(ctx, enrolled.ID)
-	if FormatCapabilities(status.Agent.Capabilities) != "observe,agent.update" {
+	if agentpolicy.FormatCapabilities(status.Agent.Capabilities) != "observe,agent.update" {
 		t.Fatalf("unreadable rights replaced the report: %+v", status.Agent)
 	}
 }
@@ -77,7 +79,7 @@ func TestConnect_RecordsTheReportedRightsAndTheGapShows(t *testing.T) {
 func TestConnect_RecordsTheAccountAndWhyARightCannotBeExercised(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
-	cleartext, _, err := h.service.CreateToken(ctx, "vps-paris-1", RoleGeneric, []Capability{{Name: CapabilityDockerDeploy}, {Name: CapabilityAgentUpdate}})
+	cleartext, _, err := h.service.CreateToken(ctx, "vps-paris-1", RoleGeneric, []agentpolicy.Capability{{Name: agentpolicy.CapabilityDockerDeploy}, {Name: agentpolicy.CapabilityAgentUpdate}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +97,7 @@ func TestConnect_RecordsTheAccountAndWhyARightCannotBeExercised(t *testing.T) {
 	if status.Agent.RunAs == nil || *status.Agent.RunAs != (Account{UID: 998, Name: "opencloud-agent"}) {
 		t.Fatalf("account %+v", status.Agent.RunAs)
 	}
-	if status.Agent.UnavailableReason(CapabilityDockerDeploy) != "docker_denied" || status.Agent.UnavailableReason(CapabilityAgentUpdate) != "" {
+	if status.Agent.UnavailableReason(agentpolicy.CapabilityDockerDeploy) != "docker_denied" || status.Agent.UnavailableReason(agentpolicy.CapabilityAgentUpdate) != "" {
 		t.Fatalf("unavailable %+v", status.Agent.Unavailable)
 	}
 	if status.Agent.CapabilitiesDiffer() {
@@ -308,5 +310,26 @@ func TestConnect_ARevocationBetweenAuthenticationAndOpeningLeavesNoSession(t *te
 	}
 	if status, _ := h.service.Get(ctx, m.ID); status.Online {
 		t.Fatal("the revoked agent is online")
+	}
+}
+
+// L'écart ne se dit que s'il y a deux choses à comparer : ce que le jeton
+// demandait et ce que l'agent a rapporté.
+func TestAgent_CapabilitiesDifferOnlyWhenBothSidesAreKnown(t *testing.T) {
+	requested, _ := agentpolicy.ParseCapabilities("agent.update")
+	observeOnly, _ := agentpolicy.ParseCapabilities("")
+	reported := Agent{ID: "agt_1", Requested: requested, Capabilities: observeOnly, ReportedAt: testReportedAt}
+	if !reported.CapabilitiesDiffer() {
+		t.Fatal("a file without agent.update differs from the token")
+	}
+	same := Agent{ID: "agt_1", Requested: requested, Capabilities: requested, ReportedAt: testReportedAt}
+	if same.CapabilitiesDiffer() {
+		t.Fatal("the same list does not differ")
+	}
+	if (Agent{ID: "agt_1", Requested: requested}).CapabilitiesDiffer() {
+		t.Fatal("nothing reported yet: nothing to compare")
+	}
+	if (Agent{ID: "agt_1", Capabilities: observeOnly, ReportedAt: testReportedAt}).CapabilitiesDiffer() {
+		t.Fatal("an agent from before the rights: nothing requested, nothing to compare")
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/sampler"
@@ -452,7 +453,7 @@ func TestRecordConnection_ReplacesTheReportedRights(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
-	requested, err := machine.ParseCapabilities("agent.update,files.write=/srv/workspace")
+	requested, err := agentpolicy.ParseCapabilities("agent.update,files.write=/srv/workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,12 +469,12 @@ func TestRecordConnection_ReplacesTheReportedRights(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !machine.SameCapabilities(enrolled.Agent.Requested, requested) {
+	if !agentpolicy.SameCapabilities(enrolled.Agent.Requested, requested) {
 		t.Fatalf("requested %+v", enrolled.Agent.Requested)
 	}
 	report := func(text string, at time.Time) machine.Machine {
 		t.Helper()
-		reported, err := machine.ParseCapabilities(text)
+		reported, err := agentpolicy.ParseCapabilities(text)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -488,7 +489,7 @@ func TestRecordConnection_ReplacesTheReportedRights(t *testing.T) {
 		return got
 	}
 	first := report("observe,files.write=/srv/workspace:/opt/site", now.Add(time.Minute))
-	if machine.FormatCapabilities(first.Agent.Capabilities) != "observe,files.write=/opt/site:/srv/workspace" || !first.Agent.CapabilitiesDiffer() {
+	if agentpolicy.FormatCapabilities(first.Agent.Capabilities) != "observe,files.write=/opt/site:/srv/workspace" || !first.Agent.CapabilitiesDiffer() {
 		t.Fatalf("first report %+v", first.Agent)
 	}
 	second := report("agent.update,files.write=/srv/workspace", now.Add(2*time.Minute))
@@ -515,7 +516,7 @@ func TestRecordConnection_KeepsTheAccountAndReplacesTheReasons(t *testing.T) {
 	if enrolled.Agent.RunAs != nil || enrolled.Agent.Unavailable != nil {
 		t.Fatalf("a fresh agent has said nothing: %+v", enrolled.Agent)
 	}
-	rights, err := machine.ParseCapabilities("agent.update,docker.deploy,backup.receive=/srv/backups")
+	rights, err := agentpolicy.ParseCapabilities("agent.update,docker.deploy,backup.receive=/srv/backups")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,13 +534,13 @@ func TestRecordConnection_KeepsTheAccountAndReplacesTheReasons(t *testing.T) {
 	}
 	first := connect(machine.Connection{
 		Capabilities: rights, Account: &machine.Account{UID: 998, Name: "opencloud-agent"},
-		Unavailable: map[string]string{machine.CapabilityDockerDeploy: "docker_denied", machine.CapabilityBackupReceive: "path_denied"},
+		Unavailable: map[string]string{agentpolicy.CapabilityDockerDeploy: "docker_denied", agentpolicy.CapabilityBackupReceive: "path_denied"},
 	}, now.Add(time.Minute))
 	if first.RunAs == nil || *first.RunAs != (machine.Account{UID: 998, Name: "opencloud-agent"}) {
 		t.Fatalf("account %+v", first.RunAs)
 	}
-	if first.UnavailableReason(machine.CapabilityDockerDeploy) != "docker_denied" || first.UnavailableReason(machine.CapabilityBackupReceive) != "path_denied" ||
-		first.UnavailableReason(machine.CapabilityAgentUpdate) != "" || first.UnavailableReason(machine.CapabilityObserve) != "" {
+	if first.UnavailableReason(agentpolicy.CapabilityDockerDeploy) != "docker_denied" || first.UnavailableReason(agentpolicy.CapabilityBackupReceive) != "path_denied" ||
+		first.UnavailableReason(agentpolicy.CapabilityAgentUpdate) != "" || first.UnavailableReason(agentpolicy.CapabilityObserve) != "" {
 		t.Fatalf("reasons %+v", first.Unavailable)
 	}
 	// Le compte sans nom lisible s'écrit par son uid.
@@ -553,14 +554,14 @@ func TestRecordConnection_KeepsTheAccountAndReplacesTheReasons(t *testing.T) {
 		t.Fatalf("second report %+v / %+v", second.Unavailable, second.RunAs)
 	}
 	// Un agent d'avant, qui ne rapporte rien, ne touche ni droits ni raisons.
-	connect(machine.Connection{Capabilities: rights, Unavailable: map[string]string{machine.CapabilityDockerDeploy: "docker_missing"}}, now.Add(4*time.Minute))
+	connect(machine.Connection{Capabilities: rights, Unavailable: map[string]string{agentpolicy.CapabilityDockerDeploy: "docker_missing"}}, now.Add(4*time.Minute))
 	silent := connect(machine.Connection{}, now.Add(5*time.Minute))
-	if silent.UnavailableReason(machine.CapabilityDockerDeploy) != "docker_missing" || len(silent.Capabilities) != 4 {
+	if silent.UnavailableReason(agentpolicy.CapabilityDockerDeploy) != "docker_missing" || len(silent.Capabilities) != 4 {
 		t.Fatalf("a connection without a report must leave the last one: %+v / %+v", silent.Unavailable, silent.Capabilities)
 	}
 	// Une raison pour un droit que le rapport ne porte pas n'a pas de ligne.
-	onlyObserve, _ := machine.ParseCapabilities("")
-	reported := connect(machine.Connection{Capabilities: onlyObserve, Unavailable: map[string]string{machine.CapabilityFilesWrite: "path_denied"}}, now.Add(6*time.Minute))
+	onlyObserve, _ := agentpolicy.ParseCapabilities("")
+	reported := connect(machine.Connection{Capabilities: onlyObserve, Unavailable: map[string]string{agentpolicy.CapabilityFilesWrite: "path_denied"}}, now.Add(6*time.Minute))
 	if len(reported.Unavailable) != 0 {
 		t.Fatalf("a reason for a right the report lacks was kept: %+v", reported.Unavailable)
 	}

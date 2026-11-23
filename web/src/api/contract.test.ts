@@ -12,7 +12,7 @@ import type { Firewall, FirewallCounts, FirewallDetail, FirewallFlowsResponse, F
 import type { DeletionCount, DeletionPlan } from "./deletion";
 import type { DeclaredServiceDetail, DeclaredServicesResponse, DeployPlan, GapsResponse, ProjectsResponse, ProposalResponse, ServiceUpdate } from "./directory";
 import type { JobResponse, JobsResponse } from "./jobs";
-import type { Account, Agent, AgentAnchors, AnchorKind, Capability, Machine, MachineHost, MachineRole, MachinesResponse, ReportedCapability } from "./machines";
+import type { Account, Agent, AgentAnchors, AnchorKind, Capability, Machine, MachineHost, MachineRole, MachinesResponse, ReportedCapability, RightFit } from "./machines";
 import type { MachineStorage, PhysicalDisk, StoragePool } from "./storage";
 import type { AppliesResponse, Apply } from "./manifest";
 import type { MCPCheck } from "./mcpCheck";
@@ -134,6 +134,7 @@ const machine = shape<Machine>("Machine", {
       reported: value,
       kinds: shape<AnchorKind>("AnchorKind", { name: value, right: value, max: value, state: value, values: value }),
     }),
+    fit: dictionaryOf(shape<RightFit>("RightFit", { state: value, reason: value })),
   }),
   lifecycle: optional(lifecycle),
   roles: shape<MachineRole>("MachineRole", { name: value, version: value }),
@@ -866,6 +867,7 @@ const session = shape<Session>("Session", {
   resource_thresholds: shape("ResourceThresholds", { cpu: shape("ResourceThreshold", { attention: value, danger: value }), memory: shape("ResourceThreshold", { attention: value, danger: value }), disk: shape("ResourceThreshold", { attention: value, danger: value }) }),
   verbs: shape("SessionVerb", { id: value, route: value }),
   roles: shape("SessionRole", { id: value, capabilities: value }),
+  rights: value,
 });
 
 type IncidentUpdateJSON = Incident["updates"][number];

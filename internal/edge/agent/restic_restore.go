@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -63,7 +63,7 @@ func (r *orderRunner) acceptResticRestore(order judgedOrder) (agentwire.ActionRe
 	}
 }
 
-func judgeRestore(order judgedOrder, capabilities []machine.Capability, checks hostChecks, isProvisioned func(string) bool) (resticRestoreJob, *agentwire.ActionResult) {
+func judgeRestore(order judgedOrder, capabilities []agentpolicy.Capability, checks hostChecks, isProvisioned func(string) bool) (resticRestoreJob, *agentwire.ActionResult) {
 	refused := func(state agentwire.ActionState, reason string) *agentwire.ActionResult {
 		return &agentwire.ActionResult{RunID: order.RunID, State: state, Reason: reason}
 	}
@@ -82,14 +82,14 @@ func judgeRestore(order judgedOrder, capabilities []machine.Capability, checks h
 	if reason := restoreDestinationReason(capabilities, destination); reason != "" {
 		return resticRestoreJob{}, refused(agentwire.ActionRefused, reason)
 	}
-	granted, _ := machine.CoveringPath(capabilities, machine.CapabilityFilesWrite, destination)
+	granted, _ := agentpolicy.CoveringPath(capabilities, agentpolicy.CapabilityFilesWrite, destination)
 	return resticRestoreJob{params: params, binary: binary, granted: granted, destination: destination}, nil
 }
 
 // restoreDestinationReason : vide si la destination est couverte par files.write,
 // son dossier résolu (liens suivis) l'est encore, et rien n'y existe déjà.
-func restoreDestinationReason(capabilities []machine.Capability, destination string) string {
-	if !machine.CoversPath(capabilities, machine.CapabilityFilesWrite, destination) {
+func restoreDestinationReason(capabilities []agentpolicy.Capability, destination string) string {
+	if !agentpolicy.CoversPath(capabilities, agentpolicy.CapabilityFilesWrite, destination) {
 		return agentwire.ReasonPathOutsideRight
 	}
 	parent, err := filepath.EvalSymlinks(filepath.Dir(destination))
@@ -97,7 +97,7 @@ func restoreDestinationReason(capabilities []machine.Capability, destination str
 		return agentwire.ReasonPathUnwritable
 	}
 	resolved := filepath.Join(parent, filepath.Base(destination))
-	if !machine.CoversPath(capabilities, machine.CapabilityFilesWrite, resolved) {
+	if !agentpolicy.CoversPath(capabilities, agentpolicy.CapabilityFilesWrite, resolved) {
 		return agentwire.ReasonPathOutsideRight
 	}
 	if _, err := os.Lstat(resolved); err == nil {

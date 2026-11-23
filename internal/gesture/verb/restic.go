@@ -1,7 +1,7 @@
 package verb
 
 import (
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -28,13 +28,13 @@ func init() {
 		ID: "restic.backup.run", Route: "POST /api/machines/{id}/restic-backups/{backup}/actions/run",
 		Params: []string{"id", "backup"}, Body: []string{}, Target: TargetMachine,
 		Label: "api_token.verb_restic_backup_run", Summary: "api_token.verb_restic_backup_run_text", Reverse: "restic.backup.run",
-		Level: 1, Token: true, Order: agentwire.KindResticBackup, Right: machine.CapabilityResticProduce, Audit: audit.ResticBackupRun,
+		Level: 1, Token: true, Order: agentwire.KindResticBackup, Right: agentpolicy.CapabilityResticProduce, Audit: audit.ResticBackupRun,
 	})
 	Default.MustRegister(Verb{
 		ID: "restic.backup.verify", Route: "POST /api/machines/{id}/restic-backups/{backup}/actions/verify",
 		Params: []string{"id", "backup"}, Body: []string{}, Target: TargetResticLink,
 		Label: "api_token.verb_restic_backup_verify", Summary: "api_token.verb_restic_backup_verify_text", Reverse: "restic.backup.verify",
-		Level: 1, Token: true, Order: agentwire.KindResticVerify, Right: machine.CapabilityResticVerify, Audit: audit.ResticBackupVerify,
+		Level: 1, Token: true, Order: agentwire.KindResticVerify, Right: agentpolicy.CapabilityResticVerify, Audit: audit.ResticBackupVerify,
 	})
 	// Restaurer écrit sur la machine source, à côté de l'original, sans rien
 	// effacer : il n'y a pourtant pas de verbe qui défasse cette copie. Un geste
@@ -44,13 +44,13 @@ func init() {
 		ID: "restic.backup.restore", Route: "POST /api/machines/{id}/restic-backups/{backup}/actions/restore",
 		Params: []string{"id", "backup"}, Body: []string{"snapshot", "path", "stamp"}, Target: TargetMachine,
 		Label: "api_token.verb_restic_backup_restore", Summary: "api_token.verb_restic_backup_restore_text",
-		Level: 2, Token: true, Order: agentwire.KindResticRestore, Right: machine.CapabilityResticRestore, Audit: audit.ResticBackupRestore,
+		Level: 2, Token: true, Order: agentwire.KindResticRestore, Right: agentpolicy.CapabilityResticRestore, Audit: audit.ResticBackupRestore,
 	})
 	// Parcourir un dépôt n'écrit ni n'efface rien : il est son propre inverse.
 	Default.MustRegister(Verb{
 		ID: "restic.backup.browse", Route: "POST /api/machines/{id}/restic-backups/{backup}/actions/browse",
 		Params: []string{"id", "backup"}, Body: []string{"snapshot", "path"}, Target: TargetResticLink,
 		Label: "api_token.verb_restic_backup_browse", Summary: "api_token.verb_restic_backup_browse_text", Reverse: "restic.backup.browse",
-		Level: 1, Token: true, Order: agentwire.KindResticBrowse, Right: machine.CapabilityResticBrowse, Audit: audit.ResticBackupBrowse,
+		Level: 1, Token: true, Order: agentwire.KindResticBrowse, Right: agentpolicy.CapabilityResticBrowse, Audit: audit.ResticBackupBrowse,
 	})
 }

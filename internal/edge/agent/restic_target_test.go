@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -402,7 +402,7 @@ func TestResticTarget_MissingRestServerIsReportedNotDownloaded(t *testing.T) {
 		t.Fatalf("report %+v", report)
 	}
 	unavailable := judgeRights(context.Background(), b.runner.identity, b.runner.checks)
-	if unavailable[machine.CapabilityResticTarget] != agentwire.ReasonRestServerMissing {
+	if unavailable[agentpolicy.CapabilityResticTarget] != agentwire.ReasonRestServerMissing {
 		t.Fatalf("unavailable %v", unavailable)
 	}
 }
@@ -410,11 +410,11 @@ func TestResticTarget_MissingRestServerIsReportedNotDownloaded(t *testing.T) {
 // Les ordres de la cible demandent restic.target.
 func TestResticTarget_OrdersAreRefusedWithoutTheRight(t *testing.T) {
 	b := newResticBench(t, "restic.produce")
-	expectResult(t, b.run(t, agentwire.KindResticTargetSetup, setupParams()), agentwire.ActionRefused, agentwire.RightMissing(machine.CapabilityResticTarget))
+	expectResult(t, b.run(t, agentwire.KindResticTargetSetup, setupParams()), agentwire.ActionRefused, agentwire.RightMissing(agentpolicy.CapabilityResticTarget))
 	secret := agentwire.ResticUserSecret{RESTPassword: seededRESTPassword}
-	expectResult(t, b.runWithSecret(t, agentwire.KindResticUserAdd, agentwire.ResticUserAddParams{User: resticUser}, secret), agentwire.ActionRefused, agentwire.RightMissing(machine.CapabilityResticTarget))
+	expectResult(t, b.runWithSecret(t, agentwire.KindResticUserAdd, agentwire.ResticUserAddParams{User: resticUser}, secret), agentwire.ActionRefused, agentwire.RightMissing(agentpolicy.CapabilityResticTarget))
 	retain := agentwire.ResticRetainParams{User: resticUser, KeepDaily: 7}
-	expectResult(t, b.runWithSecret(t, agentwire.KindResticRetain, retain, agentwire.ResticRetainSecret{RepoPassword: seededRepoPassword}), agentwire.ActionRefused, agentwire.RightMissing(machine.CapabilityResticTarget))
+	expectResult(t, b.runWithSecret(t, agentwire.KindResticRetain, retain, agentwire.ResticRetainSecret{RepoPassword: seededRepoPassword}), agentwire.ActionRefused, agentwire.RightMissing(agentpolicy.CapabilityResticTarget))
 }
 
 // relayAgentServer joue les routes de la cible chez le serveur : le corps à

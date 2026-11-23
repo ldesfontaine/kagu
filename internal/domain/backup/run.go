@@ -11,6 +11,7 @@ import (
 
 	"filippo.io/age"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -214,7 +215,7 @@ func (s *Service) prepareDelivery(ctx context.Context, plan Plan) (Keyring, Dest
 	if err != nil {
 		return Keyring{}, Destination{}, machine.Status{}, fmt.Errorf("get machine: %w", err)
 	}
-	if right, _ := rightOf(target, destination.Path); right == RightMissing {
+	if receiveFit(target, destination.Path).State == agentpolicy.FitMissing {
 		return Keyring{}, Destination{}, machine.Status{}, ErrRightMissing
 	}
 	if !target.Online {

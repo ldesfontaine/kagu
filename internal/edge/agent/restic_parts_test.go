@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -206,7 +206,7 @@ func TestResticBackup_DockerPartsNeedResticDocker(t *testing.T) {
 		dockerBackup("nextcloud", []string{"app_data"}, nil),
 		dockerBackup("", nil, []string{"db-1"}),
 	} {
-		expectResult(t, b.run(t, agentwire.KindResticBackup, params), agentwire.ActionRefused, agentwire.RightMissing(machine.CapabilityResticDocker))
+		expectResult(t, b.run(t, agentwire.KindResticBackup, params), agentwire.ActionRefused, agentwire.RightMissing(agentpolicy.CapabilityResticDocker))
 	}
 	if len(b.restic.callsMade()) != 0 || daemon.count() != 0 {
 		t.Fatal("a refused order ran restic or read docker")
@@ -333,12 +333,12 @@ func TestJudgeRights_ResticDockerNeedsDockerAndRestic(t *testing.T) {
 		t.Fatalf("unavailable %v", unavailable)
 	}
 	checks.docker = func(context.Context) string { return agentwire.ReasonDockerMissing }
-	if unavailable := judgeRights(context.Background(), identity, checks); unavailable[machine.CapabilityResticDocker] != agentwire.ReasonDockerMissing {
+	if unavailable := judgeRights(context.Background(), identity, checks); unavailable[agentpolicy.CapabilityResticDocker] != agentwire.ReasonDockerMissing {
 		t.Fatalf("unavailable %v", unavailable)
 	}
 	checks = allowAll()
 	checks.findRestic = func() (string, error) { return "", errors.New("not found") }
-	if unavailable := judgeRights(context.Background(), identity, checks); unavailable[machine.CapabilityResticDocker] != agentwire.ReasonResticMissing {
+	if unavailable := judgeRights(context.Background(), identity, checks); unavailable[agentpolicy.CapabilityResticDocker] != agentwire.ReasonResticMissing {
 		t.Fatalf("unavailable %v", unavailable)
 	}
 }

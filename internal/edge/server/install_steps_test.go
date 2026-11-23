@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/version"
@@ -31,13 +32,13 @@ func stepIDs(steps []installStepJSON) []string {
 }
 
 func TestInstallSteps_FollowTheOrderTheOperatorPastes(t *testing.T) {
-	rights, err := machine.ParseCapabilities("docker.deploy,backup.receive=/srv/backups")
+	rights, err := agentpolicy.ParseCapabilities("docker.deploy,backup.receive=/srv/backups")
 	if err != nil {
 		t.Fatal(err)
 	}
 	cases := []struct {
 		name         string
-		capabilities []machine.Capability
+		capabilities []agentpolicy.Capability
 		target       installTarget
 		want         []string
 	}{
@@ -56,7 +57,7 @@ func TestInstallSteps_FollowTheOrderTheOperatorPastes(t *testing.T) {
 // Le jeton ne vit que dans l'enrôlement : aucune autre étape, copiée ailleurs
 // ou lue par un autre compte, ne le porte.
 func TestInstallSteps_TheTokenIsOnlyInTheEnrollment(t *testing.T) {
-	rights, err := machine.ParseCapabilities("docker.deploy,backup.receive=/srv/backups,backup.produce=proxmox-vzdump")
+	rights, err := agentpolicy.ParseCapabilities("docker.deploy,backup.receive=/srv/backups,backup.produce=proxmox-vzdump")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +136,7 @@ func TestInstallRights_AuthorizesTheFoldersThatDeployAndBackupsWrite(t *testing.
 	if got := installRights(nil); got != "" {
 		t.Fatalf("observe alone writes nowhere else: %q", got)
 	}
-	rights, err := machine.ParseCapabilities("docker.update,backup.receive=/srv/backups,files.write=/srv/site")
+	rights, err := agentpolicy.ParseCapabilities("docker.update,backup.receive=/srv/backups,files.write=/srv/site")
 	if err != nil {
 		t.Fatal(err)
 	}

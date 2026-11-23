@@ -1,7 +1,7 @@
 package verb
 
 import (
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -20,7 +20,7 @@ func newDefault() *Registry {
 	registry.MustRegister(Verb{
 		ID: "agent.ping", Route: "POST /api/machines/{id}/actions/ping", Params: []string{"id"}, Body: []string{}, Target: TargetMachine,
 		Label: "api_token.verb_agent_ping", Summary: "api_token.verb_agent_ping_text", Reverse: "agent.ping",
-		Level: 1, Token: true, Order: agentwire.KindAgentPing, Right: machine.CapabilityObserve, Audit: audit.ActionOrder,
+		Level: 1, Token: true, Order: agentwire.KindAgentPing, Right: agentpolicy.CapabilityObserve, Audit: audit.ActionOrder,
 	})
 	registry.MustRegister(Verb{
 		ID: "probe.pause", Route: "POST /api/probes/{id}/actions/pause", Params: []string{"id"}, Body: []string{}, Target: TargetProbe,

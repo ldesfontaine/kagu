@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
@@ -70,7 +71,7 @@ func (s *Service) OfferLocalEnrollment(ctx context.Context) (string, Token, erro
 	if live, err := s.isPending(ctx, s.offer.token); err != nil || live {
 		return s.offer.cleartext, s.offer.token, err
 	}
-	rights := []Capability{{Name: CapabilityObserve}, {Name: CapabilityProbeLAN}}
+	rights := []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}, {Name: agentpolicy.CapabilityProbeLAN}}
 	name, machineID, role := s.localMachineName(), "", RoleGeneric
 	if hasRow {
 		name, machineID, role = existing.Name, LocalID, existing.Role

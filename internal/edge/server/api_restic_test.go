@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
@@ -397,7 +398,7 @@ func TestRestic_AMissingRightIsRefusedWithTheRightAndTheMachine(t *testing.T) {
 			continue
 		}
 		for _, right := range fit.Rights {
-			if right.Right == machine.CapabilityResticProduce && right.State != "missing" {
+			if right.Right == agentpolicy.CapabilityResticProduce && right.State != "missing" {
 				t.Fatalf("restic.produce on vps: %+v", right)
 			}
 		}

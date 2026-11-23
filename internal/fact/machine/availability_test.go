@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 )
 
 func TestAccount_ReadsBackWhatItWrites(t *testing.T) {
@@ -61,7 +63,7 @@ func TestAccount_RefusesWhatAPeerCouldForge(t *testing.T) {
 
 func TestUnavailable_ReadsBackWhatItWritesInTheOrderOfTheRights(t *testing.T) {
 	unavailable := map[string]string{
-		CapabilityFilesWrite: "path_unwritable", CapabilityDockerDeploy: "docker_denied", CapabilityAgentUpdate: "not_self_updatable",
+		agentpolicy.CapabilityFilesWrite: "path_unwritable", agentpolicy.CapabilityDockerDeploy: "docker_denied", agentpolicy.CapabilityAgentUpdate: "not_self_updatable",
 	}
 	text := FormatUnavailable(unavailable)
 	const want = "agent.update=not_self_updatable,docker.deploy=docker_denied,files.write=path_unwritable"
@@ -72,7 +74,7 @@ func TestUnavailable_ReadsBackWhatItWritesInTheOrderOfTheRights(t *testing.T) {
 	if err != nil || !maps.Equal(parsed, unavailable) {
 		t.Fatalf("read back %v %v", parsed, err)
 	}
-	if FormatUnavailable(nil) != "" || FormatUnavailable(map[string]string{CapabilityDockerDeploy: ""}) != "" {
+	if FormatUnavailable(nil) != "" || FormatUnavailable(map[string]string{agentpolicy.CapabilityDockerDeploy: ""}) != "" {
 		t.Error("nothing unavailable writes nothing")
 	}
 	if parsed, err := ParseUnavailable(""); parsed != nil || err != nil {
@@ -83,7 +85,7 @@ func TestUnavailable_ReadsBackWhatItWritesInTheOrderOfTheRights(t *testing.T) {
 // Les trois raisons de backup.produce passent l'en-tête, pour ce droit seul : un
 // agent qui dit sudo_denied d'un droit de Docker est un pair qui se trompe.
 func TestUnavailable_TheProduceRightCarriesItsOwnReasons(t *testing.T) {
-	unavailable := map[string]string{CapabilityBackupProduce: "sudo_denied", CapabilityBackupReceive: "path_denied"}
+	unavailable := map[string]string{agentpolicy.CapabilityBackupProduce: "sudo_denied", agentpolicy.CapabilityBackupReceive: "path_denied"}
 	text := FormatUnavailable(unavailable)
 	if text != "backup.receive=path_denied,backup.produce=sudo_denied" {
 		t.Fatalf("formatted %q", text)
@@ -132,11 +134,11 @@ func TestUnavailableReasons_AreTheClosedListTheAgentJudgesWith(t *testing.T) {
 	}
 	// Les droits qui écrivent, dans l'ordre des droits ; une liste écrite : un
 	// droit ajouté plus tard (probe.lan, ssh.keys) n'y entre pas tout seul.
-	want := []string{CapabilityAgentUpdate, CapabilityDockerDeploy, CapabilityDockerUpdate, CapabilityBackupReceive, CapabilityBackupProduce, CapabilityFilesWrite, CapabilityProxmoxPower, CapabilityProxmoxSnapshot, CapabilityResticTarget, CapabilityResticProduce, CapabilityResticDocker, CapabilityResticVerify, CapabilityResticBrowse, CapabilityResticRestore}
-	if !slices.Equal(JudgedCapabilities(), want) || slices.Contains(JudgedCapabilities(), CapabilityObserve) {
+	want := []string{agentpolicy.CapabilityAgentUpdate, agentpolicy.CapabilityDockerDeploy, agentpolicy.CapabilityDockerUpdate, agentpolicy.CapabilityBackupReceive, agentpolicy.CapabilityBackupProduce, agentpolicy.CapabilityFilesWrite, agentpolicy.CapabilityProxmoxPower, agentpolicy.CapabilityProxmoxSnapshot, agentpolicy.CapabilityResticTarget, agentpolicy.CapabilityResticProduce, agentpolicy.CapabilityResticDocker, agentpolicy.CapabilityResticVerify, agentpolicy.CapabilityResticBrowse, agentpolicy.CapabilityResticRestore}
+	if !slices.Equal(JudgedCapabilities(), want) || slices.Contains(JudgedCapabilities(), agentpolicy.CapabilityObserve) {
 		t.Errorf("judged rights %v, want %v", JudgedCapabilities(), want)
 	}
-	order := CapabilityNames()
+	order := agentpolicy.CapabilityNames()
 	if !slices.IsSortedFunc(JudgedCapabilities(), func(a, b string) int { return slices.Index(order, a) - slices.Index(order, b) }) {
 		t.Errorf("judged rights out of the order of the rights: %v", JudgedCapabilities())
 	}

@@ -1,7 +1,7 @@
 package verb
 
 import (
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -16,11 +16,11 @@ func init() {
 	Default.MustRegister(Verb{
 		ID: "agent.update", Route: "POST /api/machines/{id}/actions/update-agent", Params: []string{"id"}, Body: []string{}, Target: TargetMachine,
 		Label: "api_token.verb_agent_update", Summary: "api_token.verb_agent_update_text", Reverse: "agent.rollback",
-		Level: 1, Token: true, Order: agentwire.KindAgentUpdate, Right: machine.CapabilityAgentUpdate, Audit: audit.ActionOrder,
+		Level: 1, Token: true, Order: agentwire.KindAgentUpdate, Right: agentpolicy.CapabilityAgentUpdate, Audit: audit.ActionOrder,
 	})
 	Default.MustRegister(Verb{
 		ID: "agent.rollback", Route: "POST /api/machines/{id}/actions/rollback-agent", Params: []string{"id"}, Body: []string{}, Target: TargetMachine,
 		Label: "api_token.verb_agent_rollback", Summary: "api_token.verb_agent_rollback_text", Reverse: "agent.update",
-		Level: 1, Token: true, Order: agentwire.KindAgentRollback, Right: machine.CapabilityAgentUpdate, Audit: audit.ActionOrder,
+		Level: 1, Token: true, Order: agentwire.KindAgentRollback, Right: agentpolicy.CapabilityAgentUpdate, Audit: audit.ActionOrder,
 	})
 }

@@ -5,6 +5,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/fact/probe"
 	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
@@ -32,7 +33,7 @@ func probeOnLoopback(t *testing.T, rights string, narrowed bool) probe.Probe {
 	}()
 
 	b := newBench(t)
-	granted, err := machine.ParseCapabilities(rights)
+	granted, err := agentpolicy.ParseCapabilities(rights)
 	if err != nil {
 		t.Fatal(err)
 	}

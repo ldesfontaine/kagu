@@ -7,6 +7,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
 	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
@@ -155,7 +156,7 @@ func TestInventory_TargetsAndLastRuns(t *testing.T) {
 		t.Fatalf("targets %+v", inventory.Targets)
 	}
 	stored, storage := inventory.Targets[0], inventory.Targets[1]
-	if stored.Kind != backup.TargetDestination || stored.Name != destination.Name || stored.Path != destination.Path || stored.Right != backup.RightOK || len(stored.Plans) != 2 {
+	if stored.Kind != backup.TargetDestination || stored.Name != destination.Name || stored.Path != destination.Path || stored.Right != agentpolicy.FitOK || len(stored.Plans) != 2 {
 		t.Fatalf("destination %+v", stored)
 	}
 	if storage.Kind != backup.TargetStorage || storage.Name != "nfs" || storage.Type != "nfs" || storage.Total != 1000 || !storage.Active || storage.MachineID != sourceID {

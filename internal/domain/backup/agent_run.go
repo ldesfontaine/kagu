@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
@@ -164,10 +165,7 @@ func (s *Service) prepareAgentPass(ctx context.Context, plan Plan, at time.Time)
 // judgeSource : la machine source a un agent dont le droit couvre le
 // producteur, puis en ligne. Tant que l'agent n'a rien rapporté, c'est lui qui jugera.
 func judgeSource(source machine.Status, producer string) error {
-	if !source.Agent.IsActive() {
-		return ErrSourceRightMissing
-	}
-	if !source.Agent.ReportedAt.IsZero() && !machine.CoversProducer(source.Agent.Capabilities, producer) {
+	if source.Agent.Fit(agentpolicy.CapabilityBackupProduce, producer).State == agentpolicy.FitMissing {
 		return ErrSourceRightMissing
 	}
 	if !source.Online {
@@ -256,7 +254,7 @@ func (p *agentPass) begin(ctx context.Context, target string) (*targetRun, error
 	produce, err := s.sender.Send(ctx, p.plan.SourceMachineID, agentwire.KindBackupProduce, params)
 	if err != nil {
 		upload.Discard()
-		return nil, sendFailure(err, machine.CapabilityBackupProduce)
+		return nil, sendFailure(err, agentpolicy.CapabilityBackupProduce)
 	}
 	if produce.State.IsFinished() {
 		// L'ordre n'est pas parti : personne ne viendra remplir le colis.
@@ -366,7 +364,7 @@ func (p *agentPass) finish(ctx context.Context, current *targetRun) (action.Run,
 	}
 	received, err := s.sendReceive(ctx, p.destination, current.upload.ID(), files, archiveKind(p.plan))
 	if err != nil {
-		return action.Run{}, sendFailure(err, machine.CapabilityBackupReceive)
+		return action.Run{}, sendFailure(err, agentpolicy.CapabilityBackupReceive)
 	}
 	if received.State.IsFinished() {
 		return received, &targetFailure{reason: runReason(received), cause: action.ErrMachineOffline}
@@ -417,7 +415,7 @@ func (p *agentPass) prune(ctx context.Context, current *targetRun) error {
 	}
 	pruned, err := s.requestPrune(ctx, p.destination, current.prefix, p.plan.Keep)
 	if err != nil {
-		return sendFailure(err, machine.CapabilityBackupReceive)
+		return sendFailure(err, agentpolicy.CapabilityBackupReceive)
 	}
 	finished, err := s.waitFor(ctx, pruned.ID)
 	if err != nil {

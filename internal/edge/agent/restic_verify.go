@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -51,8 +51,8 @@ func (r *orderRunner) acceptResticVerify(order judgedOrder) (agentwire.ActionRes
 	if !isTarget {
 		// Le dépôt est sous le dossier du droit restic.target : sans lui, aucun
 		// dépôt à vérifier.
-		r.journal.notAccepted(order, agentwire.RightMissing(machine.CapabilityResticTarget))
-		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.RightMissing(machine.CapabilityResticTarget)}, nil
+		r.journal.notAccepted(order, agentwire.RightMissing(agentpolicy.CapabilityResticTarget))
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.RightMissing(agentpolicy.CapabilityResticTarget)}, nil
 	}
 	job, refused := r.restic.target.judgeVerify(order, dir, r.checks)
 	if refused != nil {

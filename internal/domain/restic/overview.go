@@ -9,6 +9,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
 	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -148,7 +149,7 @@ type VerifyView struct {
 	Files     int
 	Bytes     int64
 	// Le droit restic.verify de la cible : l'écran propose de la ré-enrôler.
-	Right RightFit
+	Right agentpolicy.RightFit
 	// Since : d'où court l'attente d'une première réussite (la plus ancienne
 	// sauvegarde du dépôt) ; sert à dire depuis quand le test manque.
 	Since time.Time
@@ -232,7 +233,7 @@ type MachineFit struct {
 	// Le jeton de l'hôte ne lit pas ses tâches de sauvegarde (Sys.Audit sur
 	// « / ») : la fiche dit ce qui manque, « aucune tâche » n'est pas une réponse.
 	ProxmoxJobsUnknown bool
-	Rights             []RightFit
+	Rights             []RightView
 }
 
 // L'état d'une cible restic tant que son agent n'a rien rapporté.
@@ -523,7 +524,7 @@ func verifyViewOf(link Link, target machine.Status, linkSince, now time.Time) *V
 	return &VerifyView{
 		State: verify.State, Reason: verify.Reason, At: verify.At, SuccessAt: verify.SuccessAt,
 		Snapshots: verify.Snapshots, Files: verify.Files, Bytes: verify.Bytes,
-		Right:   RightOf(target, machine.CapabilityResticVerify),
+		Right:   target.Agent.Fit(agentpolicy.CapabilityResticVerify, ""),
 		Since:   linkSince,
 		IsStale: now.Sub(baseline) > VerifyStaleAfter,
 	}
@@ -651,8 +652,8 @@ func holdsOf(sources []Source, match func(Protection) bool) []string {
 // pendingState : rien de rapporté par rest-server, mais l'agent dit déjà
 // qu'il ne le trouve pas : l'écran dit quoi installer.
 func pendingState(target machine.Status) (string, string) {
-	right := RightOf(target, machine.CapabilityResticTarget)
-	if right.State == RightUnavailable && right.Reason == agentwire.ReasonRestServerMissing {
+	right := target.Agent.Fit(agentpolicy.CapabilityResticTarget, "")
+	if right.State == agentpolicy.FitUnavailable && right.Reason == agentwire.ReasonRestServerMissing {
 		return agentwire.ResticTargetError, agentwire.ResticErrorBinaryMissing
 	}
 	return targetPending, ""
@@ -669,19 +670,19 @@ func fitsOf(inputs overviewInputs) []MachineFit {
 	fits := []MachineFit{}
 	for _, status := range inputs.machines {
 		jobsBlind, isProxmoxHost := inputs.jobsBlind[status.ID]
-		produce := RightOf(status, machine.CapabilityResticProduce)
+		produce := status.Agent.Fit(agentpolicy.CapabilityResticProduce, "")
 		fits = append(fits, MachineFit{
 			MachineID: status.ID, MachineName: status.Name, OS: status.OS, Arch: status.Arch, Online: status.Online,
-			ResticAvailable: produce.State == RightOK, IsTarget: isTarget[status.ID],
+			ResticAvailable: produce.State == agentpolicy.FitOK, IsTarget: isTarget[status.ID],
 			ProxmoxHost: isProxmoxHost, ProxmoxJobsUnknown: jobsBlind,
-			Rights: []RightFit{
-				RightOf(status, machine.CapabilityResticTarget),
-				produce,
-				RightOf(status, machine.CapabilityResticDocker),
-				RightOf(status, machine.CapabilityResticVerify),
-				RightOf(status, machine.CapabilityResticBrowse),
-				RightOf(status, machine.CapabilityResticRestore),
-				RightOf(status, machine.CapabilityBackupProduce),
+			Rights: []RightView{
+				{RightFit: status.Agent.Fit(agentpolicy.CapabilityResticTarget, ""), Path: targetDirOf(status.Agent)},
+				{RightFit: produce},
+				{RightFit: status.Agent.Fit(agentpolicy.CapabilityResticDocker, "")},
+				{RightFit: status.Agent.Fit(agentpolicy.CapabilityResticVerify, "")},
+				{RightFit: status.Agent.Fit(agentpolicy.CapabilityResticBrowse, "")},
+				{RightFit: status.Agent.Fit(agentpolicy.CapabilityResticRestore, "")},
+				{RightFit: status.Agent.Fit(agentpolicy.CapabilityBackupProduce, agentpolicy.ProducerProxmoxVzdump)},
 			},
 		})
 	}

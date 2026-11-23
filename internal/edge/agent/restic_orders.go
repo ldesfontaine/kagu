@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -37,9 +37,9 @@ func (r *orderRunner) startRestic(ctx context.Context) {
 
 // resticTargetDir rend le dossier des dépôts : le chemin du droit
 // restic.target, faux sans le droit.
-func resticTargetDir(capabilities []machine.Capability) (string, bool) {
+func resticTargetDir(capabilities []agentpolicy.Capability) (string, bool) {
 	for _, capability := range capabilities {
-		if capability.Name == machine.CapabilityResticTarget && len(capability.Paths) == 1 {
+		if capability.Name == agentpolicy.CapabilityResticTarget && len(capability.Paths) == 1 {
 			return capability.Paths[0], true
 		}
 	}
@@ -145,10 +145,10 @@ func (r *orderRunner) acceptResticBackup(order judgedOrder) (agentwire.ActionRes
 func (r *orderRunner) serveRelay(ctx context.Context, request agentwire.ResticRelayRequest) {
 	server := relayLink{fetch: r.fetch}
 	r.mu.Lock()
-	isTarget := machine.HasCapability(r.identity.Capabilities(), machine.CapabilityResticTarget)
+	isTarget := agentpolicy.HasCapability(r.identity.Capabilities(), agentpolicy.CapabilityResticTarget)
 	r.mu.Unlock()
 	if !isTarget {
-		r.logger.Warn("restic relay refused", "repo", request.Repo, "reason", agentwire.RightMissing(machine.CapabilityResticTarget))
+		r.logger.Warn("restic relay refused", "repo", request.Repo, "reason", agentwire.RightMissing(agentpolicy.CapabilityResticTarget))
 		r.restic.target.answerRelay(ctx, server, request.ID, http.StatusForbidden, relayRightMissing)
 		return
 	}
@@ -166,7 +166,7 @@ func (r *orderRunner) resticReport(ctx context.Context) (agentwire.ResticReport,
 		target := r.restic.target.report(ctx, dir, checks)
 		report.Target = &target
 	}
-	if machine.HasCapability(capabilities, machine.CapabilityResticProduce) {
+	if agentpolicy.HasCapability(capabilities, agentpolicy.CapabilityResticProduce) {
 		source := r.restic.source.report(ctx, checks)
 		report.Source = &source
 	}

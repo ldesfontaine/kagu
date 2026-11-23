@@ -10,6 +10,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/fact/role"
@@ -96,6 +97,25 @@ type agentJSON struct {
 	RollbackCapable bool `json:"rollback_capable"`
 	// Les ancres de confiance locales que l'agent dit tenir.
 	Anchors anchorsJSON `json:"anchors"`
+	// Par droit connu, le verdict d'agentpolicy.Fit : l'écran l'affiche sans
+	// le recalculer.
+	Fit map[string]fitJSON `json:"fit"`
+}
+
+// state : "ok", "missing", "unavailable" (reason dit pourquoi) ou "unknown"
+// (l'agent n'a pas encore rapporté ses droits).
+type fitJSON struct {
+	State  string `json:"state"`
+	Reason string `json:"reason"`
+}
+
+func fitsToJSON(agent machine.Agent) map[string]fitJSON {
+	fits := make(map[string]fitJSON, len(agentpolicy.Names()))
+	for _, right := range agentpolicy.Names() {
+		fit := agent.Fit(right, "")
+		fits[right] = fitJSON{State: string(fit.State), Reason: fit.Reason}
+	}
+	return fits
 }
 
 // Les ancres d'un agent : reported est faux chez un agent d'avant les ancres,
@@ -245,6 +265,7 @@ func agentToJSON(agent machine.Agent) *agentJSON {
 		RunAs:                accountToJSON(agent.RunAs),
 		RollbackCapable:      agent.CanRollBack(),
 		Anchors:              anchorsToJSON(agent.Anchors),
+		Fit:                  fitsToJSON(agent),
 	}
 }
 
@@ -265,12 +286,12 @@ func reportedCapabilitiesToJSON(agent machine.Agent) []reportedCapabilityJSON {
 	return reported
 }
 
-func capabilityToJSON(capability machine.Capability) capabilityJSON {
+func capabilityToJSON(capability agentpolicy.Capability) capabilityJSON {
 	return capabilityJSON{Name: capability.Name, Paths: orEmpty(capability.Paths)}
 }
 
-func capabilityFromJSON(capability capabilityJSON) machine.Capability {
-	return machine.Capability{Name: capability.Name, Paths: capability.Paths}
+func capabilityFromJSON(capability capabilityJSON) agentpolicy.Capability {
+	return agentpolicy.Capability{Name: capability.Name, Paths: capability.Paths}
 }
 
 func roleToJSON(detected role.Role) roleJSON {
@@ -507,13 +528,13 @@ func (s *Server) writeToken(w http.ResponseWriter, r *http.Request, token machin
 // Le binaire est celui de l'état de l'agent, pas /usr/local/bin/opencloud : un
 // lien root vers un fichier que le compte de l'agent peut remplacer serait une
 // escalade sur une machine sans Docker.
-func installCommand(publicURL, token string, code lang.Code, capabilities []machine.Capability, anchors map[string][]string) string {
+func installCommand(publicURL, token string, code lang.Code, capabilities []agentpolicy.Capability, anchors map[string][]string) string {
 	command := "printf '%s\\n' '" + token + "' | runuser -u " + brand.AgentAccount + " -- " + brand.AgentCurrentPath +
 		" agent -server " + publicURL
 	if code != lang.Default {
 		command += " -lang " + string(code)
 	}
-	if rights := machine.FormatCapabilities(capabilities); rights != "" && rights != machine.CapabilityObserve {
+	if rights := agentpolicy.FormatCapabilities(capabilities); rights != "" && rights != agentpolicy.CapabilityObserve {
 		command += " -rights " + rights
 	}
 	return command + installAnchorFlags(capabilities, anchors)
@@ -524,11 +545,11 @@ func installCommand(publicURL, token string, code lang.Code, capabilities []mach
 // drapeau manque : l'agent refusera l'ordre (refus par défaut), et la fiche dira
 // la commande qui pose l'ancre. Les valeurs ont la forme du type (lettres
 // minuscules et chiffres) : elles passent sans guillemets.
-func installAnchorFlags(capabilities []machine.Capability, anchors map[string][]string) string {
+func installAnchorFlags(capabilities []agentpolicy.Capability, anchors map[string][]string) string {
 	var flags string
 	for _, kind := range anchor.Kinds() {
 		values := anchors[kind.Name]
-		if len(values) == 0 || !machine.HasCapability(capabilities, kind.Right) {
+		if len(values) == 0 || !agentpolicy.HasCapability(capabilities, kind.Right) {
 			continue
 		}
 		flags += " -" + kind.Flag + " " + anchor.FormatList(values)
@@ -542,7 +563,7 @@ func installAnchorFlags(capabilities []machine.Capability, anchors map[string][]
 // Le groupe docker équivaut à root : la page et la documentation le disent.
 // Rien n'y est protégé pour le shell : le compte, les chemins de
 // l'état et la version sont des constantes, et un chemin de droit ne porte
-// que des lettres, chiffres et « . _ - / » (machine.ValidCapabilityPath).
+// que des lettres, chiffres et « . _ - / » (agentpolicy.ValidCapabilityPath).
 // Jamais le jeton. useradd échoue sur un compte qui existe : sans effet sur
 // les lignes suivantes, qui ne dépendent pas de lui. Le lien current ne bouge
 // que si le binaire a été posé, pour ne jamais viser un fichier absent.
@@ -553,7 +574,7 @@ func installAnchorFlags(capabilities []machine.Capability, anchors map[string][]
 // sa cible ; bin/, le binaire et un dossier de droit sous un dossier du
 // compte se font donc sous le compte (runuser), et un dossier de droit que
 // root donne est d'abord vérifié n'être pas un lien.
-func installPreparation(capabilities []machine.Capability, number string, local bool) string {
+func installPreparation(capabilities []agentpolicy.Capability, number string, local bool) string {
 	account := brand.AgentAccount
 	owner := "-o " + account + " -g " + account
 	asAccount := "runuser -u " + account + " -- "
@@ -601,8 +622,8 @@ func installPreparation(capabilities []machine.Capability, number string, local 
 // l'état, est fait sous le compte. Les textes viennent de machine/produce.go :
 // aucune apostrophe, aucun nom de l'opérateur. Ce droit vaut root pour un agent
 // compromis (vzdump --script), comme le groupe docker.
-func producePreparation(capabilities []machine.Capability, asAccount string) []string {
-	if !machine.CoversProducer(capabilities, machine.ProducerProxmoxVzdump) {
+func producePreparation(capabilities []agentpolicy.Capability, asAccount string) []string {
+	if !agentpolicy.CoversProducer(capabilities, agentpolicy.ProducerProxmoxVzdump) {
 		return nil
 	}
 	return []string{
@@ -628,7 +649,7 @@ func sudoersPreparation() string {
 
 // proxmoxCommands : ce que l'opérateur joue lui-même sur l'hôte Proxmox pour les
 // droits proxmox.* (machine.ProxmoxTokenCommands), une commande par ligne.
-func proxmoxCommands(capabilities []machine.Capability) string {
+func proxmoxCommands(capabilities []agentpolicy.Capability) string {
 	if !machine.ProxmoxRights(capabilities) {
 		return ""
 	}
@@ -660,12 +681,12 @@ type writtenFolder struct {
 // des droits : la racine des services pour docker.deploy et docker.update, le
 // dossier de backup.receive (0700 : ce sont des sauvegardes), ceux de
 // files.write. Un dossier demandé par deux droits garde le mode du premier.
-func writtenFolders(capabilities []machine.Capability) []writtenFolder {
+func writtenFolders(capabilities []agentpolicy.Capability) []writtenFolder {
 	var folders []writtenFolder
 	add := func(path, mode, right string) {
 		// Les droits viennent normalisés ; un chemin qui ne l'est pas ne
 		// s'écrit pas dans des lignes qu'on colle en root.
-		if !machine.ValidCapabilityPath(path) {
+		if !agentpolicy.ValidCapabilityPath(path) {
 			return
 		}
 		for index := range folders {
@@ -680,13 +701,13 @@ func writtenFolders(capabilities []machine.Capability) []writtenFolder {
 	}
 	for _, capability := range capabilities {
 		switch capability.Name {
-		case machine.CapabilityDockerDeploy, machine.CapabilityDockerUpdate:
+		case agentpolicy.CapabilityDockerDeploy, agentpolicy.CapabilityDockerUpdate:
 			add(brand.WorkspaceRoot, "0755", capability.Name)
-		case machine.CapabilityBackupReceive:
+		case agentpolicy.CapabilityBackupReceive:
 			for _, path := range capability.Paths {
 				add(path, "0700", capability.Name)
 			}
-		case machine.CapabilityFilesWrite:
+		case agentpolicy.CapabilityFilesWrite:
 			for _, path := range capability.Paths {
 				add(path, "0755", capability.Name)
 			}
@@ -731,7 +752,7 @@ func (s *Server) reenrollMachine(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength != 0 && !s.readAPI(w, r, &request) {
 		return
 	}
-	var capabilities []machine.Capability
+	var capabilities []agentpolicy.Capability
 	if request.Capabilities != nil {
 		capabilities = httpx.ConvertAll(*request.Capabilities, capabilityFromJSON)
 	}

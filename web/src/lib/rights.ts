@@ -1,7 +1,7 @@
 import type { Capability, Machine } from "../api/machines";
 import type { Translate } from "../i18n/context";
 import { detectedProxmox } from "./proxmox";
-import { alwaysGranted, capabilityLabelKey, capabilityNames, describeUnavailable, type RightsValues } from "./machines";
+import { alwaysGranted, capabilityLabelKey, describeUnavailable, type RightsValues } from "./machines";
 
 // Les droits d'un agent manquent ici ou là ; ce fichier dit comment un écran
 // le sait, et où il mène l'opérateur : le ré-enrôlement, déjà coché du droit.
@@ -27,10 +27,11 @@ export function reenrollPath(machineID: string, wanted?: { name: string; path?: 
 }
 
 // Le droit que l'adresse demande de cocher ; rien si le nom n'est pas un droit
-// de la liste fermée (observe est toujours accordé, il n'a pas de case).
-export function wantedRightOf(search: URLSearchParams): WantedRight | null {
+// de la liste fermée de la session (observe est toujours accordé, il n'a pas
+// de case).
+export function wantedRightOf(rightNames: readonly string[], search: URLSearchParams): WantedRight | null {
   const name = search.get("droit");
-  const known = capabilityNames.find((candidate) => candidate === name && candidate !== alwaysGranted);
+  const known = rightNames.find((candidate) => candidate === name && candidate !== alwaysGranted);
   return known === undefined ? null : { name: known, path: search.get("chemin") ?? "" };
 }
 
@@ -73,9 +74,11 @@ export interface Unfit {
 }
 
 // Dit si la machine peut faire ce que demande right (null : il suffit d'un
-// agent actif), ou pourquoi elle ne le peut pas. Un droit coché que le compte
-// de l'agent ne peut pas exercer ne convient pas non plus : la raison est celle
-// que la fiche donne.
+// agent actif), ou pourquoi elle ne le peut pas, selon le verdict que le
+// serveur rend par droit. Un droit coché que le compte de l'agent ne peut pas
+// exercer ne convient pas non plus : la raison est celle que la fiche donne.
+// Un agent qui n'a pas encore rapporté ses droits ne convient pas tant que le
+// serveur ne sait pas : ce que son jeton demandait n'y change rien.
 export function unfitFor(t: Translate, machine: Pick<Machine, "id" | "agent">, right: string | null): Unfit | null {
   const agent = machine.agent;
   if (agent === null || agent.revoked_at !== null) {
@@ -84,12 +87,15 @@ export function unfitFor(t: Translate, machine: Pick<Machine, "id" | "agent">, r
   if (right === null) {
     return null;
   }
-  const held = heldRights(agent).find((capability) => capability.name === right);
-  if (held === undefined) {
+  const fit = agent.fit[right];
+  if (fit === undefined || fit.state === "missing") {
     return { reason: t("machine.fit_right_missing", t(capabilityLabelKey(right))), link: { to: reenrollPath(machine.id, { name: right }), label: t("machine.reenroll_with_right") } };
   }
-  if ("unavailable" in held && typeof held.unavailable === "string" && held.unavailable !== "") {
-    return { reason: describeUnavailable(t, held.unavailable, agent.run_as), link: { to: `/machines/${machine.id}`, label: t("machine.fit_open") } };
+  if (fit.state === "unavailable") {
+    return { reason: describeUnavailable(t, fit.reason, agent.run_as), link: { to: `/machines/${machine.id}`, label: t("machine.fit_open") } };
+  }
+  if (fit.state === "unknown") {
+    return { reason: t("machine.fit_right_unknown"), link: { to: `/machines/${machine.id}`, label: t("machine.fit_open") } };
   }
   return null;
 }

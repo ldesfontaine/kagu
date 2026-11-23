@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/testkit"
@@ -403,17 +404,17 @@ func TestResticBackup_RelayResultSaysWhichHostAndPortToOpen(t *testing.T) {
 // un invité Proxmox aussi. Rien n'est lancé.
 func TestResticBackup_IsRefusedWithoutItsRights(t *testing.T) {
 	without := newResticBench(t)
-	result := expectResult(t, without.run(t, agentwire.KindResticBackup, serviceBackup("forgejo")), agentwire.ActionRefused, agentwire.RightMissing(machine.CapabilityResticProduce))
+	result := expectResult(t, without.run(t, agentwire.KindResticBackup, serviceBackup("forgejo")), agentwire.ActionRefused, agentwire.RightMissing(agentpolicy.CapabilityResticProduce))
 	if result.Restic != nil {
 		t.Fatalf("a refused order reported a path: %+v", result.Restic)
 	}
 	provision := agentwire.ResticProvisionParams{Target: resticTargetID, Host: "nas", Port: 8000, User: resticUser, Certificate: "x"}
-	expectResult(t, without.run(t, agentwire.KindResticProvision, provision), agentwire.ActionRefused, agentwire.RightMissing(machine.CapabilityResticProduce))
+	expectResult(t, without.run(t, agentwire.KindResticProvision, provision), agentwire.ActionRefused, agentwire.RightMissing(agentpolicy.CapabilityResticProduce))
 
 	noProducer := newResticBench(t, "restic.produce")
 	noProducer.trust(t, map[string][]string{anchor.BackupGuest: {"105"}})
 	guest := agentwire.ResticBackupParams{Target: resticTargetID, Scope: agentwire.ResticScopeVM, VMID: 105, GuestType: agentwire.GuestQEMU}
-	expectResult(t, noProducer.run(t, agentwire.KindResticBackup, guest), agentwire.ActionRefused, agentwire.RightMissing(machine.CapabilityBackupProduce))
+	expectResult(t, noProducer.run(t, agentwire.KindResticBackup, guest), agentwire.ActionRefused, agentwire.RightMissing(agentpolicy.CapabilityBackupProduce))
 	if len(without.restic.callsMade())+len(noProducer.restic.callsMade()) != 0 {
 		t.Fatal("restic ran on a refused order")
 	}
@@ -442,7 +443,7 @@ func TestResticBackup_IsRefusedWhenResticIsMissing(t *testing.T) {
 	b.service(t, "forgejo")
 	expectResult(t, b.run(t, agentwire.KindResticBackup, serviceBackup("forgejo")), agentwire.ActionRefused, agentwire.ReasonResticMissing)
 	unavailable := judgeRights(context.Background(), b.runner.identity, b.runner.checks)
-	if unavailable[machine.CapabilityResticProduce] != agentwire.ReasonResticMissing {
+	if unavailable[agentpolicy.CapabilityResticProduce] != agentwire.ReasonResticMissing {
 		t.Fatalf("unavailable %v", unavailable)
 	}
 }

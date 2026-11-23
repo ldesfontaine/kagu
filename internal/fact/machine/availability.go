@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 )
 
 // Ce que l'agent dit de lui à l'ouverture du flux, au-delà de ses droits :
@@ -82,14 +84,14 @@ func UnavailableReasons() []string {
 }
 
 // JudgedCapabilities rend les droits dont l'agent juge s'il peut les exercer,
-// dans l'ordre de CapabilityNames : ceux qui écrivent sur la machine. Pas
+// dans l'ordre de agentpolicy.CapabilityNames : ceux qui écrivent sur la machine. Pas
 // observe, dont l'état de Docker se lit déjà par le moteur, ni un droit ajouté
 // plus tard qui n'écrit rien : la liste est écrite, pas déduite.
 func JudgedCapabilities() []string {
 	return []string{
-		CapabilityAgentUpdate, CapabilityDockerDeploy, CapabilityDockerUpdate, CapabilityBackupReceive,
-		CapabilityBackupProduce, CapabilityFilesWrite, CapabilityProxmoxPower, CapabilityProxmoxSnapshot,
-		CapabilityResticTarget, CapabilityResticProduce, CapabilityResticDocker, CapabilityResticVerify, CapabilityResticBrowse, CapabilityResticRestore,
+		agentpolicy.CapabilityAgentUpdate, agentpolicy.CapabilityDockerDeploy, agentpolicy.CapabilityDockerUpdate, agentpolicy.CapabilityBackupReceive,
+		agentpolicy.CapabilityBackupProduce, agentpolicy.CapabilityFilesWrite, agentpolicy.CapabilityProxmoxPower, agentpolicy.CapabilityProxmoxSnapshot,
+		agentpolicy.CapabilityResticTarget, agentpolicy.CapabilityResticProduce, agentpolicy.CapabilityResticDocker, agentpolicy.CapabilityResticVerify, agentpolicy.CapabilityResticBrowse, agentpolicy.CapabilityResticRestore,
 	}
 }
 
@@ -100,10 +102,10 @@ func FormatUnavailable(unavailable map[string]string) string {
 	items := make([]string, 0, len(unavailable))
 	for _, name := range JudgedCapabilities() {
 		if reason := unavailable[name]; reason != "" {
-			items = append(items, name+scopeSeparator+reason)
+			items = append(items, name+agentpolicy.ScopeSeparator+reason)
 		}
 	}
-	return strings.Join(items, capabilitySeparator)
+	return strings.Join(items, agentpolicy.RightSeparator)
 }
 
 // ParseUnavailable lit l'en-tête. Un texte vide ne dit rien d'indisponible
@@ -119,8 +121,8 @@ func ParseUnavailable(text string) (map[string]string, error) {
 		return nil, ErrUnavailableUnreadable
 	}
 	unavailable := map[string]string{}
-	for item := range strings.SplitSeq(text, capabilitySeparator) {
-		name, reason, found := strings.Cut(strings.TrimSpace(item), scopeSeparator)
+	for item := range strings.SplitSeq(text, agentpolicy.RightSeparator) {
+		name, reason, found := strings.Cut(strings.TrimSpace(item), agentpolicy.ScopeSeparator)
 		_, duplicate := unavailable[name]
 		if !found || duplicate || !slices.Contains(JudgedCapabilities(), name) || !slices.Contains(UnavailableReasons(), reason) {
 			return nil, ErrUnavailableUnreadable

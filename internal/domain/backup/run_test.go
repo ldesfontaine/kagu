@@ -15,6 +15,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
 	"github.com/ldesfontaine/kagu/internal/edge/store"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -106,7 +107,7 @@ func TestRun_ShowsAnUnavailableRightButStillSendsTheOrder(t *testing.T) {
 	if err != nil || len(overview.Destinations) != 1 {
 		t.Fatalf("overview %+v %v", overview, err)
 	}
-	if view := overview.Destinations[0]; view.Right != backup.RightUnavailable || view.RightReason != "path_denied" {
+	if view := overview.Destinations[0]; view.Right != agentpolicy.FitUnavailable || view.RightReason != "path_denied" {
 		t.Fatalf("destination %+v", view)
 	}
 	run, err := b.backups.RunNow(operator(), backup.SubjectDatabase)
@@ -123,7 +124,7 @@ func TestRun_ShowsAnUnavailableRightButStillSendsTheOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if overview, err = b.backups.Overview(context.Background()); err != nil || overview.Destinations[0].Right != backup.RightMissing || overview.Destinations[0].RightReason != "" {
+	if overview, err = b.backups.Overview(context.Background()); err != nil || overview.Destinations[0].Right != agentpolicy.FitMissing || overview.Destinations[0].RightReason != "" {
 		t.Fatalf("overview %+v %v", overview, err)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -644,11 +645,11 @@ func TestRun_UpdatesItselfAndTheServerSeesItComeBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	options := b.options("")
-	options.Token, _, err = b.machines.CreateToken(ctx, "vps-paris-1", machine.RoleGeneric, []machine.Capability{{Name: machine.CapabilityAgentUpdate}})
+	options.Token, _, err = b.machines.CreateToken(ctx, "vps-paris-1", machine.RoleGeneric, []agentpolicy.Capability{{Name: agentpolicy.CapabilityAgentUpdate}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	options.Rights = []machine.Capability{{Name: machine.CapabilityAgentUpdate}}
+	options.Rights = []agentpolicy.Capability{{Name: agentpolicy.CapabilityAgentUpdate}}
 	options.ReleaseKeys, options.HasReleaseKey = release.Keys{Current: public}, true
 	// Sous le lanceur stable : sans lui, l'agent ne rapporte pas de retour
 	// arrière et refuse de basculer son lien.

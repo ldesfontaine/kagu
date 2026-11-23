@@ -24,6 +24,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/edge/server/agentapi"
 	pingapi "github.com/ldesfontaine/kagu/internal/edge/server/ping" // ping : l'aide des tests du même nom
 	"github.com/ldesfontaine/kagu/internal/edge/server/public"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/firewall"
 	"github.com/ldesfontaine/kagu/internal/fact/lifecycle"
@@ -69,8 +70,8 @@ type MachineService interface {
 	List(ctx context.Context) ([]machine.Status, error)
 	Get(ctx context.Context, id string) (machine.Status, error)
 	Count(ctx context.Context) (total, online int, err error)
-	CreateToken(ctx context.Context, name string, role machine.Role, capabilities []machine.Capability) (string, machine.Token, error)
-	CreateReenrollToken(ctx context.Context, machineID string, capabilities []machine.Capability) (string, machine.Token, error)
+	CreateToken(ctx context.Context, name string, role machine.Role, capabilities []agentpolicy.Capability) (string, machine.Token, error)
+	CreateReenrollToken(ctx context.Context, machineID string, capabilities []agentpolicy.Capability) (string, machine.Token, error)
 	OfferLocalEnrollment(ctx context.Context) (string, machine.Token, error)
 	PendingTokens(ctx context.Context) ([]machine.Token, error)
 	CancelToken(ctx context.Context, id string) error

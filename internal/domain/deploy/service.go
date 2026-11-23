@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
@@ -117,10 +118,15 @@ func (s *Service) Plan(ctx context.Context, serviceID string) (Plan, error) {
 	if root == "" {
 		root = brand.WorkspaceRoot
 	}
-	right, reason := rightOf(target, deployed)
+	// Le droit du prochain geste.
+	needed := agentpolicy.CapabilityDockerDeploy
+	if deployed {
+		needed = agentpolicy.CapabilityDockerUpdate
+	}
+	right := target.Agent.Fit(needed, "")
 	plan := Plan{
 		Service: service, MachineName: target.Name, RootDir: root, Path: path.Join(root, service.ComposeProject),
-		Deployed: deployed, MachineOnline: target.Online, Right: right, RightReason: reason, Compose: string(compose), DataDirs: dataDirs,
+		Deployed: deployed, MachineOnline: target.Online, Right: right.State, RightReason: right.Reason, Compose: string(compose), DataDirs: dataDirs,
 		SharedWith: sharedWith, CanRollBack: target.Agent.CanRollBackService(),
 	}
 	if hasLast {
@@ -162,26 +168,6 @@ func (s *Service) servicesSharingProject(ctx context.Context, service directory.
 	return names, nil
 }
 
-// rightOf : « ok » ou « missing » une fois les droits de l'agent rapportés,
-// « unknown » avant. Le droit est celui du prochain geste. « unavailable » et
-// sa raison quand l'agent le porte sans pouvoir l'exercer.
-func rightOf(target machine.Status, deployed bool) (RightState, string) {
-	if target.Agent.ReportedAt.IsZero() {
-		return RightUnknown, ""
-	}
-	needed := machine.CapabilityDockerDeploy
-	if deployed {
-		needed = machine.CapabilityDockerUpdate
-	}
-	if !machine.HasCapability(target.Agent.Capabilities, needed) {
-		return RightMissing, ""
-	}
-	if reason := target.Agent.UnavailableReason(needed); reason != "" {
-		return RightUnavailable, reason
-	}
-	return RightOK, ""
-}
-
 // Deploy est le premier geste : le dossier du service n'existe pas encore sur
 // la machine. env est le contenu de l'.env à écrire ; nil n'en écrit aucun.
 func (s *Service) Deploy(ctx context.Context, serviceID string, env *string) (action.Run, error) {
@@ -219,7 +205,7 @@ func (s *Service) Upgrade(ctx context.Context, unitID, version string) (action.R
 	if !plan.Deployed {
 		return action.Run{}, ErrNotDeployed
 	}
-	if plan.Right == RightMissing {
+	if plan.Right == agentpolicy.FitMissing {
 		return action.Run{}, ErrRightMissing
 	}
 	if !plan.MachineOnline {
@@ -289,7 +275,7 @@ func (s *Service) send(ctx context.Context, serviceID string, env *string, redep
 	if len(plan.SharedWith) > 0 {
 		return action.Run{}, ErrProjectShared
 	}
-	if plan.Right == RightMissing {
+	if plan.Right == agentpolicy.FitMissing {
 		return action.Run{}, ErrRightMissing
 	}
 	if redeploy && !plan.Deployed {

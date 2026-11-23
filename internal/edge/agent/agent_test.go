@@ -18,6 +18,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/edge/server"
 	"github.com/ldesfontaine/kagu/internal/edge/store"
 	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/fact/probe"
@@ -211,8 +212,8 @@ func TestRun_RemovedMachine_StopsForGood(t *testing.T) {
 // quand l'opérateur le révoque.
 func TestRun_KeepsItsRightsReportsThemAndStopsWhenRevoked(t *testing.T) {
 	b := newBench(t)
-	token, _, _ := b.machines.CreateToken(context.Background(), "vps-lyon-2", machine.RoleGeneric, []machine.Capability{{Name: machine.CapabilityAgentUpdate}})
-	rights, err := machine.ParseCapabilities("agent.update,files.write=/srv/workspace")
+	token, _, _ := b.machines.CreateToken(context.Background(), "vps-lyon-2", machine.RoleGeneric, []agentpolicy.Capability{{Name: agentpolicy.CapabilityAgentUpdate}})
+	rights, err := agentpolicy.ParseCapabilities("agent.update,files.write=/srv/workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +229,7 @@ func TestRun_KeepsItsRightsReportsThemAndStopsWhenRevoked(t *testing.T) {
 	if reported.Agent.RootDir != "/srv/apps" {
 		t.Fatalf("reported root %q", reported.Agent.RootDir)
 	}
-	if machine.FormatCapabilities(reported.Agent.Capabilities) != "observe,agent.update,files.write=/srv/workspace" || !reported.Agent.CapabilitiesDiffer() {
+	if agentpolicy.FormatCapabilities(reported.Agent.Capabilities) != "observe,agent.update,files.write=/srv/workspace" || !reported.Agent.CapabilitiesDiffer() {
 		t.Fatalf("reported %+v", reported.Agent)
 	}
 	identity, err := LoadIdentity(b.stateDir)
@@ -263,8 +264,8 @@ func TestRun_KeepsItsRightsReportsThemAndStopsWhenRevoked(t *testing.T) {
 // serveur sait pourquoi il ne s'exerce pas.
 func TestRun_SaysItsAccountAndWhyAnEnrolledRightCannotBeExercised(t *testing.T) {
 	b := newBench(t)
-	token, _, _ := b.machines.CreateToken(context.Background(), "vps-nice-1", machine.RoleGeneric, []machine.Capability{{Name: machine.CapabilityDockerDeploy}})
-	rights, err := machine.ParseCapabilities("docker.deploy")
+	token, _, _ := b.machines.CreateToken(context.Background(), "vps-nice-1", machine.RoleGeneric, []agentpolicy.Capability{{Name: agentpolicy.CapabilityDockerDeploy}})
+	rights, err := agentpolicy.ParseCapabilities("docker.deploy")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,14 +290,14 @@ func TestRun_SaysItsAccountAndWhyAnEnrolledRightCannotBeExercised(t *testing.T) 
 	if reported.Agent.RunAs == nil || reported.Agent.RunAs.UID != int64(os.Geteuid()) {
 		t.Fatalf("the server learned the account %+v, the agent runs as uid %d", reported.Agent.RunAs, os.Geteuid())
 	}
-	if reason := reported.Agent.UnavailableReason(machine.CapabilityDockerDeploy); reason != agentwire.ReasonDockerMissing {
+	if reason := reported.Agent.UnavailableReason(agentpolicy.CapabilityDockerDeploy); reason != agentwire.ReasonDockerMissing {
 		t.Errorf("docker.deploy unavailable for %q, want %q", reason, agentwire.ReasonDockerMissing)
 	}
 	// Le droit reste celui du fichier de l'agent : il est coché, pas retiré.
-	if machine.FormatCapabilities(reported.Agent.Capabilities) != "observe,docker.deploy" {
-		t.Errorf("reported rights %s", machine.FormatCapabilities(reported.Agent.Capabilities))
+	if agentpolicy.FormatCapabilities(reported.Agent.Capabilities) != "observe,docker.deploy" {
+		t.Errorf("reported rights %s", agentpolicy.FormatCapabilities(reported.Agent.Capabilities))
 	}
-	if reason := reported.Agent.UnavailableReason(machine.CapabilityObserve); reason != "" {
+	if reason := reported.Agent.UnavailableReason(agentpolicy.CapabilityObserve); reason != "" {
 		t.Errorf("observe is never judged: %q", reason)
 	}
 	cancel()
@@ -449,7 +450,7 @@ func TestRun_AppliesItsRightsAndItsRefusalIsJournaled(t *testing.T) {
 
 	// Ré-enrôlée avec le droit : l'ordre part, l'agent, qui ne tourne pas
 	// depuis son dossier bin/, le refuse ; le refus est journalisé sous l'agent.
-	reenroll, _, err := b.machines.CreateReenrollToken(context.Background(), online.ID, []machine.Capability{{Name: machine.CapabilityAgentUpdate}})
+	reenroll, _, err := b.machines.CreateReenrollToken(context.Background(), online.ID, []agentpolicy.Capability{{Name: agentpolicy.CapabilityAgentUpdate}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,12 +458,12 @@ func TestRun_AppliesItsRightsAndItsRefusalIsJournaled(t *testing.T) {
 		t.Fatal(err)
 	}
 	options := b.options(reenroll)
-	options.Rights = []machine.Capability{{Name: machine.CapabilityAgentUpdate}}
+	options.Rights = []agentpolicy.Capability{{Name: agentpolicy.CapabilityAgentUpdate}}
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	go func() { done <- Run(ctx, options) }()
 	granted := b.waitFor(t, "vps-lyon-2", func(s machine.Status) bool {
-		return s.Online && s.Agent.ID != online.Agent.ID && machine.HasCapability(s.Agent.Capabilities, machine.CapabilityAgentUpdate)
+		return s.Online && s.Agent.ID != online.Agent.ID && agentpolicy.HasCapability(s.Agent.Capabilities, agentpolicy.CapabilityAgentUpdate)
 	})
 	sent, err := b.actions.Send(operator, granted.ID, agentwire.KindAgentUpdate, testkit.MustJSON(t, agentwire.AgentUpdateParams{Version: "v0.0.2", Parcel: "colis1"}))
 	if err != nil {

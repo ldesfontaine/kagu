@@ -12,6 +12,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/deploy"
 	"github.com/ldesfontaine/kagu/internal/domain/directory"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
@@ -260,7 +261,7 @@ func (f *fakeSender) SendForService(_ context.Context, order action.ServiceOrder
 }
 
 func activeMachine(rights string) machine.Status {
-	capabilities, err := machine.ParseCapabilities(rights)
+	capabilities, err := agentpolicy.ParseCapabilities(rights)
 	if err != nil {
 		panic(err)
 	}
@@ -299,21 +300,21 @@ func TestPlan_SaysWhereTheServiceGoesAndWhatItWillBe(t *testing.T) {
 	if plan.MachineName != "vps-paris-1" || plan.RootDir != "/srv/apps" || plan.Path != "/srv/apps/nextcloud" {
 		t.Fatalf("plan %+v", plan)
 	}
-	if plan.Deployed || plan.Right != deploy.RightOK || plan.Compose != nextcloudCompose || plan.LastRun != nil {
+	if plan.Deployed || plan.Right != agentpolicy.FitOK || plan.Compose != nextcloudCompose || plan.LastRun != nil {
 		t.Fatalf("plan %+v", plan)
 	}
 
 	// Une fois déployé, le droit qui compte est celui du redéploiement.
 	b = newBench("observe,docker.deploy", fakeRuns{folder: succeededRun(), last: succeededRun()})
 	plan, err = b.service.Plan(context.Background(), serviceID)
-	if err != nil || !plan.Deployed || plan.Right != deploy.RightMissing || plan.LastRun == nil {
+	if err != nil || !plan.Deployed || plan.Right != agentpolicy.FitMissing || plan.LastRun == nil {
 		t.Fatalf("plan %+v %v", plan, err)
 	}
 
 	// Avant que l'agent n'ait rapporté ses droits, c'est lui qui jugera.
 	b = newBench("observe", fakeRuns{})
 	b.machines.status.Agent.ReportedAt = time.Time{}
-	if plan, err = b.service.Plan(context.Background(), serviceID); err != nil || plan.Right != deploy.RightUnknown {
+	if plan, err = b.service.Plan(context.Background(), serviceID); err != nil || plan.Right != agentpolicy.FitUnknown {
 		t.Fatalf("plan %+v %v", plan, err)
 	}
 }
@@ -324,11 +325,11 @@ func TestPlan_ATimedOutDeploymentOffersRedeploy(t *testing.T) {
 	timedOut := &action.Run{ID: "cut", Kind: agentwire.KindDockerDeploy, State: action.StateFailed, Reason: action.ReasonTimeout}
 	b := newBench("observe,docker.update", fakeRuns{folder: timedOut, last: timedOut})
 	plan, err := b.service.Plan(context.Background(), serviceID)
-	if err != nil || !plan.Deployed || plan.Right != deploy.RightOK {
+	if err != nil || !plan.Deployed || plan.Right != agentpolicy.FitOK {
 		t.Fatalf("plan %+v %v", plan, err)
 	}
 	b = newBench("observe,docker.deploy", fakeRuns{folder: timedOut, last: timedOut})
-	if plan, err = b.service.Plan(context.Background(), serviceID); err != nil || plan.Right != deploy.RightMissing {
+	if plan, err = b.service.Plan(context.Background(), serviceID); err != nil || plan.Right != agentpolicy.FitMissing {
 		t.Fatalf("the right is the redeploy's: %+v %v", plan, err)
 	}
 }
@@ -339,7 +340,7 @@ func TestPlan_ARedeployThatFoundNoFolderOffersDeployAgain(t *testing.T) {
 	missing := &action.Run{ID: "none", Kind: agentwire.KindDockerUpdate, State: action.StateRefused, Reason: agentwire.ReasonServiceDirMissing}
 	b := newBench("observe,docker.deploy", fakeRuns{folder: missing, last: missing})
 	plan, err := b.service.Plan(context.Background(), serviceID)
-	if err != nil || plan.Deployed || plan.Right != deploy.RightOK {
+	if err != nil || plan.Deployed || plan.Right != agentpolicy.FitOK {
 		t.Fatalf("plan %+v %v", plan, err)
 	}
 	if _, err := b.service.Deploy(context.Background(), serviceID, nil); err != nil {
@@ -510,9 +511,9 @@ func TestDeploy_RefusesWhenTheAgentLacksTheRight(t *testing.T) {
 func TestPlan_SaysARightCannotBeExercisedAndTheOrderStillGoes(t *testing.T) {
 	ctx := context.Background()
 	b := newBench("observe,docker.deploy,docker.update", fakeRuns{})
-	b.machines.status.Agent.Unavailable = map[string]string{machine.CapabilityDockerDeploy: agentwire.ReasonDockerDenied}
+	b.machines.status.Agent.Unavailable = map[string]string{agentpolicy.CapabilityDockerDeploy: agentwire.ReasonDockerDenied}
 	plan, err := b.service.Plan(ctx, serviceID)
-	if err != nil || plan.Right != deploy.RightUnavailable || plan.RightReason != agentwire.ReasonDockerDenied {
+	if err != nil || plan.Right != agentpolicy.FitUnavailable || plan.RightReason != agentwire.ReasonDockerDenied {
 		t.Fatalf("plan %+v %v", plan, err)
 	}
 	run, err := b.service.Deploy(ctx, serviceID, nil)
@@ -522,12 +523,12 @@ func TestPlan_SaysARightCannotBeExercisedAndTheOrderStillGoes(t *testing.T) {
 
 	// Redéployer juge docker.update : une raison sur docker.deploy n'y change rien.
 	redeploy := newBench("observe,docker.deploy,docker.update", fakeRuns{folder: succeededRun(), last: succeededRun()})
-	redeploy.machines.status.Agent.Unavailable = map[string]string{machine.CapabilityDockerDeploy: agentwire.ReasonDockerDenied}
-	if plan, err = redeploy.service.Plan(ctx, serviceID); err != nil || plan.Right != deploy.RightOK || plan.RightReason != "" {
+	redeploy.machines.status.Agent.Unavailable = map[string]string{agentpolicy.CapabilityDockerDeploy: agentwire.ReasonDockerDenied}
+	if plan, err = redeploy.service.Plan(ctx, serviceID); err != nil || plan.Right != agentpolicy.FitOK || plan.RightReason != "" {
 		t.Fatalf("the redeploy's right is docker.update: %+v %v", plan, err)
 	}
-	redeploy.machines.status.Agent.Unavailable = map[string]string{machine.CapabilityDockerUpdate: agentwire.ReasonPathDenied}
-	if plan, err = redeploy.service.Plan(ctx, serviceID); err != nil || plan.Right != deploy.RightUnavailable || plan.RightReason != agentwire.ReasonPathDenied {
+	redeploy.machines.status.Agent.Unavailable = map[string]string{agentpolicy.CapabilityDockerUpdate: agentwire.ReasonPathDenied}
+	if plan, err = redeploy.service.Plan(ctx, serviceID); err != nil || plan.Right != agentpolicy.FitUnavailable || plan.RightReason != agentwire.ReasonPathDenied {
 		t.Fatalf("plan %+v %v", plan, err)
 	}
 	if _, err := redeploy.service.Redeploy(ctx, serviceID, nil); err != nil || len(redeploy.sender.sent) != 1 {
@@ -536,8 +537,8 @@ func TestPlan_SaysARightCannotBeExercisedAndTheOrderStillGoes(t *testing.T) {
 
 	// Un droit absent reste « missing », avec ou sans raison rapportée.
 	missing := newBench("observe", fakeRuns{})
-	missing.machines.status.Agent.Unavailable = map[string]string{machine.CapabilityDockerDeploy: agentwire.ReasonDockerDenied}
-	if plan, err = missing.service.Plan(ctx, serviceID); err != nil || plan.Right != deploy.RightMissing || plan.RightReason != "" {
+	missing.machines.status.Agent.Unavailable = map[string]string{agentpolicy.CapabilityDockerDeploy: agentwire.ReasonDockerDenied}
+	if plan, err = missing.service.Plan(ctx, serviceID); err != nil || plan.Right != agentpolicy.FitMissing || plan.RightReason != "" {
 		t.Fatalf("plan %+v %v", plan, err)
 	}
 }

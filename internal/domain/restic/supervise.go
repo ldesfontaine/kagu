@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -173,9 +174,9 @@ func restoreStaleFinding(source Source, protection Protection, now time.Time) (F
 // le corrige : le droit de la cible, puis l'échec du dernier essai.
 func verifyReason(verify VerifyView) string {
 	switch verify.Right.State {
-	case RightMissing:
+	case agentpolicy.FitMissing:
 		return ReasonVerifyRightMissing
-	case RightUnavailable:
+	case agentpolicy.FitUnavailable:
 		return ReasonVerifyRightUnavailable
 	}
 	switch {

@@ -19,8 +19,8 @@ import (
 
 	"filippo.io/age"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/testkit"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
@@ -92,7 +92,7 @@ func openArchive(t *testing.T, archive []byte, identity age.Identity) (string, [
 
 func produceParams(identity *age.X25519Identity) agentwire.BackupProduceParams {
 	return agentwire.BackupProduceParams{
-		Producer: machine.ProducerProxmoxVzdump, Target: "5012", Prefix: producedPrefix,
+		Producer: agentpolicy.ProducerProxmoxVzdump, Target: "5012", Prefix: producedPrefix,
 		Recipient: identity.Recipient().String(), Parcel: "colis1",
 	}
 }
@@ -109,7 +109,7 @@ type produceRig struct {
 
 func newProduceRig(t *testing.T) *produceRig {
 	t.Helper()
-	b := newOrderBenchWithRights(t, []string{"observe", "backup.produce=" + machine.ProducerProxmoxVzdump})
+	b := newOrderBenchWithRights(t, []string{"observe", "backup.produce=" + agentpolicy.ProducerProxmoxVzdump})
 	server := &parcelServer{files: map[string]string{}}
 	b.runner.fetch.use(server.client(t))
 	b.runner.fetch.setSession(parcelSession)
@@ -132,7 +132,7 @@ func (b *produceRig) trustTheKeyringAndTheGuest(t *testing.T) {
 }
 
 func (b *produceRig) useProducer(chosen producer) {
-	b.runner.produce.producers[machine.ProducerProxmoxVzdump] = chosen
+	b.runner.produce.producers[agentpolicy.ProducerProxmoxVzdump] = chosen
 }
 
 // countingProducer garde le nombre de lancements : un refus ne lance rien.
@@ -343,7 +343,7 @@ func TestBackupProduce_TheJudgeRefusesBeforeRunningAnything(t *testing.T) {
 	// Sans le droit du fichier de l'agent : le refus général des ordres.
 	without := newOrderBenchWithRights(t, nil)
 	without.runner.receive(without.signed(t, longOrder(1, agentwire.KindBackupProduce, produceParams(b.identity))))
-	if report := without.results.take(); report == nil || report.Results[0].State != agentwire.ActionRefused || report.Results[0].Reason != agentwire.RightMissing(machine.CapabilityBackupProduce) {
+	if report := without.results.take(); report == nil || report.Results[0].State != agentwire.ActionRefused || report.Results[0].Reason != agentwire.RightMissing(agentpolicy.CapabilityBackupProduce) {
 		t.Fatalf("without the right: %+v", report)
 	}
 
@@ -360,11 +360,11 @@ func TestBackupProduce_TheJudgeRefusesBeforeRunningAnything(t *testing.T) {
 	other := produceParams(b.identity)
 	other.Producer = "test-echo"
 	b.runner.produce.producers["test-echo"] = echoProducer([]byte("x"), nil, nil)
-	if got := refused(1, other); got.State != agentwire.ActionRefused || got.Reason != agentwire.RightMissing(machine.CapabilityBackupProduce) {
+	if got := refused(1, other); got.State != agentwire.ActionRefused || got.Reason != agentwire.RightMissing(agentpolicy.CapabilityBackupProduce) {
 		t.Errorf("a producer the right does not name: %+v", got)
 	}
 	// Un producteur que le droit nomme et que cet agent ne sait pas lancer.
-	delete(b.runner.produce.producers, machine.ProducerProxmoxVzdump)
+	delete(b.runner.produce.producers, agentpolicy.ProducerProxmoxVzdump)
 	if got := refused(2, produceParams(b.identity)); got.State != agentwire.ActionRefused || got.Reason != agentwire.ReasonProducerUnknown {
 		t.Errorf("an unknown producer: %+v", got)
 	}
@@ -399,7 +399,7 @@ func TestBackupProduce_TheJudgeRefusesBeforeRunningAnything(t *testing.T) {
 		wantReason, wantState := agentwire.ReasonBadOrder, agentwire.ActionFailed
 		switch {
 		case name == "an unknown nothing":
-			wantReason, wantState = agentwire.RightMissing(machine.CapabilityBackupProduce), agentwire.ActionRefused
+			wantReason, wantState = agentwire.RightMissing(agentpolicy.CapabilityBackupProduce), agentwire.ActionRefused
 		// Une clé ou une VM qui n'a pas la forme du type ne peut être dans
 		// aucune ancre : le juge des ancres la refuse avant même la forme, et la
 		// forme (readBackupProduce) la refuserait encore, vérifié plus bas.
@@ -621,7 +621,7 @@ func TestBackupProduce_OnlyTheFinalArchiveIsThereWhileUploading(t *testing.T) {
 	b := newProduceRig(t)
 	state := b.stateDir
 	tools := newProduceTools(state)
-	tools.producers[machine.ProducerProxmoxVzdump] = echoProducer([]byte("une archive"), nil, nil)
+	tools.producers[agentpolicy.ProducerProxmoxVzdump] = echoProducer([]byte("une archive"), nil, nil)
 	tools.freeBytes = b.runner.produce.freeBytes
 	sink := &recordingSink{dir: filepath.Join(state.Name(), "produce")}
 	job, refused := readBackupProduce(judgedOf(t, longOrder(1, agentwire.KindBackupProduce, produceParams(b.identity))), b.runner.identity.Capabilities(), tools.producers)
@@ -830,7 +830,7 @@ func TestVzdumpProducer_ACancelledOrderStopsTheProducer(t *testing.T) {
 	fake := newFakeVzdump(t, "exec sleep 30")
 	b := newProduceRig(t)
 	tools := b.runner.produce
-	tools.producers = map[string]producer{machine.ProducerProxmoxVzdump: fake.producer()}
+	tools.producers = map[string]producer{agentpolicy.ProducerProxmoxVzdump: fake.producer()}
 	job, refused := readBackupProduce(judgedOf(t, longOrder(1, agentwire.KindBackupProduce, produceParams(b.identity))), b.runner.identity.Capabilities(), tools.producers)
 	if refused != nil {
 		t.Fatalf("refused: %+v", refused)

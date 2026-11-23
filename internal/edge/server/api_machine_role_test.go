@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 )
@@ -110,7 +111,7 @@ func TestAPI_Session_SaysTheRolesAndTheirRights(t *testing.T) {
 		t.Fatalf("%d rôles", len(session.Roles))
 	}
 	for _, offered := range session.Roles {
-		if offered.ID == "proxmox" && !slices.Contains(offered.Capabilities, machine.CapabilityProxmoxPower) {
+		if offered.ID == "proxmox" && !slices.Contains(offered.Capabilities, agentpolicy.CapabilityProxmoxPower) {
 			t.Fatalf("le rôle proxmox ne coche pas proxmox.power : %v", offered.Capabilities)
 		}
 	}

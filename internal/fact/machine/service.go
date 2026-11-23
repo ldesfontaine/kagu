@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
@@ -79,7 +80,7 @@ type Connection struct {
 	Version   string
 	// nil : l'agent n'a rien rapporté (un agent d'avant les droits), ce qui
 	// est en base reste.
-	Capabilities []Capability
+	Capabilities []agentpolicy.Capability
 	// Les droits rapportés qu'il ne peut pas exercer, avec la raison. nil :
 	// rien d'indisponible, ou un agent qui ne sait pas le juger ; les droits
 	// rapportés se réécrivent alors sans raison.
@@ -216,14 +217,14 @@ func (s *Service) Count(ctx context.Context) (total, online int, err error) {
 // CreateToken émet le jeton d'une nouvelle machine, nommée par l'opérateur,
 // avec le rôle qu'il lui donne et les droits qu'il a cochés ; observe s'y
 // ajoute toujours.
-func (s *Service) CreateToken(ctx context.Context, name string, role Role, capabilities []Capability) (string, Token, error) {
+func (s *Service) CreateToken(ctx context.Context, name string, role Role, capabilities []agentpolicy.Capability) (string, Token, error) {
 	if err := ValidateName(name); err != nil {
 		return "", Token{}, err
 	}
 	if !slices.Contains(Roles(), role) {
 		return "", Token{}, ErrRoleUnknown
 	}
-	normalized, err := NormalizeCapabilities(capabilities)
+	normalized, err := agentpolicy.NormalizeCapabilities(capabilities)
 	if err != nil {
 		return "", Token{}, err
 	}
@@ -236,7 +237,7 @@ func (s *Service) CreateToken(ctx context.Context, name string, role Role, capab
 // droits d'un agent (décision 10) : capabilities les donne ; nil reprend ce
 // que le jeton du précédent demandait, observe seul s'il n'en demandait
 // aucun.
-func (s *Service) CreateReenrollToken(ctx context.Context, machineID string, capabilities []Capability) (string, Token, error) {
+func (s *Service) CreateReenrollToken(ctx context.Context, machineID string, capabilities []agentpolicy.Capability) (string, Token, error) {
 	machine, err := s.store.GetMachine(ctx, machineID)
 	if err != nil {
 		return "", Token{}, err
@@ -244,14 +245,14 @@ func (s *Service) CreateReenrollToken(ctx context.Context, machineID string, cap
 	if capabilities == nil {
 		capabilities = machine.Agent.Requested
 	}
-	normalized, err := NormalizeCapabilities(capabilities)
+	normalized, err := agentpolicy.NormalizeCapabilities(capabilities)
 	if err != nil {
 		return "", Token{}, err
 	}
 	return s.issueToken(ctx, machine.Name, machine.ID, machine.Role, normalized)
 }
 
-func (s *Service) issueToken(ctx context.Context, name, machineID string, role Role, capabilities []Capability) (string, Token, error) {
+func (s *Service) issueToken(ctx context.Context, name, machineID string, role Role, capabilities []agentpolicy.Capability) (string, Token, error) {
 	cleartext, token, err := NewToken(name, machineID)
 	if err != nil {
 		return "", Token{}, fmt.Errorf("generate token: %w", err)
@@ -496,7 +497,7 @@ func (s *Service) Connect(ctx context.Context, authenticated Machine, address, a
 		Address: address, Version: s.acceptedVersion(authenticated, agentVersion), At: now,
 	}
 	if capabilities != "" {
-		reported, err := ParseCapabilities(capabilities)
+		reported, err := agentpolicy.ParseCapabilities(capabilities)
 		if err != nil {
 			s.logger.Warn("agent capabilities unreadable", "machine_id", machineID, "error", err)
 		}
@@ -589,7 +590,7 @@ func (s *Service) NoteRootDir(ctx context.Context, agentID, root string) error {
 	if root == "" {
 		return nil
 	}
-	if !ValidCapabilityPath(root) {
+	if !agentpolicy.ValidCapabilityPath(root) {
 		s.logger.Warn("agent root unreadable", "agent_id", agentID)
 		return nil
 	}

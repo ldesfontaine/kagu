@@ -35,7 +35,7 @@ const (
 	// serveur répond comme avant, par un 400 global.
 	HeaderSignalSections = brand.HeaderPrefix + "Signal-Sections"
 	// Les droits que l'agent lit dans son fichier, redits à chaque ouverture
-	// du flux, sous leur forme texte (machine.FormatCapabilities). Absent
+	// du flux, sous leur forme texte (agentpolicy.FormatCapabilities). Absent
 	// chez un agent plus vieux : rien n'est rapporté.
 	HeaderAgentRights = brand.HeaderPrefix + "Agent-Rights"
 	// L'empreinte de la clé du serveur que l'agent a épinglée à son

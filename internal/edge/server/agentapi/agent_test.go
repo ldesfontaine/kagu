@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/sampler"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
@@ -357,7 +358,7 @@ func TestAgentStream_StoresTheReportedRightsThenRefusesTheRevokedAgent(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if machine.FormatCapabilities(status.Agent.Capabilities) != "observe,agent.update" || !status.Agent.CapabilitiesDiffer() {
+	if agentpolicy.FormatCapabilities(status.Agent.Capabilities) != "observe,agent.update" || !status.Agent.CapabilitiesDiffer() {
 		t.Fatalf("reported rights %+v", status.Agent)
 	}
 	if status.Agent.ServerKeyFingerprint != fingerprint {
@@ -428,7 +429,7 @@ func TestAgentStream_StoresTheAccountAndUnavailableRightsAndIgnoresForgedOnes(t 
 	if status.Agent.RunAs == nil || status.Agent.RunAs.UID != 998 || status.Agent.RunAs.Name != "opencloud-agent" {
 		t.Fatalf("account %+v", status.Agent.RunAs)
 	}
-	if status.Agent.UnavailableReason(machine.CapabilityDockerDeploy) != agentwire.ReasonDockerDenied {
+	if status.Agent.UnavailableReason(agentpolicy.CapabilityDockerDeploy) != agentwire.ReasonDockerDenied {
 		t.Fatalf("reasons %+v", status.Agent.Unavailable)
 	}
 

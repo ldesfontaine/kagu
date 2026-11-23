@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -33,7 +34,7 @@ func serviceSource(protections ...Protection) Source {
 }
 
 func TestFindingsOf_NothingToReportWhenEverythingIsFresh(t *testing.T) {
-	verify := &VerifyView{State: StateSucceeded, SuccessAt: hoursAgo(24), Right: RightFit{State: RightOK}}
+	verify := &VerifyView{State: StateSucceeded, SuccessAt: hoursAgo(24), Right: agentpolicy.RightFit{State: agentpolicy.FitOK}}
 	overview := Overview{Sources: []Source{serviceSource(resticProtectionOf("b1", hoursAgo(10), verify))}}
 	if findings := FindingsOf(overview, now); len(findings) != 0 {
 		t.Fatalf("findings %+v", findings)
@@ -94,11 +95,11 @@ func TestFindingsOf_RestoreTestOutOfDate(t *testing.T) {
 		danger bool
 	}{
 		"never":         {VerifyView{}, ReasonNeverVerified, true},
-		"old success":   {VerifyView{State: StateSucceeded, SuccessAt: hoursAgo(24 * 20), Right: RightFit{State: RightOK}}, "", false},
-		"right missing": {VerifyView{SuccessAt: hoursAgo(24 * 20), Right: RightFit{State: RightMissing}}, ReasonVerifyRightMissing, false},
-		"unavailable":   {VerifyView{SuccessAt: hoursAgo(24 * 20), Right: RightFit{State: RightUnavailable}}, ReasonVerifyRightUnavailable, false},
-		"last failed":   {VerifyView{State: StateFailed, Reason: "check_failed", SuccessAt: hoursAgo(24 * 20), Right: RightFit{State: RightOK}}, "check_failed", false},
-		"a month":       {VerifyView{State: StateSucceeded, SuccessAt: hoursAgo(24 * 31), Right: RightFit{State: RightOK}}, "", true},
+		"old success":   {VerifyView{State: StateSucceeded, SuccessAt: hoursAgo(24 * 20), Right: agentpolicy.RightFit{State: agentpolicy.FitOK}}, "", false},
+		"right missing": {VerifyView{SuccessAt: hoursAgo(24 * 20), Right: agentpolicy.RightFit{State: agentpolicy.FitMissing}}, ReasonVerifyRightMissing, false},
+		"unavailable":   {VerifyView{SuccessAt: hoursAgo(24 * 20), Right: agentpolicy.RightFit{State: agentpolicy.FitUnavailable}}, ReasonVerifyRightUnavailable, false},
+		"last failed":   {VerifyView{State: StateFailed, Reason: "check_failed", SuccessAt: hoursAgo(24 * 20), Right: agentpolicy.RightFit{State: agentpolicy.FitOK}}, "check_failed", false},
+		"a month":       {VerifyView{State: StateSucceeded, SuccessAt: hoursAgo(24 * 31), Right: agentpolicy.RightFit{State: agentpolicy.FitOK}}, "", true},
 	}
 	for name, want := range cases {
 		findings := stale(want.view)
@@ -116,7 +117,7 @@ func TestFindingsOf_RestoreTestOutOfDate(t *testing.T) {
 // Le test est celui du dépôt : deux sauvegardes d'une même source vers une même
 // cible n'ouvrent qu'une alerte, nommée par les deux machines.
 func TestFindingsOf_TheRestoreTestIsOneFindingPerRepository(t *testing.T) {
-	view := &VerifyView{IsStale: true, Since: hoursAgo(24 * 20), Right: RightFit{State: RightOK}}
+	view := &VerifyView{IsStale: true, Since: hoursAgo(24 * 20), Right: agentpolicy.RightFit{State: agentpolicy.FitOK}}
 	source := Source{
 		Key: "service:s1", Kind: agentwire.ResticScopeService, Name: "nextcloud", MachineID: "vps", MachineName: "vps", ServiceID: "s1",
 		Protections: []Protection{

@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
@@ -276,7 +277,7 @@ func TestDockerReasonOf_TranslatesTheDialErrors(t *testing.T) {
 // reasonsOf rend ce que le rapport des droits dit, avec ces vérifications.
 func reasonsOf(t *testing.T, rights string, checks hostChecks) map[string]string {
 	t.Helper()
-	capabilities, err := machine.ParseCapabilities(rights)
+	capabilities, err := agentpolicy.ParseCapabilities(rights)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +350,7 @@ func TestJudgeRights_DockerThenTheServicesRoot(t *testing.T) {
 // Un état mal gardé ne laisse que observe : il n'y a rien à juger, et rien n'est
 // dit d'un droit que l'agent n'exerce de toute façon pas.
 func TestJudgeRights_ANarrowedAgentSaysNothing(t *testing.T) {
-	capabilities, err := machine.ParseCapabilities("docker.deploy,backup.receive=/srv/a")
+	capabilities, err := agentpolicy.ParseCapabilities("docker.deploy,backup.receive=/srv/a")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +374,7 @@ func TestJudgeRights_ANarrowedAgentSaysNothing(t *testing.T) {
 // serait ignorée en bloc à la lecture de l'en-tête.
 func TestJudgeRights_EveryReasonIsOneTheServerReads(t *testing.T) {
 	for _, reason := range []string{agentwire.ReasonDockerDenied, agentwire.ReasonDockerMissing, agentwire.ReasonPathDenied, agentwire.ReasonPathUnwritable, agentwire.ReasonNotSelfUpdatable, agentwire.ReasonSudoMissing, agentwire.ReasonProducerMissing, agentwire.ReasonSudoDenied} {
-		text := machine.FormatUnavailable(map[string]string{machine.CapabilityDockerDeploy: reason})
+		text := machine.FormatUnavailable(map[string]string{agentpolicy.CapabilityDockerDeploy: reason})
 		if _, err := machine.ParseUnavailable(text); err != nil {
 			t.Errorf("%s: the server cannot read %q: %v", reason, text, err)
 		}
@@ -474,7 +475,7 @@ func TestJudgeRights_ProduceAsksNothingElseAndOnlyWhenGranted(t *testing.T) {
 
 // Un état mal gardé ne laisse que observe : le droit n'est pas jugé non plus.
 func TestJudgeRights_ProduceIsNotJudgedByANarrowedAgent(t *testing.T) {
-	capabilities, err := machine.ParseCapabilities("backup.produce=proxmox-vzdump")
+	capabilities, err := agentpolicy.ParseCapabilities("backup.produce=proxmox-vzdump")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -562,7 +563,7 @@ func TestSudoListsProgram_NoSudoOnThePathIsAnError(t *testing.T) {
 func TestNewHostChecks_ProduceFindsNoSudoOnAnEmptyPath(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	checks := newHostChecks("/nonexistent.sock", nil)
-	if got := producerReason(context.Background(), checks, machine.ProducerProxmoxVzdump); got != agentwire.ReasonSudoMissing {
+	if got := producerReason(context.Background(), checks, agentpolicy.ProducerProxmoxVzdump); got != agentwire.ReasonSudoMissing {
 		t.Errorf("judged %q", got)
 	}
 }

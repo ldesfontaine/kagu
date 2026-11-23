@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/hostconn"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
@@ -720,7 +721,7 @@ func (h *Handler) withinRights(ctx context.Context, machineID string, report con
 		return report
 	}
 	status, err := h.machines.Get(ctx, machineID)
-	if err == nil && machine.HasCapability(status.Agent.Capabilities, machine.CapabilityObserveEnv) {
+	if err == nil && agentpolicy.HasCapability(status.Agent.Capabilities, agentpolicy.CapabilityObserveEnv) {
 		return report
 	}
 	h.logger.Warn("agent sent environment links without the right, dropped", "machine_id", machineID)

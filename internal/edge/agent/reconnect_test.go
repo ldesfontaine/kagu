@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
@@ -113,7 +114,7 @@ func startAgent(t *testing.T, ctx context.Context, server *fakeServer, logs *byt
 
 // startAgentWith est startAgent avec des droits au fichier de l'agent, et la
 // main sur son client et son juge d'ordres avant le premier flux.
-func startAgentWith(t *testing.T, ctx context.Context, server *fakeServer, logs *bytes.Buffer, rights []machine.Capability, configure func(*Client, *orderRunner)) <-chan error {
+func startAgentWith(t *testing.T, ctx context.Context, server *fakeServer, logs *bytes.Buffer, rights []agentpolicy.Capability, configure func(*Client, *orderRunner)) <-chan error {
 	t.Helper()
 	httpServer := httptest.NewServer(server.handler())
 	t.Cleanup(httpServer.Close)
@@ -335,7 +336,7 @@ func TestKeepConnected_SaysItsAccountAndWhatItCannotExerciseAtEachStream(t *test
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	logs := &bytes.Buffer{}
-	rights, err := machine.ParseCapabilities("docker.deploy")
+	rights, err := agentpolicy.ParseCapabilities("docker.deploy")
 	if err != nil {
 		t.Fatal(err)
 	}

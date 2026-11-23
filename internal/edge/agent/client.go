@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
@@ -133,8 +134,8 @@ func (c *Client) SetRoot(root string) {
 
 // SetCapabilities fixe les droits que l'agent rapporte à l'ouverture du
 // flux : ceux de son fichier.
-func (c *Client) SetCapabilities(capabilities []machine.Capability) {
-	c.rights = machine.FormatCapabilities(capabilities)
+func (c *Client) SetCapabilities(capabilities []agentpolicy.Capability) {
+	c.rights = agentpolicy.FormatCapabilities(capabilities)
 }
 
 // NewClient refuse http:// vers autre chose que la boucle locale, sauf si

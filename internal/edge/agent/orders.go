@@ -10,10 +10,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/wire/judge"
 )
 
 // orderRunner juge chaque ordre reçu, exécute ceux qui passent et garde
@@ -21,17 +22,17 @@ import (
 // flux : le rang du dernier ordre exécuté se garde dans identity.json, et
 // un redémarrage ne rouvre pas la porte d'un rejeu.
 //
-// Un ordre passe si, dans cet ordre : l'agent a une clé du serveur ; la
-// signature est de cette clé ; le corps se lit strictement et porte la
-// version de l'enveloppe (agentwire.OrderVersion) ; il vise cette
-// machine et cet agent ; il n'est pas périmé ; son rang dépasse le dernier
-// exécuté ; son genre est au registre (agentwire.Spec) ; le fichier de
-// l'agent porte le droit qu'il exige (Spec.Right) ; ses paramètres et son
-// secret se lisent strictement dans leur type ; les valeurs décodées qu'il
-// présente sont dans les ancres de confiance locales. Sinon il est refusé, et le
-// refus est rapporté. Les
-// commandes d'observation ne passent pas ici : elles exigent observe, que le
-// fichier porte toujours (machine.NormalizeCapabilities l'ajoute).
+// Un ordre passe (judge.Judge, puis orderRunner.judge) si, dans cet ordre :
+// l'agent a une clé du serveur ; la signature est de cette clé ; le corps se
+// lit strictement et porte la version de l'enveloppe (agentwire.OrderVersion) ;
+// il vise cette machine et cet agent ; il n'est pas périmé ; son rang dépasse
+// le dernier exécuté ; son genre est au registre (agentwire.Spec) ; le
+// fichier de l'agent porte le droit qu'il exige (Spec.Right) ; ses paramètres
+// et son secret se lisent strictement dans leur type ; les valeurs décodées
+// qu'il présente sont dans les ancres de confiance locales. Sinon il est
+// refusé, et le refus est rapporté. Les commandes d'observation ne passent
+// pas ici : elles exigent observe, que le fichier porte toujours
+// (agentpolicy.NormalizeCapabilities l'ajoute).
 type orderRunner struct {
 	stateDir *os.Root
 	version  string
@@ -130,54 +131,32 @@ type judgedOrder struct {
 	agentwire.Order
 }
 
-// judge rend l'ordre qui passe, ou la raison de son refus. Le rang est écrit
-// sur disque avant de rendre la main : un ordre exécuté ne se rejoue plus,
-// même après un redémarrage.
+// judge rend l'ordre qui passe, ou la raison de son refus. judge.Judge juge
+// l'ordre contre la politique ; l'agent visé et le rang vivent dans
+// identity.json, l'agent les juge à leur place parmi ses contrôles : juste
+// après la machine, juste après l'échéance. Le rang est écrit sur disque
+// avant de rendre la main : un ordre exécuté ne se rejoue plus, même après un
+// redémarrage.
 func (r *orderRunner) judge(signed agentwire.SignedOrder) (judgedOrder, string) {
-	if len(r.identity.ServerKey) != ed25519.PublicKeySize {
-		return judgedOrder{}, agentwire.ReasonServerKeyMissing
+	policy := r.policy()
+	verdict := judge.Judge(signed, policy, r.now())
+	if !verdict.Read {
+		return judgedOrder{}, verdict.Reason
 	}
-	// Vérifié sous l'étiquette v2 seule : un corps v1, signé sous la sienne, ne
-	// passe pas (R-A1-9).
-	if !ed25519.Verify(r.identity.ServerKey, agentwire.OrderSigningBytes(agentwire.OrderVersion, signed.Body), signed.Signature) {
-		return judgedOrder{}, agentwire.ReasonBadSignature
-	}
-	// Sans « v », le corps ne se réécrit pas à l'identique : la lecture stricte
-	// le refuse ; une autre version est refusée ici.
-	var body agentwire.OrderBody
-	if err := agentwire.StrictDecode(signed.Body, &body); err != nil || body.V != agentwire.OrderVersion || body.RunID == "" {
-		return judgedOrder{}, agentwire.ReasonBadOrder
-	}
-	r.journal.remember(body.RunID, factsOf(signed.Body, r.identity.ServerKey))
-	undecoded := judgedOrder{RunID: body.RunID, Seq: body.Seq, Order: agentwire.Order{Kind: body.Kind}}
+	body := verdict.Body
+	r.journal.remember(body.RunID, factsOf(signed.Body, policy.ServerKey))
+	order := judgedOrder{RunID: body.RunID, Seq: body.Seq, Order: verdict.Order}
 	switch {
-	case body.MachineID != r.identity.MachineID:
-		return undecoded, agentwire.ReasonWrongMachine
+	case verdict.Reason == agentwire.ReasonWrongMachine:
+		return order, verdict.Reason
 	case body.AgentID != r.identity.AgentID:
-		return undecoded, agentwire.ReasonWrongAgent
-	case !r.now().Before(time.Unix(body.NotAfter, 0)):
-		return undecoded, agentwire.ReasonExpired
+		return order, agentwire.ReasonWrongAgent
+	case verdict.Reason == agentwire.ReasonExpired:
+		return order, verdict.Reason
 	case body.Seq <= r.identity.LastOrderSeq:
-		return undecoded, agentwire.ReasonReplayed
-	}
-	spec, known := agentwire.SpecOf(body.Kind)
-	if !known {
-		return undecoded, agentwire.ReasonUnknownKind
-	}
-	if !machine.HasCapability(r.identity.Capabilities(), spec.Right) {
-		return undecoded, agentwire.RightMissing(spec.Right)
-	}
-	// Une clé inconnue, répétée ou d'une autre casse ne se lit pas : refusée
-	// ici, avant les ancres, qui jugent la valeur décodée.
-	order, err := decodeOrder(body)
-	if err != nil {
-		return undecoded, agentwire.ReasonBadOrder
-	}
-	// Les ancres de confiance locales : le registre des genres dit lesquelles
-	// bornent l'ordre et sur quelle valeur. Relues du disque à chaque ordre,
-	// pour qu'une ancre posée par « agent trust » vaille tout de suite.
-	if finding := anchor.Judge(r.reloadAnchors(), order.Presented()); finding != nil {
-		return order, agentwire.AnchorRefusal(*finding)
+		return order, agentwire.ReasonReplayed
+	case verdict.Reason != "":
+		return order, verdict.Reason
 	}
 	if !r.keepSeq(order.Seq) {
 		return order, agentwire.ReasonStateUnwritable
@@ -185,17 +164,13 @@ func (r *orderRunner) judge(signed agentwire.SignedOrder) (judgedOrder, string) 
 	return order, ""
 }
 
-// decodeOrder lit les paramètres et le secret d'un corps par le registre des
-// genres, strictement : la seule lecture de ces octets dans l'agent.
-func decodeOrder(body agentwire.OrderBody) (judgedOrder, error) {
-	decoded, err := agentwire.Decode(body.Kind, body.Params)
-	if err != nil {
-		return judgedOrder{}, err
-	}
-	if decoded.Secret, err = agentwire.DecodeSecret(body.Kind, body.Secret); err != nil {
-		return judgedOrder{}, err
-	}
-	return judgedOrder{RunID: body.RunID, Seq: body.Seq, Order: decoded}, nil
+// policy rend ce que l'agent applique, tiré d'identity.json tant que la
+// politique n'a pas de fichier à elle (T03-03). Les ancres sont relues du
+// disque à chaque ordre, pour qu'une ancre posée par « agent trust » vaille
+// tout de suite.
+func (r *orderRunner) policy() agentpolicy.Policy {
+	r.reloadAnchors()
+	return r.identity.Policy()
 }
 
 // reloadAnchors relit les ancres du fichier d'identité et rend ce que l'agent
@@ -307,7 +282,7 @@ func (r *orderRunner) ping(order judgedOrder) agentwire.ActionResult {
 func (r *orderRunner) coversBackupPath() coveringPath {
 	capabilities := r.identity.Capabilities()
 	return func(path string) (string, bool) {
-		return machine.CoveringPath(capabilities, machine.CapabilityBackupReceive, path)
+		return agentpolicy.CoveringPath(capabilities, agentpolicy.CapabilityBackupReceive, path)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
@@ -330,16 +331,16 @@ func isServiceFolder(project string) bool {
 // judgeSourceRights : restic.produce, et pour un invité backup.produce qui
 // couvre vzdump. Tant que l'agent n'a rien rapporté, il jugera lui-même.
 func judgeSourceRights(source machine.Status, scope string) error {
-	produce := RightOf(source, machine.CapabilityResticProduce)
+	produce := source.Agent.Fit(agentpolicy.CapabilityResticProduce, "")
 	switch {
-	case produce.State == RightMissing:
+	case produce.State == agentpolicy.FitMissing:
 		return ErrSourceRightMissing
-	case produce.State == RightUnavailable && produce.Reason == agentwire.ReasonResticMissing:
+	case produce.State == agentpolicy.FitUnavailable && produce.Reason == agentwire.ReasonResticMissing:
 		return ErrResticMissing
-	case produce.State == RightUnavailable:
+	case produce.State == agentpolicy.FitUnavailable:
 		return ErrSourceRightUnavailable
 	}
-	if scope == agentwire.ResticScopeVM && RightOf(source, machine.CapabilityBackupProduce).State == RightMissing {
+	if scope == agentwire.ResticScopeVM && source.Agent.Fit(agentpolicy.CapabilityBackupProduce, agentpolicy.ProducerProxmoxVzdump).State == agentpolicy.FitMissing {
 		return ErrSourceVMRightMissing
 	}
 	return nil
@@ -351,10 +352,10 @@ func judgeDockerRight(source machine.Status, content ServiceContent) error {
 	if !content.NeedsDocker() {
 		return nil
 	}
-	switch RightOf(source, machine.CapabilityResticDocker).State {
-	case RightMissing:
+	switch source.Agent.Fit(agentpolicy.CapabilityResticDocker, "").State {
+	case agentpolicy.FitMissing:
 		return ErrSourceDockerRightMissing
-	case RightUnavailable:
+	case agentpolicy.FitUnavailable:
 		return ErrSourceDockerRightUnavailable
 	}
 	return nil

@@ -7,6 +7,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/alert"
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/fact/probe"
 	"github.com/ldesfontaine/kagu/internal/gesture/verb"
@@ -38,6 +39,9 @@ type sessionResponse struct {
 	// d'avance : l'ajout d'une machine les propose, le préréglage n'est écrit
 	// qu'ici (machine.RolePreset).
 	Roles []sessionRole `json:"roles"`
+	// Les droits qui se cochent à l'enrôlement, dans l'ordre où ils
+	// s'affichent : la liste fermée d'agentpolicy, que le front ne recopie pas.
+	Rights []string `json:"rights"`
 }
 
 type sessionRole struct {
@@ -154,9 +158,10 @@ func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 		Roles: httpx.ConvertAll(machine.Roles(), func(offered machine.Role) sessionRole {
 			return sessionRole{
 				ID:           string(offered),
-				Capabilities: httpx.ConvertAll(machine.RolePreset(offered), func(right machine.Capability) string { return right.Name }),
+				Capabilities: httpx.ConvertAll(machine.RolePreset(offered), func(right agentpolicy.Capability) string { return right.Name }),
 			}
 		}),
+		Rights: agentpolicy.CapabilityNames(),
 	})
 }
 

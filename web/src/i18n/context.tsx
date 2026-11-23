@@ -20,6 +20,8 @@ interface I18n {
   verbRoutes: ReadonlySet<string>;
   // Les rôles d'une machine et les droits qu'ils cochent d'avance.
   roles: SessionRole[];
+  // Les droits qui se cochent à l'enrôlement, dans leur ordre.
+  rights: readonly string[];
   t: Translate;
   setLanguage: (code: string) => Promise<void>;
   // Relit la session : après un réglage de seuil, les jauges suivent sans
@@ -78,6 +80,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       thresholds: session.resource_thresholds,
       verbRoutes: new Set(session.verbs.map((verb) => verb.route)),
       roles: session.roles,
+      rights: session.rights,
       t,
       setLanguage,
       reloadSession: load,
@@ -125,6 +128,11 @@ export function useThresholds(): Record<ResourceName, ResourceThresholds> {
 // Les rôles qu'une machine peut recevoir, avec leur préréglage de droits.
 export function useRoles(): SessionRole[] {
   return useI18n().roles;
+}
+
+// Les droits qui se cochent à l'enrôlement, dans l'ordre du serveur.
+export function useRightNames(): readonly string[] {
+  return useI18n().rights;
 }
 
 // Dit si une écriture est aussi un verbe d'API que les jetons peuvent porter.

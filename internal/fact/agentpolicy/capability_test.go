@@ -1,4 +1,4 @@
-package machine
+package agentpolicy
 
 import (
 	"errors"
@@ -130,27 +130,6 @@ func TestCapabilities_ProduceRefusesWhatIsNotAKnownProducer(t *testing.T) {
 	}
 }
 
-// L'écart ne se dit que s'il y a deux choses à comparer : ce que le jeton
-// demandait et ce que l'agent a rapporté.
-func TestAgent_CapabilitiesDifferOnlyWhenBothSidesAreKnown(t *testing.T) {
-	requested, _ := ParseCapabilities("agent.update")
-	observeOnly, _ := ParseCapabilities("")
-	reported := Agent{ID: "agt_1", Requested: requested, Capabilities: observeOnly, ReportedAt: testReportedAt}
-	if !reported.CapabilitiesDiffer() {
-		t.Fatal("a file without agent.update differs from the token")
-	}
-	same := Agent{ID: "agt_1", Requested: requested, Capabilities: requested, ReportedAt: testReportedAt}
-	if same.CapabilitiesDiffer() {
-		t.Fatal("the same list does not differ")
-	}
-	if (Agent{ID: "agt_1", Requested: requested}).CapabilitiesDiffer() {
-		t.Fatal("nothing reported yet: nothing to compare")
-	}
-	if (Agent{ID: "agt_1", Capabilities: observeOnly, ReportedAt: testReportedAt}).CapabilitiesDiffer() {
-		t.Fatal("an agent from before the rights: nothing requested, nothing to compare")
-	}
-}
-
 // Un dossier est couvert par le chemin du droit ou dessous ; un voisin dont
 // le nom commence pareil, un chemin non propre ou le droit d'un autre nom ne
 // le sont pas.
@@ -187,22 +166,6 @@ func TestCoversPath(t *testing.T) {
 	}
 }
 
-func TestProxmoxRights_TakeNoScopeAndAreRoundTripped(t *testing.T) {
-	parsed, err := ParseCapabilities("proxmox.snapshot,proxmox.power")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if text := FormatCapabilities(parsed); text != "observe,proxmox.power,proxmox.snapshot" || !ProxmoxRights(parsed) {
-		t.Fatalf("%q", text)
-	}
-	if _, err := ParseCapabilities("proxmox.power=/srv"); err == nil {
-		t.Error("a scope was accepted")
-	}
-	if ProxmoxRights([]Capability{{Name: CapabilityObserve}}) {
-		t.Error("observe is not a Proxmox right")
-	}
-}
-
 // Les deux droits de restic : la cible prend un seul chemin, le dossier des
 // dépôts ; la source n'en prend aucun. Ni l'un ni l'autre n'est donné sans
 // être coché.
@@ -235,8 +198,7 @@ func TestCapabilities_ResticTargetTakesOnePathAndResticProduceNone(t *testing.T)
 }
 
 // restic.verify n'a pas de chemin (le dépôt est sous celui de restic.target),
-// se pose après restic.docker dans l'ordre des droits, et n'est jamais donné
-// par défaut.
+// se pose après restic.docker dans l'ordre des droits.
 func TestCapability_ResticVerifyHasNoScopeAndIsNeverDefault(t *testing.T) {
 	parsed, err := ParseCapabilities("restic.verify,restic.target=/srv/restic")
 	if err != nil {
@@ -247,10 +209,5 @@ func TestCapability_ResticVerifyHasNoScopeAndIsNeverDefault(t *testing.T) {
 	}
 	if _, err := ParseCapabilities("restic.verify=/srv/a"); err != ErrCapabilityScope {
 		t.Fatalf("a path on restic.verify: %v", err)
-	}
-	for _, role := range Roles() {
-		if HasCapability(RolePreset(role), CapabilityResticVerify) {
-			t.Errorf("role %s grants restic.verify", role)
-		}
 	}
 }

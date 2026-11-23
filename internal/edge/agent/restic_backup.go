@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -47,7 +47,7 @@ type resticBackupJob struct {
 // backup.produce pour un invité, restic.docker pour des volumes ou des bases,
 // restic présent, et pour un service son dossier sous la racine. Un refus ne
 // lance rien.
-func readResticBackup(order judgedOrder, capabilities []machine.Capability, root string, checks hostChecks) (resticBackupJob, *agentwire.ActionResult) {
+func readResticBackup(order judgedOrder, capabilities []agentpolicy.Capability, root string, checks hostChecks) (resticBackupJob, *agentwire.ActionResult) {
 	refused := func(reason string) *agentwire.ActionResult {
 		return &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: reason}
 	}
@@ -55,11 +55,11 @@ func readResticBackup(order judgedOrder, capabilities []machine.Capability, root
 	if !ok || params.Validate() != nil {
 		return resticBackupJob{}, &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
-	if params.Scope == agentwire.ResticScopeVM && !machine.CoversProducer(capabilities, machine.ProducerProxmoxVzdump) {
-		return resticBackupJob{}, refused(agentwire.RightMissing(machine.CapabilityBackupProduce))
+	if params.Scope == agentwire.ResticScopeVM && !agentpolicy.CoversProducer(capabilities, agentpolicy.ProducerProxmoxVzdump) {
+		return resticBackupJob{}, refused(agentwire.RightMissing(agentpolicy.CapabilityBackupProduce))
 	}
-	if needsDocker(params) && !machine.HasCapability(capabilities, machine.CapabilityResticDocker) {
-		return resticBackupJob{}, refused(agentwire.RightMissing(machine.CapabilityResticDocker))
+	if needsDocker(params) && !agentpolicy.HasCapability(capabilities, agentpolicy.CapabilityResticDocker) {
+		return resticBackupJob{}, refused(agentwire.RightMissing(agentpolicy.CapabilityResticDocker))
 	}
 	binary, err := checks.findRestic()
 	if err != nil {
@@ -197,7 +197,7 @@ func (s *resticSource) runPart(ctx context.Context, job resticBackupJob, choice 
 // (--stdin-from-command) : vzdump par le script de root, comme backup.produce,
 // sans compression. Le droit se rejuge sur la machine avant de lancer.
 func (s *resticSource) producerFor(ctx context.Context, job resticBackupJob, checks hostChecks) ([]string, error) {
-	if reason := producerReason(ctx, checks, machine.ProducerProxmoxVzdump); reason != "" {
+	if reason := producerReason(ctx, checks, agentpolicy.ProducerProxmoxVzdump); reason != "" {
 		return nil, refuseWith(reason, errors.New("the producer cannot run on this machine"))
 	}
 	sudo, err := checks.lookPath("sudo")

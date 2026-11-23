@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -14,10 +14,10 @@ import (
 // porte sa portée.
 func grantedRight(name string) string {
 	scopes := map[string]string{
-		machine.CapabilityBackupReceive: "/srv/backups",
-		machine.CapabilityBackupProduce: machine.ProducerProxmoxVzdump,
-		machine.CapabilityFilesWrite:    "/srv/files",
-		machine.CapabilityResticTarget:  "/srv/restic",
+		agentpolicy.CapabilityBackupReceive: "/srv/backups",
+		agentpolicy.CapabilityBackupProduce: agentpolicy.ProducerProxmoxVzdump,
+		agentpolicy.CapabilityFilesWrite:    "/srv/files",
+		agentpolicy.CapabilityResticTarget:  "/srv/restic",
 	}
 	if scope, bounded := scopes[name]; bounded {
 		return name + "=" + scope
@@ -28,7 +28,7 @@ func grantedRight(name string) string {
 // everyRightBut rend tous les droits sauf missing.
 func everyRightBut(missing string) string {
 	var granted []string
-	for _, name := range machine.CapabilityNames() {
+	for _, name := range agentpolicy.CapabilityNames() {
 		if name != missing {
 			granted = append(granted, grantedRight(name))
 		}
@@ -42,9 +42,9 @@ func everyRightBut(missing string) string {
 func TestR_A1_14_TheServerPrejudgesWithTheRegistry(t *testing.T) {
 	for _, kind := range agentwire.OrderKinds() {
 		spec, _ := agentwire.SpecOf(kind)
-		// observe est toujours tenu (machine.NormalizeCapabilities) : il ne
+		// observe est toujours tenu (agentpolicy.NormalizeCapabilities) : il ne
 		// peut pas manquer.
-		if spec.Right != machine.CapabilityObserve {
+		if spec.Right != agentpolicy.CapabilityObserve {
 			missing := newBenchReporting(t, everyRightBut(spec.Right))
 			if _, err := missing.service.Send(operator(), machineID, kind, nil); !errors.Is(err, action.ErrRightMissing) {
 				t.Errorf("%s without %s: %v", kind, spec.Right, err)

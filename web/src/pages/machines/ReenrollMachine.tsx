@@ -9,7 +9,7 @@ import { RightsFields } from "../../components/RightsFields";
 import { WizardBar } from "../../components/Wizard";
 import { useAction } from "../../hooks/useAction";
 import { useForm } from "../../hooks/useForm";
-import { useT } from "../../i18n/context";
+import { useRightNames, useT } from "../../i18n/context";
 import { anchorFieldsOf, anchorsOf, emptyAnchorFields } from "../../lib/anchors";
 import { capabilitiesOf, isRightsModified, rightsFormOf, tokenPageState, type RightsValues, type TokenPageState } from "../../lib/machines";
 import { detectedProxmox } from "../../lib/proxmox";
@@ -36,10 +36,11 @@ export function ReenrollMachine() {
 
 function ReenrollDialog({ machine }: { machine: Machine }) {
   const t = useT();
+  const rightNames = useRightNames();
   const navigate = useNavigate();
   const requested = machine.agent?.requested ?? [];
   const [search] = useSearchParams();
-  const wanted = wantedRightOf(search);
+  const wanted = wantedRightOf(rightNames, search);
   const heldAnchors = anchorFieldsOf(machine.agent?.anchors);
   const form = useForm(noRights, { source: requested, fill: (source) => withWantedRight(rightsFormOf(source, heldAnchors), wanted) });
   const { values } = form;
@@ -56,7 +57,7 @@ function ReenrollDialog({ machine }: { machine: Machine }) {
   }
 
   const create = () => {
-    const rights = capabilitiesOf(values);
+    const rights = capabilitiesOf(rightNames, values);
     action.run(() => reenrollMachine(machine.id, rights, anchorsOf(values.anchors, values.rights)), {
       topic: "all",
       onDone: (created) => {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
@@ -15,7 +16,7 @@ func (db *DB) InsertToken(ctx context.Context, t machine.Token) error {
 	_, err := db.sql.ExecContext(ctx, `
 		INSERT INTO enrollment_tokens (id, token_hash, token_prefix, name, machine_id, role, requested_capabilities, created_at, expires_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.Hash, t.Prefix, t.Name, nullableString(t.MachineID), string(t.Role), machine.FormatCapabilities(t.Capabilities),
+		t.ID, t.Hash, t.Prefix, t.Name, nullableString(t.MachineID), string(t.Role), agentpolicy.FormatCapabilities(t.Capabilities),
 		t.CreatedAt.Unix(), t.ExpiresAt.Unix())
 	if err != nil {
 		return fmt.Errorf("insert token: %w", err)
@@ -78,7 +79,7 @@ func scanToken(row scanner) (machine.Token, error) {
 	t.Role = machine.Role(role)
 	t.AgentID = agentID.String
 	if requested != "" {
-		t.Capabilities, _ = machine.ParseCapabilities(requested)
+		t.Capabilities, _ = agentpolicy.ParseCapabilities(requested)
 	}
 	t.CreatedAt = time.Unix(createdAt, 0)
 	t.ExpiresAt = time.Unix(expiresAt, 0)

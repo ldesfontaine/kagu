@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
@@ -38,7 +39,7 @@ type installTarget struct {
 // droits autorisent (seulement quand un droit écrit hors de l'état). Le jeton
 // n'est que dans l'enrôlement. L'unité vient après lui : elle relit
 // l'identité que le premier lancement a écrite.
-func installSteps(publicURL, token string, code lang.Code, capabilities []machine.Capability, target installTarget) []installStepJSON {
+func installSteps(publicURL, token string, code lang.Code, capabilities []agentpolicy.Capability, target installTarget) []installStepJSON {
 	var steps []installStepJSON
 	if target.reenroll {
 		steps = append(steps, installStepJSON{ID: stepStop, Command: installStop()})
@@ -88,13 +89,13 @@ func installUnit() string {
 // l'agent, donc dans un dossier que l'unité doit autoriser (la racine des
 // services, les sauvegardes reçues). files.write n'en est pas : ses dossiers
 // sont préparés au nom du compte, l'unité n'y change rien.
-var rightsWritingOutsideState = []string{machine.CapabilityDockerDeploy, machine.CapabilityDockerUpdate, machine.CapabilityBackupReceive}
+var rightsWritingOutsideState = []string{agentpolicy.CapabilityDockerDeploy, agentpolicy.CapabilityDockerUpdate, agentpolicy.CapabilityBackupReceive}
 
 // installRights autorise, dans un drop-in de l'unité, les dossiers où ces
 // droits écrivent : sans lui, l'agent accepte l'ordre et ne peut pas écrire.
 // Vide quand aucun droit n'écrit ailleurs que dans l'état. Les chemins
 // viennent de writtenFolders, normalisés : ils passent entre apostrophes.
-func installRights(capabilities []machine.Capability) string {
+func installRights(capabilities []agentpolicy.Capability) string {
 	var paths []string
 	for _, folder := range writtenFolders(capabilities) {
 		writesOutside := slices.ContainsFunc(folder.rights, func(right string) bool { return slices.Contains(rightsWritingOutsideState, right) })

@@ -8,6 +8,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
 	"github.com/ldesfontaine/kagu/internal/domain/directory"
 	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
@@ -190,7 +191,7 @@ func closedKeyLists() []composedKeys {
 		{prefix: "machine.capability_unavailable_", values: machine.UnavailableReasons()},
 		// Les plans de sauvegarde : d'où ils prennent, et ce qu'un agent sait produire.
 		{prefix: "backup.source_kind_", values: []string{backup.SourceDatabase, backup.SourceAgent, backup.KindFirewall}},
-		{prefix: "backup.producer_", values: machine.Producers()},
+		{prefix: "backup.producer_", values: agentpolicy.Producers()},
 		{prefix: "backup.source_sub_", values: append(backup.SourceKinds(), agentwire.ResticScopeService)},
 		{prefix: "backup.target_kind_", values: backup.TargetKinds()},
 		{prefix: "backup.path_reason_", values: agentwire.ResticPathReasons()},
@@ -209,8 +210,8 @@ func orderKindKeys() []string {
 }
 
 func capabilityKeys() []string {
-	out := make([]string, 0, len(machine.CapabilityNames()))
-	for _, name := range machine.CapabilityNames() {
+	out := make([]string, 0, len(agentpolicy.CapabilityNames()))
+	for _, name := range agentpolicy.CapabilityNames() {
 		out = append(out, strings.ReplaceAll(name, ".", "_"))
 	}
 	return out

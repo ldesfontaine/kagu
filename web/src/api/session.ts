@@ -37,6 +37,9 @@ export interface Session {
   // Les rôles qu'une machine peut recevoir, avec les droits qu'ils cochent
   // d'avance : le serveur seul écrit ce préréglage.
   roles: SessionRole[];
+  // Les droits qui se cochent à l'enrôlement, dans l'ordre où ils
+  // s'affichent : la liste fermée du serveur, jamais recopiée ici.
+  rights: string[];
 }
 
 export interface SessionRole {
