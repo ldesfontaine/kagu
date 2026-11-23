@@ -54,11 +54,11 @@ func newResticBench(t *testing.T, sourceRights, targetRights string) *resticBenc
 	ctx := context.Background()
 	sourceMachine, sourceKey := server.enroll(t, "vps", resticSourceID)
 	targetMachine, _ := server.enroll(t, "nas", resticTargetID)
-	source, err := server.machines.Connect(ctx, sourceMachine, "192.0.2.21", "v0.0.1", sourceRights, "", "")
+	source, err := server.machines.Connect(ctx, sourceMachine, "192.0.2.21", "v0.0.1", sourceRights, "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := server.machines.Connect(ctx, targetMachine, "192.0.2.10", "v0.0.1", targetRights, "", "")
+	target, err := server.machines.Connect(ctx, targetMachine, "192.0.2.10", "v0.0.1", targetRights, "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,7 +375,7 @@ func TestRestic_AMissingRightIsRefusedWithTheRightAndTheMachine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ready.machines.Connect(context.Background(), sourceMachine.Machine, "192.0.2.21", "v0.0.1", "observe", "", ""); err != nil {
+	if _, err := ready.machines.Connect(context.Background(), sourceMachine.Machine, "192.0.2.21", "v0.0.1", "observe", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	got = callAPI(ready.Server, http.MethodPost, "/api/machines/"+resticSourceID+"/restic-backups", map[string]any{

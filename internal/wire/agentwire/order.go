@@ -13,11 +13,22 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
+// OrderVersion est la forme de l'enveloppe que ce binaire écrit et lit (R-A1-9).
+// Un agent refuse tout corps d'une autre version, ou sans version.
+const OrderVersion = 2
+
+// LegacyOrderVersion est la forme d'avant, la seule que lit un agent du
+// protocole 2 : le serveur ne l'écrit plus que pour agent.update vers lui. Elle
+// disparaît à la version suivante.
+const LegacyOrderVersion = 1
+
 // OrderBody est ce que la clé du serveur signe : quel ordre, pour quelle
-// machine et quel agent, jusqu'à quand, à quel rang. L'agent refuse un ordre
-// qui n'est pas pour lui, périmé, ou dont le rang ne dépasse pas le dernier
-// qu'il a exécuté.
+// machine et quel agent, jusqu'à quand, à quel rang, de qui et à quel niveau.
+// L'agent refuse un ordre qui n'est pas pour lui, périmé, ou dont le rang ne
+// dépasse pas le dernier qu'il a exécuté.
 type OrderBody struct {
+	// Toujours OrderVersion.
+	V         int             `json:"v"`
 	RunID     string          `json:"run_id"`
 	MachineID string          `json:"machine_id"`
 	AgentID   string          `json:"agent_id"`
@@ -30,6 +41,23 @@ type OrderBody struct {
 	NotAfter int64 `json:"not_after"`
 	// Croissant par agent : l'anti-rejeu de l'agent.
 	Seq int64 `json:"seq"`
+	// Qui a demandé l'ordre, et le niveau du geste : signés et lus une fois
+	// ici, leur contenu est celui des gestes (A4).
+	Actor string `json:"actor"`
+	Level int    `json:"level"`
+}
+
+// OrderBodyV1 est l'enveloppe d'avant la version, que le serveur signe encore
+// pour agent.update vers un agent du protocole 2, et pour rien d'autre.
+type OrderBodyV1 struct {
+	RunID     string          `json:"run_id"`
+	MachineID string          `json:"machine_id"`
+	AgentID   string          `json:"agent_id"`
+	Kind      Kind            `json:"kind"`
+	Params    json.RawMessage `json:"params,omitempty"`
+	Secret    json.RawMessage `json:"secret,omitempty"` // #nosec G117 -- comme OrderBody.Secret.
+	NotAfter  int64           `json:"not_after"`
+	Seq       int64           `json:"seq"`
 }
 
 // MaxSecretBytes borne le champ secret d'un ordre : l'enveloppe entière doit
@@ -46,11 +74,16 @@ type SignedOrder struct {
 	Key       string `json:"key"`
 }
 
-// OrderSigningBytes rend ce que la clé du serveur signe pour un corps :
-// l'étiquette de domaine puis le corps.
-func OrderSigningBytes(body []byte) []byte {
-	signed := make([]byte, 0, len(brand.OrderSignatureDomain)+len(body))
-	signed = append(signed, brand.OrderSignatureDomain...)
+// OrderSigningBytes rend ce que la clé du serveur signe pour un corps de
+// cette version : l'étiquette de domaine de la version, puis le corps. Une
+// signature v1 ne vaut donc pas pour un corps v2, ni l'inverse.
+func OrderSigningBytes(version int, body []byte) []byte {
+	domain := brand.OrderSignatureDomain
+	if version == LegacyOrderVersion {
+		domain = brand.LegacyOrderSignatureDomain
+	}
+	signed := make([]byte, 0, len(domain)+len(body))
+	signed = append(signed, domain...)
 	return append(signed, body...)
 }
 

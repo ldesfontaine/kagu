@@ -14,7 +14,10 @@ const sessionTokenBytes = 32
 type Session struct {
 	MachineID string
 	// L'agent qui tient le flux : son signal se note sur lui.
-	AgentID     string
+	AgentID string
+	// Le protocole que l'agent a dit à l'ouverture : il dit l'enveloppe des
+	// ordres qu'il lit (agentwire.LegacyProtocolVersion : la v1).
+	Protocol    string
 	Token       string
 	ConnectedAt time.Time
 	done        chan struct{}
@@ -49,7 +52,7 @@ func NewSessions() *Sessions {
 
 // Open enregistre un flux ; un flux précédent de la même machine est fermé,
 // le plus récent gagne.
-func (s *Sessions) Open(machineID, agentID string, now time.Time) (*Session, error) {
+func (s *Sessions) Open(machineID, agentID, protocol string, now time.Time) (*Session, error) {
 	raw := make([]byte, sessionTokenBytes)
 	if _, err := rand.Read(raw); err != nil {
 		return nil, err
@@ -57,6 +60,7 @@ func (s *Sessions) Open(machineID, agentID string, now time.Time) (*Session, err
 	session := &Session{
 		MachineID:   machineID,
 		AgentID:     agentID,
+		Protocol:    protocol,
 		Token:       hex.EncodeToString(raw),
 		ConnectedAt: now,
 		done:        make(chan struct{}),
@@ -109,6 +113,16 @@ func (s *Sessions) IsOnline(machineID string) bool {
 	defer s.mu.RUnlock()
 	_, ok := s.byMachine[machineID]
 	return ok
+}
+
+// Protocol rend le protocole du flux ouvert d'une machine, vide sans flux.
+func (s *Sessions) Protocol(machineID string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if session, ok := s.byMachine[machineID]; ok {
+		return session.Protocol
+	}
+	return ""
 }
 
 func (s *Sessions) CountOnline() int {

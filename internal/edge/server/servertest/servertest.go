@@ -61,7 +61,8 @@ func NewNonce(t *testing.T) string {
 }
 
 // SignedStreamRequest construit la requête du flux avec la preuve que
-// l'agent signe pour cet aléa, à l'heure figée des tests, en protocole 2.
+// l'agent signe pour cet aléa, à l'heure figée des tests, dans le protocole
+// de ce binaire.
 func SignedStreamRequest(t *testing.T, url, machineID string, private ed25519.PrivateKey, nonce string) *http.Request {
 	t.Helper()
 	raw, err := base64.StdEncoding.DecodeString(nonce)
@@ -131,6 +132,15 @@ func OpenStreamWithRights(t *testing.T, handler http.Handler, machineID string, 
 	t.Helper()
 	return openStream(t, handler, machineID, private, func(request *http.Request) {
 		request.Header.Set(agentwire.HeaderAgentRights, rights)
+	})
+}
+
+// OpenStreamSpeaking ouvre le flux d'un agent qui annonce ce protocole : un
+// agent d'avant, du protocole 2.
+func OpenStreamSpeaking(t *testing.T, handler http.Handler, machineID string, private ed25519.PrivateKey, protocol string) (*http.Response, string, *bufio.Reader, context.CancelFunc) {
+	t.Helper()
+	return openStream(t, handler, machineID, private, func(request *http.Request) {
+		request.Header.Set(agentwire.HeaderProtocol, protocol)
 	})
 }
 

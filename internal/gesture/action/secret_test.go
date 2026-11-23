@@ -37,7 +37,7 @@ func TestSendWithSecret_SignsTheSecretButNeverStoresOrJournalsIt(t *testing.T) {
 	}
 
 	signed := b.pusher.sent[0].Order
-	if !ed25519.Verify(key.PublicKey(), agentwire.OrderSigningBytes(signed.Body), signed.Signature) {
+	if !ed25519.Verify(key.PublicKey(), agentwire.OrderSigningBytes(agentwire.OrderVersion, signed.Body), signed.Signature) {
 		t.Fatal("the order is not signed")
 	}
 	var body agentwire.OrderBody

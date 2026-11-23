@@ -25,7 +25,7 @@ func TestBackups_FirewallExportPlanNeverLeaksTheKeysOrTheConfiguration(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := server.machines.Connect(context.Background(), remote.Machine, "192.0.2.1", agentwire.PrefixSinceVersion, "backup.receive=/srv/backups", "", ""); err != nil {
+	if _, err := server.machines.Connect(context.Background(), remote.Machine, "192.0.2.1", agentwire.PrefixSinceVersion, "backup.receive=/srv/backups", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	firewallID, _ := declareFirewallThroughAPI(t, server, fake)

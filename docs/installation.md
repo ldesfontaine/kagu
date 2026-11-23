@@ -1789,7 +1789,8 @@ lit pas, comme `dev`) ; le plan de la base, lui, part vers n'importe quel agent.
 | Situation | Effet |
 | --- | --- |
 | Agent plus ancien que le serveur, même protocole | Accepté. Le serveur ignore les sections du signal que l'agent n'envoie pas, et lui répond dans l'ancien format de refus |
-| Agent d'un autre protocole | Refusé, `426 protocol_unsupported` : il reste hors ligne. Un agent du protocole 2 s'arrête (code 2) et dit d'installer le même binaire que sur la machine Kagu ; un agent du protocole 1 réessaie sans fin |
+| Agent du protocole 2 (d'avant l'enveloppe v2) | Accepté, en ligne, mais il ne reçoit qu'`agent.update` : tout autre ordre est refusé avant l'envoi (`409 action.agent_outdated`). Mettez-le à jour. Cette exception disparaît à la version suivante |
+| Agent d'un autre protocole | Refusé, `426 protocol_unsupported` : il reste hors ligne. Un agent récent s'arrête (code 2) et dit d'installer le même binaire que sur la machine Kagu ; un agent du protocole 1 réessaie sans fin |
 | Commande du serveur inconnue de l'agent | Ignorée, une ligne `unknown command` au journal de l'agent |
 | Champ JSON inconnu dans ce que l'agent envoie | Ignoré par le serveur |
 | Serveur redémarré | Les agents se reconnectent seuls ; l'interface et les flux aussi |

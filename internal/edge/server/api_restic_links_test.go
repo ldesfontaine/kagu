@@ -187,7 +187,7 @@ func TestRestic_AMissingBinaryIsRefusedWithWhatToInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	bench.machines.Disconnect(bench.source)
-	if _, err := bench.machines.Connect(ctx, sourceMachine.Machine, "192.0.2.21", "v0.0.1", "observe,restic.produce", "", "restic.produce=restic_missing"); err != nil {
+	if _, err := bench.machines.Connect(ctx, sourceMachine.Machine, "192.0.2.21", "v0.0.1", "observe,restic.produce", "", "restic.produce=restic_missing", ""); err != nil {
 		t.Fatal(err)
 	}
 	setup := callAPI(bench.Server, http.MethodPost, "/api/machines/"+resticTargetID+"/actions/restic-target-setup",

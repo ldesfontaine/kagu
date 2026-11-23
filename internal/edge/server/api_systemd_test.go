@@ -22,7 +22,7 @@ func systemdUnit(name string, active systemdunits.Active, sub systemdunits.Sub) 
 func (ts *testServer) connectedAgent(t *testing.T) string {
 	t.Helper()
 	enrolled, _ := ts.enroll(t, "vps-paris-1", remoteID)
-	session, err := ts.machines.Connect(context.Background(), enrolled, "192.0.2.1", "v0.0.1", "", "", "")
+	session, err := ts.machines.Connect(context.Background(), enrolled, "192.0.2.1", "v0.0.1", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

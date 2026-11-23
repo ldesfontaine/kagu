@@ -88,7 +88,7 @@ func newOrderBenchWithRights(t *testing.T, rights []string) *orderBench {
 // order rend un ordre ping valide de rang seq, à retoucher par le test.
 func order(seq int64) agentwire.OrderBody {
 	return agentwire.OrderBody{
-		RunID: fmt.Sprintf("run-%d", seq), MachineID: orderMachineID, AgentID: orderAgentID, Kind: agentwire.KindAgentPing,
+		V: agentwire.OrderVersion, RunID: fmt.Sprintf("run-%d", seq), MachineID: orderMachineID, AgentID: orderAgentID, Kind: agentwire.KindAgentPing,
 		NotAfter: orderNow.Add(time.Minute).Unix(), Seq: seq,
 	}
 }
@@ -110,7 +110,7 @@ func (b *orderBench) send(t *testing.T, body agentwire.OrderBody, signer ed25519
 	if err != nil {
 		t.Fatal(err)
 	}
-	signed := agentwire.SignedOrder{Body: encoded, Signature: ed25519.Sign(signer, agentwire.OrderSigningBytes(encoded))}
+	signed := agentwire.SignedOrder{Body: encoded, Signature: ed25519.Sign(signer, agentwire.OrderSigningBytes(agentwire.OrderVersion, encoded))}
 	data, err := json.Marshal(signed)
 	if err != nil {
 		t.Fatal(err)
@@ -322,7 +322,7 @@ func TestOrderRunner_ForgedResticOrdersAreRefused(t *testing.T) {
 // à la main.
 func (b *orderBench) sendBody(t *testing.T, encoded []byte) agentwire.ActionResult {
 	t.Helper()
-	data, err := json.Marshal(agentwire.SignedOrder{Body: encoded, Signature: ed25519.Sign(b.private, agentwire.OrderSigningBytes(encoded))})
+	data, err := json.Marshal(agentwire.SignedOrder{Body: encoded, Signature: ed25519.Sign(b.private, agentwire.OrderSigningBytes(agentwire.OrderVersion, encoded))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,4 +553,80 @@ func rawFieldReads(t *testing.T, name string, source []byte) []string {
 		})
 	}
 	return found
+}
+
+// Un agent v2 ne lit que l'enveloppe v2 (R-A1-9) : le corps v1, même signé
+// par la vraie clé sous son étiquette, un corps sans « v » ou d'une autre
+// version sont refusés, sans prendre de rang ni atteindre l'exécuteur.
+// L'exception agent.update ne vaut que pour un agent du protocole 2.
+func TestR_A1_9_AV2AgentRefusesABodyWithoutVOrOfAnotherVersion(t *testing.T) {
+	b := newOrderBenchWithRights(t, everyRight)
+	called := countExecutors(t)
+	signedUnder := func(version int, encoded []byte) agentwire.ActionResult {
+		t.Helper()
+		data, err := json.Marshal(agentwire.SignedOrder{Body: encoded, Signature: ed25519.Sign(b.private, agentwire.OrderSigningBytes(version, encoded))})
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.runner.receive(data)
+		report := b.results.take()
+		if report == nil || len(report.Results) != 1 {
+			t.Fatalf("one result expected, got %+v", report)
+		}
+		return report.Results[0]
+	}
+	legacyOf := func(kind agentwire.Kind) []byte {
+		current := order(1)
+		encoded, err := json.Marshal(agentwire.OrderBodyV1{
+			RunID: current.RunID, MachineID: current.MachineID, AgentID: current.AgentID, Kind: kind,
+			NotAfter: current.NotAfter, Seq: current.Seq,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return encoded
+	}
+	versioned := func(version int) []byte {
+		body := order(1)
+		body.V = version
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return encoded
+	}
+	withoutV, found := strings.CutPrefix(string(versioned(agentwire.OrderVersion)), `{"v":2,`)
+	if !found {
+		t.Fatal("the v2 body does not start with its version")
+	}
+	cases := []struct {
+		name    string
+		version int
+		body    []byte
+		reason  string
+	}{
+		{"agent.update v1 under the v1 label", agentwire.LegacyOrderVersion, legacyOf(agentwire.KindAgentUpdate), agentwire.ReasonBadSignature},
+		{"agent.ping v1 under the v1 label", agentwire.LegacyOrderVersion, legacyOf(agentwire.KindAgentPing), agentwire.ReasonBadSignature},
+		{"agent.update v1 under the v2 label", agentwire.OrderVersion, legacyOf(agentwire.KindAgentUpdate), agentwire.ReasonBadOrder},
+		{"no v", agentwire.OrderVersion, []byte("{" + withoutV), agentwire.ReasonBadOrder},
+		{"v 0", agentwire.OrderVersion, versioned(0), agentwire.ReasonBadOrder},
+		{"v 1", agentwire.OrderVersion, versioned(1), agentwire.ReasonBadOrder},
+		{"v 3", agentwire.OrderVersion, versioned(3), agentwire.ReasonBadOrder},
+		{"v 2 under the v1 label", agentwire.LegacyOrderVersion, versioned(agentwire.OrderVersion), agentwire.ReasonBadSignature},
+	}
+	for _, c := range cases {
+		if result := signedUnder(c.version, c.body); result.State != agentwire.ActionRefused || result.Reason != c.reason {
+			t.Errorf("%s: %+v", c.name, result)
+		}
+	}
+	if len(called) != 0 {
+		t.Fatalf("an executor ran: %v", called)
+	}
+	if saved, _ := LoadIdentity(b.stateDir); saved.LastOrderSeq != 0 {
+		t.Fatalf("a refused order moved the seq to %d", saved.LastOrderSeq)
+	}
+	// Le témoin : le même ordre en v2, sous l'étiquette v2, atteint l'exécuteur.
+	if result := signedUnder(agentwire.OrderVersion, versioned(agentwire.OrderVersion)); result.State != agentwire.ActionSucceeded || called[agentwire.KindAgentPing] != 1 {
+		t.Fatalf("the v2 order: %+v, called %v", result, called)
+	}
 }

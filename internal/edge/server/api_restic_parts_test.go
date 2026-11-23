@@ -56,7 +56,7 @@ func (b *resticBench) reconnectSource(t *testing.T, rights string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := b.machines.Connect(context.Background(), status.Machine, "192.0.2.21", "v0.0.1", rights, "", "")
+	session, err := b.machines.Connect(context.Background(), status.Machine, "192.0.2.21", "v0.0.1", rights, "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

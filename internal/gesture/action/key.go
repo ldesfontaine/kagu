@@ -231,6 +231,6 @@ func (k *Key) Sign(order Order, pinned string) (agentwire.SignedOrder, error) {
 	if err != nil {
 		return agentwire.SignedOrder{}, err
 	}
-	signature := ed25519.Sign(signer.private, agentwire.OrderSigningBytes(body))
+	signature := ed25519.Sign(signer.private, agentwire.OrderSigningBytes(order.Version, body))
 	return agentwire.SignedOrder{Body: body, Signature: signature, Key: signer.fingerprint}, nil
 }

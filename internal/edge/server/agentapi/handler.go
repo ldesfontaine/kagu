@@ -34,7 +34,7 @@ type MachineService interface {
 	NoteRollbackVersion(ctx context.Context, agentID, reported string) error
 	NoteServiceRollbackVersion(ctx context.Context, agentID, reported string) error
 	NoteAnchors(ctx context.Context, agentID, reported string) error
-	Connect(ctx context.Context, authenticated machine.Machine, address, agentVersion, capabilities, account, unavailable string) (*machine.Session, error)
+	Connect(ctx context.Context, authenticated machine.Machine, address, agentVersion, capabilities, account, unavailable, protocol string) (*machine.Session, error)
 	Disconnect(session *machine.Session)
 	Signal(ctx context.Context, sessionToken string) (machineID string, err error)
 	// Get rend la machine et l'agent : le serveur y relit les droits que

@@ -56,7 +56,7 @@ func newUpdateBench(t *testing.T, options updateOptions) *updateBench {
 	b := &updateBench{db: db, state: state}
 	b.machines = machine.New(db, machine.NewSessions(), logger)
 	enrolled := enrollWithArch(t, b.machines, options.arch)
-	session, err := b.machines.Connect(context.Background(), enrolled, "192.0.2.1", options.agentVersion, options.rights, "", options.unavailable)
+	session, err := b.machines.Connect(context.Background(), enrolled, "192.0.2.1", options.agentVersion, options.rights, "", options.unavailable, "")
 	if err != nil {
 		t.Fatal(err)
 	}

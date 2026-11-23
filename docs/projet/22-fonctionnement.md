@@ -302,9 +302,13 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    serveur l'oublie : une preuve captée moins de 5 min avant peut alors
    resservir une fois, ce qui suppose de lire le trafic en clair, donc de
    tenir le proxy qui termine TLS (il tient déjà le flux).
-   Chaque requête de l'agent porte `OpenCloud-Agent-Protocol: 2`. Un agent
-   d'une autre version reçoit `426 protocol_unsupported`, sur chaque chemin
-   `/agent/…`, `/agent/challenge` du protocole 1 compris.
+   Chaque requête de l'agent porte `OpenCloud-Agent-Protocol: 3`. Le serveur
+   admet encore le `2`, pour qu'un agent d'avant reçoive sa mise à jour : la
+   session retient le protocole lu à l'ouverture du flux (en mémoire, rien en
+   base), et un agent du protocole 2 ne reçoit qu'`agent.update` (« Un ordre,
+   de bout en bout »). Un agent d'une autre version reçoit
+   `426 protocol_unsupported`, sur chaque chemin `/agent/…`,
+   `/agent/challenge` du protocole 1 compris.
    **L'agent ne suit aucune redirection** : une réponse 3xx est un refus, un
    proxy mal réglé ou un faux serveur ne l'envoie pas ailleurs avec ses
    en-têtes. Il lit le flux par lignes de 64 Kio au plus et par événements
@@ -604,8 +608,8 @@ et qu'**aucun ordre ne peut écrire**.
   (`backup.recipient=age1…,backup.guest=101:102,restic.target-cert=!` ; `!` : le
   fichier porte des valeurs illisibles ; `none` : rien de posé), à chaque
   ouverture du flux, gardé dans `agents.anchors` (migration 036 : **NULL** tant
-  que l'agent n'a rien dit). Un texte illisible est ignoré en entier. Le
-  protocole reste en version 2 : un champ de plus, optionnel.
+  que l'agent n'a rien dit). Un texte illisible est ignoré en entier. Un
+  champ de plus, optionnel : il ne change pas le protocole.
 - **Le serveur n'envoie pas un ordre qu'il sait refusé** (`action.send`, comme
   pour les droits) : `409 anchor.<type>_{missing,outside,unreadable}`, avec la
   commande exacte à lancer sur la machine dans le corps (`command`). Un agent
@@ -1392,26 +1396,38 @@ fermée et vit dans le protocole (`agentwire.Kind`) : jamais une chaîne shell.
    « Éprouver l'agent » de la carte Ordres de la fiche. Refus, sans rien
    écrire : `404` machine inconnue, `409 machine.no_agent` sans agent actif,
    `409 action.right_missing` quand l'agent a rapporté ses droits sans celui
-   de l'ordre, `409 action.machine_offline` sans flux ouvert.
+   de l'ordre, `409 action.machine_offline` sans flux ouvert,
+   `409 action.agent_outdated` quand l'agent parle encore le protocole 2 et
+   que l'ordre n'est pas `agent.update`.
 2. **Le serveur écrit le run**, état `queued`, et prend dans la même
    transaction le **rang** suivant de l'agent (`agents.last_order_seq`, qui ne
    recule jamais, même quand les runs sont purgés ; un agent révoqué entre-temps
    n'en reçoit pas). Puis l'événement `action.order` (acteur, genre, machine,
    agent ; l'objet est le run, nommé par sa machine). `requested_by` recopie
    l'acteur (`operator:lucas`, `api:…`).
-3. **Il signe** le corps `{run_id, machine_id, agent_id, kind, params,
-   not_after, seq}` avec `server.key`, précédé de l'étiquette
-   `opencloud-order/v1` et d'un octet nul : la signature d'un ordre ne vaut
-   pour rien d'autre. `not_after` vaut l'instant plus 2 min
-   (`action.OrderLifetime`).
+3. **Il signe** le corps `{v, run_id, machine_id, agent_id, kind, params,
+   secret, not_after, seq, actor, level}` (enveloppe v2, `v` vaut 2) avec
+   `server.key`, précédé de l'étiquette `<brand.ID>-order/v2`
+   (`opencloud-order/v2`) et d'un octet nul : la signature d'un ordre ne vaut
+   pour rien d'autre. `actor` recopie `requested_by` ; `level` vaut 0 tant
+   que les gestes ne portent pas de niveau. `not_after` vaut l'instant plus
+   2 min (`action.OrderLifetime`). **L'exception v1** : vers un agent du
+   protocole 2, `agent.update` part dans l'enveloppe d'avant
+   (`agentwire.OrderBodyV1`, sans `v`, `actor` ni `level`), sous l'étiquette
+   `opencloud-order/v1`, la seule qu'il sait lire ; tout autre ordre vers lui
+   est refusé à l'étape 1. Le protocole est celui que la session a lu à
+   l'ouverture du flux : un ordre signé v2 pour un agent revenu entre-temps en
+   protocole 2 est refusé par lui. L'exception disparaît à la version
+   suivante.
 4. **Il marque le run `sent`, puis le pousse** sur le flux : la réponse de
    l'agent trouve toujours un run envoyé. Un flux tombé ou une file pleine :
    le run finit `failed`, raison `undelivered`. L'API rend le run (`201`).
 5. **L'agent juge**, dans cet ordre, et refuse au premier écart : il a une
    clé du serveur épinglée (`server_key_missing`) ; la signature est de cette
-   clé, sur ces octets, vérifiée avant de lire un champ (`bad_signature`) ; le
-   corps se lit **strictement** (`bad_order`, voir « Le registre des genres »
-   plus bas) ; il vise cette machine (`wrong_machine`) et
+   clé, sur ces octets, sous l'étiquette v2 seule, vérifiée avant de lire un
+   champ (`bad_signature` : un corps v1 signé sous la sienne ne passe pas) ;
+   le corps se lit **strictement** et porte `v: 2` (`bad_order` sans `v` ou
+   d'une autre version, voir « Le registre des genres » plus bas) ; il vise cette machine (`wrong_machine`) et
    cet agent : un ordre fait pour l'agent d'avant un ré-enrôlement est refusé
    (`wrong_agent`) ; il n'est pas périmé (`expired`) ; son rang dépasse
    strictement le dernier exécuté (`replayed`) ; son genre est connu
@@ -1439,7 +1455,7 @@ L'agent n'importe pas `action` (`TestLayers_AgentStaysOffTheServer`). Les observ
 
 | Lu strictement | Comment | Refus |
 | --- | --- | --- |
-| L'enveloppe signée (`OrderBody`) | `agentwire.StrictDecode` : décodé avec `DisallowUnknownFields`, réencodé par `json.Marshal`, comparé octet pour octet | `bad_order` |
+| L'enveloppe signée (`OrderBody`, `v`, `actor` et `level` compris) | `agentwire.StrictDecode` : décodé avec `DisallowUnknownFields`, réencodé par `json.Marshal`, comparé octet pour octet ; `v` doit valoir `agentwire.OrderVersion` (2) | `bad_order` |
 | Les paramètres | `agentwire.Decode(genre, octets)` : la même lecture, dans le type du genre | `bad_order`, avant toute ancre |
 | Le secret | `agentwire.DecodeSecret` : la même lecture ; un secret sur un genre qui n'en porte pas est refusé | `bad_order` |
 

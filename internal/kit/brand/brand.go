@@ -118,6 +118,12 @@ const (
 // illisibles.
 const SecretKeyIDDomain = ID + "-key-id\x00"
 
+// OrderSignatureDomain précède le corps d'un ordre (enveloppe v2) dans ce que
+// la clé du serveur signe : une signature d'ordre ne vaut pour rien d'autre.
+// Dérivé de ID comme SecretKeyIDDomain : le changer, c'est que les agents
+// installés refusent les ordres signés sous l'ancienne étiquette.
+const OrderSignatureDomain = ID + "-order/v2\x00"
+
 // LabelPrefix est lu par l'agent sur les conteneurs. Dérivé de ID comme les
 // chemins : le changer, c'est que les conteneurs déjà étiquetés ne sont plus
 // lus et retombent aux niveaux Compose et nom.
@@ -169,9 +175,10 @@ const (
 	// partage avec le serveur : le mode forward ne croit l'identité que d'une
 	// requête qui le porte. Le nom est dans la configuration du mandataire.
 	ProxySecretHeader = "X-" + HeaderPrefix + "Proxy-Secret" // #nosec G101 -- un nom d'en-tête, pas un secret.
-	// Précède le corps d'un ordre dans ce que la clé du serveur signe : une
-	// signature d'ordre ne vaut pour rien d'autre.
-	OrderSignatureDomain = "opencloud-order/v1\x00"
+	// L'étiquette de l'enveloppe v1, que lit un agent du protocole 2 : gardée
+	// pour le seul agent.update qui le met à jour, elle disparaît à la version
+	// suivante.
+	LegacyOrderSignatureDomain = "opencloud-order/v1\x00"
 	// Précède ce que l'agent signe pour ouvrir son flux (protocole 2) : la
 	// preuve ne vaut pour rien d'autre.
 	AgentProofDomain = "opencloud-agent-proof/v2\x00"

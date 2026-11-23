@@ -66,24 +66,50 @@ func TestLoadKey_RefusesAnOpenOrDamagedFile(t *testing.T) {
 // ne se vérifie pas.
 func TestSign_SignsTheBytesThatTravel(t *testing.T) {
 	key := GenerateKey()
-	order := Order{RunID: "r1", MachineID: "m1", AgentID: "a1", Kind: agentwire.KindAgentPing, NotAfter: time.Unix(1700000000, 0), Seq: 7}
+	order := Order{RunID: "r1", MachineID: "m1", AgentID: "a1", Kind: agentwire.KindAgentPing, NotAfter: time.Unix(1700000000, 0), Seq: 7, Actor: "operator:lucas"}
 	signed, err := key.Sign(order, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if signed.Key != key.Fingerprint() || !ed25519.Verify(key.PublicKey(), agentwire.OrderSigningBytes(signed.Body), signed.Signature) {
+	if signed.Key != key.Fingerprint() || !ed25519.Verify(key.PublicKey(), agentwire.OrderSigningBytes(agentwire.OrderVersion, signed.Body), signed.Signature) {
 		t.Fatal("a valid order does not verify")
 	}
-	if want := `{"run_id":"r1","machine_id":"m1","agent_id":"a1","kind":"agent.ping","not_after":1700000000,"seq":7}`; string(signed.Body) != want {
+	if want := `{"v":2,"run_id":"r1","machine_id":"m1","agent_id":"a1","kind":"agent.ping","not_after":1700000000,"seq":7,"actor":"operator:lucas","level":0}`; string(signed.Body) != want {
 		t.Fatalf("body %s", signed.Body)
 	}
 	tampered := append([]byte(nil), signed.Body...)
 	tampered[len(tampered)-2] = '8'
-	if ed25519.Verify(key.PublicKey(), agentwire.OrderSigningBytes(tampered), signed.Signature) {
+	if ed25519.Verify(key.PublicKey(), agentwire.OrderSigningBytes(agentwire.OrderVersion, tampered), signed.Signature) {
 		t.Fatal("a tampered body verifies")
 	}
 	if ed25519.Verify(key.PublicKey(), signed.Body, signed.Signature) {
 		t.Fatal("the signature holds without its domain label")
+	}
+}
+
+// L'enveloppe v1, pour agent.update vers un agent du protocole 2 : le corps
+// d'avant, sans version ni acteur, signé sous l'étiquette v1 ; cette signature
+// ne vaut pas sous l'étiquette v2, ni l'inverse.
+func TestSign_TheLegacyEnvelopeIsSignedUnderItsOwnLabel(t *testing.T) {
+	key := GenerateKey()
+	order := Order{RunID: "r1", MachineID: "m1", AgentID: "a1", Kind: agentwire.KindAgentUpdate, NotAfter: time.Unix(1700000000, 0), Seq: 7, Actor: "operator:lucas", Version: agentwire.LegacyOrderVersion}
+	legacy, err := key.Sign(order, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"run_id":"r1","machine_id":"m1","agent_id":"a1","kind":"agent.update","not_after":1700000000,"seq":7}`; string(legacy.Body) != want {
+		t.Fatalf("legacy body %s", legacy.Body)
+	}
+	if !ed25519.Verify(key.PublicKey(), agentwire.OrderSigningBytes(agentwire.LegacyOrderVersion, legacy.Body), legacy.Signature) {
+		t.Fatal("a v1 order does not verify under the v1 label")
+	}
+	if ed25519.Verify(key.PublicKey(), agentwire.OrderSigningBytes(agentwire.OrderVersion, legacy.Body), legacy.Signature) {
+		t.Fatal("a v1 signature holds under the v2 label")
+	}
+	order.Version = agentwire.OrderVersion
+	current, _ := key.Sign(order, "")
+	if ed25519.Verify(key.PublicKey(), agentwire.OrderSigningBytes(agentwire.LegacyOrderVersion, current.Body), current.Signature) {
+		t.Fatal("a v2 signature holds under the v1 label")
 	}
 }
 
@@ -110,10 +136,10 @@ func TestKey_RotationSignsWithTheKeyTheAgentPinned(t *testing.T) {
 	order := Order{RunID: "r", Kind: agentwire.KindAgentPing, NotAfter: time.Unix(1, 0)}
 	forOld, _ := loaded.Sign(order, old.Fingerprint())
 	forNew, _ := loaded.Sign(order, loaded.Fingerprint())
-	if forOld.Key != old.Fingerprint() || !ed25519.Verify(old.PublicKey(), agentwire.OrderSigningBytes(forOld.Body), forOld.Signature) {
+	if forOld.Key != old.Fingerprint() || !ed25519.Verify(old.PublicKey(), agentwire.OrderSigningBytes(agentwire.OrderVersion, forOld.Body), forOld.Signature) {
 		t.Fatal("an agent on the previous key does not get its signature")
 	}
-	if forNew.Key != loaded.Fingerprint() || !ed25519.Verify(loaded.PublicKey(), agentwire.OrderSigningBytes(forNew.Body), forNew.Signature) {
+	if forNew.Key != loaded.Fingerprint() || !ed25519.Verify(loaded.PublicKey(), agentwire.OrderSigningBytes(agentwire.OrderVersion, forNew.Body), forNew.Signature) {
 		t.Fatal("an agent on the new key does not get its signature")
 	}
 	finished, err := loaded.Finished()

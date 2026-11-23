@@ -520,7 +520,7 @@ func (b *orderBench) signed(t *testing.T, body agentwire.OrderBody) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := json.Marshal(agentwire.SignedOrder{Body: encoded, Signature: ed25519.Sign(b.private, agentwire.OrderSigningBytes(encoded))})
+	data, err := json.Marshal(agentwire.SignedOrder{Body: encoded, Signature: ed25519.Sign(b.private, agentwire.OrderSigningBytes(agentwire.OrderVersion, encoded))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -779,7 +779,7 @@ func (b *orderBench) signedOrder(t *testing.T, body agentwire.OrderBody) agentwi
 	if err != nil {
 		t.Fatal(err)
 	}
-	return agentwire.SignedOrder{Body: encoded, Signature: ed25519.Sign(b.private, agentwire.OrderSigningBytes(encoded))}
+	return agentwire.SignedOrder{Body: encoded, Signature: ed25519.Sign(b.private, agentwire.OrderSigningBytes(agentwire.OrderVersion, encoded))}
 }
 
 // R-E3-17 : une archive reçue ne remplace jamais une archive gardée ; une

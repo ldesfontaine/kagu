@@ -44,7 +44,7 @@ func (b *bench) connectSource(rights string) *machine.Session {
 	if err != nil {
 		b.t.Fatal(err)
 	}
-	session, err := b.machines.Connect(context.Background(), source.Machine, "192.0.2.2", currentAgentVersion, rights, "", "")
+	session, err := b.machines.Connect(context.Background(), source.Machine, "192.0.2.2", currentAgentVersion, rights, "", "", "")
 	if err != nil {
 		b.t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func (b *bench) reconnectDestination(version, reportedRights string) {
 		b.t.Fatal(err)
 	}
 	b.machines.Disconnect(b.session)
-	b.session, err = b.machines.Connect(context.Background(), destination.Machine, "192.0.2.1", version, reportedRights, "", "")
+	b.session, err = b.machines.Connect(context.Background(), destination.Machine, "192.0.2.1", version, reportedRights, "", "", "")
 	if err != nil {
 		b.t.Fatal(err)
 	}

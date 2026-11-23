@@ -10,7 +10,7 @@ renommée `<tag>.md` à la publication, et son entrée passe dans le tableau de
 - **La mémoire d'une machine en ZFS ne compte plus le cache ZFS** (#328) : un Pi de sauvegarde à 70 % de mémoire « utilisée » dont 9,9 Go d'ARC affiche désormais ce qu'il utilise vraiment, et le cache ZFS apparaît à part sur la fiche.
 - **Une montée de version de service revient seule en arrière** (#493, lot A) : l'agent juge la santé du service pendant 5 minutes et remet la version précédente si elle ne tient pas. **Les données ne sont pas restaurées.** Voir plus bas.
 - **Six migrations** (`036`, `037`, `038`, `039`, `040`, `041`) : **sauvegarde de la base obligatoire** avant la mise à jour.
-- **Le protocole de l'agent ne change pas** (version `2`) : un agent v0.6.0 reste connecté et continue de tout faire, mais **n'applique pas les ancres**.
+- **Le protocole de l'agent passe en version `3`** (enveloppe v2 des ordres, R-A1-9) : un agent v0.6.0 (protocole `2`) **reste connecté** mais ne reçoit plus qu'`agent.update` ; tout autre ordre vers lui est refusé avant l'envoi (`409 action.agent_outdated`). **Mettez le serveur à jour d'abord, puis chaque agent.** Voir plus bas.
 - **Des alertes de processeur et de mémoire**, des **seuils réglables par machine**, « **Lu / Non lu** » à la place d'« acquitter », et un **rappel** des alertes de danger restées sans lecture (#489) : voir plus bas.
 - **Des catégories d'alertes par canal** (#494) : un canal choisit les familles qu'il reçoit (machines, services, tâches, sondes, sauvegardes, mises à jour). **Migration `040`** ; un canal existant n'a aucune catégorie et reçoit tout, comme avant.
 - **Le parcours navigateur ne tombe plus sous charge** (#490) : il retrouve un choix de menu par son nom et attend l'état de la page, plus un délai. Aucun changement pour l'opérateur.
@@ -18,6 +18,13 @@ renommée `<tag>.md` à la publication, et son entrée passe dans le tableau de
 - **La carte réseau de la vue d'ensemble est refaite** (#507) : Internet, Ailleurs, Chez vous ; un couloir par zone, une carte par machine avec ses services. Voir plus bas.
 - **Les refus d'une machine n'ont plus qu'une clé** (#499, lot 1 de la factorisation) : `machine.offline` (409), `machine.unknown` (422), `machine.no_agent` (409) remplacent les sept clés « hors ligne », « inconnue » et « sans agent » des domaines. **Visible** : la vérification des images et les journaux d'une machine hors ligne répondent **409** (503 avant) ; une file de commandes pleine ne se dit plus « hors ligne » pour la vérification des images (503 « trop de commandes en attente ») ; la sauvegarde juge le droit **avant** l'état en ligne, comme les ordres. **Migration `041`** : les cartes de sauvegarde gardent leur dernière raison sous la clé neuve. Les clients de l'API qui lisaient `action.machine_offline` et ses sœurs lisent `machine.offline`.
 - **Aucune clé de `config.toml` nouvelle.**
+
+## L'enveloppe v2 des ordres (T01-10)
+
+- **Le corps signé porte `v` (2), `actor` et `level`**, lus une fois par le lecteur strict, sous l'étiquette `opencloud-order/v2` (dérivée de `brand.ID`). `actor` recopie qui a demandé l'ordre ; `level` vaut 0 tant que les gestes n'ont pas de niveau.
+- **Un agent à jour refuse tout corps v1**, sans `v` ou d'une autre version : `bad_signature` ou `bad_order`, rien ne s'exécute.
+- **Un agent v0.6.0 reste connecté** (le serveur admet encore le protocole `2`) et ne reçoit qu'`agent.update`, signé dans l'enveloppe et l'étiquette v1 qu'il sait lire. Tout autre ordre vers lui : `409 action.agent_outdated`, rien n'est écrit. Les écrans ne le grisent pas encore.
+- **Ce que ça coûte** : un agent pas encore mis à jour n'exécute plus rien d'autre que sa mise à jour, sauvegardes comprises. Un serveur pas à jour devant un agent à jour : l'agent est refusé (`426`), mettez le serveur à jour d'abord. Un agent oublié une version de plus devra être réinstallé par sa ligne `join`.
 
 ## La carte réseau (#507)
 
@@ -123,5 +130,5 @@ Les clés d'opérateur, la co-signature, le verrouillage de la clé du serveur, 
 - **Avant** : utilisée = `MemTotal − MemAvailable`. Le noyau ne compte pas l'ARC ZFS dans `MemAvailable` : sur un Pi de 16 Go, 11 Go « utilisés » dont 9,9 Go (9,2 Gio) d'ARC, pour 29 Mo de plus gros processus.
 - **Maintenant** : l'agent lit `size` et `c_min` dans `/proc/spl/kstat/zfs/arcstats` et retranche `size − c_min`. `mem_used` porte la valeur corrigée (les seuils d'alerte la lisent) ; `zfs_cache` porte l'ARC entier.
 - **L'écran** : la tuile mémoire de la fiche dit « cache ZFS 9,2 Gio » à côté du pourcentage. Sans ZFS, ou avec un agent ancien : rien de plus, comme avant.
-- **Le protocole de l'agent reste en version `2`** (champ optionnel). Un agent v0.6.0 ne corrige rien : sa mémoire reste fausse sur une machine en ZFS jusqu'à sa mise à jour.
+- **Un champ optionnel**, sans effet sur le protocole. Un agent v0.6.0 ne corrige rien : sa mémoire reste fausse sur une machine en ZFS jusqu'à sa mise à jour.
 - **Ce que ça coûte** : l'ARC est retranché en entier au-dessus de son plancher, même s'il ne se vide pas d'un coup ; sous forte pression la valeur peut être un peu basse. L'historique d'avant la mise à jour garde l'ancienne valeur ; la taille du cache n'est gardée que 48 h (le brut), pas dans les moyennes.

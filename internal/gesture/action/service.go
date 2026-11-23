@@ -58,6 +58,9 @@ type Store interface {
 type Machines interface {
 	Get(ctx context.Context, id string) (machine.Status, error)
 	List(ctx context.Context) ([]machine.Status, error)
+	// AgentProtocol rend le protocole que parle le flux ouvert de la machine,
+	// vide sans flux.
+	AgentProtocol(machineID string) string
 	NoteServerKey(ctx context.Context, agentID, fingerprint string) error
 }
 
@@ -284,6 +287,12 @@ func (s *Service) send(ctx context.Context, order ServiceOrder) (Run, error) {
 	if !target.Online {
 		return Run{}, ErrMachineOffline
 	}
+	// Lu au moment de signer : un ordre signé v2 pour un agent revenu entre-temps
+	// en protocole 2 est refusé par lui, et c'est voulu.
+	version, err := envelopeFor(s.machines.AgentProtocol(machineID), kind)
+	if err != nil {
+		return Run{}, err
+	}
 	run, err := s.newRun(ctx, target, kind, params)
 	if err != nil {
 		return Run{}, err
@@ -294,7 +303,7 @@ func (s *Service) send(ctx context.Context, order ServiceOrder) (Run, error) {
 		return Run{}, fmt.Errorf("insert run: %w", err)
 	}
 	s.auditor.Record(ctx, orderEvent(run, order.SecretLabel, order.AuditDetails))
-	run, err = s.deliver(ctx, run, target.Agent.ServerKeyFingerprint, secret)
+	run, err = s.deliver(ctx, run, target.Agent.ServerKeyFingerprint, version, secret)
 	s.changed(machineID)
 	return run, err
 }
@@ -313,12 +322,13 @@ func (s *Service) newRun(ctx context.Context, target machine.Status, kind agentw
 	}, nil
 }
 
-// deliver signe le run écrit avec la clé que l'agent a épinglée, le marque
-// envoyé, puis le pousse. Marqué avant de partir : la réponse de l'agent
-// trouve toujours un run envoyé.
-func (s *Service) deliver(ctx context.Context, run Run, pinned string, secret json.RawMessage) (Run, error) {
+// deliver signe le run écrit avec la clé que l'agent a épinglée, dans
+// l'enveloppe qu'il lit, le marque envoyé, puis le pousse. Marqué avant de
+// partir : la réponse de l'agent trouve toujours un run envoyé.
+func (s *Service) deliver(ctx context.Context, run Run, pinned string, version int, secret json.RawMessage) (Run, error) {
 	order := run.order()
 	order.Secret = secret
+	order.Version = version
 	signed, err := s.key.Sign(order, pinned)
 	if err != nil {
 		return s.failUndelivered(ctx, run, err)
