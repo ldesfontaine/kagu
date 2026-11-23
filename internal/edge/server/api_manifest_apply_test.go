@@ -261,7 +261,7 @@ func TestManifestAPI_PlanAndApplyAreOperatorRoutes(t *testing.T) {
 		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		request.Header.Set("Content-Type", "application/json")
 		if user != "" {
-			request.SetBasicAuth(user, password)
+			signInRequest(server.Server, request, user, password)
 		} else {
 			request.Header.Set(anonymousHeader, "1")
 		}
@@ -285,7 +285,7 @@ func TestManifestAPI_PlanAndApplyAreOperatorRoutes(t *testing.T) {
 	cross := httptest.NewRequest(http.MethodPost, "/api/manifest/plan", bytes.NewReader(body))
 	cross.Header.Set("Sec-Fetch-Site", "cross-site")
 	cross.Header.Set("Content-Type", "application/json")
-	cross.SetBasicAuth(testUsername, testPassword)
+	signInRequest(server.Server, cross, testUsername, testPassword)
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, cross)
 	if recorder.Code != http.StatusForbidden {
@@ -293,7 +293,7 @@ func TestManifestAPI_PlanAndApplyAreOperatorRoutes(t *testing.T) {
 	}
 }
 
-// Sur TCP l'acteur est l'opérateur, nommé par son identifiant Basic ; sur la
+// Sur TCP l'acteur est l'opérateur, nommé par le compte de sa session ; sur la
 // socket, c'est la commande locale sous le compte qu'elle déclare, nettoyé.
 func TestControlSocket_ActorIsCLI(t *testing.T) {
 	server := newTestServer(t)
@@ -354,7 +354,7 @@ func TestControlSocket_ActorIsCLI(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/manifest/plan", bytes.NewReader(body))
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")
-	request.SetBasicAuth(testUsername, testPassword)
+	signInRequest(server.Server, request, testUsername, testPassword)
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	decodeAPI(t, recorder, &judged)
@@ -362,7 +362,7 @@ func TestControlSocket_ActorIsCLI(t *testing.T) {
 	request = httptest.NewRequest(http.MethodPost, "/api/manifest/apply", bytes.NewReader(body))
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")
-	request.SetBasicAuth(testUsername, testPassword)
+	signInRequest(server.Server, request, testUsername, testPassword)
 	recorder = httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusCreated {
@@ -374,7 +374,7 @@ func TestControlSocket_ActorIsCLI(t *testing.T) {
 	}
 }
 
-// exportedFile2 lit l'export par la socket, que le mode basic ne garde pas.
+// exportedFile2 lit l'export par la socket, que le mode native ne garde pas.
 func (ts *testServer) exportedFile2(t *testing.T) string {
 	t.Helper()
 	recorder := httptest.NewRecorder()

@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -21,8 +22,8 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
 )
 
-// callAsOperator joue une requête JSON comme le front, sous les
-// identifiants Basic de l'opérateur.
+// callAsOperator joue une requête JSON comme le front, sous une session de
+// l'opérateur ouverte avec ce mot de passe.
 func callAsOperator(server *Server, method, path, password string, payload any) *httptest.ResponseRecorder {
 	var body bytes.Buffer
 	if payload != nil {
@@ -31,7 +32,7 @@ func callAsOperator(server *Server, method, path, password string, payload any) 
 	request := httptest.NewRequest(method, path, &body)
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")
-	request.SetBasicAuth(testUsername, password)
+	signInRequest(server, request, testUsername, password)
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	return recorder
@@ -153,8 +154,9 @@ func TestAudit_OperatorGesturesAreJournaledUnderTheirIdentityWithoutSecrets(t *t
 	var actions []audit.Action
 	for _, event := range server.auditSince(t, mark) {
 		actions = append(actions, event.Action)
-		if event.Actor != audit.Operator(testUsername) {
-			t.Errorf("%s: actor %+v, want the operator", event.Action, event.Actor)
+		// L'opérateur est nommé par sa session, son compte en nom lisible.
+		if event.Actor.Kind != audit.ActorOperator || event.Actor.Label != testUsername || len(event.Actor.Name) != 16 {
+			t.Errorf("%s: actor %+v, want the operator's session", event.Action, event.Actor)
 		}
 		for name := range event.Details {
 			if isSecretDetailName(name) {
@@ -245,18 +247,19 @@ func TestAudit_GestureWithoutActorIsJournaledAsUnknown(t *testing.T) {
 	}
 }
 
-// À la première configuration, un en-tête Basic qu'aucun mode ne vérifie ne
+// À la première configuration, un en-tête Basic, qu'aucun mode ne lit, ne
 // nomme pas l'opérateur : l'activation est journalisée sous un opérateur sans
 // nom, le compte créé se lit dans les détails.
 func TestAudit_UnverifiedBasicHeaderNamesNobody(t *testing.T) {
 	server := newFirstSetupServer(t)
 	setupCode := authtest.SetupCode(t, server.operator)
 	mark := server.latestAuditID(t)
-	body := `{"mode":"basic","setup_code":"` + setupCode + `","username":"lucas","password":"une phrase assez longue"}`
-	request := httptest.NewRequest(http.MethodPost, "/api/auth/actions/enable", strings.NewReader(body))
+	body := `{"mode":"native","setup_code":"` + setupCode + `","username":"lucas","password":"une phrase assez longue"}`
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/setup", strings.NewReader(body))
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")
 	request.SetBasicAuth("quelqu-un", "rien")
+	request.TLS = &tls.ConnectionState{}
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
@@ -383,7 +386,7 @@ func TestAudit_TokenGestureKeepsTheTokenNameAfterRevocation(t *testing.T) {
 		t.Fatal("no operator event")
 	}
 	for _, own := range operated.Events {
-		if own.ActorKind != "operator" || own.ActorLabel != nil || own.Details["on_behalf_of"] != "" {
+		if own.ActorKind != "operator" || own.ActorLabel == nil || *own.ActorLabel != testUsername || own.Details["on_behalf_of"] != "" {
 			t.Fatalf("operator event %+v", own)
 		}
 	}

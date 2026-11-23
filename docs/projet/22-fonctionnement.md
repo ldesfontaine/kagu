@@ -81,15 +81,15 @@ Trait double : chiffré. Trait simple : en clair, mais sans quitter la machine.
 
 | Flux | D'où à où | Chiffrement | Qui prouve quoi |
 | --- | --- | --- | --- |
-| Interface | navigateur → Traefik | TLS de Traefik | L'opérateur, par HTTP Basic, avec le compte créé à la première configuration (mode `basic`) : identifiant et mot de passe, renvoyés par le navigateur à chaque requête, `/api/events` et les flux de journaux compris. En mode `forward`, le SSO qui authentifie (Authelia derrière Traefik) : Kagu ne croit l'en-tête d'identité (`Remote-User` par défaut), présent une seule fois, que d'un pair de `trusted_proxies` qui porte aussi le secret partagé quand il est configuré (`forward_secret_file`, en-tête `X-OpenCloud-Proxy-Secret`), et répond `401` à tout le reste ; c'est au mandataire (Traefik) d'écraser l'en-tête envoyé par le client. Une identité ainsi prouvée mais absente d'une liste `forward_users` non vide reçoit `403 auth.forward_forbidden`. Un jeton d'API (`Authorization: Bearer`) remplace l'un et l'autre mode, sur sa liste fermée de lectures, plus les verbes qu'il porte en écriture (« Comment un agent IA lit Kagu »). Mode `none` (installation neuve, ou après `opencloud auth disable`) : aucun compte, le serveur ne sert que la première configuration et répond `401 auth.setup_required` au reste ; la création du compte exige le code de première configuration (« Comment l'opérateur entre dans l'interface »). Le front charge la page, puis parle à `/api/…` en JSON |
-| Interface | Traefik → Kagu | En clair, sur `127.0.0.1` de la même machine | Toute écriture de l'API exige `Content-Type: application/json`, même sans corps, et un `Sec-Fetch-Site` présent doit valoir `same-origin` ou `none`. Toute requête sous `/api/…` exige un `Host` reconnu (hôte de `public_url`, `localhost`, IP littérale, hôte de `listen`), contre le DNS rebinding : sinon `403 bad_host`. Un `%2F` dans le chemin brut d'une route `/api/…` est refusé `400 bad_path` avant tout routage ; les fichiers du front compilé ne s'ouvrent sans session que sur la route du front, jugée sur le chemin encodé (R-A2-13). Pas de cookie, mais le navigateur joint aussi les identifiants Basic à une requête partie d'une page tierce : c'est cette garde qui l'arrête |
-| Direct | navigateur → `/api/events`, une connexion par onglet | TLS de Traefik | L'opérateur, par HTTP Basic ou par le SSO, comme l'interface ; refusé en mode `none` (`401 auth.setup_required`). Le flux ne dit que « les machines ont changé », « les tâches ont changé », jamais lesquelles. Plafond de 64 onglets, comptés par le serveur et non par les abonnés du bus (la page de statut y est abonnée aussi), `503` au-delà |
+| Interface | navigateur → Traefik | TLS de Traefik | L'opérateur, par une session (mode `native`) : la page de connexion échange le compte créé à la première configuration contre un cookie `__Host-kagu_session` (`Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`) que le navigateur joint à chaque requête, `/api/events` et les flux de journaux compris ; le mot de passe ne voyage qu'à la connexion. Un en-tête `Authorization: Basic` n'est lu par aucun mode. En mode `forward`, le SSO qui authentifie (Authelia derrière Traefik) : Kagu ne croit l'en-tête d'identité (`Remote-User` par défaut), présent une seule fois, que d'un pair de `trusted_proxies` qui porte aussi le secret partagé quand il est configuré (`forward_secret_file`, en-tête `X-OpenCloud-Proxy-Secret`), et répond `401` à tout le reste ; c'est au mandataire (Traefik) d'écraser l'en-tête envoyé par le client. Une identité ainsi prouvée mais absente d'une liste `forward_users` non vide reçoit `403 auth.forward_forbidden`. Un jeton d'API (`Authorization: Bearer`) remplace l'un et l'autre mode, sur sa liste fermée de lectures, plus les verbes qu'il porte en écriture (« Comment un agent IA lit Kagu »). Mode `none` (installation neuve, ou après `opencloud auth disable`) : aucun compte, le serveur ne sert que la première configuration et répond `401 auth.setup_required` au reste ; la création du compte exige le code de première configuration (« Comment l'opérateur entre dans l'interface »). Le front charge la page, puis parle à `/api/…` en JSON |
+| Interface | Traefik → Kagu | En clair, sur `127.0.0.1` de la même machine | Toute écriture de l'API exige `Content-Type: application/json`, même sans corps, et un `Sec-Fetch-Site` présent doit valoir `same-origin` ou `none`. Toute requête sous `/api/…` exige un `Host` reconnu (hôte de `public_url`, `localhost`, IP littérale, hôte de `listen`), contre le DNS rebinding : sinon `403 bad_host`. Un `%2F` dans le chemin brut d'une route `/api/…` est refusé `400 bad_path` avant tout routage ; les fichiers du front compilé ne s'ouvrent sans session que sur la route du front, jugée sur le chemin encodé (R-A2-13). Le cookie de session est `SameSite=Strict` : une page tierce ne l'emporte pas ; cette garde s'y ajoute |
+| Direct | navigateur → `/api/events`, une connexion par onglet | TLS de Traefik | L'opérateur, par sa session ou par le SSO, comme l'interface ; refusé en mode `none` (`401 auth.setup_required`). Le flux ne dit que « les machines ont changé », « les tâches ont changé », jamais lesquelles. Plafond de 64 onglets, comptés par le serveur et non par les abonnés du bus (la page de statut y est abonnée aussi), `503` au-delà |
 | Agent | machine → Traefik | TLS de Traefik, ou empreinte épinglée par `-pin` si pas de domaine | Ed25519 : l'agent signe un aléa qu'il tire, l'identifiant de sa machine et l'heure (protocole 2), Kagu vérifie avec la clé enrôlée. Le signal porte les mesures de la machine et ce que son Docker a montré, dans un débit borné par machine ; les journaux d'un conteneur remontent par `POST /agent/logs/…`, jeton de session |
 | Agent, sens retour | Kagu → machine, sur le flux ouvert | Le même flux | Le serveur pousse des **commandes d'observation** (« suis les journaux du conteneur X », « arrête », le jeu de sondes, les images à ne pas interroger) : des lectures, **non signées**, que l'agent ne reçoit que du serveur qui tient son flux. Elles ne sont pas crues pour autant : l'agent rejuge le jeu de sondes et n'ouvre que le journal d'un conteneur qu'il a lui-même rapporté, quatre suivis au plus à la fois (le cinquième est refusé `service.logs_busy`), quinze minutes chacun (le front rouvre un suivi encore affiché) ; ces bornes sont à l'agent, qui les tient sans attendre le serveur, séparées des quatre suivis par machine du serveur (« Comment une cible est sondée », « Comment les conteneurs sont suivis »). Les **ordres** voyagent dans une enveloppe **signée Ed25519 par la clé du serveur** (`server.key`), que l'agent vérifie avec la clé épinglée à l'enrôlement avant d'en lire un champ : qui tient le flux sans la clé (un mandataire, un faux serveur) peut couper ou retarder un ordre, pas en fabriquer ; un ordre périmé ou rejoué est refusé (« Comment un ordre part et revient ») |
 | Sauvegarde, le départ | `serve` → agent d'une autre machine : l'ordre signé `backup.receive` sur le flux, puis `GET /agent/parcels/{colis}/{nom}` sous le jeton de session de l'agent | TLS de Traefik ; le fichier est **déjà** chiffré (age, pour la clé publique de sauvegarde) avant de quitter `serve` | L'ordre est signé par `server.key` et porte la taille et le SHA-256 de chaque fichier : l'agent ne garde que ce qui correspond. Le colis ne se sert qu'à la machine pour laquelle il est écrit (`404` sinon), 30 requêtes par minute et par machine |
 | Sauvegarde produite par un agent | agent producteur → `serve` : `PUT /agent/parcels/{colis}/{nom}` sous le jeton de session de l'agent, puis `serve` → agent de destination par le `GET` ci-dessus | **Chiffrée age sur la machine source avant tout transport** (pour la clé publique de sauvegarde) ; téléversée à `serve` sous TLS ; `serve` ne peut pas la lire | L'agent producteur n'a que la clé publique : le clair du producteur n'existe que dans `produce/`, `0600`, et part avec l'ordre. `serve` range le fichier tel qu'il arrive, vérifie la taille et la somme annoncées, et n'a pas la clé privée : il ne la lit pas. 30 requêtes par minute et par machine, comme le téléchargement |
 | Sauvegarde, au repos | la destination, sur la machine d'un agent | age : X25519 et ChaCha20-Poly1305 pour l'archive ; la clé privée, déposée à côté, est scellée par scrypt avec la phrase de passe de l'opérateur | Seule la phrase ouvre la clé, seule la clé ouvre l'archive. L'agent n'a ni l'une ni l'autre : il vérifie la somme et l'en-tête `age-encryption.org/v1`, il ne déchiffre jamais |
-| Journaux | navigateur → `/api/containers/{id}/logs/stream` | TLS de Traefik | L'opérateur, par HTTP Basic ou par le SSO. En mode `none`, refusé comme le reste de l'interface (`401 auth.setup_required`). Une seconde connexion par onglet ; seize lectures de journaux en tout, suivis des onglets et tirages uniques compris |
+| Journaux | navigateur → `/api/containers/{id}/logs/stream` | TLS de Traefik | L'opérateur, par sa session ou par le SSO. En mode `none`, refusé comme le reste de l'interface (`401 auth.setup_required`). Une seconde connexion par onglet ; seize lectures de journaux en tout, suivis des onglets et tirages uniques compris |
 | Sonde | machine qui sonde → la cible | Celui de la cible : TLS si la sonde est en `https://` ou si une sonde TCP demande la poignée de main, rien sinon | Personne : une sonde n'est pas authentifiée, elle regarde du dehors comme n'importe qui. Un certificat refusé rend l'essai **dégradé**, jamais hors ligne, et la requête n'est pas rejouée. La chaîne est jugée par la machine qui sonde, avec les autorités qu'elle connaît |
 | Docker | agent → `/var/run/docker.sock` | Aucun : une socket Unix de la machine | Les droits Unix : le compte de l'agent est dans le groupe `docker` (ou l'agent est root), ce qui **équivaut à root** (« Ce qui manque encore »). `opencloud serve` ne lit plus la socket : il n'a besoin ni de root ni du groupe `docker`. Le client ne connaît aucun verbe qui écrit |
 | Agent | Traefik → Kagu | En clair, boucle locale | `X-Forwarded-*` cru seulement depuis `trusted_proxies`. `X-Forwarded-For` se lit de la droite : la source est la dernière entrée qui n'est pas un mandataire de confiance, ce que le client écrit à gauche ne compte pas |
@@ -99,7 +99,7 @@ Trait double : chiffré. Trait simple : en clair, mais sans quitter la machine.
 | Statut | visiteur → Traefik → `/statut/<slug>`, `/statut/<slug>/api/…` | TLS de Traefik | Personne, par conception : la page est publique. Elle ne dit que le nom de ses composants et ce que l'opérateur a écrit ; jamais un identifiant d'objet, un nom de machine, de conteneur ou de sonde, une cible, un port, ni rien d'une autre page. Des tests le prouvent sur la réponse réelle |
 | Registre | agent → le registre de l'image | TLS, sauf vers la boucle locale (un registre sur `localhost:5000`, comme Docker le fait) | L'agent s'authentifie par un jeton anonyme, ou signé des identifiants en clair du `config.json` de Docker de la machine ; le registre ne prouve rien de plus que son certificat. Rien ne sort qu'un nom de dépôt et un tag ; l'agent ne tire jamais une image. Aucune redirection suivie |
 | Agent IA | client MCP → Traefik → mcp-maison | TLS de Traefik | OAuth de mcp-maison, délégué à l'IdP OIDC de l'opérateur (Authelia, Authentik, Keycloak, GitLab) : Kagu n'y voit rien et n'y prouve rien |
-| Agent IA | mcp-maison → Kagu, `/api/…` | En clair, sur l'adresse de `listen`, sans sortir de la machine | Un Bearer, jeton d'API créé sous Paramètres, à échéance de 30, 90 (défaut) ou 365 jours, ou sans échéance si l'opérateur le choisit. Il est jugé **avant le mode** d'authentification de l'interface (ni Basic ni l'en-tête du mandataire), sauf en mode `none` où il est ignoré, et n'ouvre que 32 lectures, plus, pour un jeton en écriture, les routes des seuls verbes cochés, à débit borné par jeton (« Comment un agent IA lit Kagu »). Le jeton est haché avant d'être cherché, et son dernier usage noté au plus une fois par minute. Activer l'authentification de l'interface les révoque tous |
+| Agent IA | mcp-maison → Kagu, `/api/…` | En clair, sur l'adresse de `listen`, sans sortir de la machine | Un Bearer, jeton d'API créé sous Paramètres, à échéance de 30, 90 (défaut) ou 365 jours, ou sans échéance si l'opérateur le choisit. Il est jugé **avant le mode** d'authentification de l'interface (ni la session ni l'en-tête du mandataire), sauf en mode `none` où il est ignoré, et n'ouvre que 32 lectures, plus, pour un jeton en écriture, les routes des seuls verbes cochés, à débit borné par jeton (« Comment un agent IA lit Kagu »). Le jeton est haché avant d'être cherché, et son dernier usage noté au plus une fois par minute. La première configuration de l'interface les révoque tous |
 | Vérification de mcp-maison | Kagu → `mcp_url`, `GET /health` | Celui de l'adresse réglée : en clair vers la machine ou un réseau privé, le lien-local est refusé | Personne : on lit un état, rien ne s'écrit. Trois secondes, une redirection n'est pas suivie, 64 Kio au plus ; déclenchée par la carte de Paramètres, jamais en fond |
 | Commande locale | `opencloud export` et `opencloud apply` → `state_dir/control.sock` | Aucun : une socket Unix de la machine, rien ne passe par le réseau | Les droits Unix : la socket est en 0600 et `state_dir` doit être fermé au groupe et aux autres (sinon `serve` ne l'ouvre pas), il faut tourner sous le compte du service ou en root. Aucune garde d'opérateur ni de même-origine, aucun navigateur n'y passe ; elle ne sert que les quatre routes `/api/manifest/…` (export, plan, apply, journal), chacune avec sa méthode, tout le reste y répond 404. Elle **écrit** l'annuaire : qui l'atteint peut déjà lire la base et la clé de chiffrement, c'est le même raisonnement que pour `opencloud auth`. L'acteur du journal est `cli` et son nom est celui que la commande déclare : indicatif |
 | Alerte par e-mail | Kagu → le relais SMTP | STARTTLS exigé (défaut, 587) ou TLS dès la connexion (465), certificat vérifié contre le magasin du système ; `none` seulement si l'adresse jointe est sur la boucle locale ou un réseau privé, vérifié à la connexion | Kagu s'authentifie par AUTH PLAIN ou LOGIN, après le chiffrement. Un relais qui ne propose pas STARTTLS est refusé : jamais de repli en clair. Au-delà du relais, le message voyage comme tout courrier, et son destinataire le garde |
@@ -152,7 +152,8 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `opencloud.db` | Le dernier constat sur chaque image d'une machine dans `image_checks` (issue, empreinte tirée, empreinte publiée, tag plus récent et son empreinte, type déduit) ; sur la fiche `containers`, ce que Compose dit du service (`compose_service`, `compose_dir`, `compose_file`). La politique de l'opérateur ne vit plus sur la fiche : elle est sur l'unité (`service_units.update_policy`) | Écrasé à chaque vérification ; purgé après 30 jours sans vérification ; la machine retirée emporte tout. Le dossier du projet Compose est un chemin de la machine, en clair |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les alertes dans `alerts` (type, gravité, objet et son nom recopié, machine, service déclaré, détails en JSON, dates dont le début du calme, la lecture (`acknowledged_at`), la dernière annonce (`notified_at`) et le rappel parti (`reminded_at`) ; l'objet et le service en clés étrangères `set null`), les canaux dans `alert_channels` (**URL et secret chiffrés** — le jeton du bot pour Matrix —, format, destinataires d'un e-mail ou salon Matrix dans `destination`, gravité minimale, `categories` : les familles reçues, séparées par des virgules, **vide = toutes**), les livraisons dans `alert_deliveries` (événement, essais, motif, code, heure de l'essai suivant, ou retenue par la limite du canal, ou tue par un silence), les silences dans `mutes` (cible en clé étrangère, type, fenêtre, motif, auteur, et `announce` avec `public_title` quand le silence s'annonce en maintenance) | Résolues purgées après 90 jours, livraisons avec leur alerte, canaux sans purge. Silences finis depuis plus de 90 jours purgés avec les alertes (au départ, puis une fois par jour) ; une machine (avec ses conteneurs), un service déclaré, une sonde ou une tâche retirée emporte ses silences par la clé étrangère (`cascade`), une pause ou un archivage les garde ; le plan de suppression les compte. **L'URL et le secret d'un canal sont chiffrés** (AES-256-GCM, clé du serveur, liés à leur ligne) : un webhook Discord, Slack ou ntfy porte son jeton dans le chemin de l'URL, c'est un secret autant que la clé de signature. Il faut pouvoir les rejouer au récepteur, un haché ne servirait à rien ; l'API ne renvoie jamais le secret. Pour Matrix, c'est le jeton d'accès du bot : le déconnecter du compte du bot le révoque |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les jetons d'API dans `api_tokens` (empreinte SHA-256, préfixe affiché, portée `read` ou `write`, nom, échéance de 30, 90 ou 365 jours ou aucune, dernier usage) et leurs verbes dans `api_token_verbs` (migration `016_api_token_verbs.sql` : un verbe du registre par ligne, aucune ligne : aucune action ; `ON DELETE CASCADE`), leur portée dans `api_tokens.machines_limited` et `guests_limited` et les tables `api_token_machines` et `api_token_guests` (migration `023_api_token_reach.sql` : « La portée d'un jeton »), et les demandes de verbe à confirmation que ces jetons déposent dans `verb_requests` (migration `025_verb_requests.sql` : « Les verbes à confirmation ») | Rien n'est en clair : une copie de la base n'ouvre rien. Révoquer **efface** la ligne, ses verbes, sa portée et ses demandes en attente ; purge des jetons échus toutes les 15 minutes ; 16 jetons au plus ; activer l'authentification de l'interface les efface tous |
-| Machine Kagu, `state_dir` | `opencloud.db` | L'accès de l'opérateur à l'interface dans `auth_settings` (une ligne) : le mode (`none`, `basic`, `forward`), l'identifiant, l'empreinte **bcrypt** du mot de passe (coût 12), le nom de l'en-tête d'identité du mode `forward` (`forward_header`), la date d'activation | Le mot de passe n'est jamais stocké ni renvoyé ; une copie de la base donne l'identifiant, pas l'accès. L'identité transmise par le SSO n'est jamais stockée : elle arrive avec chaque requête. `none` ne veut plus dire « ouvert » : aucun compte, l'installation attend sa première configuration. Désactiver efface identifiant, empreinte et en-tête, et y ramène |
+| Machine Kagu, `state_dir` | `opencloud.db` | L'accès de l'opérateur à l'interface dans `auth_settings` (une ligne) : le mode (`none`, `native`, `forward` ; une base en `basic` devient `native` à la migration `044`, même nom, même empreinte), l'identifiant, l'empreinte **bcrypt** du mot de passe (coût 12), le nom de l'en-tête d'identité du mode `forward` (`forward_header`), la date d'activation | Le mot de passe n'est jamais stocké ni renvoyé ; une copie de la base donne l'identifiant, pas l'accès. L'identité transmise par le SSO n'est jamais stockée : elle arrive avec chaque requête. `none` ne veut plus dire « ouvert » : aucun compte, l'installation attend sa première configuration. Désactiver efface identifiant, empreinte et en-tête, toutes les sessions, et y ramène |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les sessions de l'opérateur dans `operator_sessions` (migration `044`) : `id` (16 hexadécimaux, montré dans la liste et dans l'audit), `token_hash` (SHA-256 du jeton du cookie, `ident.HashToken`), `identity` (le compte), `created_at`, `seen_at` (écrit au plus une fois par minute), `expires_at` (fin absolue, 12 h), `reauth_at` (nul : la redemande viendra le poser), `source` (adresse au /64), `user_agent` (200 octets au plus, nettoyé) | Le jeton (256 bits) n'est jamais stocké : une copie de la base n'ouvre aucune session. Une session meurt à 2 h sans requête, à 12 h, à la déconnexion, quand le mot de passe change (les autres), au retour en `none` (toutes). Les mortes sont effacées quand on les présente et à chaque connexion |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les réglages de l'opérateur dans `settings`, une seule ligne : la langue de l'interface ; le délai du rappel des alertes de danger (`danger_reminder_hours`, 12 par défaut, 0 le coupe) ; le relais d'e-mails (`mail_host`, `mail_port`, `mail_tls`, `mail_username`, `mail_from`, et **`mail_password` chiffré** : il faut le rejouer au relais, un haché ne servirait à rien ; l'API ne le renvoie jamais, `has_password` dit seulement qu'il y en a un) ; la fin de support (`lifecycle_disabled`, à 0 tant qu'elle est activée) | Chaque écrivain relit, modifie sa clé et réécrit dans une seule transaction : la langue et le relais changés en même temps survivent tous deux, même depuis deux processus. **Le mot de passe du relais est chiffré** comme les autres secrets saisis dans l'interface, lié à la ligne des réglages |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les seuils des alertes de ressources dans `alert_thresholds` (migration `037_alert_thresholds.sql`) : une ligne par ressource (`cpu`, `memory`, `disk`) et par périmètre, `machine_id` à NULL pour le réglage global ou la machine qu'elle surcharge (clé étrangère en `cascade`) ; seuil d'attention, seuil de danger, fenêtre en secondes (0 : la dernière lecture, le disque). Le seuil de retour n'est pas stocké | Deux index uniques partiels : une règle par ressource pour le global, une par machine et ressource. Les seuils du disque déjà réglés sous Paramètres passent au global à la migration, tels quels |
 | Machine Kagu, `state_dir` | `secret.key` | La clé qui chiffre les secrets ci-dessus : une ligne `key-v1:<id>:<clé>`, AES-256, 32 octets tirés au hasard, jamais en base. `<id>` est l'empreinte courte de la clé, inscrite aussi dans chaque chiffré ; le temps d'une rotation, le fichier porte plusieurs lignes (quatre au plus) : un chiffré s'ouvre avec la clé de son `<id>`, la première ligne scelle | Mode 0600, écriture atomique, refusée si un autre compte peut la lire. `serve` la crée au premier démarrage par une création exclusive (un lien dur d'un temporaire écrit et synchronisé : si le fichier existe, elle échoue) ; deux `serve` lancés ensemble sur une base neuve tirent chacun une clé, un seul gagne, l'autre relit la sienne. `opencloud secrets rotate` en tire une neuve et rescelle chaque secret, l'ancienne gardée sous `secret.key.rotated-<horodatage>` ; `opencloud secrets forget` remplace une clé perdue, l'ancienne gardée sous `secret.key.forgotten-<horodatage>`. **À sauvegarder à part, une fois** : sans elle, la base garde ses données mais perd ses secrets. `opencloud secrets forget` repart d'une clé neuve (voir `installation.md`) |
@@ -3514,7 +3515,7 @@ dans une chaîne JSON). Sur le port web, ces routes sont des routes d'opérateur
 comme le reste de l'API (authentification, garde même-origine) ; sur la
 socket, aucune garde. **L'acteur** d'un apply est `cli` sur la socket, sous le
 compte système que la commande déclare (`actor_name`, indicatif, jamais une
-preuve), et `operator` sur le port web, sous l'identifiant Basic ou l'identité
+preuve), et `operator` sur le port web, sous le compte de sa session ou l'identité
 transmise par le SSO. Seules les quatre routes `/api/manifest/…` sont
 servies sur la socket, et chacune avec sa méthode.
 
@@ -4616,7 +4617,8 @@ plus grave, puis la plus récente). Le sujet `alerts` du direct relit tout.
 ## Comment l'opérateur entre dans l'interface
 
 L'accès est un **mode**, stocké dans `auth_settings` et relu à chaque
-requête : `none` (par défaut), `basic` et `forward`.
+requête : `none` (par défaut), `native` et `forward`. HTTP Basic n'existe
+plus (R-A2-1) : un en-tête `Authorization: Basic` n'est lu par aucun mode.
 
 - **`none`** : aucun compte, l'installation attend sa **première
   configuration** (décision du 17 octobre : « compte local créé au premier
@@ -4624,18 +4626,19 @@ requête : `none` (par défaut), `basic` et `forward`.
   quoi créer le compte : le front compilé (page et fichiers), `GET
   /api/session` et `GET /api/i18n/{code}` pour s'afficher dans la langue
   réglée, `GET /api/auth` pour savoir où il en est, et `POST
-  /api/auth/actions/enable` (liste `firstSetupRoutes` dans
-  `auth_middleware.go`). Toute autre route de l'opérateur répond `401
+  /api/auth/setup` (liste `beforeSignInRoutes` dans `auth_middleware.go`,
+  qui sert aussi la connexion en `native` ; `login` et `logout` y sont,
+  et refusent hors de leur mode). Toute autre route de l'opérateur répond `401
   auth.setup_required`, **sans** `WWW-Authenticate` (le navigateur n'a aucun
   identifiant à demander), sur ses en-têtes, sans lire le corps ; hors
   `/api/`, une ligne dit d'ouvrir l'interface et de créer le compte. Le front
   voit `mode: none` et affiche l'écran de première configuration à la place
   de l'interface : identifiant et mot de passe deux fois (12 caractères au
-  moins), ou le SSO. Le compte créé, il se présente avec ces
-  identifiants par une requête `XMLHttpRequest` qui les porte (le navigateur
-  les retient comme s'il les avait demandés, `fetch` ne sait pas le faire),
-  puis relit `/api/auth` : l'interface s'ouvre sans fenêtre de connexion. Un
-  navigateur qui ne les retiendrait pas les demande dans sa fenêtre. **La
+  moins), ou le SSO. En `native`, la réponse de `setup` ouvre la première
+  session et pose son cookie (mêmes règles que la connexion, R-A2-4 compris :
+  en HTTP clair hors de la boucle locale, `403 auth.https_required` avant de
+  juger le code, qui n'est pas usé) ; le front relit `/api/auth` et
+  l'interface s'ouvre. **La
   création du compte exige le code de première configuration** (R-A2-5) :
   8 chiffres, 30 minutes, un seul usage, 5 essais faux au total puis il est
   brûlé (le bon compris). `opencloud admin setup-code` le tire, par la
@@ -4643,8 +4646,8 @@ requête : `none` (par défaut), `basic` et `forward`.
   seule, jamais par le port) ; la base ne garde que son empreinte SHA-256
   (`setup_code_hash`, `setup_code_expires`, `setup_code_failures` dans
   `auth_settings`, migration `042`) et tout changement d'état de l'accès
-  l'efface. Le champ `setup_code` de `POST /api/auth/actions/enable` le porte,
-  en `basic` comme en `forward` ; refus `422 auth.setup_code_required` (absent),
+  l'efface. Le champ `setup_code` de `POST /api/auth/setup` le porte,
+  en `native` comme en `forward` ; refus `422 auth.setup_code_required` (absent),
   `422 auth.setup_code_wrong` (faux, compté), `409 auth.setup_code_unusable`
   (aucun tiré, échu ou brûlé). Il tient après un redémarrage, jusqu'à son
   échéance. Le tirage est au journal d'audit (`auth.setup_code_issue`, acteur `cli`, échéance, jamais la valeur). `serve` écrit en `WARN` « première configuration en attente »
@@ -4655,16 +4658,52 @@ requête : `none` (par défaut), `basic` et `forward`.
   base, qui peut de toute façon y écrire ; la socket n'a que son mode `0600`
   (la garde par uid 0 viendra avec la commande `admin` complète). Rien ne se
   fait sans compte, pas même lire.
-- **`basic`** : HTTP Basic, realm `Kagu`, UTF-8. Créé à la première
-  configuration : identifiant (64 caractères,
-  sans `:`), mot de passe de 12 caractères au moins et 72 octets au plus
-  (au-delà, bcrypt ne lit plus). Sans identifiants justes, `401` avec
-  `WWW-Authenticate` ; hors `/api/`, le corps dit en une ligne (français si
-  `Accept-Language` commence par `fr`, anglais sinon) que le mot de passe
-  perdu se lève par `opencloud auth disable -config <chemin de la config>`,
-  ce que le navigateur montre si l'on annule sa fenêtre. Le navigateur demande alors dans sa propre fenêtre
-  et renvoie seul les identifiants, `EventSource` compris. La barre
-  latérale dit « Accès protégé · identifiant ».
+- **`native`** : un compte, créé à la première configuration : identifiant
+  (64 caractères, sans `:`), mot de passe de 12 caractères au moins et 72
+  octets au plus (au-delà, bcrypt ne lit plus). Sans session, les routes de
+  l'opérateur répondent `401 unauthorized`, sans `WWW-Authenticate` ; le
+  front, `GET /api/session`, `GET /api/i18n/{code}`, `GET /api/auth` (sans
+  le compte : `signed_in: false`), `login` et `logout` restent servis. Le
+  front montre alors la page de connexion (nom, mot de passe, « Se
+  connecter », le secours en petit), et y revient de lui-même quand une
+  requête répond `401 unauthorized` (session morte). La barre latérale dit
+  « Accès protégé · identifiant ».
+
+  **La session** (R-A2-2, R-A2-3, `internal/fact/auth/session.go`).
+  `POST /api/auth/login` juge nom et mot de passe par `Verify` (même file
+  bcrypt bornée, même limiteur par adresse que le changement de mot de passe),
+  puis tire **toujours** une session neuve : jeton de 256 bits
+  (`ident.NewSecret`), identifiant de 16 hexadécimaux, empreinte par
+  `ident.HashToken` en base (`operator_sessions`). La session que la requête
+  présentait est fermée et son cookie écrasé : un cookie posé avant la
+  connexion (par un autre serveur de `localhost`, W-F1) n'ouvre rien après.
+  Refus `401 auth.login_failed` (jamais lequel des deux est faux), `429`.
+  Le cookie : sur HTTPS (`r.TLS`, ou `X-Forwarded-Proto: https` d'un pair de
+  `trusted_proxies`, `pageAddress`), `__Host-kagu_session`, `Secure`,
+  `HttpOnly`, `SameSite=Strict`, `Path=/`, 12 h ; sur la boucle locale en
+  HTTP (le tunnel SSH, `http://localhost:8080`), `kagu_session_local`, sans
+  `Secure`, accepté **seulement** d'un pair et d'une adresse cliente
+  (`clientAddress`) de boucle locale, sans `X-Forwarded-Proto` : derrière un
+  mandataire de confiance sur `127.0.0.1`, tout client a un pair de boucle
+  locale. Ailleurs, en HTTP clair, aucune session ne s'ouvre :
+  `403 auth.https_required` (R-A2-4). Le nom des cookies vient de
+  `internal/kit/brand`. Chaque requête relit la session par l'empreinte du
+  jeton : morte après 2 h sans requête ou à 12 h, ou ouverte pour un autre
+  compte, elle est effacée et la requête reçoit `401`. `seen_at` ne s'écrit
+  qu'une fois par minute ; une écriture ratée (disque plein) ne ferme rien.
+  `POST /api/auth/logout` ferme la session et efface les deux cookies.
+  Réglages › Accès liste les sessions vivantes (`GET /api/auth/sessions` :
+  navigateur, adresse au /64, vue il y a, `current` pour la sienne), en ferme
+  une (`DELETE /api/auth/sessions/{id}`, 404 si inconnue ; la sienne efface
+  aussi le cookie) ou toutes les autres
+  (`POST /api/auth/sessions/actions/close-others`, `{closed}`). Changer le
+  mot de passe (`PUT /api/auth/password`, `current` exigé) ferme toutes les
+  autres sessions, pas la sienne (R-A2-9). Le journal d'audit nomme
+  l'opérateur par sa session : acteur `operator`, nom = identifiant de la
+  session, libellé = le compte (`operator:<id>` dans `requested_by` des
+  ordres). La contrepartie : le front, la langue et la version de Kagu
+  (`GET /api/session`) se lisent sans session, comme en `none`, pour que la
+  page de connexion s'affiche dans la langue réglée.
 - **`forward`** (« SSO » dans l'interface et la documentation ; *mandataire* ne
   désigne que le reverse proxy de `trusted_proxies`) : Kagu derrière un
   SSO en amont qui authentifie (Authelia en `forwardAuth` de Traefik) et lui transmet l'identité dans
@@ -4672,8 +4711,7 @@ requête : `none` (par défaut), `basic` et `forward`.
   caractères au plus). Passe seulement une requête venue d'un pair de
   `trusted_proxies`, **qui prouve être passée par le mandataire** (le reverse proxy ; voir
   ci-dessous) **et** qui porte cet en-tête non vide ; tout le reste
-  répond `401`, sans `WWW-Authenticate` : pas de fenêtre Basic, pas de
-  double connexion. Hors `/api/`, le corps dit en une ligne de passer par
+  répond `401`, sans `WWW-Authenticate` : pas de double connexion. Hors `/api/`, le corps dit en une ligne de passer par
   le SSO, et que `opencloud auth disable -config …` rouvre l'accès.
   L'identité voyage dans le contexte de la requête jusqu'à `/api/auth`, et
   la barre latérale dit « Protégé · SSO · identité ». Sous Paramètres, la
@@ -4768,7 +4806,7 @@ aucune autre (« Comment un agent IA lit Kagu »). Ouverts, chacun avec sa
 propre preuve ou par conception : `/agent/…` (la clé de l'agent), `/ping/…`
 (le jeton) et `/statut…` (public). Le
 jugement porte sur le motif de route enregistré, et le test
-`TestAuthBasic_GuardsEveryOperatorRouteAndLeavesTheOthersOpen` fige la
+`TestAuthNative_GuardsEveryOperatorRouteAndLeavesTheOthersOpen` fige la
 liste des ouvertes ; son jumeau `TestAuthForward_…` vérifie la même liste
 en mode `forward`, et `TestFirstSetup_ServesOnlyTheSetupRoutesAndLeavesTheOthersOpen`
 en mode `none`, avec les routes de la première configuration.
@@ -4791,31 +4829,28 @@ Un flux ouvert (le
 direct, le suivi d'un journal) relit l'état à chaque ping de 15 s et se ferme
 s'il n'est plus le même : le navigateur revient et se fait juger.
 
-Vérifier coûte un bcrypt (~100 ms) : une seule vérification lente à la
-fois, et les derniers identifiants justes sont retenus en mémoire sous
-forme d'un HMAC à clé tirée au démarrage, comparé en temps constant et lié
-à l'empreinte du moment. Changer le mot de passe ou désactiver les rend
-caducs, même depuis la commande de secours. Les échecs sont limités par
-adresse (celle que `trusted_proxies` résout) : rafale de 10, puis un essai
-toutes les 6 s, `429` au-delà ; des identifiants retenus ne comptent pas.
+Vérifier coûte un bcrypt (~100 ms), payé seulement à la connexion et au
+changement de mot de passe : ensuite la session porte l'opérateur. Une seule
+vérification lente à la fois. Les essais sont limités par adresse (celle que
+`trusted_proxies` résout) : rafale de 10, puis un essai toutes les 6 s,
+`429` au-delà ; une requête qui porte une session ne compte pas.
 
 La file de la vérification lente est bornée : une tentative admise par le
 limiteur attend la place unique (un canal d'une place, pas un mutex) derrière
 **neuf** autres au plus, soit la rafale entière qu'une adresse a le droit de
-présenter : les onglets de l'opérateur qui reviennent ensemble après un
-redémarrage attendent le premier, puis passent par la mémoire. Au-delà, refus
+présenter : plusieurs onglets qui se connectent ensemble attendent leur tour.
+Au-delà, refus
 immédiat, `429` avec `Retry-After` (comme le limiteur) et un `WARN`
 « interface authentication queue full » : sans cette borne, quelques adresses
 admises faisaient grossir la file plus vite que bcrypt ne la vide, et la
 vérification de l'opérateur (après un redémarrage ou un changement de mot de
 passe) attendait derrière sans fin. L'attente suit la requête : un client
 parti rend sa place sans coûter de bcrypt, et sa réponse (`503`) n'est pas
-notée comme un échec. Des identifiants retenus ne font jamais la queue.
+notée comme un échec. Une session ne fait jamais la queue.
 
 La contrepartie : pendant une attaque qui garde la file pleine (il faut pour
 cela plus d'essais admis que bcrypt n'en traite, soit plusieurs adresses ou
-/64 distincts), l'opérateur dont les identifiants ne sont pas encore retenus
-reçoit lui aussi `429` et réessaie après `Retry-After` ; admis, il passe en
+/64 distincts), l'opérateur qui se connecte reçoit lui aussi `429` et réessaie après `Retry-After` ; admis, il passe en
 dix bcrypt au plus. Avant, il entrait toujours dans la file, mais derrière
 toutes les tentatives admises, et elle grossissait tant que l'attaque durait.
 Une place réservée à l'identifiant connu a été
@@ -4981,14 +5016,14 @@ l'acteur du journal, et un moyen de voir si mcp-maison répond.
 ### L'admission
 
 Un `Authorization: Bearer …` est jugé **avant le mode** d'authentification :
-en `basic` comme en `forward`, il passe par le jeton, ni par Basic ni par
+en `native` comme en `forward`, il passe par le jeton, ni par la session ni par
 l'en-tête d'identité du SSO. En mode `none` il est ignoré : la première
 configuration seule est servie.
 
 | Cas | Réponse |
 | --- | --- |
 | La route n'est ni dans la liste ci-dessous ni un verbe du registre | `403 api_token.route_forbidden`, sans même regarder le jeton |
-| Jeton inconnu, révoqué ou échu | `401 api_token.invalid`, `WWW-Authenticate: Bearer`. Les échecs comptent dans le limiteur des échecs Basic (rafale de 10, puis un essai toutes les 6 s par adresse ; `429` au-delà) ; le journal du processus dit la source et le chemin, jamais le jeton |
+| Jeton inconnu, révoqué ou échu | `401 api_token.invalid`, `WWW-Authenticate: Bearer`. Les échecs comptent dans le limiteur des échecs de connexion (rafale de 10, puis un essai toutes les 6 s par adresse ; `429` au-delà) ; le journal du processus dit la source et le chemin, jamais le jeton |
 | Jeton valide, route de la liste | La requête passe, avec le jeton dans son contexte ; l'acteur d'audit est `api:<identifiant du jeton>` |
 | Jeton `read`, route d'un verbe (un `POST`) | `403 api_token.route_forbidden` |
 | Jeton `write` qui ne porte pas le verbe de la route | `403 api_token.verb_forbidden`, journalisé (`api_token.deny`) |
@@ -5357,7 +5392,7 @@ l'identifiant du jeton. mcp-maison dit pour qui il appelle dans l'en-tête
 a **exactement un**, retire les caractères de contrôle, le borne à 200
 caractères, et le range dans `details.on_behalf_of` de la ligne du journal.
 Il est **indicatif** : il n'ouvre aucun droit, et il n'est lu que sur une
-requête admise par jeton (ignoré sous Basic ou `forward`). Le `Recorder` le
+requête admise par jeton (ignoré sous une session ou en `forward`). Le `Recorder` le
 pose après le nettoyage des détails, et jamais ailleurs : un geste ne peut pas
 l'usurper. La page du journal l'affiche à côté de l'acteur (« Jeton d'API · id ·
 pour alice »).
@@ -6449,11 +6484,11 @@ quarante gestes gardent leur signature. La contrepartie : un geste appelé sans
 acteur dans son contexte n'est pas refusé, il s'écrit sous `unknown`, avec un
 `WARN audit event without actor` au journal du processus, et l'onglet le montre
 en rouge. Un test le prouve ; un autre joue les gestes par l'API, sous
-Basic, et vérifie que chacun porte l'opérateur et aucun secret.
+une session, et vérifie que chacun porte l'opérateur et aucun secret.
 
 | `actor_kind` | `actor_name` | Posé par |
 | --- | --- | --- |
-| `operator` | L'identifiant Basic, ou l'identité transmise par le SSO en mode `forward` ; vide à la première configuration, seul geste admis sans compte (un en-tête Basic qu'aucun mode ne vérifie ne nomme personne ; le compte créé se lit dans les détails). Borné, sans caractère de contrôle | `server`, sur toute route de l'opérateur, juste après `requireOperator` (`withOperatorActor`) |
+| `operator` | En mode `native`, la session : `actor_name` est son identifiant (`operator:<id>`), `actor_label` le compte ; en mode `forward`, l'identité transmise par le SSO ; vide à la première configuration, seul geste admis sans compte (un en-tête Basic, qu'aucun mode ne lit, ne nomme personne ; le compte créé se lit dans les détails). Borné, sans caractère de contrôle | `server`, sur toute route de l'opérateur, juste après `requireOperator` (`withOperatorActor`) |
 | `api` | L'identifiant du jeton d'API ; la personne au nom de qui l'agent appelle est dans `details.on_behalf_of` (en-tête `X-MCP-Maison-User`, bornée à 200 caractères), indicative, pas une preuve. Le **nom du jeton**, recopié à l'écriture, est dans `actor_label` | `server`, sur une route admise par jeton (`admitAPIToken`), pour ses lectures, ses verbes et ses refus (`api_token.deny`) |
 | `cli` | Le compte système que la commande déclare : indicatif, pas une preuve | La socket de commande (`markControlSocket`), puis `apply` sous le nom qu'il porte déjà dans `applies` ; `opencloud auth disable` et `opencloud secrets forget`, qui écrivent sur la base |
 | `rule` | Vide | `serve`, sur son contexte racine : ses boucles de fond et ce qu'il fait au démarrage (une sonde qui porte des identifiants mise en pause, la fenêtre d'une maintenance qui s'ouvre ou se ferme) |
@@ -6878,7 +6913,7 @@ trois étages qui ne dérivent pas l'un de l'autre.
 
 | Étage | Exemples | Renommer coûte |
 | --- | --- | --- |
-| Nom affiché (`ProductName`) | titre des pages, User-Agent (sauf vers endoflife.date, qui porte `ID`), expéditeur des e-mails, domaine de l'authentification Basic | Rien d'installé : seuls les textes changent |
+| Nom affiché (`ProductName`) | titre des pages, User-Agent (sauf vers endoflife.date, qui porte `ID`), expéditeur des e-mails | Rien d'installé : seuls les textes changent |
 | Identifiant technique (`ID`) | `/etc/opencloud`, `/var/lib/opencloud`, `opencloud.db`, nom de la machine locale, préfixe des transactions Matrix | Les chemins bougent : une installation existante doit migrer |
 | Empreinte du protocole | en-têtes `OpenCloud-…`, préfixes de jetons (`oc_`, `ock_`, `ocs_`…), empreinte `opencloud-host:` | Casse les agents installés, les récepteurs de webhooks et les jetons émis : il faudrait d'abord une transition qui accepte les deux formes |
 

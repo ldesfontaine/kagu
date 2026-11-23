@@ -59,7 +59,7 @@ func NewSourceSlots(limit int) *SourceSlots {
 // Take réserve une place pour cette adresse ; faux quand sa source tient déjà
 // sa part.
 func (s *SourceSlots) Take(address string) bool {
-	source := sourceKey(address)
+	source := SourceKey(address)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.taken[source] >= s.limit {
@@ -70,7 +70,7 @@ func (s *SourceSlots) Take(address string) bool {
 }
 
 func (s *SourceSlots) Release(address string) {
-	source := sourceKey(address)
+	source := SourceKey(address)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.taken[source] <= 1 {

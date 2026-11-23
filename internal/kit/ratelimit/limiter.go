@@ -115,7 +115,7 @@ func (l *Limiter) Size() int {
 	return len(l.buckets)
 }
 
-// BySource compte par adresse cliente, normalisée par sourceKey : l'appelant
+// BySource compte par adresse cliente, normalisée par SourceKey : l'appelant
 // passe l'adresse telle qu'il la lit, il ne peut pas oublier le /64.
 type BySource struct {
 	limiter *Limiter
@@ -137,5 +137,5 @@ func (b *BySource) Size() int {
 
 // Allow dit si la requête de cette adresse passe, et la compte si oui.
 func (b *BySource) Allow(address string) bool {
-	return b.limiter.Allow(sourceKey(address))
+	return b.limiter.Allow(SourceKey(address))
 }

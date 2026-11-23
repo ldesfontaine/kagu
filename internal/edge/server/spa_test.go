@@ -164,7 +164,7 @@ func listAssets(t *testing.T, server *Server) []string {
 func TestR_A2_13(t *testing.T) {
 	servertest.RequireFront(t)
 	server := newFirstSetupServer(t)
-	server.enableBasic(t)
+	server.enableNative(t)
 
 	anonymous := func(target string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(http.MethodGet, target, nil)
@@ -201,7 +201,7 @@ func TestR_A2_13(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, "/api/machines/..%2F..%2Ftheme.js", nil)
 		request.Host = "localhost"
 		if signedIn {
-			request.SetBasicAuth(testUsername, testPassword)
+			signInRequest(server.Server, request, testUsername, testPassword)
 		}
 		recorder := httptest.NewRecorder()
 		server.Server.ServeHTTP(recorder, request)

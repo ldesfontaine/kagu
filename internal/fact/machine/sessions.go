@@ -1,13 +1,11 @@
 package machine
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"sync"
 	"time"
-)
 
-const sessionTokenBytes = 32
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
+)
 
 // Session est un flux ouvert par l'agent d'une machine. Son jeton, tiré à
 // l'ouverture, authentifie les signaux qui suivent sans nouvelle signature.
@@ -53,15 +51,15 @@ func NewSessions() *Sessions {
 // Open enregistre un flux ; un flux précédent de la même machine est fermé,
 // le plus récent gagne.
 func (s *Sessions) Open(machineID, agentID, protocol string, now time.Time) (*Session, error) {
-	raw := make([]byte, sessionTokenBytes)
-	if _, err := rand.Read(raw); err != nil {
+	token, err := ident.NewSecret()
+	if err != nil {
 		return nil, err
 	}
 	session := &Session{
 		MachineID:   machineID,
 		AgentID:     agentID,
 		Protocol:    protocol,
-		Token:       hex.EncodeToString(raw),
+		Token:       token,
 		ConnectedAt: now,
 		done:        make(chan struct{}),
 		events:      make(chan StreamEvent, eventBacklog),

@@ -1,4 +1,5 @@
 import type { AuthState } from "../api/auth";
+import type { ApiError } from "../api/client";
 
 // Ce que la barre latérale dit de l'accès : protégé par tel identifiant, ou
 // par le mandataire pour telle identité. Rien tant que l'API n'a pas répondu,
@@ -23,6 +24,21 @@ export function accessLabel(state: AuthState | null): AccessLabel | null {
 // la remplace. Jamais sur un doute, ni pendant le chargement.
 export function needsFirstSetup(state: AuthState | null): boolean {
   return state !== null && state.mode === "none";
+}
+
+// En connexion native, sans session valable, le serveur ne sert que la
+// connexion : l'écran la remplace. Jamais pendant le chargement.
+export function needsSignIn(state: AuthState | null): boolean {
+  return state !== null && state.mode === "native" && !state.signed_in;
+}
+
+// Ce que la connexion dit d'un refus : le serveur nomme ses refus, sauf le
+// trop d'essais (429), qu'il rend en texte comme tout refus de débit.
+export function loginFailure(error: ApiError | null): ApiError | string | null {
+  if (error !== null && error.status === 429) {
+    return "auth.login_too_many";
+  }
+  return error;
 }
 
 // Le mode mandataire est actif mais sans preuve du passage par le mandataire :

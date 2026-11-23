@@ -170,7 +170,7 @@ func TestAuthForwardSecret_AConfiguredSecretIsRequiredFromAnyTrustedProxy(t *tes
 }
 
 func TestAuthAPI_EnableForwardRefusedOnALoopbackProxyWithoutASecret(t *testing.T) {
-	const enable = "/api/auth/actions/enable"
+	const enable = "/api/auth/setup"
 	for _, trusted := range [][]string{
 		{"127.0.0.1/32"},
 		{"::1/128"},
@@ -196,7 +196,7 @@ func TestAuthAPI_EnableForwardOnALoopbackProxyWorksWithTheSecret(t *testing.T) {
 	server := newFirstSetupServer(t)
 	server.trustedProxies = parsePrefixes(t, "127.0.0.1/32", "::1/128")
 	server.forwardSecret = proxySecret
-	const enable = "/api/auth/actions/enable"
+	const enable = "/api/auth/setup"
 
 	body := `{"mode":"forward","setup_code":"` + authtest.SetupCode(t, server.operator) + `"}`
 	post := func(secret string) *httptest.ResponseRecorder {
@@ -251,13 +251,13 @@ func TestAuthAPI_ForwardInsecureIsAbsentWhenSomethingProvesTheProxy(t *testing.T
 	withSecret.enableForwardOnLoopback(t, proxySecret)
 	container := newFirstSetupServer(t)
 	container.enableForward(t)
-	basic := newFirstSetupServer(t)
-	basic.enableBasic(t)
+	native := newFirstSetupServer(t)
+	native.enableNative(t)
 
 	for name, read := range map[string]*httptest.ResponseRecorder{
 		"loopback with a secret":     callProxied(withSecret.Server, http.MethodGet, "/api/auth", loopbackPeer, testUsername, proxySecret),
 		"container proxy, no secret": callForwarded(container.Server, http.MethodGet, "/api/auth", trustedPeer, testUsername),
-		"basic mode":                 callAs(basic.Server, http.MethodGet, "/api/auth", testUsername, testPassword),
+		"native mode":                callAs(native.Server, http.MethodGet, "/api/auth", testUsername, testPassword),
 	} {
 		if read.Code != http.StatusOK {
 			t.Errorf("%s: %d %s", name, read.Code, read.Body.String())

@@ -24,7 +24,7 @@ func TestTU21_ATrickledBodyDoesNotHoldTheConnectionPastTheReadDeadline(t *testin
 	const held = 10
 	const readBound = 500 * time.Millisecond
 	bench := newFirstSetupServer(t)
-	bench.enableBasic(t)
+	bench.enableNative(t)
 	bench.trustedProxies = []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}
 	bench.clientSlots = ratelimit.NewSourceSlots(perClient)
 	bench.refusals = newRefusalLog(nil)

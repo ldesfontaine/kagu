@@ -18,7 +18,7 @@ import (
 // Sans compte, chaque route est jugée : celles de la première configuration
 // passent, les autres routes de l'opérateur répondent 401
 // auth.setup_required sans défi Basic, et les routes ouvertes le restent,
-// les mêmes qu'en basic et en forward.
+// les mêmes qu'en native et en forward.
 func TestFirstSetup_ServesOnlyTheSetupRoutesAndLeavesTheOthersOpen(t *testing.T) {
 	server := newFirstSetupServer(t)
 	open := map[string]bool{}
@@ -36,7 +36,7 @@ func TestFirstSetup_ServesOnlyTheSetupRoutesAndLeavesTheOthersOpen(t *testing.T)
 			if refused && strings.Contains(recorder.Body.String(), codeSetupRequired) {
 				t.Errorf("%s %s: an open route waits for the first setup", route.method, route.pattern)
 			}
-		case isFirstSetupRoute(route.method, route.pattern):
+		case isBeforeSignInRoute(route.method, route.pattern):
 			if refused {
 				t.Errorf("%s %s: status 401, the first setup needs it", route.method, route.pattern)
 			}
@@ -64,7 +64,7 @@ func TestFirstSetup_EnableOpensTheRoutesToTheNewAccount(t *testing.T) {
 		t.Fatalf("read before the setup: %d %+v", read.Code, state)
 	}
 
-	enabled := callAPI(server.Server, http.MethodPost, "/api/auth/actions/enable", authEnableRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
+	enabled := callSetupAPI(server.Server, authSetupRequest{SetupCode: authtest.SetupCode(t, server.operator), Username: testUsername, Password: testPassword})
 	if enabled.Code != http.StatusOK {
 		t.Fatalf("enable: %d %s", enabled.Code, enabled.Body.String())
 	}
@@ -72,13 +72,13 @@ func TestFirstSetup_EnableOpensTheRoutesToTheNewAccount(t *testing.T) {
 		t.Fatalf("with the new account: %d %s", got.Code, got.Body.String())
 	}
 	anonymous := callAs(server.Server, http.MethodGet, "/api/machines", "", "")
-	if anonymous.Code != http.StatusUnauthorized || errorCode(t, anonymous) != codeUnauthorized || anonymous.Header().Get("WWW-Authenticate") == "" {
-		t.Fatalf("without credentials after the setup: %d %s", anonymous.Code, anonymous.Body.String())
+	if anonymous.Code != http.StatusUnauthorized || errorCode(t, anonymous) != codeUnauthorized || anonymous.Header().Get("WWW-Authenticate") != "" {
+		t.Fatalf("without a session after the setup: %d %s", anonymous.Code, anonymous.Body.String())
 	}
-	// La création du compte n'est servie qu'une fois : ensuite, elle exige le
-	// compte, et le refuse.
-	if got := callAs(server.Server, http.MethodPost, "/api/auth/actions/enable", "", ""); got.Code != http.StatusUnauthorized {
-		t.Fatalf("a second anonymous setup: %d", got.Code)
+	// La création du compte n'est servie qu'une fois : ensuite, elle le refuse.
+	again := callSetupAPI(server.Server, authSetupRequest{SetupCode: "12345678", Username: "autre", Password: testPassword})
+	if again.Code != http.StatusConflict || errorCode(t, again) != "auth.already_enabled" {
+		t.Fatalf("a second anonymous setup: %d %s", again.Code, again.Body.String())
 	}
 }
 

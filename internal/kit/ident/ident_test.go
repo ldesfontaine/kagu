@@ -41,6 +41,22 @@ func TestNewSized_IsTwoLowercaseHexPerByte(t *testing.T) {
 	}
 }
 
+// Le jeton d'une session : 256 bits, soixante-quatre hexadécimaux, neuf à
+// chaque tirage.
+func TestNewSecret_Is256BitsOfLowercaseHex(t *testing.T) {
+	first, err := NewSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(first) || first == second {
+		t.Fatalf("secrets %q %q", first, second)
+	}
+}
+
 func mustNew(t *testing.T) string {
 	t.Helper()
 	id, err := New()

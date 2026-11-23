@@ -36,7 +36,7 @@ export function AccessPasswordForm({ minLength, busy, onSubmit }: { minLength: n
           <Failure error={error} />
         </SettingBlock>
       )}
-      <SettingFoot note={t("auth.browser_prompt")}>
+      <SettingFoot note={t("auth.change_note")}>
         <Button type="submit" variant="primary" icon="check" disabled={busy}>
           {t("auth.change")}
         </Button>

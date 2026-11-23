@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { changePassword, disableAuth, signIn, type AuthState } from "../../api/auth";
+import { changePassword, disableAuth, useOpenSessions, type AuthState, type PasswordChange } from "../../api/auth";
 import { Button } from "../../components/Button";
 import { Note } from "../../components/Card";
 import { ConfirmInline } from "../../components/ConfirmInline";
@@ -13,16 +13,17 @@ import { useT } from "../../i18n/context";
 import { isForwardInsecure } from "../../lib/auth";
 import { ago } from "../../lib/time";
 import { AccessPasswordForm } from "./AccessPasswordForm";
+import { AccessSessionsBlock } from "./AccessSessionsBlock";
 import { SettingsSection } from "./SettingsSection";
 
 function reloadPage() {
   window.location.reload();
 }
 
-// L'accès à l'interface, tel que la première configuration l'a posé.
-// Changer le mot de passe rend caducs les identifiants du navigateur : les
-// nouveaux lui sont confiés, puis la page se recharge, après avoir dit les
-// jetons d'API qui vivent encore.
+// L'accès à l'interface, tel que la première configuration l'a posé. En
+// connexion native : l'identifiant, les sessions ouvertes, le changement de
+// mot de passe. Changer le mot de passe ferme les autres sessions et garde
+// la courante : l'écran le dit, avec les jetons d'API qui vivent encore.
 // Désactiver ramène l'installation à sa première configuration : il est dans
 // la zone de danger, derrière une confirmation en ligne. En mode SSO, il n'y
 // a rien à saisir après coup : la section montre l'en-tête, l'identité que le
@@ -32,23 +33,20 @@ export function AccessSection({ state }: { state: AuthState }) {
   const now = useNow();
   const action = useAction();
   const enabled = state.mode !== "none";
-  const [livingTokens, setLivingTokens] = useState(0);
+  const native = state.mode === "native";
+  const sessions = useOpenSessions(native);
+  const [changed, setChanged] = useState<PasswordChange | null>(null);
 
   const disable = () => {
     action.run(() => disableAuth(), { onDone: reloadPage });
   };
-  // Le changement rend caducs les identifiants du navigateur : signIn lui
-  // confie les nouveaux, pour que l'écran reste utilisable le temps de dire
-  // les jetons d'API qui vivent encore.
   const changeTo = (current: string, password: string) => {
-    action.run(
-      async () => {
-        const change = await changePassword(current, password);
-        await signIn(state.username, password);
-        return change;
+    action.run(() => changePassword(current, password), {
+      onDone: (change) => {
+        setChanged(change);
+        sessions.reload();
       },
-      { onDone: (change) => (change.api_tokens === 0 ? reloadPage() : setLivingTokens(change.api_tokens)) },
-    );
+    });
   };
 
   return (
@@ -63,10 +61,13 @@ export function AccessSection({ state }: { state: AuthState }) {
           <Note tone="warn">{t("auth.forward_insecure")}</Note>
         </SettingBlock>
       )}
-      {state.mode === "basic" && (
-        <SettingRow label={t("auth.username_label")}>
-          <span className="mono">{state.username}</span>
-        </SettingRow>
+      {native && (
+        <>
+          <SettingRow label={t("auth.username_label")}>
+            <span className="mono">{state.username}</span>
+          </SettingRow>
+          <AccessSessionsBlock sessions={sessions} onSignedOut={reloadPage} />
+        </>
       )}
       {state.mode === "forward" && (
         <>
@@ -88,15 +89,16 @@ export function AccessSection({ state }: { state: AuthState }) {
           </SettingRow>
         </>
       )}
-      {livingTokens > 0 ? (
+      {changed !== null ? (
         <SettingBlock>
-          <Note tone="warn">{t("auth.tokens_remain", livingTokens)}</Note>
-          <Button variant="primary" icon="check" onClick={reloadPage}>
+          <Note tone="ok">{t("auth.password_changed")}</Note>
+          {changed.api_tokens > 0 && <Note tone="warn">{t("auth.tokens_remain", changed.api_tokens)}</Note>}
+          <Button variant="primary" icon="check" onClick={() => setChanged(null)}>
             {t("auth.tokens_continue")}
           </Button>
         </SettingBlock>
       ) : (
-        state.mode === "basic" && <AccessPasswordForm minLength={state.password_min_length} busy={action.busy} onSubmit={changeTo} />
+        native && <AccessPasswordForm minLength={state.password_min_length} busy={action.busy} onSubmit={changeTo} />
       )}
       {action.error !== null && (
         <SettingBlock>

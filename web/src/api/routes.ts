@@ -8,7 +8,11 @@ import { segment } from "./client";
 // d'écriture que ni cette liste ni sa liste « sans écran » ne nomme.
 export const writes = [
   "PUT /api/session/language",
-  "POST /api/auth/actions/enable",
+  "POST /api/auth/setup",
+  "POST /api/auth/login",
+  "POST /api/auth/logout",
+  "DELETE /api/auth/sessions/{id}",
+  "POST /api/auth/sessions/actions/close-others",
   "POST /api/auth/actions/disable",
   "PUT /api/auth/password",
   "PUT /api/settings/thresholds/{resource}",

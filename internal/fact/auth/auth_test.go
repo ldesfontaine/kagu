@@ -16,8 +16,9 @@ import (
 
 // memoryStore tient l'état comme la base, sans elle.
 type memoryStore struct {
-	state State
-	code  SetupCode
+	state    State
+	code     SetupCode
+	sessions memorySessions
 }
 
 func (m *memoryStore) GetAuthState(context.Context) (State, error) {
@@ -34,6 +35,9 @@ func (m *memoryStore) SaveAuthStateIf(ctx context.Context, expected, next State,
 	}
 	m.state = next
 	m.code = SetupCode{}
+	if next.Mode == ModeNone {
+		m.sessions = nil
+	}
 	return true, nil
 }
 
@@ -60,10 +64,7 @@ var none = State{Mode: ModeNone}
 func newTestService(t *testing.T) (*Service, *memoryStore) {
 	t.Helper()
 	store := &memoryStore{}
-	service, err := New(store, slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatal(err)
-	}
+	service := New(store, slog.New(slog.DiscardHandler))
 	service.SetHashCost(bcrypt.MinCost)
 	return service, store
 }
@@ -93,12 +94,12 @@ func verifies(t *testing.T, service *Service, state State, username, password st
 	return verified
 }
 
-func TestEnableBasic_StoresASlowHashNeverThePassword(t *testing.T) {
+func TestEnableNative_StoresASlowHashNeverThePassword(t *testing.T) {
 	service, store := newTestService(t)
-	if _, err := service.EnableBasic(context.Background(), none, issueCode(t, service), "lucas", "correct horse battery"); err != nil {
+	if _, err := service.EnableNative(context.Background(), none, issueCode(t, service), "lucas", "correct horse battery"); err != nil {
 		t.Fatal(err)
 	}
-	if store.state.Mode != ModeBasic || !strings.HasPrefix(store.state.PasswordHash, "$2") {
+	if store.state.Mode != ModeNative || !strings.HasPrefix(store.state.PasswordHash, "$2") {
 		t.Fatalf("stored %+v", store.state)
 	}
 	if strings.Contains(store.state.PasswordHash, "correct horse") {
@@ -123,35 +124,29 @@ func TestValidate_RefusesShortPasswordsAndSeparatorInUsername(t *testing.T) {
 	}
 }
 
-// Les identifiants vérifiés sont retenus, et oubliés dès que l'empreinte
-// change : changement de mot de passe ou désactivation.
-func TestVerify_RemembersUntilThePasswordChanges(t *testing.T) {
+// Verify juge contre l'empreinte en vigueur : l'ancien mot de passe ne passe
+// plus après un changement, et la désactivation efface tout.
+func TestVerify_JudgesTheHashInForce(t *testing.T) {
 	service, store := newTestService(t)
 	ctx := context.Background()
-	state, err := service.EnableBasic(ctx, none, issueCode(t, service), "lucas", "correct horse battery")
+	state, err := service.EnableNative(ctx, none, issueCode(t, service), "lucas", "correct horse battery")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if service.Remembered(state, "lucas", "correct horse battery") {
-		t.Fatal("nothing is remembered before a first verification")
+	if !verifies(t, service, state, "lucas", "correct horse battery") {
+		t.Fatal("right credentials refused")
 	}
-	if verified, err := service.Verify(ctx, state, "lucas", "correct horse battery"); err != nil || !verified {
-		t.Fatalf("right credentials refused: %v, %v", verified, err)
-	}
-	if !service.Remembered(state, "lucas", "correct horse battery") {
-		t.Fatal("verified credentials must be remembered")
-	}
-	if service.Remembered(state, "lucas", "something else") || verifies(t, service, state, "lucas", "something else") {
+	if verifies(t, service, state, "lucas", "something else") {
 		t.Fatal("a wrong password passed")
 	}
 	if verifies(t, service, state, "other", "correct horse battery") {
 		t.Fatal("a wrong username passed")
 	}
-	changed, err := service.ChangePassword(ctx, state, "correct horse battery", "another long passphrase")
+	changed, err := service.ChangePassword(ctx, state, "", "correct horse battery", "another long passphrase")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if service.Remembered(changed, "lucas", "correct horse battery") || verifies(t, service, changed, "lucas", "correct horse battery") {
+	if verifies(t, service, changed, "lucas", "correct horse battery") {
 		t.Fatal("the old password survived the change")
 	}
 	if err := service.Disable(ctx, changed); err != nil {
@@ -178,10 +173,10 @@ func TestEnableForward_StoresTheHeaderAndNoCredentials(t *testing.T) {
 	if _, err := service.EnableForward(ctx, state, issueCode(t, service), "X-Forwarded-User"); !errors.Is(err, ErrAlreadyEnabled) {
 		t.Fatalf("enable twice: %v", err)
 	}
-	if _, err := service.EnableBasic(ctx, state, issueCode(t, service), "lucas", "correct horse battery"); !errors.Is(err, ErrAlreadyEnabled) {
-		t.Fatalf("basic over forward: %v", err)
+	if _, err := service.EnableNative(ctx, state, issueCode(t, service), "lucas", "correct horse battery"); !errors.Is(err, ErrAlreadyEnabled) {
+		t.Fatalf("native over forward: %v", err)
 	}
-	if _, err := service.ChangePassword(ctx, state, "correct horse battery", "another long passphrase"); !errors.Is(err, ErrNoPassword) {
+	if _, err := service.ChangePassword(ctx, state, "", "correct horse battery", "another long passphrase"); !errors.Is(err, ErrNoPassword) {
 		t.Fatalf("change password in forward mode: %v", err)
 	}
 	if verifies(t, service, store.state, "", "") {
@@ -213,7 +208,7 @@ func TestEnableForward_RefusesAnInvalidHeaderName(t *testing.T) {
 }
 
 func TestModes_ListsEveryModeTheStoreAccepts(t *testing.T) {
-	want := []Mode{ModeNone, ModeBasic, ModeForward}
+	want := []Mode{ModeNone, ModeNative, ModeForward}
 	if got := Modes(); !slices.Equal(got, want) {
 		t.Fatalf("modes %v, want %v", got, want)
 	}
@@ -254,9 +249,9 @@ func verifyInBackground(ctx context.Context, service *Service, state State, user
 	return result
 }
 
-func newBasicState(t *testing.T, service *Service) State {
+func newNativeState(t *testing.T, service *Service) State {
 	t.Helper()
-	state, err := service.EnableBasic(context.Background(), none, issueCode(t, service), "lucas", "correct horse battery")
+	state, err := service.EnableNative(context.Background(), none, issueCode(t, service), "lucas", "correct horse battery")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +262,7 @@ func newBasicState(t *testing.T, service *Service) State {
 // ne coûte aucun bcrypt : des identifiants justes ne passent pas non plus.
 func TestVerify_CanceledWhileWaiting_ReturnsWithoutComparing(t *testing.T) {
 	service, _ := newTestService(t)
-	state := newBasicState(t, service)
+	state := newNativeState(t, service)
 	holdVerification(t, service)
 	ctx, cancel := context.WithCancel(context.Background())
 	result := verifyInBackground(ctx, service, state, "lucas", "correct horse battery")
@@ -278,14 +273,11 @@ func TestVerify_CanceledWhileWaiting_ReturnsWithoutComparing(t *testing.T) {
 		t.Fatalf("verdict %+v", got)
 	}
 	waitForQueued(t, service, 0)
-	if service.Remembered(state, "lucas", "correct horse battery") {
-		t.Fatal("a canceled verification must not have compared the password")
-	}
 }
 
 func TestVerify_CanceledBeforeStarting_GivesTheSlotBack(t *testing.T) {
 	service, _ := newTestService(t)
-	state := newBasicState(t, service)
+	state := newNativeState(t, service)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	verified, err := service.Verify(ctx, state, "lucas", "correct horse battery")
@@ -299,7 +291,7 @@ func TestVerify_CanceledBeforeStarting_GivesTheSlotBack(t *testing.T) {
 
 func TestVerify_FullQueue_RefusesAtOnce(t *testing.T) {
 	service, _ := newTestService(t)
-	state := newBasicState(t, service)
+	state := newNativeState(t, service)
 	holdVerification(t, service)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -331,33 +323,11 @@ func TestVerify_FullQueue_RefusesAtOnce(t *testing.T) {
 	waitForQueued(t, service, 0)
 }
 
-// Les identifiants déjà vérifiés ne font pas la queue : l'opérateur connecté
-// n'est pas refusé parce qu'une file de mauvais mots de passe est pleine.
-func TestVerify_RememberedCredentialsSkipTheQueue(t *testing.T) {
+// Plusieurs onglets qui se connectent ensemble remplissent la file sans être
+// refusés : chacun attend son bcrypt.
+func TestVerify_OperatorTabsSigningInTogether_AllPass(t *testing.T) {
 	service, _ := newTestService(t)
-	state := newBasicState(t, service)
-	if !verifies(t, service, state, "lucas", "correct horse battery") {
-		t.Fatal("right credentials refused")
-	}
-	holdVerification(t, service)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	for range maxQueuedVerifications {
-		verifyInBackground(ctx, service, state, "lucas", "wrong password here")
-	}
-	waitForQueued(t, service, maxQueuedVerifications)
-	verified, err := service.Verify(context.Background(), state, "lucas", "correct horse battery")
-	if err != nil || !verified {
-		t.Fatalf("remembered credentials: %v, %v", verified, err)
-	}
-}
-
-// Les onglets de l'opérateur qui reviennent ensemble après un redémarrage
-// (la mémoire est vide) remplissent la file sans être refusés : un seul
-// bcrypt, les autres passent par la mémoire.
-func TestVerify_OperatorTabsReturningTogether_AllPass(t *testing.T) {
-	service, _ := newTestService(t)
-	state := newBasicState(t, service)
+	state := newNativeState(t, service)
 	release := holdVerification(t, service)
 	tabs := make([]<-chan verdict, 0, maxQueuedVerifications)
 	for range maxQueuedVerifications {
@@ -376,7 +346,7 @@ func TestVerify_OperatorTabsReturningTogether_AllPass(t *testing.T) {
 // tour et passe, tant que la file n'est pas pleine.
 func TestVerify_RightOperatorBehindAShortQueue_Passes(t *testing.T) {
 	service, _ := newTestService(t)
-	state := newBasicState(t, service)
+	state := newNativeState(t, service)
 	release := holdVerification(t, service)
 	for range maxQueuedVerifications - 1 {
 		verifyInBackground(context.Background(), service, state, "lucas", "wrong password here")
@@ -400,15 +370,15 @@ func TestVerify_RightOperatorBehindAShortQueue_Passes(t *testing.T) {
 func TestChangePasswordAndDisable_RefuseAnAuthorizingStateThatChanged(t *testing.T) {
 	service, store := newTestService(t)
 	ctx := context.Background()
-	authorizing, err := service.EnableBasic(ctx, none, issueCode(t, service), "lucas", "correct horse battery")
+	authorizing, err := service.EnableNative(ctx, none, issueCode(t, service), "lucas", "correct horse battery")
 	if err != nil {
 		t.Fatal(err)
 	}
-	changed, err := service.ChangePassword(ctx, authorizing, "correct horse battery", "another long passphrase")
+	changed, err := service.ChangePassword(ctx, authorizing, "", "correct horse battery", "another long passphrase")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.ChangePassword(ctx, authorizing, "correct horse battery", "a third long passphrase"); !errors.Is(err, ErrStateChanged) {
+	if _, err := service.ChangePassword(ctx, authorizing, "", "correct horse battery", "a third long passphrase"); !errors.Is(err, ErrStateChanged) {
 		t.Fatalf("change under the old state: %v, want ErrStateChanged", err)
 	}
 	if err := service.Disable(ctx, authorizing); !errors.Is(err, ErrStateChanged) {
@@ -420,7 +390,7 @@ func TestChangePasswordAndDisable_RefuseAnAuthorizingStateThatChanged(t *testing
 	if err := service.Disable(ctx, changed); err != nil {
 		t.Fatalf("disable under the current state: %v", err)
 	}
-	if _, err := service.ChangePassword(ctx, changed, "correct horse battery", "a third long passphrase"); !errors.Is(err, ErrStateChanged) {
+	if _, err := service.ChangePassword(ctx, changed, "", "correct horse battery", "a third long passphrase"); !errors.Is(err, ErrStateChanged) {
 		t.Fatalf("change after the interface reopened: %v, want ErrStateChanged", err)
 	}
 	if store.state.Mode != ModeNone {
@@ -431,9 +401,9 @@ func TestChangePasswordAndDisable_RefuseAnAuthorizingStateThatChanged(t *testing
 func TestEnable_RefusesAnAuthorizingStateThatIsNotTheStoredOne(t *testing.T) {
 	service, store := newTestService(t)
 	ctx := context.Background()
-	stale := State{Mode: ModeBasic, Username: "lucas", PasswordHash: "ancienne", EnabledAt: time.Unix(1, 0)}
-	if _, err := service.EnableBasic(ctx, stale, issueCode(t, service), "lucas", "correct horse battery"); !errors.Is(err, ErrStateChanged) {
-		t.Fatalf("basic: %v, want ErrStateChanged", err)
+	stale := State{Mode: ModeNative, Username: "lucas", PasswordHash: "ancienne", EnabledAt: time.Unix(1, 0)}
+	if _, err := service.EnableNative(ctx, stale, issueCode(t, service), "lucas", "correct horse battery"); !errors.Is(err, ErrStateChanged) {
+		t.Fatalf("native: %v, want ErrStateChanged", err)
 	}
 	if _, err := service.EnableForward(ctx, stale, issueCode(t, service), DefaultForwardHeader); !errors.Is(err, ErrStateChanged) {
 		t.Fatalf("forward: %v, want ErrStateChanged", err)
@@ -445,16 +415,16 @@ func TestEnable_RefusesAnAuthorizingStateThatIsNotTheStoredOne(t *testing.T) {
 
 func TestStateSame_ComparesEveryField(t *testing.T) {
 	at := time.Unix(1_800_000_000, 0)
-	base := State{Mode: ModeBasic, Username: "lucas", PasswordHash: "empreinte", Header: "", EnabledAt: at}
-	if !base.Same(base) || !base.Same(State{Mode: ModeBasic, Username: "lucas", PasswordHash: "empreinte", EnabledAt: at.In(time.UTC)}) {
+	base := State{Mode: ModeNative, Username: "lucas", PasswordHash: "empreinte", Header: "", EnabledAt: at}
+	if !base.Same(base) || !base.Same(State{Mode: ModeNative, Username: "lucas", PasswordHash: "empreinte", EnabledAt: at.In(time.UTC)}) {
 		t.Fatal("the same state must be the same, whatever the time zone")
 	}
 	for name, other := range map[string]State{
 		"mode":      {Mode: ModeForward, Username: "lucas", PasswordHash: "empreinte", EnabledAt: at},
-		"username":  {Mode: ModeBasic, Username: "autre", PasswordHash: "empreinte", EnabledAt: at},
-		"hash":      {Mode: ModeBasic, Username: "lucas", PasswordHash: "autre", EnabledAt: at},
-		"header":    {Mode: ModeBasic, Username: "lucas", PasswordHash: "empreinte", Header: "Remote-User", EnabledAt: at},
-		"enabledAt": {Mode: ModeBasic, Username: "lucas", PasswordHash: "empreinte", EnabledAt: at.Add(time.Second)},
+		"username":  {Mode: ModeNative, Username: "autre", PasswordHash: "empreinte", EnabledAt: at},
+		"hash":      {Mode: ModeNative, Username: "lucas", PasswordHash: "autre", EnabledAt: at},
+		"header":    {Mode: ModeNative, Username: "lucas", PasswordHash: "empreinte", Header: "Remote-User", EnabledAt: at},
+		"enabledAt": {Mode: ModeNative, Username: "lucas", PasswordHash: "empreinte", EnabledAt: at.Add(time.Second)},
 	} {
 		if base.Same(other) {
 			t.Errorf("a different %s must not be the same state", name)
@@ -465,21 +435,21 @@ func TestStateSame_ComparesEveryField(t *testing.T) {
 func TestChangePassword_RefusesAWrongCurrentPasswordBeforeHashing(t *testing.T) {
 	service, store := newTestService(t)
 	ctx := context.Background()
-	state, err := service.EnableBasic(ctx, none, issueCode(t, service), "lucas", "correct horse battery")
+	state, err := service.EnableNative(ctx, none, issueCode(t, service), "lucas", "correct horse battery")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Un nouveau mot de passe trop court n'est dit qu'au hachage : la
 	// réponse prouve que le mot de passe actuel a été jugé avant.
 	for _, current := range []string{"", "wrong password here", "Correct horse battery"} {
-		if _, err := service.ChangePassword(ctx, state, current, "short"); !errors.Is(err, ErrCurrentPasswordWrong) {
+		if _, err := service.ChangePassword(ctx, state, "", current, "short"); !errors.Is(err, ErrCurrentPasswordWrong) {
 			t.Fatalf("current %q: %v, want ErrCurrentPasswordWrong", current, err)
 		}
 		if !store.state.Same(state) {
 			t.Fatalf("current %q: a refused change wrote %+v", current, store.state)
 		}
 	}
-	if _, err := service.ChangePassword(ctx, state, "correct horse battery", "short"); !errors.Is(err, ErrPasswordTooShort) {
+	if _, err := service.ChangePassword(ctx, state, "", "correct horse battery", "short"); !errors.Is(err, ErrPasswordTooShort) {
 		t.Fatalf("right current, short new: %v, want ErrPasswordTooShort", err)
 	}
 }

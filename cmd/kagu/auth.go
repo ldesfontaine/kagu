@@ -69,10 +69,7 @@ func authCommand(args []string, out io.Writer) error {
 		return err
 	}
 	defer db.Close()
-	access, err := auth.New(db, logger)
-	if err != nil {
-		return err
-	}
+	access := auth.New(db, logger)
 	access.SetAuditor(audit.New(db, logger))
 	if command == "disable" {
 		return disableAuth(ctx, access, out)
@@ -120,7 +117,7 @@ func printAuthStatus(ctx context.Context, access *auth.Service, forwardUsers []s
 			state.Header, describeForwardUsers(forwardUsers), enabledAt)
 		return err
 	}
-	_, err = fmt.Fprintf(out, "mode : %s\nidentifiant : %s\nactivée le : %s\n",
+	_, err = fmt.Fprintf(out, "mode : %s — un compte, la connexion ouvre une session\nidentifiant : %s\nactivée le : %s\n",
 		state.Mode, state.Username, enabledAt)
 	return err
 }

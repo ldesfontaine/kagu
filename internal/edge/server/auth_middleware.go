@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
-	"errors"
 	"io"
 	"net/http"
 	"path"
@@ -19,13 +18,15 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
-// L'accès de l'opérateur à l'interface. En mode basic, HTTP Basic garde
-// tout ce que l'opérateur appelle : le front, l'API, le direct et les flux
-// de journaux. En mode forward, les mêmes routes exigent l'en-tête
-// d'identité posé par un mandataire de trusted_proxies. En mode none,
-// l'installation attend sa première configuration : seules les routes qui
-// servent à créer le compte passent, et la création exige le code que
-// `admin setup-code` tire par la socket locale.
+// L'accès de l'opérateur à l'interface. En mode native, une session (le
+// cookie que pose la connexion, session_cookie.go) garde tout ce que
+// l'opérateur appelle : l'API, le direct et les flux de journaux ; sans elle,
+// seules les routes qui servent à se connecter passent. En mode forward, les
+// mêmes routes exigent l'en-tête d'identité posé par un mandataire de
+// trusted_proxies. En mode none, l'installation attend sa première
+// configuration : seules les routes qui servent à créer le compte passent, et
+// la création exige le code que `admin setup-code` tire par la socket locale.
+// Un en-tête Authorization: Basic n'est lu par aucun mode (R-CNX-1).
 // Un jeton d'API (Authorization: Bearer) remplace l'un et l'autre, sur une
 // liste fermée de lectures (apiTokenRoutes) : voir admitAPIToken.
 // Restent ouverts ceux qui ont leur propre preuve ou n'en ont pas
@@ -33,11 +34,10 @@ import (
 // statut (publique).
 
 const (
-	authRealmHeader  = `Basic realm="` + brand.ProductName + `", charset="UTF-8"`
 	codeUnauthorized = "unauthorized"
 	// Une vérification lente coûte ~100 ms : dix d'un coup, puis une toutes
-	// les six secondes par adresse. Des identifiants justes sont retenus et
-	// ne repassent plus par ici.
+	// les six secondes par adresse. Seules la connexion et le changement de
+	// mot de passe en paient une.
 	authAttemptRate  = 1.0 / 6
 	authAttemptBurst = 10
 	authIdle         = 30 * time.Minute
@@ -46,12 +46,15 @@ const (
 // Ce que le serveur attend du composant auth.
 type AuthService interface {
 	State(ctx context.Context) (auth.State, error)
-	Remembered(state auth.State, username, password string) bool
-	Verify(ctx context.Context, state auth.State, username, password string) (bool, error)
-	EnableBasic(ctx context.Context, expected auth.State, setupCode, username, password string) (auth.State, error)
+	SetupNative(ctx context.Context, expected auth.State, setupCode, username, password string, client auth.SessionClient) (auth.State, auth.OpenedSession, error)
 	EnableForward(ctx context.Context, expected auth.State, setupCode, header string) (auth.State, error)
 	IssueSetupCode(ctx context.Context) (auth.IssuedSetupCode, error)
-	ChangePassword(ctx context.Context, expected auth.State, currentPassword, password string) (auth.State, error)
+	Login(ctx context.Context, expected auth.State, username, password string, client auth.SessionClient) (auth.OpenedSession, error)
+	ResumeSession(ctx context.Context, state auth.State, token string) (auth.Session, bool, error)
+	Sessions(ctx context.Context) ([]auth.Session, error)
+	CloseSession(ctx context.Context, id string) error
+	CloseOtherSessions(ctx context.Context, keepID string) (int, error)
+	ChangePassword(ctx context.Context, expected auth.State, keepSession, currentPassword, password string) (auth.State, error)
 	Disable(ctx context.Context, expected auth.State) error
 }
 
@@ -73,21 +76,25 @@ const codeForwardForbidden = "auth.forward_forbidden"
 // l'identité reçue (%s).
 const forwardForbiddenPage = "auth.forward_forbidden_identity"
 
-// Les routes de l'opérateur qu'une installation sans compte (mode none) sert
-// à qui atteint le port : le front, sa session et ses catalogues pour
-// s'afficher dans la langue réglée, l'état de l'accès, et la création du
-// compte. Tout le reste attend : un avertissement n'est pas un contrôle.
-var firstSetupRoutes = []string{
+// Les routes de l'opérateur servies sans session, à qui atteint le port,
+// tant qu'aucun compte n'existe (mode none) ou que personne n'est connecté
+// (mode native) : le front, sa session et ses catalogues pour s'afficher dans
+// la langue réglée, l'état de l'accès, la création du compte, la connexion
+// et la déconnexion. Chacune refuse elle-même ce qui ne vaut pas dans le mode
+// du moment. Tout le reste attend : un avertissement n'est pas un contrôle.
+var beforeSignInRoutes = []string{
 	"GET /api/session",
 	"GET /api/i18n/{code}",
 	"GET /api/auth",
-	"POST /api/auth/actions/enable",
+	"POST /api/auth/setup",
+	"POST /api/auth/login",
+	"POST /api/auth/logout",
 	anyMethod + " /",
 }
 
-// isFirstSetupRoute dit si la route reste servie en mode none.
-func isFirstSetupRoute(method, pattern string) bool {
-	return slices.Contains(firstSetupRoutes, method+" "+pattern)
+// isBeforeSignInRoute dit si la route est servie sans session.
+func isBeforeSignInRoute(method, pattern string) bool {
+	return slices.Contains(beforeSignInRoutes, method+" "+pattern)
 }
 
 // Les préfixes qui ne passent jamais par l'authentification de
@@ -109,17 +116,17 @@ func isOperatorRoute(pattern string) bool {
 // requireOperator relit le mode à chaque requête : la commande de secours
 // `opencloud auth disable` écrit dans la base, et serve la suit sans
 // redémarrer ; l'installation revient alors à sa première configuration.
-// firstSetup dit si la route reste servie tant qu'aucun compte n'existe,
-// access ce qu'un jeton d'API en obtient.
-func (s *Server) requireOperator(next http.HandlerFunc, firstSetup bool, access tokenAccess) http.HandlerFunc {
+// beforeSignIn dit si la route est servie sans session, access ce qu'un jeton
+// d'API en obtient.
+func (s *Server) requireOperator(next http.HandlerFunc, beforeSignIn bool, access tokenAccess) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		state, err := s.auth.State(r.Context())
 		if err != nil {
 			s.apiInternalError(w, r, err)
 			return
 		}
-		// Un Bearer est jugé avant le mode : en basic comme en forward, il
-		// passe par le jeton, ni par Basic ni par l'en-tête du mandataire.
+		// Un Bearer est jugé avant le mode : en native comme en forward, il
+		// passe par le jeton, ni par la session ni par l'en-tête du mandataire.
 		// En none, il est ignoré : la première configuration seule est servie.
 		if bearer, presented := bearerOf(r); presented && state.Mode != auth.ModeNone {
 			s.admitAPIToken(w, r, bearer, access, next)
@@ -127,15 +134,13 @@ func (s *Server) requireOperator(next http.HandlerFunc, firstSetup bool, access 
 		}
 		switch state.Mode {
 		case auth.ModeNone:
-			if !firstSetup {
+			if !beforeSignIn {
 				s.writeSetupRequired(w, r)
 				return
 			}
 			s.admitOperator(w, r, state, next)
-		case auth.ModeBasic:
-			if s.checkBasic(w, r, state) {
-				s.admitOperator(w, r, state, next)
-			}
+		case auth.ModeNative:
+			s.admitSession(w, r, state, beforeSignIn, next)
 		case auth.ModeForward:
 			identity, ok := s.checkForward(w, r, state)
 			if ok {
@@ -300,61 +305,36 @@ func (s *Server) refuseEncodedSlash(next http.Handler) http.Handler {
 	})
 }
 
-// checkBasic répond lui-même 401 ou 429 quand il refuse.
-func (s *Server) checkBasic(w http.ResponseWriter, r *http.Request, state auth.State) bool {
-	username, password, presented := r.BasicAuth()
-	if !presented {
-		s.writeUnauthorized(w, r)
-		return false
+// admitSession admet la requête que porte une session vivante, et la pose
+// dans son contexte. Sans session, seules les routes d'avant la connexion
+// passent ; les autres répondent 401.
+func (s *Server) admitSession(w http.ResponseWriter, r *http.Request, state auth.State, beforeSignIn bool, next http.HandlerFunc) {
+	session, signedIn, err := s.auth.ResumeSession(r.Context(), state, s.presentedSessionToken(r))
+	if err != nil {
+		s.apiInternalError(w, r, err)
+		return
 	}
-	if s.auth.Remembered(state, username, password) {
-		return true
-	}
-	source := s.clientAddress(r)
-	if !s.authLimit.Allow(source) {
-		s.logger.Warn("interface authentication rate limited", "source", source)
-		httpx.WriteTooMany(w)
-		return false
-	}
-	verified, err := s.auth.Verify(r.Context(), state, username, password)
-	switch {
-	case errors.Is(err, auth.ErrVerificationQueueFull):
-		// Même réponse que le limiteur : l'attente de bcrypt est bornée, et
-		// l'opérateur qui retombe là réessaie après Retry-After.
-		s.logger.Warn("interface authentication queue full", "source", source)
-		httpx.WriteTooMany(w)
-		return false
-	case err != nil:
-		// La requête a pris fin pendant l'attente (client parti, arrêt) :
-		// ce n'est pas un mauvais mot de passe, et personne ne lira la réponse.
-		http.Error(w, "request canceled", http.StatusServiceUnavailable)
-		return false
-	case !verified:
-		s.logger.Warn("interface authentication failed", "source", source, "path", r.URL.Path)
-		s.writeUnauthorized(w, r)
-		return false
-	}
-	return true
-}
-
-// Le défi Basic : le navigateur demande les identifiants, puis les
-// renvoie seul à chaque requête de la même origine, EventSource compris.
-func (s *Server) writeUnauthorized(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("WWW-Authenticate", authRealmHeader)
-	if strings.HasPrefix(r.URL.Path, "/api/") {
+	if !signedIn && !beforeSignIn {
 		s.writeAPIError(w, http.StatusUnauthorized, codeUnauthorized)
 		return
 	}
-	w.Header().Set("Cache-Control", "no-store")
-	// Le navigateur affiche ce texte quand l'opérateur annule la fenêtre :
-	// c'est là qu'il faut dire comment rouvrir l'accès.
-	catalog := s.catalogs.For(browserLanguage(r))
-	http.Error(w, catalog.Get("auth.unauthorized"), http.StatusUnauthorized)
+	if signedIn {
+		r = r.WithContext(context.WithValue(r.Context(), operatorSessionKey{}, session))
+	}
+	s.admitOperator(w, r, state, next)
 }
 
-// Le refus d'une installation sans compte, sans défi Basic : le navigateur
-// n'a aucun identifiant à demander, le front montre l'écran de première
-// configuration. Hors /api, le texte dit d'ouvrir l'interface.
+// operatorSessionKey porte, dans le contexte de la requête, la session native
+// qui l'a admise.
+type operatorSessionKey struct{}
+
+func sessionFrom(ctx context.Context) (auth.Session, bool) {
+	session, ok := ctx.Value(operatorSessionKey{}).(auth.Session)
+	return session, ok
+}
+
+// Le refus d'une installation sans compte : le front montre l'écran de
+// première configuration. Hors /api, le texte dit d'ouvrir l'interface.
 func (s *Server) writeSetupRequired(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		s.writeAPIError(w, http.StatusUnauthorized, codeSetupRequired)
@@ -476,8 +456,7 @@ func (s *Server) hasProxySecret(r *http.Request) bool {
 	return subtle.ConstantTimeCompare(received[:], expected[:]) == 1
 }
 
-// Le refus du mode forward, sans défi Basic : le navigateur n'a rien à
-// demander, c'est le SSO en amont qui authentifie.
+// Le refus du mode forward : c'est le SSO en amont qui authentifie.
 func (s *Server) writeForwardUnauthorized(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		s.writeAPIError(w, http.StatusUnauthorized, codeUnauthorized)

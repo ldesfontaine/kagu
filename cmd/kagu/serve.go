@@ -39,9 +39,9 @@ const (
 	stateDirMode    = 0o700
 	// Le défaut de net/http est 1 Mio d'en-têtes par requête, et /ping/ et
 	// /statut sont ouverts : un anonyme pourrait y mettre une URL d'un mégaoctet.
-	// Les en-têtes légitimes (Authorization Basic ou Bearer, X-Forwarded-For,
-	// preuve signée de l'agent) tiennent en quelques centaines d'octets.
-	// L'interface ne pose aucun cookie ; ceux qu'un mandataire
+	// Les en-têtes légitimes (Authorization Bearer, X-Forwarded-For, preuve
+	// signée de l'agent, le cookie de session de l'interface) tiennent en
+	// quelques centaines d'octets. Les cookies qu'un mandataire
 	// d'authentification pose sur le domaine parent arrivent aussi, mais
 	// pèsent quelques Kio : la marge reste large.
 	maxHeaderBytes = 64 << 10

@@ -35,7 +35,7 @@ func TestR_A2_9_ChangingThePasswordNeedsTheCurrentOne(t *testing.T) {
 		"wrong":                   changePasswordBody("not the password", changedPassword),
 		"wrong and a bad new one": changePasswordBody("not the password", "short"),
 	} {
-		got := callBasicJSON(server.Server, http.MethodPut, "/api/auth/password", body, testPassword)
+		got := callSignedInJSON(server.Server, http.MethodPut, "/api/auth/password", body, testPassword)
 		if got.Code != http.StatusForbidden || errorCode(t, got) != "auth.current_password_wrong" {
 			t.Fatalf("%s current: %d %s, want 403 auth.current_password_wrong", name, got.Code, got.Body.String())
 		}
@@ -43,11 +43,11 @@ func TestR_A2_9_ChangingThePasswordNeedsTheCurrentOne(t *testing.T) {
 			t.Fatalf("%s current: the stored hash changed", name)
 		}
 	}
-	if got := callAs(server.Server, http.MethodGet, "/api/auth", testUsername, changedPassword); got.Code != http.StatusUnauthorized {
+	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, changedPassword); got.Code != http.StatusUnauthorized {
 		t.Fatalf("the refused password opens: %d", got.Code)
 	}
 
-	changed := callBasicJSON(server.Server, http.MethodPut, "/api/auth/password", changePasswordBody(testPassword, changedPassword), testPassword)
+	changed := callSignedInJSON(server.Server, http.MethodPut, "/api/auth/password", changePasswordBody(testPassword, changedPassword), testPassword)
 	if changed.Code != http.StatusOK {
 		t.Fatalf("right current: %d %s", changed.Code, changed.Body.String())
 	}
@@ -59,10 +59,10 @@ func TestR_A2_9_ChangingThePasswordNeedsTheCurrentOne(t *testing.T) {
 	if body := changed.Body.String(); strings.Contains(body, "$2") || strings.Contains(body, testPassword) || strings.Contains(body, changedPassword) {
 		t.Fatal("neither a hash nor a password leaves the process")
 	}
-	if got := callAs(server.Server, http.MethodGet, "/api/auth", testUsername, changedPassword); got.Code != http.StatusOK {
+	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, changedPassword); got.Code != http.StatusOK {
 		t.Fatalf("new password: %d", got.Code)
 	}
-	if got := callAs(server.Server, http.MethodGet, "/api/auth", testUsername, testPassword); got.Code != http.StatusUnauthorized {
+	if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, testPassword); got.Code != http.StatusUnauthorized {
 		t.Fatalf("old password after change: %d", got.Code)
 	}
 }
@@ -77,7 +77,7 @@ func TestR_A2_9_AWrongCurrentPasswordCountsAgainstTheSourceLimit(t *testing.T) {
 		request.RemoteAddr = "203.0.113.9:4000"
 		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		request.Header.Set("Content-Type", "application/json")
-		request.SetBasicAuth(testUsername, testPassword)
+		signInRequest(server.Server, request, testUsername, testPassword)
 		recorder := httptest.NewRecorder()
 		server.ServeHTTP(recorder, request)
 		return recorder.Code

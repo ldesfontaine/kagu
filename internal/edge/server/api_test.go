@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -27,6 +28,22 @@ import (
 // callAPI joue une requête JSON comme le front la fait : même origine,
 // corps en application/json.
 func callAPI(server *Server, method, path string, payload any) *httptest.ResponseRecorder {
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, newAPIRequest(method, path, payload))
+	return recorder
+}
+
+// callSetupAPI joue la première configuration sur HTTPS, comme le navigateur :
+// en HTTP clair, d'une adresse publique, aucune session ne s'ouvre (R-A2-4).
+func callSetupAPI(server *Server, payload any) *httptest.ResponseRecorder {
+	request := newAPIRequest(http.MethodPost, "/api/auth/setup", payload)
+	request.TLS = &tls.ConnectionState{}
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func newAPIRequest(method, path string, payload any) *http.Request {
 	var body bytes.Buffer
 	if payload != nil {
 		_ = json.NewEncoder(&body).Encode(payload)
@@ -37,9 +54,7 @@ func callAPI(server *Server, method, path string, payload any) *httptest.Respons
 	if payload != nil || method != http.MethodGet {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	recorder := httptest.NewRecorder()
-	server.ServeHTTP(recorder, request)
-	return recorder
+	return request
 }
 
 func decodeAPI(t *testing.T, recorder *httptest.ResponseRecorder, into any) {
