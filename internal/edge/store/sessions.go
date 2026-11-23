@@ -30,6 +30,16 @@ func (db *DB) CreateSession(ctx context.Context, session auth.Session, tokenHash
 
 func (db *DB) SessionByTokenHash(ctx context.Context, tokenHash string) (auth.Session, bool, error) {
 	row := db.sql.QueryRowContext(ctx, `SELECT `+operatorSessionColumns+` FROM operator_sessions WHERE token_hash = ?`, tokenHash)
+	return foundOperatorSession(row)
+}
+
+func (db *DB) SessionByID(ctx context.Context, id string) (auth.Session, bool, error) {
+	row := db.sql.QueryRowContext(ctx, `SELECT `+operatorSessionColumns+` FROM operator_sessions WHERE id = ?`, id)
+	return foundOperatorSession(row)
+}
+
+// foundOperatorSession lit la session d'une ligne, et dit si elle existe.
+func foundOperatorSession(row scanner) (auth.Session, bool, error) {
 	session, err := scanOperatorSession(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return auth.Session{}, false, nil

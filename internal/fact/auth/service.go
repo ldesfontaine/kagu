@@ -63,6 +63,8 @@ type Service struct {
 	verifying chan struct{}
 	// Le nombre d'attentes en cours, pour refuser au-delà de la borne.
 	queued atomic.Int32
+	// Les fins de session que des flux attendent (session_watch.go).
+	watches sessionWatches
 }
 
 func New(store Store, logger *slog.Logger) *Service {
@@ -200,7 +202,7 @@ func (s *Service) ChangePassword(ctx context.Context, expected State, keepSessio
 	if err := s.replaceState(ctx, expected, next); err != nil {
 		return State{}, err
 	}
-	closed, err := s.store.DeleteOtherSessions(ctx, keepSession)
+	closed, err := s.closeOtherSessions(ctx, keepSession)
 	if err != nil {
 		return State{}, err
 	}
@@ -226,6 +228,8 @@ func (s *Service) Disable(ctx context.Context, expected State) error {
 	if err := s.replaceState(ctx, expected, State{Mode: ModeNone}); err != nil {
 		return err
 	}
+	// Le store a effacé les sessions avec l'état ; leurs flux se ferment.
+	s.watches.endAllBut("")
 	s.logger.Warn("interface authentication disabled", "previous_mode", string(current.Mode))
 	s.auditor.Record(ctx, authEvent(audit.AuthDisable, current))
 	return nil

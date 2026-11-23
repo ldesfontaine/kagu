@@ -40,16 +40,24 @@ func (ts *testServer) enableForwardOnLoopback(t *testing.T, secret string) {
 func callProxied(server *Server, method, path, peer, identity string, secrets ...string) *httptest.ResponseRecorder {
 	request := httptest.NewRequestWithContext(context.Background(), method, path, nil)
 	request.RemoteAddr = net.JoinHostPort(peer, "4000")
-	request.Header.Set("Sec-Fetch-Site", "same-origin")
-	if identity != "" {
-		request.Header.Set(auth.DefaultForwardHeader, identity)
-	}
-	for _, secret := range secrets {
-		request.Header.Add(brand.ProxySecretHeader, secret)
-	}
+	proxied(identity, secrets...)(request)
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	return recorder
+}
+
+// proxied pose ce que le mandataire pose : l'identité, si elle n'est pas
+// vide, et les valeurs du secret données.
+func proxied(identity string, secrets ...string) func(*http.Request) {
+	return func(request *http.Request) {
+		request.Header.Set("Sec-Fetch-Site", "same-origin")
+		if identity != "" {
+			request.Header.Set(auth.DefaultForwardHeader, identity)
+		}
+		for _, secret := range secrets {
+			request.Header.Add(brand.ProxySecretHeader, secret)
+		}
+	}
 }
 
 func TestAuthForwardSecret_ALoopbackPeerMustProveItWentThroughTheProxy(t *testing.T) {

@@ -150,6 +150,32 @@ func (s *Server) requireSameOrigin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// requireStreamOrigin garde un flux de l'opérateur, qu'un GET ouvre : il
+// tient la session ouverte et pousse ce qui change, une page d'un autre site
+// n'a pas à l'ouvrir. La lecture de Sec-Fetch-Site est celle des écritures,
+// plus stricte : « none » (une adresse tapée) est refusé aussi, un
+// EventSource ne l'envoie jamais. Un Origin présent doit être le nôtre.
+func (s *Server) requireStreamOrigin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
+			s.writeAPIError(w, http.StatusForbidden, codeOrigin)
+			return
+		}
+		if origin := r.Header.Get("Origin"); origin != "" && !s.isOwnOrigin(r, origin) {
+			s.writeAPIError(w, http.StatusForbidden, codeOrigin)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// isOwnOrigin compare un Origin à public_url, ou, sans public_url, à
+// l'adresse par laquelle on lit la page (resolvePublicURL).
+func (s *Server) isOwnOrigin(r *http.Request, origin string) bool {
+	own := originOf(s.resolvePublicURL(r).URL)
+	return own != "" && strings.EqualFold(origin, own)
+}
+
 func isJSON(contentType string) bool {
 	mediaType, _, _ := strings.Cut(contentType, ";")
 	return strings.TrimSpace(mediaType) == "application/json"

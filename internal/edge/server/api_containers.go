@@ -323,6 +323,12 @@ func (s *Server) streamContainerLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer s.releaseLogSlot()
+	r, stop, err := s.bindStreamToSession(r)
+	if err != nil {
+		s.apiInternalError(w, r, err)
+		return
+	}
+	defer stop()
 	batches, err := s.containers.FollowLogs(r.Context(), item.ID, tailOf(r))
 	if err != nil {
 		s.writeLogsError(w, r, err)
