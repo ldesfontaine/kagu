@@ -2412,6 +2412,7 @@ Elle écrit une clé neuve et **efface ce que l'ancienne chiffrait** :
 | L'URL et le secret des canaux d'alerte (webhook, Matrix) | Les canaux sont **désactivés** et vidés : ressaisir l'URL et le secret de chacun, puis le réactiver. Un canal e-mail reste actif mais n'envoie rien tant que le mot de passe du relais n'est pas ressaisi |
 | Le jeton de chaque tâche | Chaque tâche reçoit un **nouveau jeton** : l'ancienne URL de ping ne répond plus, remplacez-la dans les crons |
 | Le secret du jeton de chaque hôte Proxmox | Il est **vidé** : l'hôte reste déclaré et garde son dernier relevé, mais ne se relit plus (« Proxmox refuse le jeton »). Redéclarez-le avec le même jeton, ou un neuf : Machines → la machine → Hyperviseur → **Modifier** |
+| Le code à six chiffres de la connexion | Il est **retiré** : le mot de passe seul ouvre la session. Le reposer sous Réglages → Accès |
 | Les mots de passe des dépôts restic | Ils sont **vidés** en base, liens retirés compris. Chaque source garde les siens et sauvegarde encore ; la cible ne purge plus ces dépôts (« mots de passe perdus avec la clé »), et un lien retiré puis redéclaré ne rouvre plus son ancien dépôt |
 
 Tout le reste de la base reste. La commande affiche le nombre de canaux

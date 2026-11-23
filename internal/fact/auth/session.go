@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/ratelimit"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
@@ -45,6 +46,9 @@ type Session struct {
 	// Source : l'adresse cliente à l'ouverture, au /64 en IPv6.
 	Source    string
 	UserAgent string
+	// ReauthAt : la dernière redemande réussie sur cette session (R-A2-7),
+	// zéro sinon.
+	ReauthAt time.Time
 }
 
 // aliveAt dit si la session vit encore à cet instant.
@@ -90,11 +94,16 @@ type SessionStore interface {
 	// idleSince ou dont la fin est passée à now.
 	DeleteDeadSessions(ctx context.Context, idleSince, now time.Time) error
 	ListSessions(ctx context.Context) ([]Session, error)
+	// RenewSessionToken remplace l'empreinte du jeton de la session id et pose
+	// reauthAt ; dit si la session existait.
+	RenewSessionToken(ctx context.Context, id, tokenHash string, reauthAt time.Time) (bool, error)
 }
 
-// Login juge nom et mot de passe sous l'état qui a admis la requête, et ouvre
-// une session neuve : rien n'est repris d'un cookie présenté (W-F1).
-func (s *Service) Login(ctx context.Context, expected State, username, password string, client SessionClient) (OpenedSession, error) {
+// Login juge nom et mot de passe sous l'état qui a admis la requête, puis le
+// code s'il est actif (R-A2-6), et ouvre une session neuve : rien n'est repris
+// d'un cookie présenté (W-F1). Le code ne se juge qu'après un mot de passe
+// juste : ErrTOTPRequired dit à la page de le demander en second écran.
+func (s *Service) Login(ctx context.Context, expected State, username, password, code string, client SessionClient) (OpenedSession, error) {
 	current, err := s.store.GetAuthState(ctx)
 	if err != nil {
 		return OpenedSession{}, err
@@ -111,6 +120,9 @@ func (s *Service) Login(ctx context.Context, expected State, username, password 
 	}
 	if !matches {
 		return OpenedSession{}, ErrLoginFailed
+	}
+	if err := s.requireTOTP(ctx, code); err != nil {
+		return OpenedSession{}, err
 	}
 	return s.openSession(ctx, current.Username, client)
 }
@@ -297,6 +309,7 @@ func (s *Service) CloseSession(ctx context.Context, id string) error {
 		return ErrSessionNotFound
 	}
 	s.logger.Info("operator session closed", "session", id)
+	s.auditor.Record(ctx, closedSessionEvent(audit.Details{"session": id}))
 	return nil
 }
 
@@ -307,6 +320,7 @@ func (s *Service) CloseOtherSessions(ctx context.Context, keepID string) (int, e
 		return 0, err
 	}
 	s.logger.Info("operator sessions closed", "kept", keepID, "closed", closed)
+	s.auditor.Record(ctx, closedSessionEvent(closedOthersDetails(keepID, closed)))
 	return closed, nil
 }
 

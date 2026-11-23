@@ -10,37 +10,52 @@ import { Modal, ModalCancel } from "./Modal";
 // fenêtre se ferme : l'écriture et son erreur restent à la page (useAction),
 // comme avec ConfirmInline. Contrôlée par l'appelant quand le geste n'est pas
 // un bouton (un envoi de formulaire) ; ConfirmModal en est le bouton.
+// Avec stays, la fenêtre reste ouverte au clic : ce qu'elle demande en plus
+// (children, un mot de passe par exemple) se juge avant le geste, et
+// l'appelant la ferme quand il a abouti, ou y montre le refus.
 export function ConfirmDialog({
   title,
   question,
   confirmLabel,
   onConfirm,
   onClose,
+  stays = false,
+  busy = false,
+  dirty = false,
+  children,
 }: {
   title: string;
   question: string;
   confirmLabel: string;
   onConfirm: () => void;
   onClose: () => void;
+  stays?: boolean;
+  busy?: boolean;
+  dirty?: boolean;
+  children?: ReactNode;
 }) {
   const confirm = () => {
-    onClose();
+    if (!stays) {
+      onClose();
+    }
     onConfirm();
   };
   return (
     <Modal
       title={title}
       onClose={onClose}
+      dirty={dirty}
       actions={
         <>
           <ModalCancel />
-          <Button variant="danger" onClick={confirm}>
+          <Button variant="danger" onClick={confirm} disabled={busy}>
             {confirmLabel}
           </Button>
         </>
       }
     >
       <p className="modal-question">{question}</p>
+      {children}
     </Modal>
   );
 }

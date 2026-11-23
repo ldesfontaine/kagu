@@ -51,11 +51,18 @@ func (v Verb) AsksConfirmation() bool {
 	return v.Level == 2
 }
 
+// AsksReauth dit si le geste exige, en native, un mot de passe redonné depuis
+// peu (R-A2-7) : c'est le niveau 4.
+func (v Verb) AsksReauth() bool {
+	return v.Level == 4
+}
+
 // Target dit ce que le segment {id} d'un verbe désigne : la machine dont
 // l'agent reçoit l'ordre, ou une sonde ou une tâche, qu'on rattache à sa
 // machine, ou un dépôt restic : {id} est la source et l'ordre part aussi à la
 // cible du dépôt, jugée comme la source. Un verbe de Proxmox vise en plus
-// l'invité du segment {vmid}.
+// l'invité du segment {vmid}. Target ne sert qu'à juger la portée d'un jeton :
+// un geste des niveaux 3 et 4, qu'aucun jeton ne porte, peut ne pas en avoir.
 type Target string
 
 const (
@@ -95,7 +102,7 @@ var (
 	ErrNoReverse      = errors.New("verb: a verb of level 1 names its reverse")
 	ErrConfirmReverse = errors.New("verb: a gesture above level 1 has no reverse")
 	ErrParamsMismatch = errors.New("verb: params do not match the route path")
-	ErrTargetInvalid  = errors.New("verb: target must be machine, probe, job or restic_link, and the route must carry {id}")
+	ErrTargetInvalid  = errors.New("verb: target must be machine, probe, job or restic_link, and the route must carry {id}; only a gesture closed to tokens may have none")
 	ErrDuplicate      = errors.New("verb: already registered")
 	ErrConfirmTarget  = errors.New("verb: a verb to confirm must target a machine")
 	ErrUnknownReverse = errors.New("verb: reverse is not registered")
@@ -131,7 +138,7 @@ func (r *Registry) Register(v Verb) error {
 	if !slices.Equal(v.Params, PathParams(v.Route)) {
 		return fmt.Errorf("%w: %s", ErrParamsMismatch, v.ID)
 	}
-	if !slices.Contains([]Target{TargetMachine, TargetProbe, TargetJob, TargetResticLink}, v.Target) || !slices.Contains(v.Params, "id") {
+	if !targetAllowed(v) {
 		return fmt.Errorf("%w: %s", ErrTargetInvalid, v.ID)
 	}
 	if _, found := r.Lookup(v.ID); found {
@@ -162,6 +169,15 @@ func checkLevel(v Verb) error {
 		return ErrConfirmReverse
 	}
 	return nil
+}
+
+// targetAllowed : un geste ouvert aux jetons vise un objet connu, nommé par le
+// segment {id} ; un geste des niveaux 3 et 4 peut ne viser rien.
+func targetAllowed(v Verb) bool {
+	if v.Target == "" && v.Level >= 3 {
+		return true
+	}
+	return slices.Contains([]Target{TargetMachine, TargetProbe, TargetJob, TargetResticLink}, v.Target) && slices.Contains(v.Params, "id")
 }
 
 // MustRegister est Register pour le câblage au démarrage : une erreur est

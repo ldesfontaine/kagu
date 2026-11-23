@@ -853,6 +853,7 @@ const auth = shape<AuthState>("AuthState", {
   session: optional(value),
   forward_insecure: optional(value),
   allowed_users: value,
+  totp: optional(value),
 });
 
 const session = shape<Session>("Session", {

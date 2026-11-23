@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 
-import { api, ApiError, errorKey, failureOf, onSessionLost, segment } from "./client";
+import { api, ApiError, errorKey, failureOf, onReauthRequired, onSessionLost, segment } from "./client";
 import { route } from "./routes";
 
 afterEach(() => {
@@ -128,4 +128,31 @@ test("un mot de passe faux à la connexion n'est pas une session morte", async (
   await expect(api.get("/api/machines")).rejects.toThrow(ApiError);
   stop();
   expect(lost).toBe(0);
+});
+
+// R-A2-7 côté écran : un 403 « auth.reauth_required » ouvre la fenêtre de
+// redemande ; réussie, le geste se rejoue une fois ; abandonnée, le refus reste.
+test("un geste refusé faute de redemande se rejoue après elle, une fois", async () => {
+  const sent: string[] = [];
+  let answers = [403, 204];
+  vi.stubGlobal("fetch", (path: string) => {
+    sent.push(path);
+    const status = answers.shift() ?? 500;
+    const body = status === 403 ? JSON.stringify({ error: "auth.reauth_required" }) : null;
+    return Promise.resolve(new Response(body, { status }));
+  });
+  let asked = 0;
+  const stop = onReauthRequired(() => {
+    asked++;
+    return Promise.resolve(true);
+  });
+  await api.send(route("DELETE /api/jobs/{id}", { id: "x" }));
+  expect(asked).toBe(1);
+  expect(sent).toEqual(["/api/jobs/x", "/api/jobs/x"]);
+
+  answers = [403];
+  stop();
+  onReauthRequired(() => Promise.resolve(false));
+  await expect(api.send(route("DELETE /api/jobs/{id}", { id: "x" }))).rejects.toMatchObject({ status: 403, code: "auth.reauth_required" });
+  expect(sent).toHaveLength(3);
 });

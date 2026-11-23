@@ -178,6 +178,14 @@ const (
 	AuthChangeMode    Action = "auth.change_mode"
 	// Le code de première configuration tiré : l'échéance, jamais sa valeur.
 	AuthSetupCodeIssue Action = "auth.setup_code_issue" // #nosec G101 -- un nom, pas un secret.
+	// Le code à six chiffres posé, retiré par la personne, ou retiré par root
+	// sur le canal local ; jamais son secret.
+	AuthTOTPEnable  Action = "auth.totp_enable"
+	AuthTOTPDisable Action = "auth.totp_disable"
+	AuthTOTPReset   Action = "auth.totp_reset"
+	// Une session de l'interface fermée par la personne connectée : la sienne,
+	// une de la liste, ou toutes les autres.
+	AuthCloseSession Action = "auth.close_session"
 
 	APITokenCreate Action = "api_token.create" // #nosec G101 -- un nom, pas un secret.
 	APITokenRevoke Action = "api_token.revoke" // #nosec G101 -- un nom, pas un secret.
@@ -270,6 +278,7 @@ func Actions() []Action {
 		AlertAcknowledge,
 		SettingsUpdate,
 		AuthEnable, AuthDisable, AuthChangePassword, AuthResetPassword, AuthChangeMode, AuthSetupCodeIssue,
+		AuthTOTPEnable, AuthTOTPDisable, AuthTOTPReset, AuthCloseSession,
 		APITokenCreate, APITokenUpdate, APITokenRevoke, APITokenDeny,
 		SecretsForget, SecretsRotate, SecretsRotateServerKey, SecretsFinishServerKey,
 		ActionOrder, ActionRefused, ActionRolledBack,

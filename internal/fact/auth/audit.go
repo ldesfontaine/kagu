@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -29,4 +30,15 @@ func setupCodeEvent(expiresAt time.Time) audit.Event {
 		Action: audit.AuthSetupCodeIssue, ObjectID: auditObjectID, ObjectName: auditObjectID,
 		Details: audit.Details{"expires_at": expiresAt.UTC().Format(time.RFC3339)},
 	}
+}
+
+// closedSessionEvent dit la session fermée, ou combien l'ont été autour de
+// celle gardée ; jamais un jeton.
+func closedSessionEvent(details audit.Details) audit.Event {
+	return audit.Event{Action: audit.AuthCloseSession, ObjectID: auditObjectID, ObjectName: auditObjectID, Details: details}
+}
+
+// closedOthersDetails : la session gardée et le nombre de fermées.
+func closedOthersDetails(keptID string, closed int) audit.Details {
+	return audit.Details{"kept": keptID, "closed": strconv.Itoa(closed)}
 }

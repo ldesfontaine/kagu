@@ -2,10 +2,14 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"time"
+
+	"rsc.io/qr"
 
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
@@ -35,6 +39,9 @@ type authResponse struct {
 	// La longueur minimale, pour que le front la dise et la vérifie avant
 	// d'envoyer ; le serveur reste le juge.
 	PasswordMinLength int `json:"password_min_length"`
+	// En native, présent et vrai quand le code à six chiffres est actif, dit
+	// par GET /api/auth à qui a une session : la redemande le demande aussi.
+	TOTP bool `json:"totp,omitempty"`
 }
 
 // La première configuration révoque tous les jetons d'API : la réponse dit
@@ -55,9 +62,12 @@ type authSetupRequest struct {
 	Header    string `json:"header"`
 }
 
+// Code est le code à six chiffres, vide au premier écran : le serveur le
+// demande (auth.totp_required) quand il est actif.
 type authLoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Code     string `json:"code"`
 }
 
 // Current est le mot de passe en vigueur : sans lui juste, rien ne change.
@@ -129,6 +139,13 @@ func (s *Server) getAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	response := s.authJSON(state, viewerOf(r))
 	response.ForwardInsecure = state.Mode == auth.ModeForward && s.forwardSecretRequired()
+	if state.Mode == auth.ModeNative && response.SignedIn {
+		response.TOTP, err = s.auth.TOTPActive(r.Context())
+		if err != nil {
+			s.apiInternalError(w, r, err)
+			return
+		}
+	}
 	s.writeAPI(w, http.StatusOK, response)
 }
 
@@ -267,17 +284,15 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		s.apiRefuse(w, http.StatusForbidden, codeHTTPSRequired)
 		return
 	}
-	source := s.clientAddress(r)
-	if !s.authLimit.Allow(source) {
-		s.logger.Warn("interface sign-in rate limited", "source", source)
-		httpx.WriteTooMany(w)
+	if !s.allowPasswordAttempt(w, r, "interface sign-in rate limited") {
 		return
 	}
+	source := s.clientAddress(r)
 	authorizing, _ := authorizingStateFrom(r.Context())
-	opened, err := s.auth.Login(r.Context(), authorizing, request.Username, request.Password, sessionClientOf(r, source))
+	opened, err := s.auth.Login(r.Context(), authorizing, request.Username, request.Password, request.Code, sessionClientOf(r, source))
 	switch {
-	case errors.Is(err, auth.ErrLoginFailed):
-		s.logger.Warn("interface sign-in failed", "source", source)
+	case errors.Is(err, auth.ErrLoginFailed), errors.Is(err, auth.ErrTOTPRequired), errors.Is(err, auth.ErrTOTPWrong):
+		s.logger.Warn("interface sign-in failed", "source", source, "error", err)
 		key, _ := refusal.KeyOf(err)
 		s.apiRefuse(w, http.StatusUnauthorized, key)
 		return
@@ -403,28 +418,13 @@ func (s *Server) changeAuthPassword(w http.ResponseWriter, r *http.Request) {
 	if !s.readAPI(w, r, &request) {
 		return
 	}
-	// Le mot de passe actuel faux compte comme un échec de connexion : sans
-	// ce frein, la route serait un oracle de mot de passe.
-	source := s.clientAddress(r)
-	if !s.authLimit.Allow(source) {
-		s.logger.Warn("interface password change rate limited", "source", source)
-		httpx.WriteTooMany(w)
+	if !s.allowPasswordAttempt(w, r, "interface password change rate limited") {
 		return
 	}
 	authorizing, _ := authorizingStateFrom(r.Context())
 	current, _ := sessionFrom(r.Context())
 	state, err := s.auth.ChangePassword(r.Context(), authorizing, current.ID, request.Current, request.Password)
-	switch {
-	case errors.Is(err, auth.ErrCurrentPasswordWrong):
-		s.logger.Warn("interface password change refused: current password wrong", "source", source)
-		key, _ := refusal.KeyOf(err)
-		s.apiRefuse(w, http.StatusForbidden, key)
-		return
-	case errors.Is(err, auth.ErrVerificationQueueFull):
-		s.logger.Warn("interface password change queue full", "source", source)
-		httpx.WriteTooMany(w)
-		return
-	case s.failed(w, r, err, nil):
+	if !s.passwordAccepted(w, r, err) {
 		return
 	}
 	tokens, err := s.apiTokens.List(r.Context())
@@ -432,6 +432,152 @@ func (s *Server) changeAuthPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeAPI(w, http.StatusOK, authPasswordResponse{authResponse: authToJSON(state, viewerOf(r)), APITokens: len(tokens)})
+}
+
+// La redemande d'un geste de niveau 4 : le mot de passe, et le code s'il est
+// actif.
+type reauthRequest struct {
+	Password string `json:"password"`
+	Code     string `json:"code"`
+}
+
+// reauth pose reauth_at sur la session de la requête (R-A2-7) et lui donne un
+// jeton neuf, dans un cookie neuf (R-A2-3). Le mot de passe faux compte comme
+// un échec de connexion, comme au changement de mot de passe.
+func (s *Server) reauth(w http.ResponseWriter, r *http.Request) {
+	var request reauthRequest
+	if !s.readAPI(w, r, &request) {
+		return
+	}
+	cookieName, ok := s.sessionCookieName(r)
+	if !ok {
+		s.apiRefuse(w, http.StatusForbidden, codeHTTPSRequired)
+		return
+	}
+	if !s.allowPasswordAttempt(w, r, "interface re-authentication rate limited") {
+		return
+	}
+	authorizing, _ := authorizingStateFrom(r.Context())
+	current, _ := sessionFrom(r.Context())
+	token, err := s.auth.Reauth(r.Context(), authorizing, current.ID, request.Password, request.Code)
+	if !s.passwordAccepted(w, r, err) {
+		return
+	}
+	setSessionCookie(w, cookieName, token)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type totpProposalResponse struct {
+	// Le secret en base 32, à saisir à la main si le QR code ne se lit pas.
+	Secret string `json:"secret"`
+	URI    string `json:"uri"`
+	// L'image du QR code de URI, en data URI PNG : l'écran l'affiche telle quelle.
+	QRCode string `json:"qr_code"`
+}
+
+// proposeTOTP tire un secret à scanner ; rien n'est gardé tant que le premier
+// code juste ne revient pas par enableTOTP.
+func (s *Server) proposeTOTP(w http.ResponseWriter, r *http.Request) {
+	authorizing, _ := authorizingStateFrom(r.Context())
+	proposal, err := s.auth.ProposeTOTP(r.Context(), authorizing)
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	image, err := qrCodeDataURI(proposal.URI)
+	if err != nil {
+		s.apiInternalError(w, r, err)
+		return
+	}
+	s.writeAPI(w, http.StatusOK, totpProposalResponse{Secret: proposal.Secret, URI: proposal.URI, QRCode: image})
+}
+
+// qrCodeDataURI dessine le QR code du texte, en PNG, bordure comprise.
+func qrCodeDataURI(text string) (string, error) {
+	code, err := qr.Encode(text, qr.M)
+	if err != nil {
+		return "", fmt.Errorf("encode qr code: %w", err)
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG()), nil
+}
+
+// Le secret proposé et un premier code de l'application.
+type totpEnableRequest struct {
+	Secret string `json:"secret"`
+	Code   string `json:"code"`
+}
+
+func (s *Server) enableTOTP(w http.ResponseWriter, r *http.Request) {
+	var request totpEnableRequest
+	if !s.readAPI(w, r, &request) {
+		return
+	}
+	authorizing, _ := authorizingStateFrom(r.Context())
+	err := s.auth.EnableTOTP(r.Context(), authorizing, request.Secret, request.Code)
+	s.finishAPIAction(w, r, err, nil)
+}
+
+type totpDisableRequest struct {
+	Password string `json:"password"`
+}
+
+// disableTOTP retire le code, sur le mot de passe ; un mot de passe faux
+// compte comme un échec de connexion.
+func (s *Server) disableTOTP(w http.ResponseWriter, r *http.Request) {
+	var request totpDisableRequest
+	if !s.readAPI(w, r, &request) {
+		return
+	}
+	if !s.allowPasswordAttempt(w, r, "interface code removal rate limited") {
+		return
+	}
+	authorizing, _ := authorizingStateFrom(r.Context())
+	err := s.auth.DisableTOTP(r.Context(), authorizing, request.Password)
+	if !s.passwordAccepted(w, r, err) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// allowPasswordAttempt passe la requête au limiteur de la connexion : sans
+// ce frein, une route qui juge le mot de passe serait un oracle. Il répond
+// lui-même 429.
+func (s *Server) allowPasswordAttempt(w http.ResponseWriter, r *http.Request, limitedMessage string) bool {
+	source := s.clientAddress(r)
+	if !s.authLimit.Allow(source) {
+		s.logger.Warn(limitedMessage, "source", source)
+		httpx.WriteTooMany(w)
+		return false
+	}
+	return true
+}
+
+// passwordAccepted répond à l'échec d'une route qui redemande le mot de passe
+// (et le code) à la personne connectée : 403 avec la clé, 429 si la file
+// bcrypt est pleine. Il dit si la route peut continuer.
+func (s *Server) passwordAccepted(w http.ResponseWriter, r *http.Request, err error) bool {
+	switch {
+	case err == nil:
+		return true
+	case errors.Is(err, auth.ErrCurrentPasswordWrong), errors.Is(err, auth.ErrTOTPRequired), errors.Is(err, auth.ErrTOTPWrong):
+		s.logger.Warn("interface password asked again: refused", "source", s.clientAddress(r), "error", err)
+		key, _ := refusal.KeyOf(err)
+		s.apiRefuse(w, http.StatusForbidden, key)
+	case errors.Is(err, auth.ErrVerificationQueueFull):
+		s.logger.Warn("interface verification queue full", "source", s.clientAddress(r))
+		httpx.WriteTooMany(w)
+	default:
+		s.failed(w, r, err, nil)
+	}
+	return false
+}
+
+// resetTOTP retire le code sans rien demander : root, par la socket seulement
+// (R-CNX-4). Pas de codes de secours : c'est le secours.
+func (s *Server) resetTOTP(w http.ResponseWriter, r *http.Request) {
+	if !s.readEmptyBody(w, r) {
+		return
+	}
+	s.finishAPIAction(w, r, s.auth.ResetTOTP(r.Context()), nil)
 }
 
 type setupCodeResponse struct {

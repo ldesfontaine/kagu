@@ -137,11 +137,11 @@ var reachVerbsThatSucceed = map[string]bool{
 // parti.
 var reachVerbsThatAsk = map[string]bool{"proxmox.vm.snapshot_delete": true}
 
-// Le garde-fou : chaque verbe du registre a une requête dans ce banc. Un
+// Le garde-fou : chaque verbe qu'un jeton peut porter a une requête dans ce banc. Un
 // verbe ajouté sans cas ici, donc sans test de portée, fait échouer.
 func TestReach_EveryRegisteredVerbHasACase(t *testing.T) {
 	bench := newReachBench(t)
-	for _, offered := range verb.Default.All() {
+	for _, offered := range verb.Default.OpenToTokens() {
 		if offered.Target == "" {
 			t.Errorf("%s: no target, its reach cannot be judged", offered.ID)
 		}
@@ -160,7 +160,7 @@ func TestReach_EveryRegisteredVerbHasACase(t *testing.T) {
 // visée et l'invité, et rien n'a été fait.
 func TestReach_EveryActionRouteIsJudgedOnItsMachine(t *testing.T) {
 	bench := newReachBench(t)
-	for _, offered := range verb.Default.All() {
+	for _, offered := range verb.Default.OpenToTokens() {
 		t.Run(offered.ID, func(t *testing.T) {
 			bearer, token := bench.issueReachToken(t, "limité-"+offered.ID, []string{offered.ID}, apitoken.Reach{OnlyMachines: true, Machines: []string{reachA}})
 			// Un jeton par verbe : le plafond des jetons tiendrait moins de verbes.
@@ -258,14 +258,14 @@ func TestReach_NoReachIsUnchangedAndAnEmptyReachRefusesEverything(t *testing.T) 
 	bench := newReachBench(t)
 	everyone, _ := bench.issueReachToken(t, "partout", allVerbIDs(), apitoken.Reach{})
 	nobody, _ := bench.issueReachToken(t, "nulle part", allVerbIDs(), apitoken.Reach{OnlyMachines: true})
-	for _, offered := range verb.Default.All() {
+	for _, offered := range verb.Default.OpenToTokens() {
 		for _, machineID := range []string{reachA, reachB} {
 			requireInScope(t, "no reach "+offered.ID+" on "+machineID, bench.call(t, offered.ID, machineID, everyone))
 		}
 	}
 	// Le débit des refus journalisés est par jeton : les refus restent des
 	// refus au-delà, la boucle ne dépend pas de l'audit.
-	for _, offered := range verb.Default.All() {
+	for _, offered := range verb.Default.OpenToTokens() {
 		for _, machineID := range []string{reachA, reachB} {
 			requireOutOfScope(t, "empty reach "+offered.ID+" on "+machineID, bench.call(t, offered.ID, machineID, nobody))
 		}

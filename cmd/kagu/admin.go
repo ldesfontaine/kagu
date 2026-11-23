@@ -23,6 +23,7 @@ import (
 const (
 	adminSetupCode     = "setup-code"
 	adminResetPassword = "reset-password"
+	adminResetTOTP     = "reset-totp"
 	adminModeNative    = "auth-mode native"
 	adminModeForward   = "auth-mode forward"
 	adminCloseSessions = "sessions close-all"
@@ -33,6 +34,7 @@ const (
 var adminPaths = map[string]string{
 	adminSetupCode:     "/control/admin/setup-code",
 	adminResetPassword: "/control/admin/reset-password",
+	adminResetTOTP:     "/control/admin/reset-totp",
 	adminModeNative:    "/control/admin/auth-mode",
 	adminModeForward:   "/control/admin/auth-mode",
 	adminCloseSessions: "/control/admin/sessions/close-all",
@@ -94,6 +96,8 @@ func adminCommand(args []string, out io.Writer, openTerminal terminalOpener, eui
 		return run.issueSetupCode(ctx)
 	case adminResetPassword:
 		return run.resetPassword(ctx)
+	case adminResetTOTP:
+		return run.resetTOTP(ctx)
 	case adminModeNative:
 		return run.setNative(ctx, *username)
 	case adminModeForward:
@@ -145,6 +149,16 @@ func (a adminRun) resetPassword(ctx context.Context) error {
 		return err
 	}
 	_, err = fmt.Fprintln(a.out, a.text.Format("admin.reset_done", reset.Closed))
+	return err
+}
+
+// resetTOTP retire le code à six chiffres : le téléphone perdu, il n'y a pas
+// de codes de secours, root est le secours (R-CNX-4).
+func (a adminRun) resetTOTP(ctx context.Context) error {
+	if err := a.callWithoutAnswer(ctx, adminResetTOTP, struct{}{}, http.StatusNoContent); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(a.out, a.text.Get("admin.reset_totp_done"))
 	return err
 }
 
@@ -209,17 +223,33 @@ func (a adminRun) revokeAllTokens(ctx context.Context) error {
 
 // call envoie le geste à la socket et lit la réponse attendue dans answer.
 func (a adminRun) call(ctx context.Context, gesture string, payload any, want int, answer any) error {
-	status, body, err := a.client.post(ctx, adminPaths[gesture], payload, controlTimeout)
+	body, err := a.send(ctx, gesture, payload, want)
 	if err != nil {
 		return err
-	}
-	if status != want {
-		return a.refusalOf(status, body)
 	}
 	if err := json.Unmarshal(body, answer); err != nil {
 		return fmt.Errorf("read the server's answer: %w", err)
 	}
 	return nil
+}
+
+// callWithoutAnswer envoie un geste dont la réponse attendue n'a pas de corps.
+func (a adminRun) callWithoutAnswer(ctx context.Context, gesture string, payload any, want int) error {
+	_, err := a.send(ctx, gesture, payload, want)
+	return err
+}
+
+// send envoie le geste à la socket et rend le corps de la réponse attendue,
+// ou le refus dit dans la langue de la commande.
+func (a adminRun) send(ctx context.Context, gesture string, payload any, want int) ([]byte, error) {
+	status, body, err := a.client.post(ctx, adminPaths[gesture], payload, controlTimeout)
+	if err != nil {
+		return nil, err
+	}
+	if status != want {
+		return nil, a.refusalOf(status, body)
+	}
+	return body, nil
 }
 
 // adminHints : les refus du serveur que la commande dit avec la suite à
@@ -228,6 +258,7 @@ var adminHints = map[error]string{
 	auth.ErrDisabled:       "admin.no_account_yet",
 	auth.ErrNoPassword:     "admin.forward_no_password",
 	auth.ErrAlreadyEnabled: "admin.setup_already_done",
+	auth.ErrTOTPInactive:   "admin.totp_none",
 }
 
 // refusalOf dit un refus du serveur dans la langue de la commande. Un 403

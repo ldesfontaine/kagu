@@ -1,11 +1,12 @@
 import { useState } from "react";
 
-import { changePassword, useOpenSessions, type AuthState, type PasswordChange } from "../../api/auth";
+import { changePassword, disableTOTP, useOpenSessions, type AuthState, type PasswordChange } from "../../api/auth";
 import { Button } from "../../components/Button";
 import { Note } from "../../components/Card";
 import { Failure } from "../../components/Failure";
+import { Input } from "../../components/Field";
 import { Pill } from "../../components/Pill";
-import { SettingBlock, SettingRow } from "../../components/SettingRow";
+import { SettingBlock, SettingFoot, SettingRow } from "../../components/SettingRow";
 import { useAction } from "../../hooks/useAction";
 import { useNow } from "../../hooks/useNow";
 import { useT } from "../../i18n/context";
@@ -13,6 +14,7 @@ import { isForwardInsecure } from "../../lib/auth";
 import { ago } from "../../lib/time";
 import { AccessPasswordForm } from "./AccessPasswordForm";
 import { AccessSessionsBlock } from "./AccessSessionsBlock";
+import { AccessTOTPEnrolment } from "./AccessTOTPEnrolment";
 import { SettingsSection } from "./SettingsSection";
 
 function reloadPage() {
@@ -20,14 +22,14 @@ function reloadPage() {
 }
 
 // L'accès à l'interface, tel que la première configuration l'a posé. En
-// connexion native : l'identifiant, les sessions ouvertes, le changement de
-// mot de passe. Changer le mot de passe ferme les autres sessions et garde
+// connexion native : l'identifiant, les sessions ouvertes, le code à six
+// chiffres (proposé, jamais imposé), le changement de mot de passe. Changer le mot de passe ferme les autres sessions et garde
 // la courante : l'écran le dit, avec les jetons d'API qui vivent encore.
 // Refaire un accès perdu ou changer de mode ne se fait pas ici : root le fait
 // sur la machine, par le canal local (R-A2-10), et la section le dit. En mode
 // SSO, il n'y a rien à saisir après coup : la section montre l'en-tête,
 // l'identité que le SSO transmet, et qui peut entrer.
-export function AccessSection({ state }: { state: AuthState }) {
+export function AccessSection({ state, reload }: { state: AuthState; reload: () => void }) {
   const t = useT();
   const now = useNow();
   const action = useAction();
@@ -63,6 +65,7 @@ export function AccessSection({ state }: { state: AuthState }) {
             <span className="mono">{state.username}</span>
           </SettingRow>
           <AccessSessionsBlock sessions={sessions} onSignedOut={reloadPage} />
+          <AccessTOTPRows active={state.totp === true} onChanged={reload} />
         </>
       )}
       {state.mode === "forward" && (
@@ -107,5 +110,63 @@ export function AccessSection({ state }: { state: AuthState }) {
         </SettingRow>
       )}
     </SettingsSection>
+  );
+}
+
+// Le code à six chiffres de la connexion : le poser (le carré, puis un premier
+// code), ou le retirer, sur le mot de passe. Un téléphone perdu se règle par
+// root, sur la machine : la ligne le dit.
+function AccessTOTPRows({ active, onChanged }: { active: boolean; onChanged: () => void }) {
+  const t = useT();
+  const action = useAction();
+  const [enrolling, setEnrolling] = useState(false);
+  const [password, setPassword] = useState("");
+
+  if (!active) {
+    return (
+      <SettingRow label={t("auth.totp_title")} description={t("auth.totp_intro")} block>
+        {enrolling ? (
+          <AccessTOTPEnrolment
+            onEnabled={() => {
+              setEnrolling(false);
+              onChanged();
+            }}
+          />
+        ) : (
+          <Button icon="shield" onClick={() => setEnrolling(true)}>
+            {t("auth.totp_enable")}
+          </Button>
+        )}
+      </SettingRow>
+    );
+  }
+  const remove = () => {
+    action.run(() => disableTOTP(password), { onDone: onChanged });
+  };
+  return (
+    <form
+      className="setting-stack"
+      onSubmit={(event) => {
+        event.preventDefault();
+        remove();
+      }}
+    >
+      <SettingRow label={t("auth.totp_title")} description={t("auth.totp_rescue")}>
+        <Pill tone="ok">{t("auth.totp_on")}</Pill>
+      </SettingRow>
+      <SettingRow label={t("auth.password_label")} htmlFor="totp-password" width="medium">
+        <Input id="totp-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+      </SettingRow>
+      {action.error !== null && (
+        <SettingBlock>
+          <Failure error={action.error} />
+        </SettingBlock>
+      )}
+      <SettingFoot note={t("auth.totp_disable_note")}>
+        <Button type="submit" icon="x" disabled={action.busy}>
+          {t("auth.totp_disable")}
+        </Button>
+      </SettingFoot>
+    </form>
   );
 }

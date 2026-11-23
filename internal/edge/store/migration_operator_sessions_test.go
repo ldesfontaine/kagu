@@ -40,10 +40,10 @@ func TestMigration044_ABasicBaseStartsNativeAndTheOldPasswordOpensASession(t *te
 	}
 
 	service := auth.New(db, slog.New(slog.DiscardHandler))
-	if _, err := service.Login(ctx, state, "lucas", "a wrong passphrase", auth.SessionClient{}); err == nil {
+	if _, err := service.Login(ctx, state, "lucas", "a wrong passphrase", "", auth.SessionClient{}); err == nil {
 		t.Fatal("a wrong password opened a session")
 	}
-	opened, err := service.Login(ctx, state, "lucas", oldPassword, auth.SessionClient{Address: "127.0.0.1"})
+	opened, err := service.Login(ctx, state, "lucas", oldPassword, "", auth.SessionClient{Address: "127.0.0.1"})
 	if err != nil {
 		t.Fatal(err)
 	}

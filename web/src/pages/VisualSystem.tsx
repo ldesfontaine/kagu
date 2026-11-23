@@ -8,6 +8,7 @@ import { ActionButton } from "../components/ActionButton";
 import { Button } from "../components/Button";
 import { Card, CardBody, CardHeader, Empty, EmptyLine, KeyValue, Meter, Stat } from "../components/Card";
 import { ConfirmInline } from "../components/ConfirmInline";
+import { ConfirmGesture } from "../components/ConfirmGesture";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { CardGrid, EntityCard } from "../components/EntityCard";
 import { Checkbox, Checks, Field, Input } from "../components/Field";
@@ -483,11 +484,12 @@ export function VisualSystem() {
 
 // La fenêtre modale : le voile flou, la saisie qui ne se perd pas (Échap
 // demande avant d'abandonner, un clic sur le voile ne ferme rien), la
-// confirmation d'un geste qui ne se défait pas, et le bouton d'action avec ou
-// sans la puce « MCP ».
+// confirmation d'un geste qui ne se défait pas, la redemande d'un geste de
+// niveau 4 (ConfirmGesture), et le bouton d'action avec ou sans la puce « MCP ».
 function ModalSample() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [gesture, setGesture] = useState(false);
   const [text, setText] = useState("");
   const finish = () => {
     setOpen(false);
@@ -507,7 +509,21 @@ function ModalSample() {
         >
           {t("visual.modal.confirm_open")}
         </ConfirmModal>
+        <Button variant="danger" icon="shield" onClick={() => setGesture(true)}>
+          {t("visual.modal.gesture_open")}
+        </Button>
       </div>
+      {gesture && (
+        <ConfirmGesture
+          confirm={{ mode: "reauth", sso: false, code: true }}
+          title={t("auth.reauth_title")}
+          question={t("auth.reauth_why")}
+          confirmLabel={t("auth.reauth_confirm")}
+          perform={() => Promise.resolve()}
+          onDone={() => setGesture(false)}
+          onClose={() => setGesture(false)}
+        />
+      )}
       <div className="cluster">
         <ActionButton route="POST /api/probes/{id}/actions/pause" onClick={() => undefined}>
           {t("visual.modal.action_verb")}

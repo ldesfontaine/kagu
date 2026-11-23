@@ -60,11 +60,17 @@ var secretColumns = []secretColumn{
 	{table: "firewalls", column: "api_secret"},
 	{table: "restic_links", column: "rest_password"},
 	{table: "restic_links", column: "repo_password"},
+	{table: "auth_settings", column: "totp_secret"},
 }
 
 func settingsPasswordScope() seal.Scope {
 	// La table des réglages n'a qu'une ligne, d'id 1.
 	return seal.Scope{Table: "settings", Column: "mail_password", Row: "1"}
+}
+
+func totpSecretScope() seal.Scope {
+	// L'accès à l'interface n'a qu'une ligne, d'id 1.
+	return seal.Scope{Table: "auth_settings", Column: "totp_secret", Row: "1"}
 }
 
 func channelScope(column string, id int64) seal.Scope {
@@ -259,7 +265,8 @@ type Forgotten struct {
 
 // ForgetSecrets est la sortie de secours d'une clé perdue : ce qui était
 // chiffré avec elle est irrécupérable, la base est remise dans un état qui
-// démarre. Le mot de passe du relais est vidé ; chaque canal qui portait une
+// démarre. Le mot de passe du relais est vidé ; le code à six chiffres de
+// l'interface est retiré ; chaque canal qui portait une
 // URL ou un secret est vidé et désactivé ; chaque tâche reçoit un nouveau
 // jeton ; chaque hôte Proxmox et chaque pare-feu perd son secret et reste déclaré, son
 // prochain relevé dira « refusé » jusqu'à ce qu'on le redéclare ; chaque lien
@@ -273,6 +280,11 @@ func (db *DB) ForgetSecrets(ctx context.Context, newToken func() (string, error)
 	err := db.inTx(ctx, "forgetting secrets", func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `UPDATE settings SET mail_password = ''`); err != nil {
 			return fmt.Errorf("forget mail password: %w", err)
+		}
+		// Le code à six chiffres se repose depuis les réglages ; d'ici là, le
+		// mot de passe seul ouvre la session.
+		if _, err := tx.ExecContext(ctx, `UPDATE auth_settings SET totp_secret = '', totp_last_step = 0`); err != nil {
+			return fmt.Errorf("forget totp secret: %w", err)
 		}
 		// Un canal e-mail n'a ni URL ni secret : il n'a rien perdu, il reste actif.
 		result, err := tx.ExecContext(ctx,

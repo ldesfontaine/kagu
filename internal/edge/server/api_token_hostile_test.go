@@ -27,7 +27,7 @@ var hostileAllowedResticVerbs = []string{"restic.backup.run", "restic.backup.ver
 func (b *resticBench) hostileToken(t *testing.T) string {
 	t.Helper()
 	var every []string
-	for _, offered := range verb.Default.All() {
+	for _, offered := range verb.Default.OpenToTokens() {
 		every = append(every, offered.ID)
 	}
 	cleartext, _, err := b.apiTokens.Create(context.Background(), apitoken.Request{Name: "hostile", Scope: apitoken.ScopeWrite, Verbs: every})
@@ -59,7 +59,7 @@ func TestHostileToken_EveryWriteRouteExceptTheVerbsIsRefusedAndNothingChanges(t 
 		if route.method == http.MethodGet || route.method == anyMethod || !strings.HasPrefix(route.pattern, "/api/") {
 			continue
 		}
-		if offered, isVerb := verb.Default.ByRoute(route.method + " " + route.pattern); isVerb {
+		if offered, isVerb := verb.Default.ByRoute(route.method + " " + route.pattern); isVerb && offered.Token {
 			if strings.HasPrefix(offered.ID, "restic.") && !slices.Contains(hostileAllowedResticVerbs, offered.ID) {
 				t.Errorf("%s : un verbe restic hors de la liste du ticket", offered.ID)
 			}

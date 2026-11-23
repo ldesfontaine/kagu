@@ -63,7 +63,9 @@ func (db *DB) SaveAuthStateIf(ctx context.Context, expected, next auth.State, at
 // writeAuthState efface aussi le code de première configuration : tout
 // changement d'état l'use, et un code ne survit pas à la désactivation. Un
 // retour au mode none efface les sessions, dans la même transaction : le
-// compte recréé ensuite n'hérite d'aucune.
+// compte recréé ensuite n'hérite d'aucune. Le code à six chiffres ne survit
+// qu'à un état qui reste native sous le même compte (un mot de passe refait) :
+// un passage au SSO, ou un autre compte, le retire.
 func writeAuthState(ctx context.Context, to execer, state auth.State, at time.Time) error {
 	if state.Mode == auth.ModeNone {
 		if _, err := to.ExecContext(ctx, `DELETE FROM operator_sessions`); err != nil {
@@ -82,7 +84,11 @@ func writeAuthState(ctx context.Context, to execer, state auth.State, at time.Ti
 			updated_at = excluded.updated_at,
 			setup_code_hash = '',
 			setup_code_expires = NULL,
-			setup_code_failures = 0`,
+			setup_code_failures = 0,
+			totp_secret = CASE WHEN excluded.mode = 'native' AND excluded.username = auth_settings.username
+				THEN auth_settings.totp_secret ELSE '' END,
+			totp_last_step = CASE WHEN excluded.mode = 'native' AND excluded.username = auth_settings.username
+				THEN auth_settings.totp_last_step ELSE 0 END`,
 		string(state.Mode), state.Username, state.PasswordHash, state.Header, nullableTime(state.EnabledAt), at.Unix())
 	if err != nil {
 		return fmt.Errorf("save auth state: %w", err)
@@ -139,4 +145,70 @@ func (db *DB) RecordSetupCodeFailure(ctx context.Context) error {
 		return fmt.Errorf("record setup code failure: %w", err)
 	}
 	return nil
+}
+
+// GetTOTP rend le code à six chiffres, son secret ouvert ; sans ligne, ou sans
+// code, le secret est vide.
+func (db *DB) GetTOTP(ctx context.Context) (auth.TOTP, error) {
+	var stored auth.TOTP
+	err := db.sql.QueryRowContext(ctx, `SELECT totp_secret, totp_last_step FROM auth_settings WHERE id = 1`).
+		Scan(&stored.Secret, &stored.LastStep)
+	if errors.Is(err, sql.ErrNoRows) {
+		return auth.TOTP{}, nil
+	}
+	if err != nil {
+		return auth.TOTP{}, fmt.Errorf("get totp: %w", err)
+	}
+	stored.Secret, err = db.openSecret(stored.Secret, totpSecretScope())
+	if err != nil {
+		return auth.TOTP{}, err
+	}
+	return stored, nil
+}
+
+// EnableTOTPIfNone scelle et pose le secret, seulement en native et sans
+// code actif : deux activations en même temps n'en posent qu'une.
+func (db *DB) EnableTOTPIfNone(ctx context.Context, secret string, servedStep int64) (bool, error) {
+	sealed, err := db.sealSecret(secret, totpSecretScope())
+	if err != nil {
+		return false, fmt.Errorf("seal totp secret: %w", err)
+	}
+	result, err := db.sql.ExecContext(ctx,
+		`UPDATE auth_settings SET totp_secret = ?, totp_last_step = ? WHERE id = 1 AND mode = 'native' AND totp_secret = ''`,
+		sealed, servedStep)
+	if err != nil {
+		return false, fmt.Errorf("enable totp: %w", err)
+	}
+	changed, err := countAffected(result)
+	if err != nil {
+		return false, fmt.Errorf("enable totp: %w", err)
+	}
+	return changed > 0, nil
+}
+
+func (db *DB) ClearTOTP(ctx context.Context) (bool, error) {
+	result, err := db.sql.ExecContext(ctx, `UPDATE auth_settings SET totp_secret = '', totp_last_step = 0 WHERE id = 1 AND totp_secret <> ''`)
+	if err != nil {
+		return false, fmt.Errorf("clear totp: %w", err)
+	}
+	changed, err := countAffected(result)
+	if err != nil {
+		return false, fmt.Errorf("clear totp: %w", err)
+	}
+	return changed > 0, nil
+}
+
+// ConsumeTOTPStep sert le pas d'un seul tenant : la comparaison au pas déjà
+// servi et l'écriture sont une seule requête.
+func (db *DB) ConsumeTOTPStep(ctx context.Context, step int64) (bool, error) {
+	result, err := db.sql.ExecContext(ctx,
+		`UPDATE auth_settings SET totp_last_step = ? WHERE id = 1 AND totp_secret <> '' AND totp_last_step < ?`, step, step)
+	if err != nil {
+		return false, fmt.Errorf("consume totp step: %w", err)
+	}
+	changed, err := countAffected(result)
+	if err != nil {
+		return false, fmt.Errorf("consume totp step: %w", err)
+	}
+	return changed > 0, nil
 }

@@ -371,8 +371,8 @@ func TestTokenVerbs_AFullTokenSeesEveryVerbOnARealRoute(t *testing.T) {
 	server := newTestServer(t)
 	bearer, _ := server.issueWriteToken(t, "plein", allVerbIDs()...)
 	reply, _ := server.tokenVerbsOf(t, bearer)
-	if len(reply.Verbs) != len(verb.Default.All()) {
-		t.Fatalf("%d verbs, want %d", len(reply.Verbs), len(verb.Default.All()))
+	if len(reply.Verbs) != len(verb.Default.OpenToTokens()) {
+		t.Fatalf("%d verbs, want %d", len(reply.Verbs), len(verb.Default.OpenToTokens()))
 	}
 	real := map[string]bool{}
 	for _, route := range server.routes() {

@@ -17,6 +17,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // L'accès de l'opérateur à l'interface. En mode native, une session (le
@@ -51,7 +52,7 @@ type AuthService interface {
 	SetupNative(ctx context.Context, expected auth.State, setupCode, username, password string, client auth.SessionClient) (auth.State, auth.OpenedSession, error)
 	EnableForward(ctx context.Context, expected auth.State, setupCode, header string) (auth.State, error)
 	IssueSetupCode(ctx context.Context) (auth.IssuedSetupCode, error)
-	Login(ctx context.Context, expected auth.State, username, password string, client auth.SessionClient) (auth.OpenedSession, error)
+	Login(ctx context.Context, expected auth.State, username, password, code string, client auth.SessionClient) (auth.OpenedSession, error)
 	ResumeSession(ctx context.Context, state auth.State, token string) (auth.Session, bool, error)
 	OpenForwardSession(ctx context.Context, expected auth.State, identity string, client auth.SessionClient) (auth.OpenedSession, error)
 	ResumeForwardSession(ctx context.Context, state auth.State, token, identity string) (auth.Session, bool, error)
@@ -65,6 +66,13 @@ type AuthService interface {
 	ResetPassword(ctx context.Context, password string) (int, error)
 	SetMode(ctx context.Context, change auth.ModeChange) (auth.State, int, error)
 	CloseAllSessions(ctx context.Context) (int, error)
+	TOTPActive(ctx context.Context) (bool, error)
+	ProposeTOTP(ctx context.Context, state auth.State) (auth.TOTPProposal, error)
+	EnableTOTP(ctx context.Context, expected auth.State, secret, code string) error
+	DisableTOTP(ctx context.Context, expected auth.State, password string) error
+	ResetTOTP(ctx context.Context) error
+	Reauth(ctx context.Context, expected auth.State, sessionID, password, code string) (string, error)
+	RequireFreshReauth(state auth.State, session auth.Session) error
 }
 
 // codeAuthStateChanged est le refus d'une écriture autorisée sous un état
@@ -245,6 +253,24 @@ func (s *Server) grantsAuthority(next http.HandlerFunc) http.HandlerFunc {
 		authorizing, _ := authorizingStateFrom(r.Context())
 		if !current.Same(authorizing) {
 			s.apiRefuse(w, http.StatusConflict, codeAuthStateChanged)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// requireFreshReauth garde un geste de niveau 4 (R-A2-7, R-A2-8) : en native,
+// la session qui l'a admis doit avoir redonné son mot de passe depuis moins de
+// cinq minutes, sinon 403 auth.reauth_required, et le front ouvre la fenêtre
+// de redemande ; en forward, rien n'est redemandé. Le jugement est celui du
+// composant (auth.RequireFreshReauth).
+func (s *Server) requireFreshReauth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authorizing, _ := authorizingStateFrom(r.Context())
+		session, _ := sessionFrom(r.Context())
+		if err := s.auth.RequireFreshReauth(authorizing, session); err != nil {
+			key, _ := refusal.KeyOf(err)
+			s.apiRefuse(w, http.StatusForbidden, key)
 			return
 		}
 		next(w, r)

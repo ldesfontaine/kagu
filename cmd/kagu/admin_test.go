@@ -244,7 +244,7 @@ func localServer(t *testing.T, readPeer func(net.Conn) (uint32, error)) (configP
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := operator.Login(ctx, state, "lucas", "correct horse battery", auth.SessionClient{}); err != nil {
+	if _, err := operator.Login(ctx, state, "lucas", "correct horse battery", "", auth.SessionClient{}); err != nil {
 		t.Fatal(err)
 	}
 	return configPath, db, operator
@@ -303,5 +303,18 @@ func TestR_CNX_4_ResetPasswordByRootOnTheLocalChannel(t *testing.T) {
 	sessions, _ := db.ListSessions(context.Background())
 	if !after.Same(before) || len(sessions) != 2 {
 		t.Fatalf("a non-root peer changed something: %+v, %d sessions", after, len(sessions))
+	}
+}
+
+// reset-totp : root retire le code à six chiffres par la socket ; rien à
+// retirer se dit avec la suite.
+func TestAdminResetTOTP_RemovesTheCodeOrSaysThereIsNone(t *testing.T) {
+	out, fake, err := runAdminAgainst(t, "/control/admin/reset-totp", http.StatusNoContent, "", noTerminal, "reset-totp")
+	if err != nil || len(fake.received) != 1 || !strings.Contains(out, "retiré") {
+		t.Fatalf("out %q, received %v, err %v", out, fake.received, err)
+	}
+	_, _, err = runAdminAgainst(t, "/control/admin/reset-totp", http.StatusConflict, `{"error":"auth.totp_inactive"}`, noTerminal, "reset-totp")
+	if err == nil || !strings.Contains(err.Error(), "rien à retirer") {
+		t.Fatalf("got %v", err)
 	}
 }
