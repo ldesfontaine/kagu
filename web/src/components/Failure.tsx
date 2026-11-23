@@ -1,6 +1,7 @@
 import { errorKey, type ApiError } from "../api/client";
 import { useT } from "../i18n/context";
 import { commandOfRefusal } from "../lib/anchors";
+import { refusalArguments } from "../lib/auth";
 import { rightOfRefusal } from "../lib/rights";
 import { Note } from "./Card";
 import { AnchorFix } from "./AnchorFix";
@@ -25,24 +26,25 @@ export function Failure({ error, gesture }: { error: ApiError | string | null | 
     return null;
   }
   const key = typeof error === "string" ? error : errorKey(error);
+  const args = typeof error === "string" ? [] : refusalArguments(error, Date.now());
   // Une ancre de confiance locale a fait refuser l'ordre : le serveur joint la
   // commande que l'administrateur lance sur la machine pour la poser.
   const fix = commandOfRefusal(error);
   if (fix !== null) {
     return (
       <Note tone="danger">
-        <p>{t(key)}</p>
+        <p>{t(key, ...args)}</p>
         <AnchorFix command={fix.command} exact={fix.exact} machineID={gesture?.machineID} />
       </Note>
     );
   }
   const right = gesture === undefined ? null : (gesture.right ?? rightOfRefusal(key));
   if (gesture === undefined || right === null) {
-    return <Note tone="danger">{t(key)}</Note>;
+    return <Note tone="danger">{t(key, ...args)}</Note>;
   }
   return (
     <Note tone="danger">
-      <p>{t(key)}</p>
+      <p>{t(key, ...args)}</p>
       <MissingRightButton machineID={gesture.machineID} right={right} path={gesture.path} />
     </Note>
   );

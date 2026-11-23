@@ -72,6 +72,9 @@ const (
 	KindSourceUnprotected Kind = "source_unprotected"
 	KindTargetFull        Kind = "target_full"
 	KindTargetUnreachable Kind = "target_unreachable"
+	// Le code à six chiffres du compte est suspendu après trop de codes faux
+	// d'affilée (R-A2-16) : tout code, le juste aussi, est refusé jusqu'à l'heure dite.
+	KindTOTPLocked Kind = "totp_locked"
 )
 
 // Kinds liste le catalogue, dans l'ordre des écrans.
@@ -81,6 +84,7 @@ func Kinds() []Kind {
 		KindJobLate, KindJobFailed, KindProbeDown, KindProbePasswordRemoved,
 		KindCertExpiring, KindCertExpired, KindCertUntrusted, KindDiskFull, KindCPUHigh, KindMemoryHigh, KindAgentRolledBack, KindServiceRolledBack,
 		KindBackupStale, KindRestoreTestStale, KindSourceUnprotected, KindTargetFull, KindTargetUnreachable,
+		KindTOTPLocked,
 	}
 }
 
@@ -119,10 +123,13 @@ const (
 	// Un service déclaré : l'objet de l'alerte d'une montée de version, qui
 	// n'appartient à aucun conteneur en particulier.
 	ObjectService ObjectKind = "service"
+	// Le compte de l'opérateur : l'objet de l'alerte d'un code suspendu. Il
+	// n'a pas de clé étrangère, l'alerte ne devient jamais orpheline.
+	ObjectAccount ObjectKind = "account"
 )
 
 func ObjectKinds() []ObjectKind {
-	return []ObjectKind{ObjectMachine, ObjectContainer, ObjectHeartbeat, ObjectProbe, ObjectVolume, ObjectBackup, ObjectService}
+	return []ObjectKind{ObjectMachine, ObjectContainer, ObjectHeartbeat, ObjectProbe, ObjectVolume, ObjectBackup, ObjectService, ObjectAccount}
 }
 
 func isObjectKind(kind ObjectKind) bool {
@@ -183,6 +190,8 @@ type Details struct {
 	// de l'.env masquées par l'agent ; un canal les retire à l'envoi si sa
 	// case « joindre les journaux » est éteinte.
 	Log []string `json:"log,omitempty"`
+	// La fin d'une suspension (le code du compte).
+	Until time.Time `json:"until,omitzero"`
 	// Le rapport de l'agent est arrivé après l'expiration du run : l'annuaire
 	// n'a pas été remis à la version d'avant, l'alerte le dit.
 	Late bool `json:"late,omitempty"`
@@ -191,7 +200,7 @@ type Details struct {
 func (d Details) Equal(other Details) bool {
 	return d.Count == other.Count && d.Percent == other.Percent && d.WindowMinutes == other.WindowMinutes && d.MountPoint == other.MountPoint && d.Threshold == other.Threshold &&
 		d.ExitCode == other.ExitCode && d.Reason == other.Reason && d.Target == other.Target &&
-		d.Bytes == other.Bytes && d.Version == other.Version && slices.Equal(d.Log, other.Log) && d.Late == other.Late && d.NotAfter.Equal(other.NotAfter) && d.Since.Equal(other.Since)
+		d.Bytes == other.Bytes && d.Version == other.Version && slices.Equal(d.Log, other.Log) && d.Late == other.Late && d.NotAfter.Equal(other.NotAfter) && d.Since.Equal(other.Since) && d.Until.Equal(other.Until)
 }
 
 // Fact est ce qu'une source émet : de quoi ouvrir une alerte, ou en

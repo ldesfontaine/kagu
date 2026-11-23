@@ -1,6 +1,7 @@
 import type { AuthState } from "../api/auth";
 import type { ApiError } from "../api/client";
 import type { ReauthConfirm } from "./confirmGesture";
+import { formatWhen } from "./time";
 
 // Ce que la barre latérale dit de l'accès : protégé par tel identifiant, ou
 // par le mandataire pour telle identité. Rien tant que l'API n'a pas répondu,
@@ -38,7 +39,8 @@ export function needsSignIn(state: AuthState | null): boolean {
 // demandé n'est pas un échec : le second écran le dit déjà.
 export function loginFailure(error: ApiError | null): ApiError | string | null {
   if (error !== null && error.status === 429) {
-    return "auth.login_too_many";
+    // Le compte ralenti a sa clé (R-A2-16) ; le frein par adresse n'en a pas.
+    return error.code === "auth.account_slowed" ? error : "auth.login_too_many";
   }
   if (asksTOTP(error)) {
     return null;
@@ -62,6 +64,16 @@ export function reauthConfirmOf(state: AuthState): ReauthConfirm {
 // code à six chiffres : la page ouvre son second écran.
 export function asksTOTP(error: ApiError | null): boolean {
   return error !== null && error.code === "auth.totp_required";
+}
+
+// Ce que la phrase d'un refus cite : « Code suspendu jusqu'à 14:32 » dit
+// l'heure de la fin que le serveur joint à auth.totp_locked (R-A2-16).
+export function refusalArguments(error: ApiError, now: number): string[] {
+  const payload = error.payload;
+  if (error.code !== "auth.totp_locked" || typeof payload !== "object" || payload === null || !("until" in payload) || typeof payload.until !== "string") {
+    return [];
+  }
+  return [formatWhen(payload.until, now)];
 }
 
 // Vérifie le formulaire avant l'envoi, pour dire l'erreur sans attendre ;

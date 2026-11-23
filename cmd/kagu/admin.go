@@ -24,6 +24,7 @@ const (
 	adminSetupCode     = "setup-code"
 	adminResetPassword = "reset-password"
 	adminResetTOTP     = "reset-totp"
+	adminUnlock        = "unlock"
 	adminModeNative    = "auth-mode native"
 	adminModeForward   = "auth-mode forward"
 	adminCloseSessions = "sessions close-all"
@@ -35,6 +36,7 @@ var adminPaths = map[string]string{
 	adminSetupCode:     "/control/admin/setup-code",
 	adminResetPassword: "/control/admin/reset-password",
 	adminResetTOTP:     "/control/admin/reset-totp",
+	adminUnlock:        "/control/admin/unlock",
 	adminModeNative:    "/control/admin/auth-mode",
 	adminModeForward:   "/control/admin/auth-mode",
 	adminCloseSessions: "/control/admin/sessions/close-all",
@@ -98,6 +100,8 @@ func adminCommand(args []string, out io.Writer, openTerminal terminalOpener, eui
 		return run.resetPassword(ctx)
 	case adminResetTOTP:
 		return run.resetTOTP(ctx)
+	case adminUnlock:
+		return run.unlock(ctx)
 	case adminModeNative:
 		return run.setNative(ctx, *username)
 	case adminModeForward:
@@ -159,6 +163,16 @@ func (a adminRun) resetTOTP(ctx context.Context) error {
 		return err
 	}
 	_, err := fmt.Fprintln(a.out, a.text.Get("admin.reset_totp_done"))
+	return err
+}
+
+// unlock remet à zéro les échecs du compte : le code suspendu après trop de
+// codes faux, le compte ralenti après trop de mots de passe faux (R-A2-16).
+func (a adminRun) unlock(ctx context.Context) error {
+	if err := a.callWithoutAnswer(ctx, adminUnlock, struct{}{}, http.StatusNoContent); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(a.out, a.text.Get("admin.unlock_done"))
 	return err
 }
 

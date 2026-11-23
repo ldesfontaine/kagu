@@ -71,7 +71,8 @@ type AuthService interface {
 	EnableTOTP(ctx context.Context, expected auth.State, secret, code string) error
 	DisableTOTP(ctx context.Context, expected auth.State, password string) error
 	ResetTOTP(ctx context.Context) error
-	Reauth(ctx context.Context, expected auth.State, sessionID, password, code string) (string, error)
+	Unlock(ctx context.Context) error
+	Reauth(ctx context.Context, expected auth.State, sessionID, source, password, code string) (string, error)
 	RequireFreshReauth(state auth.State, session auth.Session) error
 }
 

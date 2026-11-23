@@ -65,7 +65,8 @@ func (db *DB) SaveAuthStateIf(ctx context.Context, expected, next auth.State, at
 // retour au mode none efface les sessions, dans la même transaction : le
 // compte recréé ensuite n'hérite d'aucune. Le code à six chiffres ne survit
 // qu'à un état qui reste native sous le même compte (un mot de passe refait) :
-// un passage au SSO, ou un autre compte, le retire.
+// un passage au SSO, ou un autre compte, le retire. Les échecs du compte
+// (R-A2-16) le suivent : un autre compte repart de zéro.
 func writeAuthState(ctx context.Context, to execer, state auth.State, at time.Time) error {
 	if state.Mode == auth.ModeNone {
 		if _, err := to.ExecContext(ctx, `DELETE FROM operator_sessions`); err != nil {
@@ -88,7 +89,15 @@ func writeAuthState(ctx context.Context, to execer, state auth.State, at time.Ti
 			totp_secret = CASE WHEN excluded.mode = 'native' AND excluded.username = auth_settings.username
 				THEN auth_settings.totp_secret ELSE '' END,
 			totp_last_step = CASE WHEN excluded.mode = 'native' AND excluded.username = auth_settings.username
-				THEN auth_settings.totp_last_step ELSE 0 END`,
+				THEN auth_settings.totp_last_step ELSE 0 END,
+			totp_failures = CASE WHEN excluded.mode = 'native' AND excluded.username = auth_settings.username
+				THEN auth_settings.totp_failures ELSE 0 END,
+			totp_locked_until = CASE WHEN excluded.mode = 'native' AND excluded.username = auth_settings.username
+				THEN auth_settings.totp_locked_until ELSE NULL END,
+			password_failures_hour = CASE WHEN excluded.mode = 'native' AND excluded.username = auth_settings.username
+				THEN auth_settings.password_failures_hour ELSE 0 END,
+			password_failures_window = CASE WHEN excluded.mode = 'native' AND excluded.username = auth_settings.username
+				THEN auth_settings.password_failures_window ELSE NULL END`,
 		string(state.Mode), state.Username, state.PasswordHash, state.Header, nullableTime(state.EnabledAt), at.Unix())
 	if err != nil {
 		return fmt.Errorf("save auth state: %w", err)
@@ -187,7 +196,7 @@ func (db *DB) EnableTOTPIfNone(ctx context.Context, secret string, servedStep in
 }
 
 func (db *DB) ClearTOTP(ctx context.Context) (bool, error) {
-	result, err := db.sql.ExecContext(ctx, `UPDATE auth_settings SET totp_secret = '', totp_last_step = 0 WHERE id = 1 AND totp_secret <> ''`)
+	result, err := db.sql.ExecContext(ctx, `UPDATE auth_settings SET totp_secret = '', totp_last_step = 0, totp_failures = 0, totp_locked_until = NULL WHERE id = 1 AND totp_secret <> ''`)
 	if err != nil {
 		return false, fmt.Errorf("clear totp: %w", err)
 	}
@@ -199,10 +208,14 @@ func (db *DB) ClearTOTP(ctx context.Context) (bool, error) {
 }
 
 // ConsumeTOTPStep sert le pas d'un seul tenant : la comparaison au pas déjà
-// servi et l'écriture sont une seule requête.
-func (db *DB) ConsumeTOTPStep(ctx context.Context, step int64) (bool, error) {
-	result, err := db.sql.ExecContext(ctx,
-		`UPDATE auth_settings SET totp_last_step = ? WHERE id = 1 AND totp_secret <> '' AND totp_last_step < ?`, step, step)
+// servi, celle de la suspension du code (auth.TOTPFailures.Locked) et
+// l'écriture sont une seule requête. Servi, il remet à zéro les codes faux.
+func (db *DB) ConsumeTOTPStep(ctx context.Context, step int64, at time.Time) (bool, error) {
+	result, err := db.sql.ExecContext(ctx, `
+		UPDATE auth_settings SET totp_last_step = ?, totp_failures = 0, totp_locked_until = NULL
+		WHERE id = 1 AND totp_secret <> '' AND totp_last_step < ?
+			AND (totp_locked_until IS NULL OR totp_locked_until <= ?)`,
+		step, step, at.Unix())
 	if err != nil {
 		return false, fmt.Errorf("consume totp step: %w", err)
 	}
@@ -211,4 +224,57 @@ func (db *DB) ConsumeTOTPStep(ctx context.Context, step int64) (bool, error) {
 		return false, fmt.Errorf("consume totp step: %w", err)
 	}
 	return changed > 0, nil
+}
+
+const accountFailuresSelect = `SELECT totp_failures, totp_locked_until, password_failures_hour, password_failures_window FROM auth_settings WHERE id = 1`
+
+// GetAccountFailures rend les compteurs du compte ; sans ligne, ils sont à zéro.
+func (db *DB) GetAccountFailures(ctx context.Context) (auth.AccountFailures, error) {
+	return scanAccountFailures(db.sql.QueryRowContext(ctx, accountFailuresSelect))
+}
+
+func scanAccountFailures(row scanner) (auth.AccountFailures, error) {
+	var failures auth.AccountFailures
+	var lockedUntil, windowStart sql.NullInt64
+	err := row.Scan(&failures.TOTP.Count, &lockedUntil, &failures.Password.Count, &windowStart)
+	if errors.Is(err, sql.ErrNoRows) {
+		return auth.AccountFailures{}, nil
+	}
+	if err != nil {
+		return auth.AccountFailures{}, fmt.Errorf("get account failures: %w", err)
+	}
+	if lockedUntil.Valid {
+		failures.TOTP.LockedUntil = time.Unix(lockedUntil.Int64, 0)
+	}
+	if windowStart.Valid {
+		failures.Password.WindowStart = time.Unix(windowStart.Int64, 0)
+	}
+	return failures, nil
+}
+
+// ChangeAccountFailures lit, change et écrit les compteurs dans une seule
+// transaction, qui prend le verrou d'écriture dès son début (_txlock) : deux
+// tentatives en même temps se suivent. Sans ligne (aucun compte), rien ne
+// s'écrit.
+func (db *DB) ChangeAccountFailures(ctx context.Context, change func(auth.AccountFailures) auth.AccountFailures) (before, after auth.AccountFailures, err error) {
+	err = db.inTx(ctx, "account failures update", func(tx *sql.Tx) error {
+		var readErr error
+		before, readErr = scanAccountFailures(tx.QueryRowContext(ctx, accountFailuresSelect))
+		if readErr != nil {
+			return readErr
+		}
+		after = change(before)
+		if after.Same(before) {
+			return nil
+		}
+		_, writeErr := tx.ExecContext(ctx, `
+			UPDATE auth_settings SET totp_failures = ?, totp_locked_until = ?, password_failures_hour = ?, password_failures_window = ?
+			WHERE id = 1`,
+			after.TOTP.Count, nullableTime(after.TOTP.LockedUntil), after.Password.Count, nullableTime(after.Password.WindowStart))
+		if writeErr != nil {
+			return fmt.Errorf("save account failures: %w", writeErr)
+		}
+		return nil
+	})
+	return before, after, err
 }

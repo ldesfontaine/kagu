@@ -237,6 +237,7 @@ func newFirstSetupServer(t *testing.T) *testServer {
 	apiTokens := apitoken.New(db, logger)
 	apiTokens.SetClock(func() time.Time { return testNow })
 	operator := auth.New(db, logger)
+	operator.SetAlerter(alerts)
 	operator.SetClock(func() time.Time { return testNow })
 	// Le coût minimal de bcrypt : le coût réel ferait durer chaque test.
 	operator.SetHashCost(bcrypt.MinCost)

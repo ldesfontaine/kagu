@@ -577,6 +577,7 @@ const alert = shape<AlertJSON>("Alert", {
     target: optional(value),
     not_after: optional(value),
     since: optional(value),
+    until: optional(value),
     bytes: optional(value),
     version: optional(value),
     log: optional(value),

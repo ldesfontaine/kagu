@@ -67,6 +67,14 @@ type Config struct {
 	MaxConnections          int `toml:"max_connections" validate:"min=1,max=1000000"`
 	MaxConnectionsPerSource int `toml:"max_connections_per_source" validate:"min=1,max=1000000"`
 	WriteTimeoutSeconds     int `toml:"write_timeout_seconds" validate:"min=1,max=3600"`
+	// Les échecs comptés par compte (R-A2-16) : codes faux d'affilée qui
+	// suspendent le code (au plus ce que tient auth_settings), minutes de
+	// suspension, mots de passe faux par heure au-delà desquels le compte
+	// ralentit, secondes entre deux essais une fois ralenti.
+	TOTPMaxFailures         int `toml:"totp_max_failures" validate:"min=1,max=5"`
+	TOTPLockMinutes         int `toml:"totp_lock_minutes" validate:"min=1,max=1440"`
+	PasswordFailuresPerHour int `toml:"password_failures_per_hour" validate:"min=1,max=100000"`
+	PasswordPaceSeconds     int `toml:"password_pace_seconds" validate:"min=1,max=3600"`
 }
 
 func Default() Config {
@@ -76,6 +84,10 @@ func Default() Config {
 		MaxConnections:          defaultMaxConnections,
 		MaxConnectionsPerSource: defaultMaxConnectionsPerSource,
 		WriteTimeoutSeconds:     defaultWriteTimeoutSeconds,
+		TOTPMaxFailures:         auth.DefaultTOTPFailures,
+		TOTPLockMinutes:         int(auth.DefaultTOTPLock / time.Minute),
+		PasswordFailuresPerHour: auth.DefaultPasswordFailuresPerHour,
+		PasswordPaceSeconds:     int(auth.DefaultPasswordPace / time.Second),
 	}
 }
 
@@ -97,6 +109,17 @@ func (c Config) SlogLevel() slog.Level {
 // WriteTimeout est la durée d'écriture d'une réponse hors flux.
 func (c Config) WriteTimeout() time.Duration {
 	return time.Duration(c.WriteTimeoutSeconds) * time.Second
+}
+
+// AccountLimits rend les seuils des échecs par compte, que la validation a
+// bornés.
+func (c Config) AccountLimits() auth.AccountLimits {
+	return auth.AccountLimits{
+		TOTPFailures:            c.TOTPMaxFailures,
+		TOTPLock:                time.Duration(c.TOTPLockMinutes) * time.Minute,
+		PasswordFailuresPerHour: c.PasswordFailuresPerHour,
+		PasswordPace:            time.Duration(c.PasswordPaceSeconds) * time.Second,
+	}
 }
 
 // TrustedPrefixes rend les mandataires sous forme utilisable ; la validation

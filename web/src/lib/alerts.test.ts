@@ -27,6 +27,7 @@ import {
   stateOf,
   withAlertFilter,
 } from "./alerts";
+import { formatWhen } from "./time";
 
 const t = (key: string, ...args: (string | number)[]) => [key, ...args].join(" ");
 const now = Date.parse("2026-09-22T10:00:00Z");
@@ -53,6 +54,19 @@ function alert(overrides: Partial<Alert>): Alert {
 }
 
 describe("describeAlert", () => {
+  it("dit l'heure de fin et la dernière source d'un code suspendu, sans lien ni silence", () => {
+    const locked = alert({
+      kind: "totp_locked",
+      severity: "danger",
+      object: { kind: "account", id: "lucas", name: "lucas" },
+      machine_id: "",
+      machine_name: "",
+      details: { until: "2026-09-22T10:15:00Z", target: "203.0.113.5" },
+    });
+    expect(describeAlert(t, locked, now, disks).cause).toBe(`alert.cause_totp_locked ${formatWhen("2026-09-22T10:15:00Z", now)} 203.0.113.5`);
+    expect(objectPath(locked.object, "")).toBeNull();
+    expect(mutePathOf(locked)).toContain("target_kind=&target_id=");
+  });
   it("cite le seuil noté par la dernière lecture plutôt que celui de la session", () => {
     const text = describeAlert(t, alert({ details: { mount_point: "/data", percent: 72, threshold: 70 } }), now, disks);
     expect(text.cause).toBe("alert.cause_disk_full /data vps-lyon-2 70");

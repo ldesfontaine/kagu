@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
@@ -26,6 +27,9 @@ type apiError struct {
 	// La commande pose la valeur de l'ordre (faux : « trust list », l'écran
 	// renvoie alors à la fiche de la machine).
 	CommandExact bool `json:"command_exact,omitempty"`
+	// La fin de la suspension du code, pour auth.totp_locked : la page de
+	// connexion dit « Code suspendu jusqu'à 14:32 ».
+	Until time.Time `json:"until,omitzero"`
 }
 
 const (

@@ -318,3 +318,25 @@ func TestAdminResetTOTP_RemovesTheCodeOrSaysThereIsNone(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// unlock : root remet à zéro les échecs du compte par la socket ; en SSO il n'y
+// a pas de compte à débloquer, et la commande le dit.
+func TestAdminUnlock_ResetsTheAccountFailuresOrSaysThereIsNoAccount(t *testing.T) {
+	for _, answered := range []struct {
+		name, answer, wantOut, wantRefusal string
+		status                             int
+	}{
+		{"account", "", "remis à zéro", "", http.StatusNoContent},
+		{"sso", `{"error":"auth.no_password"}`, "", "SSO", http.StatusConflict},
+	} {
+		t.Run(answered.name, func(t *testing.T) {
+			out, fake, err := runAdminAgainst(t, "/control/admin/unlock", answered.status, answered.answer, noTerminal, "unlock")
+			if len(fake.received) != 1 || !strings.Contains(out, answered.wantOut) {
+				t.Fatalf("out %q, received %v", out, fake.received)
+			}
+			if (err == nil) != (answered.wantRefusal == "") || (err != nil && !strings.Contains(err.Error(), answered.wantRefusal)) {
+				t.Fatalf("got %v, want a refusal saying %q", err, answered.wantRefusal)
+			}
+		})
+	}
+}

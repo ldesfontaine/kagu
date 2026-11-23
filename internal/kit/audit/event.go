@@ -183,6 +183,8 @@ const (
 	AuthTOTPEnable  Action = "auth.totp_enable"
 	AuthTOTPDisable Action = "auth.totp_disable"
 	AuthTOTPReset   Action = "auth.totp_reset"
+	// Root remet à zéro les échecs du compte sur le canal local (R-A2-16).
+	AuthUnlock Action = "auth.unlock"
 	// Une session de l'interface fermée par la personne connectée : la sienne,
 	// une de la liste, ou toutes les autres.
 	AuthCloseSession Action = "auth.close_session"
@@ -278,7 +280,7 @@ func Actions() []Action {
 		AlertAcknowledge,
 		SettingsUpdate,
 		AuthEnable, AuthDisable, AuthChangePassword, AuthResetPassword, AuthChangeMode, AuthSetupCodeIssue,
-		AuthTOTPEnable, AuthTOTPDisable, AuthTOTPReset, AuthCloseSession,
+		AuthTOTPEnable, AuthTOTPDisable, AuthTOTPReset, AuthUnlock, AuthCloseSession,
 		APITokenCreate, APITokenUpdate, APITokenRevoke, APITokenDeny,
 		SecretsForget, SecretsRotate, SecretsRotateServerKey, SecretsFinishServerKey,
 		ActionOrder, ActionRefused, ActionRolledBack,

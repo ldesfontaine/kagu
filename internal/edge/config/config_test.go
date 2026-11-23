@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ldesfontaine/kagu/internal/fact/auth"
 )
 
 func TestParse_EmptyFile_UsesDefaults(t *testing.T) {
@@ -234,6 +236,41 @@ func TestParse_ConnectionLimits_ABadValueStopsTheStart(t *testing.T) {
 		"max_connections = 0", "max_connections = -1",
 		"max_connections_per_source = 0",
 		"write_timeout_seconds = 0", "write_timeout_seconds = -30", "write_timeout_seconds = 86400",
+	} {
+		if _, _, err := Parse([]byte(line + "\n")); err == nil {
+			t.Errorf("%q was accepted", line)
+		}
+	}
+}
+
+func TestParse_AccountLimits_DefaultAndCustom(t *testing.T) {
+	cfg, _, err := Parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := cfg.AccountLimits(), auth.DefaultAccountLimits(); got != want {
+		t.Fatalf("got %+v, want the defaults %+v", got, want)
+	}
+	custom := "totp_max_failures = 3\ntotp_lock_minutes = 60\npassword_failures_per_hour = 8\npassword_pace_seconds = 90\n"
+	cfg, _, err = Parse([]byte(custom))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := auth.AccountLimits{TOTPFailures: 3, TOTPLock: time.Hour, PasswordFailuresPerHour: 8, PasswordPace: 90 * time.Second}
+	if got := cfg.AccountLimits(); got != want {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
+// Le seuil des codes faux ne dépasse pas ce que la colonne totp_failures tient.
+func TestParse_AccountLimits_ABadValueStopsTheStart(t *testing.T) {
+	if _, _, err := Parse([]byte(fmt.Sprintf("totp_max_failures = %d\n", auth.MaxTOTPFailures))); err != nil {
+		t.Fatalf("the column's own ceiling must be accepted: %v", err)
+	}
+	for _, line := range []string{
+		fmt.Sprintf("totp_max_failures = %d", auth.MaxTOTPFailures+1), "totp_max_failures = 0",
+		"totp_lock_minutes = 0", "totp_lock_minutes = 1441",
+		"password_failures_per_hour = 0", "password_pace_seconds = 0", "password_pace_seconds = 3601",
 	} {
 		if _, _, err := Parse([]byte(line + "\n")); err == nil {
 			t.Errorf("%q was accepted", line)
