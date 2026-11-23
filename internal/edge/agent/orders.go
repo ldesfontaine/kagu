@@ -22,7 +22,8 @@ import (
 // un redémarrage ne rouvre pas la porte d'un rejeu.
 //
 // Un ordre passe si, dans cet ordre : l'agent a une clé du serveur ; la
-// signature est de cette clé ; le corps se lit strictement ; il vise cette
+// signature est de cette clé ; le corps se lit strictement et porte la
+// version de l'enveloppe (agentwire.OrderVersion) ; il vise cette
 // machine et cet agent ; il n'est pas périmé ; son rang dépasse le dernier
 // exécuté ; son genre est au registre (agentwire.Spec) ; le fichier de
 // l'agent porte le droit qu'il exige (Spec.Right) ; ses paramètres et son
@@ -136,11 +137,15 @@ func (r *orderRunner) judge(signed agentwire.SignedOrder) (judgedOrder, string) 
 	if len(r.identity.ServerKey) != ed25519.PublicKeySize {
 		return judgedOrder{}, agentwire.ReasonServerKeyMissing
 	}
-	if !ed25519.Verify(r.identity.ServerKey, agentwire.OrderSigningBytes(signed.Body), signed.Signature) {
+	// Vérifié sous l'étiquette v2 seule : un corps v1, signé sous la sienne, ne
+	// passe pas (R-A1-9).
+	if !ed25519.Verify(r.identity.ServerKey, agentwire.OrderSigningBytes(agentwire.OrderVersion, signed.Body), signed.Signature) {
 		return judgedOrder{}, agentwire.ReasonBadSignature
 	}
+	// Sans « v », le corps ne se réécrit pas à l'identique : la lecture stricte
+	// le refuse ; une autre version est refusée ici.
 	var body agentwire.OrderBody
-	if err := agentwire.StrictDecode(signed.Body, &body); err != nil || body.RunID == "" {
+	if err := agentwire.StrictDecode(signed.Body, &body); err != nil || body.V != agentwire.OrderVersion || body.RunID == "" {
 		return judgedOrder{}, agentwire.ReasonBadOrder
 	}
 	r.journal.remember(body.RunID, factsOf(signed.Body, r.identity.ServerKey))

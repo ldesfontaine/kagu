@@ -135,9 +135,11 @@ func (h *Handler) writeEnrollError(w http.ResponseWriter, r *http.Request, err e
 
 // speaksProtocol refuse un agent d'une autre version du protocole, en le
 // disant : 426 protocol_unsupported. Un agent du protocole 1 ne pose pas
-// l'en-tête.
+// l'en-tête. Le protocole 2 est encore admis, pour qu'un agent d'avant reçoive
+// agent.update (la session retient lequel).
 func (h *Handler) speaksProtocol(w http.ResponseWriter, r *http.Request) bool {
-	if r.Header.Get(agentwire.HeaderProtocol) == agentwire.ProtocolVersion {
+	switch r.Header.Get(agentwire.HeaderProtocol) {
+	case agentwire.ProtocolVersion, agentwire.LegacyProtocolVersion:
 		return true
 	}
 	h.writeError(w, http.StatusUpgradeRequired, agentwire.CodeProtocolUnsupported)
@@ -212,9 +214,12 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// serveur s'en sert pour ne pas envoyer un ordre qu'il sait refusé. Avec
 	// eux, le compte sous lequel il tourne et les droits que ce compte ne peut
 	// pas exercer : la fiche les montre, aucun ordre n'est refusé pour autant.
+	// Le protocole va à la session : il dit l'enveloppe des ordres que l'agent
+	// lit.
 	session, err := h.machines.Connect(r.Context(), authenticated, h.clientAddress(r),
 		r.Header.Get(agentwire.HeaderAgentVersion), r.Header.Get(agentwire.HeaderAgentRights),
-		r.Header.Get(agentwire.HeaderAgentAccount), r.Header.Get(agentwire.HeaderAgentUnavailable))
+		r.Header.Get(agentwire.HeaderAgentAccount), r.Header.Get(agentwire.HeaderAgentUnavailable),
+		r.Header.Get(agentwire.HeaderProtocol))
 	if errors.Is(err, machine.ErrAgentRevoked) {
 		h.writeAuthError(w, err)
 		return

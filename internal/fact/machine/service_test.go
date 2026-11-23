@@ -457,7 +457,7 @@ func TestConnectSignalDisconnect_DriveOnlineAndLastSeen(t *testing.T) {
 	if status, _ := h.service.Get(context.Background(), m.ID); status.Online {
 		t.Fatal("online before any connection")
 	}
-	session, err := h.service.Connect(context.Background(), m, "51.15.20.114", "v0.0.1", "", "", "")
+	session, err := h.service.Connect(context.Background(), m, "51.15.20.114", "v0.0.1", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,7 +488,7 @@ func TestConnectSignalDisconnect_DriveOnlineAndLastSeen(t *testing.T) {
 func TestRemove_ClosesTheOpenSession(t *testing.T) {
 	h := newHarness(t)
 	m, _ := h.enroll(t, "vps-paris-1")
-	session, err := h.service.Connect(context.Background(), m, "", "", "", "", "")
+	session, err := h.service.Connect(context.Background(), m, "", "", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -504,8 +504,8 @@ func TestRemove_ClosesTheOpenSession(t *testing.T) {
 
 func TestSessions_NewConnectionReplacesThePreviousOne(t *testing.T) {
 	sessions := NewSessions()
-	first, _ := sessions.Open("m", "a1", time.Now())
-	second, _ := sessions.Open("m", "a2", time.Now())
+	first, _ := sessions.Open("m", "a1", "", time.Now())
+	second, _ := sessions.Open("m", "a2", "", time.Now())
 	select {
 	case <-first.Done():
 	default:
@@ -585,7 +585,7 @@ func TestR_A1_13_AReportedValueRefusedKeepsTheStoredOne(t *testing.T) {
 	if err := h.service.NoteSystem(ctx, m.ID, "Debian GNU/Linux 13"); err != nil {
 		t.Fatal(err)
 	}
-	session, err := h.service.Connect(ctx, m, "192.0.2.1", "v0.0.7", "", "", "")
+	session, err := h.service.Connect(ctx, m, "192.0.2.1", "v0.0.7", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -593,7 +593,7 @@ func TestR_A1_13_AReportedValueRefusedKeepsTheStoredOne(t *testing.T) {
 
 	for _, refused := range []string{"v1\x1b[2J", "v1\n", "v\u202e1", strings.Repeat("v", MaxSystemLength+1), "v\xff"} {
 		stored, _ := h.service.Get(ctx, m.ID)
-		session, err := h.service.Connect(ctx, stored.Machine, "192.0.2.1", refused, "", "", "")
+		session, err := h.service.Connect(ctx, stored.Machine, "192.0.2.1", refused, "", "", "", "")
 		if err != nil {
 			t.Fatalf("a refused version must not close the stream: %v", err)
 		}
@@ -611,7 +611,7 @@ func TestR_A1_13_AReportedValueRefusedKeepsTheStoredOne(t *testing.T) {
 	}
 
 	stored, _ := h.service.Get(ctx, m.ID)
-	session, err = h.service.Connect(ctx, stored.Machine, "192.0.2.1", "v0.0.8", "", "", "")
+	session, err = h.service.Connect(ctx, stored.Machine, "192.0.2.1", "v0.0.8", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -36,7 +36,7 @@ func TestSSHKeys_TheSignalWritesTheReportAndTheAPIReadsIt(t *testing.T) {
 	server := newTestServer(t)
 	enrolled, _ := server.enroll(t, "vps-paris-1", remoteID)
 	server.enroll(t, "bastion", bastionID)
-	session, err := server.machines.Connect(context.Background(), enrolled, "192.0.2.1", "v0.0.1", "", "", "")
+	session, err := server.machines.Connect(context.Background(), enrolled, "192.0.2.1", "v0.0.1", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestSSHKeys_AnUnknownMachineIsNotFound(t *testing.T) {
 func TestSSHKeys_AnInvalidReportIsRefusedAloneAndTheOldOneStays(t *testing.T) {
 	server := newTestServer(t)
 	enrolled, _ := server.enroll(t, "vps-paris-1", remoteID)
-	session, err := server.machines.Connect(context.Background(), enrolled, "192.0.2.1", "v0.0.1", "", "", "")
+	session, err := server.machines.Connect(context.Background(), enrolled, "192.0.2.1", "v0.0.1", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestSSHKeys_AnInvalidReportIsRefusedAloneAndTheOldOneStays(t *testing.T) {
 func TestSSHKeys_AnAgentThatReadsSectionRefusalsGetsTheKeyOfTheRefusedSection(t *testing.T) {
 	server := newTestServer(t)
 	enrolled, _ := server.enroll(t, "vps-paris-1", remoteID)
-	session, err := server.machines.Connect(context.Background(), enrolled, "192.0.2.1", "v0.0.1", "", "", "")
+	session, err := server.machines.Connect(context.Background(), enrolled, "192.0.2.1", "v0.0.1", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

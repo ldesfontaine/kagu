@@ -104,23 +104,52 @@ type Order struct {
 	Secret   json.RawMessage
 	NotAfter time.Time
 	Seq      int64
+	// L'acteur du run (Run.RequestedBy), signé dans l'enveloppe v2.
+	Actor string
+	// La forme de l'enveloppe : agentwire.LegacyOrderVersion pour agent.update
+	// vers un agent du protocole 2 (envelopeFor), la courante sinon.
+	Version int
 }
 
 func (r Run) order() Order {
 	return Order{
 		RunID: r.ID, MachineID: r.MachineID, AgentID: r.AgentID, Kind: r.Kind,
-		Params: r.Params, NotAfter: r.NotAfter, Seq: r.Seq,
+		Params: r.Params, NotAfter: r.NotAfter, Seq: r.Seq, Actor: r.RequestedBy,
 	}
 }
 
+// encode écrit le corps dans l'enveloppe de sa version, toujours par
+// json.Marshal du type : jamais une carte à la main. Le secret part signé vers
+// l'agent, c'est son rôle : ces octets ne vont qu'à la signature et au flux,
+// jamais à la base ni à un journal.
 func (o Order) encode() ([]byte, error) {
-	body := agentwire.OrderBody{
-		RunID: o.RunID, MachineID: o.MachineID, AgentID: o.AgentID, Kind: o.Kind,
-		Params: o.Params, Secret: o.Secret, NotAfter: o.NotAfter.Unix(), Seq: o.Seq,
+	if o.Version == agentwire.LegacyOrderVersion {
+		legacy := agentwire.OrderBodyV1{
+			RunID: o.RunID, MachineID: o.MachineID, AgentID: o.AgentID, Kind: o.Kind,
+			Params: o.Params, Secret: o.Secret, NotAfter: o.NotAfter.Unix(), Seq: o.Seq,
+		}
+		return json.Marshal(legacy) // #nosec G117 -- le corps signé porte le secret jusqu'à l'agent, rien d'autre ne le garde.
 	}
-	// Le secret part signé vers l'agent, c'est son rôle : ces octets ne vont
-	// qu'à la signature et au flux, jamais à la base ni à un journal.
+	// Level reste 0 tant que les gestes ne portent pas de niveau (A4).
+	body := agentwire.OrderBody{
+		V: agentwire.OrderVersion, RunID: o.RunID, MachineID: o.MachineID, AgentID: o.AgentID, Kind: o.Kind,
+		Params: o.Params, Secret: o.Secret, NotAfter: o.NotAfter.Unix(), Seq: o.Seq, Actor: o.Actor,
+	}
 	return json.Marshal(body) // #nosec G117 -- le corps signé porte le secret jusqu'à l'agent, rien d'autre ne le garde.
+}
+
+// envelopeFor rend l'enveloppe qu'un agent de ce protocole lit pour ce genre.
+// Un agent du protocole 2 ne lit que la v1, et ne reçoit qu'agent.update, pour
+// se mettre à jour : tout autre ordre vers lui est refusé avant d'être écrit.
+// L'exception disparaît à la version suivante.
+func envelopeFor(protocol string, kind agentwire.Kind) (int, error) {
+	if protocol != agentwire.LegacyProtocolVersion {
+		return agentwire.OrderVersion, nil
+	}
+	if kind != agentwire.KindAgentUpdate {
+		return 0, ErrAgentOutdated
+	}
+	return agentwire.LegacyOrderVersion, nil
 }
 
 // Query choisit les runs d'une liste, du plus récent au plus ancien.
@@ -135,6 +164,9 @@ var (
 	// ErrRightMissing : l'agent a rapporté ses droits et celui de l'ordre
 	// n'y est pas ; il le refuserait. Rien n'est écrit.
 	ErrRightMissing = refusal.Conflict("action.right_missing", "the agent does not hold the right this order needs: re-enroll it with that right")
+	// ErrAgentOutdated : l'agent parle encore le protocole 2 ; il ne reçoit
+	// qu'agent.update. Rien n'est écrit.
+	ErrAgentOutdated = refusal.Conflict("action.agent_outdated", "the agent is too old to read this order: update it first")
 	// ErrMachineOffline : alias de machine.ErrOffline, le temps que les appelants passent au nom neuf.
 	ErrMachineOffline = machine.ErrOffline
 	// ErrReportInvalid : la section actions d'un signal sort de ce qu'un

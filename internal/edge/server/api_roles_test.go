@@ -31,7 +31,7 @@ func openAgentSession(t *testing.T, server *testServer, machineID string) string
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := server.machines.Connect(context.Background(), enrolled.Machine, "192.0.2.1", "v0.0.1", "", "", "")
+	session, err := server.machines.Connect(context.Background(), enrolled.Machine, "192.0.2.1", "v0.0.1", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

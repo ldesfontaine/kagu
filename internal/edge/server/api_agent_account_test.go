@@ -18,7 +18,7 @@ func reconnectAs(t *testing.T, server *testServer, rights, account, unavailable 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := server.machines.Connect(context.Background(), current.Machine, "192.0.2.1", "v0.0.1", rights, account, unavailable); err != nil {
+	if _, err := server.machines.Connect(context.Background(), current.Machine, "192.0.2.1", "v0.0.1", rights, account, unavailable, ""); err != nil {
 		t.Fatal(err)
 	}
 }

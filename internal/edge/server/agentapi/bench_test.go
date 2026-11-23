@@ -104,7 +104,7 @@ func (b *bench) openStream(t *testing.T, machineID string, private ed25519.Priva
 	return servertest.OpenStream(t, b, machineID, private)
 }
 
-// postJSON poste comme un agent du protocole 2.
+// postJSON poste comme un agent du protocole de ce binaire.
 func (b *bench) postJSON(path string, payload any) *httptest.ResponseRecorder {
 	body, _ := json.Marshal(payload)
 	request := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))

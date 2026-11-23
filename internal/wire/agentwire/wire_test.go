@@ -45,8 +45,10 @@ func TestWire_JSONLabelsAreFrozen(t *testing.T) {
 			`{"restic":{"source":{"version":"restic 0.18.1"}}}`},
 		{"restic run result", ActionResult{RunID: "r", State: ActionSucceeded, Restic: &ResticRunReport{Path: ResticPathRelay, Reason: ResticTCPUnreachable, TargetHost: "nas", TargetPort: 8000, BytesAdded: 3, DurationSeconds: 4}},
 			`{"run_id":"r","state":"succeeded","restic":{"path":"relay","reason":"tcp_unreachable","target_host":"nas","target_port":8000,"bytes_added":3,"duration_seconds":4}}`},
-		{"order body", OrderBody{RunID: "r", MachineID: "m", AgentID: "a", Kind: KindAgentPing, NotAfter: 1, Seq: 2},
-			`{"run_id":"r","machine_id":"m","agent_id":"a","kind":"agent.ping","not_after":1,"seq":2}`},
+		{"order body", OrderBody{V: OrderVersion, RunID: "r", MachineID: "m", AgentID: "a", Kind: KindAgentPing, NotAfter: 1, Seq: 2, Actor: "operator:lucas", Level: 1},
+			`{"v":2,"run_id":"r","machine_id":"m","agent_id":"a","kind":"agent.ping","not_after":1,"seq":2,"actor":"operator:lucas","level":1}`},
+		{"order body v1", OrderBodyV1{RunID: "r", MachineID: "m", AgentID: "a", Kind: KindAgentUpdate, NotAfter: 1, Seq: 2},
+			`{"run_id":"r","machine_id":"m","agent_id":"a","kind":"agent.update","not_after":1,"seq":2}`},
 		{"signed order", SignedOrder{Body: []byte("{}"), Signature: []byte{1}, Key: "SHA256:x"}, `{"body":"e30=","signature":"AQ==","key":"SHA256:x"}`},
 		{"signal response", SignalResponse{Rejected: map[string]string{SectionProbes: SectionRefusal(SectionProbes)}}, `{"rejected":{"probes":"bad_probes"}}`},
 	}

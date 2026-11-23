@@ -69,7 +69,7 @@ func TestRun_RefusesAnOfflineMachineAndALostRight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b.session, err = b.machines.Connect(context.Background(), enrolled.Machine, "192.0.2.1", "v0.0.1", "backup.receive=/srv/autre", "", "")
+	b.session, err = b.machines.Connect(context.Background(), enrolled.Machine, "192.0.2.1", "v0.0.1", "backup.receive=/srv/autre", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestRun_ShowsAnUnavailableRightButStillSendsTheOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.machines.Disconnect(b.session)
-	b.session, err = b.machines.Connect(context.Background(), enrolled.Machine, "192.0.2.1", "v0.0.1", rights, "998:opencloud-agent", "backup.receive=path_denied")
+	b.session, err = b.machines.Connect(context.Background(), enrolled.Machine, "192.0.2.1", "v0.0.1", rights, "998:opencloud-agent", "backup.receive=path_denied", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestRun_ShowsAnUnavailableRightButStillSendsTheOrder(t *testing.T) {
 	}
 	// Le droit absent reste « missing », la raison ne le change pas.
 	b.machines.Disconnect(b.session)
-	b.session, err = b.machines.Connect(context.Background(), enrolled.Machine, "192.0.2.1", "v0.0.1", "backup.receive=/srv/autre", "", "")
+	b.session, err = b.machines.Connect(context.Background(), enrolled.Machine, "192.0.2.1", "v0.0.1", "backup.receive=/srv/autre", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -91,7 +91,7 @@ func atHome(t *testing.T, server *testServer, machineID, address string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := server.machines.Connect(context.Background(), found.Machine, address, "v0.0.1", "", "", "")
+	session, err := server.machines.Connect(context.Background(), found.Machine, address, "v0.0.1", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

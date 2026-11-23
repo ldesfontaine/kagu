@@ -172,6 +172,12 @@ func (s *Service) List(ctx context.Context) ([]Status, error) {
 	return statuses, nil
 }
 
+// AgentProtocol rend le protocole que parle le flux ouvert de la machine, vide
+// sans flux : l'enveloppe des ordres qu'il lit en dépend.
+func (s *Service) AgentProtocol(machineID string) string {
+	return s.sessions.Protocol(machineID)
+}
+
 func (s *Service) Get(ctx context.Context, id string) (Status, error) {
 	machine, err := s.store.GetMachine(ctx, id)
 	if err != nil {
@@ -479,8 +485,9 @@ func (s *Service) Authenticate(ctx context.Context, proof Proof) (Machine, error
 // Connect ouvre la session d'une machine authentifiée et note sa venue :
 // l'adresse sur la machine, la version, les droits, le compte et les droits
 // indisponibles sur son agent. Un texte illisible n'est pas gardé, le flux
-// s'ouvre quand même.
-func (s *Service) Connect(ctx context.Context, authenticated Machine, address, agentVersion, capabilities, account, unavailable string) (*Session, error) {
+// s'ouvre quand même. Le protocole de l'agent ne va qu'à la session : il ne
+// vaut que pour ce flux.
+func (s *Service) Connect(ctx context.Context, authenticated Machine, address, agentVersion, capabilities, account, unavailable, protocol string) (*Session, error) {
 	machineID := authenticated.ID
 	now := s.now()
 	connection := Connection{
@@ -498,7 +505,7 @@ func (s *Service) Connect(ctx context.Context, authenticated Machine, address, a
 	if err := s.store.RecordConnection(ctx, connection); err != nil {
 		return nil, fmt.Errorf("record connection: %w", err)
 	}
-	session, err := s.sessions.Open(machineID, authenticated.Agent.ID, now)
+	session, err := s.sessions.Open(machineID, authenticated.Agent.ID, protocol, now)
 	if err != nil {
 		return nil, fmt.Errorf("open session: %w", err)
 	}

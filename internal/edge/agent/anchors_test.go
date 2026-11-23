@@ -306,7 +306,7 @@ func TestJournal_RecordsWhatWasSignedAndNeverASecret(t *testing.T) {
 	_, stranger, _ := ed25519.GenerateKey(rand.Reader)
 	forged := longOrder(4, agentwire.KindAgentPing, map[string]any{"password": seeded})
 	forgedEncoded, _ := json.Marshal(forged)
-	forgedData, _ := json.Marshal(agentwire.SignedOrder{Body: forgedEncoded, Signature: ed25519.Sign(stranger, agentwire.OrderSigningBytes(forgedEncoded))})
+	forgedData, _ := json.Marshal(agentwire.SignedOrder{Body: forgedEncoded, Signature: ed25519.Sign(stranger, agentwire.OrderSigningBytes(agentwire.OrderVersion, forgedEncoded))})
 	b.runner.receive(forgedData)
 	b.until(t, forged.RunID)
 

@@ -281,7 +281,7 @@ func TestAgentStream_RefusesAReplayAWrongKeyAndAMalformedNonce(t *testing.T) {
 
 // Un agent du protocole 1 (sans l'en-tête de version) lit pourquoi il n'est
 // pas servi, sur chaque route, défi compris : 426 protocol_unsupported. Un
-// chemin inconnu, en protocole 2, répond 404.
+// chemin inconnu, dans le protocole de ce binaire, répond 404.
 func TestAgentRoutes_RefuseAnAgentOfProtocolOne(t *testing.T) {
 	server := newBench(t)
 	enrolled, private := server.enroll(t, "vps-paris-1", remoteID)
@@ -299,7 +299,7 @@ func TestAgentRoutes_RefuseAnAgentOfProtocolOne(t *testing.T) {
 		}
 	}
 	if got := server.postJSON("/agent/challenge", map[string]string{"machine_id": remoteID}); got.Code != http.StatusNotFound {
-		t.Errorf("an unknown path in protocol 2: %d %s", got.Code, got.Body.String())
+		t.Errorf("an unknown path in the current protocol: %d %s", got.Code, got.Body.String())
 	}
 }
 
@@ -526,5 +526,29 @@ func TestR_A1_13_ARefusedEnrollmentKeepsTheToken(t *testing.T) {
 	}
 	if recorder := server.postJSON("/agent/enroll", request); recorder.Code != http.StatusCreated {
 		t.Fatalf("the same token must enroll: status %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+// Le serveur admet le protocole de ce binaire et le 2, lui seul d'avant ; un
+// protocole qu'il ne connaît pas est refusé 426, sur chaque route.
+func TestAgentRoutes_AdmitProtocolTwoAndNoOther(t *testing.T) {
+	server := newBench(t)
+	for _, protocol := range []string{"1", "4", " 3", "3 ", "03"} {
+		request := httptest.NewRequest(http.MethodPost, "/agent/challenge", strings.NewReader(`{}`))
+		request.Header.Set(agentwire.HeaderProtocol, protocol)
+		recorder := httptest.NewRecorder()
+		server.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusUpgradeRequired {
+			t.Errorf("protocol %q: %d %s", protocol, recorder.Code, recorder.Body.String())
+		}
+	}
+	for _, protocol := range []string{agentwire.ProtocolVersion, agentwire.LegacyProtocolVersion} {
+		request := httptest.NewRequest(http.MethodPost, "/agent/challenge", strings.NewReader(`{}`))
+		request.Header.Set(agentwire.HeaderProtocol, protocol)
+		recorder := httptest.NewRecorder()
+		server.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusNotFound {
+			t.Errorf("protocol %q: %d %s", protocol, recorder.Code, recorder.Body.String())
+		}
 	}
 }

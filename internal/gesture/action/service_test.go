@@ -82,7 +82,7 @@ func newBenchLogging(t *testing.T, rights string, logger *slog.Logger) *bench {
 	machines := machine.New(db, machine.NewSessions(), logger)
 	machines.SetClock(clock)
 	enrolled := storetest.EnrollMachine(t, machines, machineID, "vps-paris-1")
-	session, err := machines.Connect(context.Background(), enrolled, "192.0.2.1", "v0.0.1", rights, "", "")
+	session, err := machines.Connect(context.Background(), enrolled, "192.0.2.1", "v0.0.1", rights, "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func TestRekey_DeliversTheNewKeySignedByThePinnedOne(t *testing.T) {
 	}
 	order := b.pusher.sent[0].Order
 	if b.pusher.sent[0].Kind != agentwire.KindServerKey || order.Key != old.Fingerprint() ||
-		!ed25519.Verify(old.PublicKey(), agentwire.OrderSigningBytes(order.Body), order.Signature) {
+		!ed25519.Verify(old.PublicKey(), agentwire.OrderSigningBytes(agentwire.OrderVersion, order.Body), order.Signature) {
 		t.Fatalf("the order is not signed by the pinned key: %+v", order)
 	}
 	var body agentwire.OrderBody

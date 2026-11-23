@@ -77,9 +77,15 @@ const RollbackVersion = 1
 // ServiceRollbackVersion est celle du retour arrière d'un service.
 const ServiceRollbackVersion = 1
 
-// ProtocolVersion est la seule que ce serveur et cet agent parlent. Le 1
-// avait un défi émis par le serveur (/agent/challenge) ; le 2 le retire.
-const ProtocolVersion = "2"
+// ProtocolVersion est celle que cet agent parle. Le 1 avait un défi émis par
+// le serveur (/agent/challenge) ; le 2 le retire ; le 3 lit l'enveloppe v2 des
+// ordres (OrderVersion).
+const ProtocolVersion = "3"
+
+// LegacyProtocolVersion est celle d'avant, que le serveur admet encore : un
+// agent qui la parle ne lit que l'enveloppe v1 et ne reçoit qu'agent.update,
+// pour se mettre à jour. Elle disparaît à la version suivante.
+const LegacyProtocolVersion = "2"
 
 const (
 	// CodeProtocolUnsupported : l'agent ne parle pas la version du serveur.

@@ -80,7 +80,7 @@ func (b *updateBench) addMachine(t *testing.T, id, name, version string, migrate
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := b.machines.Connect(ctx, enrolled, "192.0.2.50", version, "observe,agent.update", "", "")
+	session, err := b.machines.Connect(ctx, enrolled, "192.0.2.50", version, "observe,agent.update", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

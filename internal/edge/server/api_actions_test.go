@@ -80,7 +80,7 @@ func TestActions_PingIsSignedSentAndAnsweredThroughTheSignal(t *testing.T) {
 		t.Fatal(err)
 	}
 	public, fingerprint, err := server.actions.ServerKey()
-	if err != nil || signed.Key != fingerprint || !ed25519.Verify(public, agentwire.OrderSigningBytes(signed.Body), signed.Signature) {
+	if err != nil || signed.Key != fingerprint || !ed25519.Verify(public, agentwire.OrderSigningBytes(agentwire.OrderVersion, signed.Body), signed.Signature) {
 		t.Fatalf("signature does not verify with the server key: %v", err)
 	}
 	var body agentwire.OrderBody
@@ -202,7 +202,7 @@ func TestActions_ServerKeyRotationReachesAnAgentOnThePreviousKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if signed.Key != old.Fingerprint() || !ed25519.Verify(old.PublicKey(), agentwire.OrderSigningBytes(signed.Body), signed.Signature) {
+	if signed.Key != old.Fingerprint() || !ed25519.Verify(old.PublicKey(), agentwire.OrderSigningBytes(agentwire.OrderVersion, signed.Body), signed.Signature) {
 		t.Fatal("the new key is not delivered under the previous one")
 	}
 	var body agentwire.OrderBody
