@@ -15,6 +15,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/domain/alert"
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
 	"github.com/ldesfontaine/kagu/internal/fact/auth/authtest"
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
@@ -215,5 +216,29 @@ func TestR_A2_16_TwoAttemptsAtOnceCountTwice(t *testing.T) {
 	}
 	if open := server.openAlerts(t); len(open) != 1 {
 		t.Fatalf("%d alerts for one suspension", len(open))
+	}
+}
+
+// Le geste de root laisse sa ligne d'audit ; refusé (pas de compte à mot de
+// passe), il n'en laisse aucune.
+func TestUnlock_LeavesAnAuditLineOnlyWhenItRuns(t *testing.T) {
+	server := newTestServer(t)
+	before := server.latestAuditID(t)
+	if got := callControl(server, http.MethodPost, "/control/admin/unlock", `{}`, rootUID); got.Code != http.StatusNoContent {
+		t.Fatalf("unlock: %d %s", got.Code, got.Body.String())
+	}
+	events := server.auditSince(t, before)
+	if len(events) != 1 || events[0].Action != audit.AuthUnlock {
+		t.Fatalf("audit lines: %+v, want one auth.unlock", events)
+	}
+
+	forward := newFirstSetupServer(t)
+	forward.enableForward(t)
+	before = forward.latestAuditID(t)
+	if got := callControl(forward, http.MethodPost, "/control/admin/unlock", `{}`, rootUID); got.Code != http.StatusConflict {
+		t.Fatalf("unlock in forward: %d %s, want 409", got.Code, got.Body.String())
+	}
+	if events := forward.auditSince(t, before); len(events) != 0 {
+		t.Fatalf("a refused unlock left %+v", events)
 	}
 }

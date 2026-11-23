@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
@@ -271,6 +273,7 @@ func (s *Service) Unlock(ctx context.Context) error {
 	s.lastPasswordAttempt = time.Time{}
 	s.paceMu.Unlock()
 	s.logger.Warn("interface account failures reset on the local channel", "username", current.Username)
+	s.auditor.Record(ctx, authEvent(audit.AuthUnlock, current))
 	s.notifyUnlocked(ctx, current.Username)
 	return nil
 }

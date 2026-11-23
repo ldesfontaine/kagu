@@ -4785,8 +4785,7 @@ plus (R-A2-1) : un en-tête `Authorization: Basic` n'est lu par aucun mode.
     l'opérateur en cinq essais, de n'importe où, et qui l'ignore ralentit
     la connexion en 21 ; l'opérateur n'a alors que le délai ou root. Le
     moment du dernier essai d'un compte ralenti vit en mémoire : un redémarrage
-    de `serve` rend un essai de plus. `unlock` écrit au journal du processus
-    (`WARN`), pas au journal d'audit.
+    de `serve` rend un essai de plus.
 
   **La redemande du niveau 4** (R-A2-7, R-CNX-6, `internal/fact/auth/reauth.go`).
   Le mux lit le niveau de chaque route au registre des gestes
@@ -5073,7 +5072,7 @@ par le serveur de toute façon, par l'uid.
 | `setup-code` | `setup-code` | Tire le code de première configuration (ci-dessus) ; refusé une fois le compte créé |
 | `reset-password` | `reset-password` | Nouveau mot de passe, demandé deux fois sur le terminal (`/dev/tty`), sans écho, jamais sur l'entrée standard. Ferme **toutes** les sessions ; ne révoque pas les jetons d'API. Refusé en `forward` (pas de mot de passe) et sans compte (le compte se crée par la première configuration, avec un code) |
 | `reset-totp` | `reset-totp` | Retire le code à six chiffres (téléphone perdu) : le mot de passe seul ouvre de nouveau la session. Rien n'est demandé, les sessions restent. Refusé sans code actif (« rien à retirer »), en `forward` et sans compte. Audit `auth.totp_reset` |
-| `unlock` | `unlock` | Remet à zéro les échecs du compte (R-A2-16) : lève la suspension du code et le ralentissement du compte, résout l'alerte `totp_locked`. Refusé en `forward` et sans compte. `WARN` au journal de `serve`, pas de ligne d'audit |
+| `unlock` | `unlock` | Remet à zéro les échecs du compte (R-A2-16) : lève la suspension du code et le ralentissement du compte, résout l'alerte `totp_locked`. Refusé en `forward` et sans compte. Audit `auth.unlock` |
 | `auth-mode native -username <nom>` | `auth-mode` | Passe à un compte, mot de passe demandé deux fois. Ferme toutes les sessions |
 | `auth-mode forward [-header Remote-User]` | `auth-mode` | Passe derrière le SSO, ou change l'en-tête en `forward`. Ferme toutes les sessions |
 | `sessions close-all` | `sessions/close-all` | Ferme toutes les sessions (un `WARN` au journal de `serve`, pas de ligne d'audit) |
