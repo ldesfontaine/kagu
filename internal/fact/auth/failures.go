@@ -2,10 +2,9 @@ package auth
 
 import (
 	"context"
-
-	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
