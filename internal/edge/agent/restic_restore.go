@@ -7,12 +7,14 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -23,14 +25,26 @@ import (
 // temporaire créé à côté de la destination (même disque), puis l'agent déplace
 // le résultat à sa place ; le dossier temporaire est le seul chose effacée, et
 // c'est lui qui l'a créé.
+//
+// À l'écriture, la destination est rejugée sous la racine du droit
+// files.write, ouverte une fois (R-A1-10) : un lien posé après l'acceptation
+// est refusé, et ni restic ni le déplacement ne sortent du droit. restic
+// reçoit le dossier temporaire ouvert (descripteur 3) et y écrit par
+// /proc/self/fd/3 : le chemin du dossier n'est plus relu.
 const (
 	resticRestoreTimeout = 55 * time.Minute
 	restoreTempPrefix    = ".restaure-tmp-"
+	restoreTempMode      = 0o700
+	// restic remplace une cible qui est un lien : /proc/self/fd/3 en est un,
+	// il écrit donc dans un sous-dossier qu'il crée.
+	restoreInheritedTarget = "/proc/self/fd/3/restic"
+	restoreTargetBelowTemp = "restic"
 )
 
 type resticRestoreJob struct {
 	params      agentwire.ResticRestoreParams
 	binary      string
+	granted     string
 	destination string
 }
 
@@ -68,7 +82,8 @@ func judgeRestore(order judgedOrder, capabilities []machine.Capability, checks h
 	if reason := restoreDestinationReason(capabilities, destination); reason != "" {
 		return resticRestoreJob{}, refused(agentwire.ActionRefused, reason)
 	}
-	return resticRestoreJob{params: params, binary: binary, destination: destination}, nil
+	granted, _ := machine.CoveringPath(capabilities, machine.CapabilityFilesWrite, destination)
+	return resticRestoreJob{params: params, binary: binary, granted: granted, destination: destination}, nil
 }
 
 // restoreDestinationReason : vide si la destination est couverte par files.write,
@@ -94,7 +109,8 @@ func restoreDestinationReason(capabilities []machine.Capability, destination str
 }
 
 // restore lance restic dans un dossier temporaire voisin, puis déplace le
-// résultat à la destination. Les mots de passe sont masqués dans toute sortie.
+// résultat à la destination, tout sous la racine du droit. Les mots de passe
+// sont masqués dans toute sortie.
 func (s *resticSource) restore(ctx context.Context, job resticRestoreJob) ([]agentwire.OutputLine, error) {
 	ctx, cancel := context.WithTimeout(ctx, resticRestoreTimeout)
 	defer cancel()
@@ -105,16 +121,17 @@ func (s *resticSource) restore(ctx context.Context, job resticRestoreJob) ([]age
 		}
 		return nil, refuseWith(agentwire.ReasonPathUnwritable, err)
 	}
-	parent, err := filepath.EvalSymlinks(filepath.Dir(job.destination))
+	parent, err := openDestination(job.granted, filepath.Dir(job.destination), false)
+	if err != nil {
+		return nil, err
+	}
+	defer parent.Close()
+	tempName, temp, err := makeRestoreTemp(parent)
 	if err != nil {
 		return nil, refuseWith(agentwire.ReasonPathUnwritable, err)
 	}
-	destination := filepath.Join(parent, filepath.Base(job.destination))
-	temp, err := os.MkdirTemp(parent, restoreTempPrefix)
-	if err != nil {
-		return nil, refuseWith(agentwire.ReasonPathUnwritable, err)
-	}
-	defer removeOwnTemp(temp, parent)
+	defer func() { _ = parent.RemoveAll(tempName) }()
+	defer temp.Close()
 
 	choice := restic.Choose(ctx, s.dialer, s.loadTarget(job.params.Target), false)
 	s.logger.Info("restic path chosen", "target", job.params.Target, "path", choice.Path, "reason", choice.Reason, "purpose", "restore")
@@ -123,10 +140,11 @@ func (s *resticSource) restore(ctx context.Context, job resticRestoreJob) ([]age
 		return nil, failWith(agentwire.ReasonResticFailed, err)
 	}
 	defer release()
-	command, err := restic.RestoreSnapshot(job.binary, repository, job.params.Snapshot, temp, job.params.Path)
+	command, err := restic.RestoreSnapshot(job.binary, repository, job.params.Snapshot, restoreInheritedTarget, job.params.Path)
 	if err != nil {
 		return nil, failWith(agentwire.ReasonBadOrder, err)
 	}
+	command.Inherited = []*os.File{temp}
 	tail := newLineTail(resticTailLines)
 	code, runErr := s.runner.run(ctx, command, io.Discard, tail.writer("stderr"))
 	tail.flush()
@@ -134,24 +152,36 @@ func (s *resticSource) restore(ctx context.Context, job resticRestoreJob) ([]age
 	if runErr != nil || code != 0 {
 		return lines, failWith(agentwire.ReasonRestoreFailed, fmt.Errorf("restic restore exited with code %d: %v", code, runErr))
 	}
-	restored := filepath.Join(temp, filepath.FromSlash(job.params.Path))
-	if _, err := os.Lstat(restored); err != nil {
+	restored := path.Join(tempName, restoreTargetBelowTemp, strings.TrimPrefix(job.params.Path, "/"))
+	if _, err := parent.Lstat(restored); err != nil {
 		return lines, failWith(agentwire.ReasonPathNotInSnapshot, errors.New("the path is not in the snapshot"))
 	}
 	// Dernier jugement avant d'écrire : rien n'existe à la destination.
-	if _, err := os.Lstat(destination); err == nil {
+	name := filepath.Base(job.destination)
+	if _, err := parent.Lstat(name); err == nil {
 		return lines, refuseWith(agentwire.ReasonPathExists, errors.New("the destination appeared"))
 	}
-	if err := os.Rename(restored, destination); err != nil {
+	if err := parent.Rename(restored, name); err != nil {
 		return lines, failWith(agentwire.ReasonPathUnwritable, err)
 	}
-	return append(lines, stdout("restored "+destination)), nil
+	return append(lines, stdout("restored "+job.destination)), nil
 }
 
-// removeOwnTemp efface le dossier temporaire que l'agent a créé, et lui seul :
-// son nom porte le préfixe et son parent est celui de la destination.
-func removeOwnTemp(temp, parent string) {
-	if filepath.Dir(temp) == parent && strings.HasPrefix(filepath.Base(temp), restoreTempPrefix) {
-		_ = os.RemoveAll(temp)
+// makeRestoreTemp crée le dossier temporaire sous la racine ouverte (os.Root
+// n'a pas de MkdirTemp) et l'ouvre : c'est ce descripteur que restic reçoit.
+func makeRestoreTemp(parent *os.Root) (string, *os.File, error) {
+	suffix, err := ident.New()
+	if err != nil {
+		return "", nil, err
 	}
+	name := restoreTempPrefix + suffix
+	if err := parent.Mkdir(name, restoreTempMode); err != nil {
+		return "", nil, err
+	}
+	temp, err := parent.Open(name)
+	if err != nil {
+		_ = parent.Remove(name)
+		return "", nil, err
+	}
+	return name, temp, nil
 }

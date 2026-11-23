@@ -47,6 +47,7 @@ type fakeCall struct {
 	env        map[string]string
 	repository string
 	caCert     string
+	inherited  []*os.File
 }
 
 // fakeRestic joue restic sans le lancer : answer écrit sa sortie et rend son
@@ -58,7 +59,7 @@ type fakeRestic struct {
 }
 
 func (f *fakeRestic) run(_ context.Context, command restic.Command, stdout, stderr io.Writer) (int, error) {
-	call := fakeCall{args: command.Args, env: map[string]string{}}
+	call := fakeCall{args: command.Args, env: map[string]string{}, inherited: command.Inherited}
 	for _, variable := range command.Env {
 		name, value, _ := strings.Cut(variable, "=")
 		call.env[name] = value

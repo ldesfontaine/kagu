@@ -28,7 +28,13 @@ func NewID() (string, error) {
 	}
 	raw[6] = (raw[6] & 0x0f) | 0x40
 	raw[8] = (raw[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%x-%x-%x-%x-%x", raw[0:4], raw[4:6], raw[6:8], raw[8:10], raw[10:]), nil
+	return formatID(raw), nil
+}
+
+// formatID est la seule forme d'un identifiant de machine : hexadécimal en
+// minuscules, tirets aux places fixes.
+func formatID(raw []byte) string {
+	return fmt.Sprintf("%x-%x-%x-%x-%x", raw[0:4], raw[4:6], raw[6:8], raw[8:10], raw[10:])
 }
 
 // NewNonce tire l'aléa d'une preuve. crypto/rand ne rend plus d'erreur
@@ -74,18 +80,20 @@ func Verify(publicKey []byte, payload, signature []byte) bool {
 	return ed25519.Verify(ed25519.PublicKey(publicKey), payload, signature)
 }
 
+// idBytes n'admet que la forme que NewID écrit (R-A1-11) : une autre casse ou
+// d'autres tirets nommeraient la même machine, et le même utilisateur restic
+// (agentwire.ResticUserFor met l'identifiant en minuscules).
 func idBytes(machineID string) ([]byte, error) {
-	clean := strings.ReplaceAll(machineID, "-", "")
-	if len(clean) != idSize*2 {
-		return nil, ErrBadID
-	}
-	raw, err := hex.DecodeString(clean)
-	if err != nil {
+	raw, err := hex.DecodeString(strings.ReplaceAll(machineID, "-", ""))
+	if err != nil || len(raw) != idSize || formatID(raw) != machineID {
 		return nil, ErrBadID
 	}
 	return raw, nil
 }
 
+// ValidateID juge l'identifiant que l'agent a tiré. « local » n'y passe pas :
+// l'agent de la machine openCloud envoie aussi le sien, le serveur pose
+// LocalID après (machineIDFor).
 func ValidateID(machineID string) error {
 	_, err := idBytes(machineID)
 	return err

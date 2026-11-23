@@ -157,6 +157,7 @@ func (execResticRunner) run(ctx context.Context, command restic.Command, stdout,
 	// absolu), l'environnement remplacé ; les secrets sont des fichiers.
 	process := exec.CommandContext(ctx, command.Binary, command.Args...) // #nosec G204 -- bounded: voir ci-dessus.
 	process.Env = command.Env
+	process.ExtraFiles = command.Inherited
 	process.Stdout = stdout
 	process.Stderr = stderr
 	// Un arrêt demande poliment : restic retire son verrou sur SIGTERM.

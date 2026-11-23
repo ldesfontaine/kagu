@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -51,11 +52,13 @@ type Repository struct {
 }
 
 // Command est une commande restic prête à lancer, sans shell : le binaire,
-// ses arguments et son environnement complet.
+// ses arguments et son environnement complet. Inherited sont les fichiers
+// ouverts que restic reçoit à partir du descripteur 3, dans l'ordre.
 type Command struct {
-	Binary string
-	Args   []string
-	Env    []string
+	Binary    string
+	Args      []string
+	Env       []string
+	Inherited []*os.File
 }
 
 // String rend la commande pour un journal : les arguments, et les seuls noms

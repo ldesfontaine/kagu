@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -35,7 +37,7 @@ func restoreBenchFor(t *testing.T, content string) *restoreBench {
 		// Un restic bavard : il recopie le mot de passe qu'il a lu, comme le ferait un échec.
 		password, _ := os.ReadFile(call.env["RESTIC_PASSWORD_FILE"])
 		_, _ = io.WriteString(stderr, "warning: password "+string(password)+"\n")
-		target := call.args[slices.Index(call.args, "--target")+1]
+		target := inheritedPath(call, call.args[slices.Index(call.args, "--target")+1])
 		include := strings.NewReplacer(`\*`, `*`, `\?`, `?`, `\[`, `[`, `\\`, `\`).Replace(call.args[slices.Index(call.args, "--include")+1])
 		if content == "" {
 			return 0
@@ -53,6 +55,16 @@ func restoreBenchFor(t *testing.T, content string) *restoreBench {
 		return 0
 	}
 	return &restoreBench{resticBench: b, area: area}
+}
+
+// inheritedPath rend, dans le processus du test, le chemin que le vrai restic
+// lirait : /proc/self/fd/3 y est le premier fichier hérité.
+func inheritedPath(call fakeCall, target string) string {
+	below, inherited := strings.CutPrefix(target, "/proc/self/fd/3/")
+	if !inherited || len(call.inherited) == 0 {
+		return target
+	}
+	return filepath.Join(fmt.Sprintf("/proc/self/fd/%d", call.inherited[0].Fd()), below)
 }
 
 func (b *restoreBench) original(t *testing.T, name, content string) string {
@@ -241,5 +253,80 @@ func TestResticRestore_NeedsItsRightAndTakesNoSecret(t *testing.T) {
 	expectResult(t, b.runWithSecret(t, agentwire.KindResticRestore, params, agentwire.ResticVerifySecret{RepoPassword: seededRepoPassword}), agentwire.ActionRefused, agentwire.ReasonBadOrder)
 	if len(b.restic.callsMade()) != 0 {
 		t.Fatal("restic ran with an order that carried a secret")
+	}
+}
+
+// R-A1-10 : la destination est rejugée à l'écriture, sous la racine du droit
+// files.write ouverte une fois. Un dossier de la destination remplacé par un
+// lien après l'acceptation est refusé (path_outside_right) sans lancer
+// restic ; remplacé pendant que restic tourne, ni restic ni le déplacement ne
+// le suivent. Rien n'est écrit hors du droit.
+func TestR_A1_10_ALinkPlacedBetweenAcceptanceAndWritingIsRefused(t *testing.T) {
+	b := restoreBenchFor(t, "contenu restauré")
+	elsewhere, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder := filepath.Join(b.area, "dossier-a")
+	if err := os.Mkdir(folder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	original := filepath.Join(folder, "app.ini")
+	if err := os.WriteFile(original, []byte("contenu actuel"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	swapForLink := func() {
+		if err := os.Rename(folder, folder+".deplace"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(elsewhere, folder); err != nil {
+			t.Fatal(err)
+		}
+	}
+	accept := func() resticRestoreJob {
+		order := judgedOrder{RunID: "run-r-a1-10", Order: agentwire.Order{Kind: agentwire.KindResticRestore,
+			Params: agentwire.ResticRestoreParams{Target: resticTargetID, Snapshot: testSnapshotID, Path: original, Stamp: restoreStamp}}}
+		job, refused := judgeRestore(order, b.runner.identity.Capabilities(), b.runner.checks, b.runner.restic.source.isProvisioned)
+		if refused != nil {
+			t.Fatalf("the order was refused at acceptance: %+v", refused)
+		}
+		return job
+	}
+	calls := len(b.restic.callsMade())
+
+	job := accept()
+	swapForLink()
+	output, err := b.runner.restic.source.restore(context.Background(), job)
+	if result := resultOf("run-r-a1-10", output, err); result.Reason != agentwire.ReasonPathOutsideRight {
+		t.Fatalf("a link placed after acceptance gave %q, want %q", result.Reason, agentwire.ReasonPathOutsideRight)
+	}
+	if len(b.restic.callsMade()) != calls {
+		t.Fatal("restic ran through a link")
+	}
+
+	// Remis en place, puis remplacé pendant que restic écrit.
+	if err := os.Remove(folder); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(folder+".deplace", folder); err != nil {
+		t.Fatal(err)
+	}
+	job = accept()
+	writes := b.restic.answer
+	b.restic.answer = func(call fakeCall, number int, stdout, stderr io.Writer) int {
+		swapForLink()
+		return writes(call, number, stdout, stderr)
+	}
+	if _, err := b.runner.restic.source.restore(context.Background(), job); err != nil {
+		t.Fatalf("the restore held by its root failed: %v", err)
+	}
+	if readText(t, folder+".deplace/app.ini.restaure-"+restoreStamp) != "contenu restauré" {
+		t.Fatal("the copy did not land in the folder opened at writing")
+	}
+	if entries, _ := os.ReadDir(folder + ".deplace"); len(entries) != 2 {
+		t.Fatalf("only the original and the copy may remain: %v", entries)
+	}
+	if entries, _ := os.ReadDir(elsewhere); len(entries) != 0 {
+		t.Fatalf("something was written outside the right: %v", entries)
 	}
 }

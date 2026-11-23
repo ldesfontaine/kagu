@@ -303,6 +303,9 @@ func (db *DB) Enroll(ctx context.Context, tokenHash string, candidate machine.Ma
 }
 
 func insertMachine(ctx context.Context, tx *sql.Tx, m machine.Machine) error {
+	if err := refuseLookalikeID(ctx, tx, m.ID); err != nil {
+		return err
+	}
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO machines (id, name, hostname, address, os, arch, role, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -312,6 +315,24 @@ func insertMachine(ctx context.Context, tx *sql.Tx, m machine.Machine) error {
 	}
 	if err != nil {
 		return fmt.Errorf("insert machine: %w", err)
+	}
+	return nil
+}
+
+// refuseLookalikeID refuse un identifiant égal à un existant, casse et tirets
+// mis à part (R-A1-11). Un ancien agent a pu s'enrôler sous une autre forme
+// que celle de machine.NewID : les deux partageraient l'utilisateur restic
+// (agentwire.ResticUserFor met en minuscules).
+func refuseLookalikeID(ctx context.Context, tx *sql.Tx, id string) error {
+	var lookalikes int
+	err := tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM machines
+		WHERE replace(lower(id), '-', '') = replace(lower(?), '-', '')`, id).Scan(&lookalikes)
+	if err != nil {
+		return fmt.Errorf("read lookalike machine ids: %w", err)
+	}
+	if lookalikes != 0 {
+		return machine.ErrBadID
 	}
 	return nil
 }
