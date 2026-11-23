@@ -257,7 +257,6 @@ func TestVerbs_EveryOtherWriteRouteIsRefusedToAFullWriteToken(t *testing.T) {
 		{http.MethodPut, "/api/firewalls/x"},
 		{http.MethodDelete, "/api/firewalls/x"},
 		{http.MethodPut, "/api/machines/x/proxmox"},
-		{http.MethodPost, "/api/auth/actions/disable"},
 		{http.MethodPost, "/api/alerts/x/actions/acknowledge"},
 	} {
 		if got := callBearerWith(server.Server, target.method, target.path, bearer, ""); got.Code != http.StatusForbidden {

@@ -324,3 +324,14 @@ func (s *Service) closeOtherSessions(ctx context.Context, keepID string) (int, e
 	s.watches.endAllBut(keepID)
 	return closed, err
 }
+
+// CloseAllSessions ferme toutes les sessions, par le canal local : root met
+// tout le monde dehors sans toucher au mot de passe.
+func (s *Service) CloseAllSessions(ctx context.Context) (int, error) {
+	closed, err := s.closeAllSessions(ctx)
+	if err != nil {
+		return 0, err
+	}
+	s.logger.Warn("operator sessions closed on the local channel", "closed", closed)
+	return closed, nil
+}

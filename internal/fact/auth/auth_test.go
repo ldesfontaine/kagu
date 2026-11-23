@@ -125,7 +125,7 @@ func TestValidate_RefusesShortPasswordsAndSeparatorInUsername(t *testing.T) {
 }
 
 // Verify juge contre l'empreinte en vigueur : l'ancien mot de passe ne passe
-// plus après un changement, et la désactivation efface tout.
+// plus après un changement, ni après celui de root.
 func TestVerify_JudgesTheHashInForce(t *testing.T) {
 	service, store := newTestService(t)
 	ctx := context.Background()
@@ -149,11 +149,11 @@ func TestVerify_JudgesTheHashInForce(t *testing.T) {
 	if verifies(t, service, changed, "lucas", "correct horse battery") {
 		t.Fatal("the old password survived the change")
 	}
-	if err := service.Disable(ctx, changed); err != nil {
+	if _, err := service.ResetPassword(ctx, "a passphrase from root"); err != nil {
 		t.Fatal(err)
 	}
-	if store.state.Mode != ModeNone || store.state.PasswordHash != "" || store.state.Username != "" {
-		t.Fatalf("disable must erase the credentials: %+v", store.state)
+	if verifies(t, service, store.state, "lucas", "another long passphrase") || !verifies(t, service, store.state, "lucas", "a passphrase from root") {
+		t.Fatal("the reset password is not the one in force")
 	}
 }
 
@@ -182,11 +182,8 @@ func TestEnableForward_StoresTheHeaderAndNoCredentials(t *testing.T) {
 	if verifies(t, service, store.state, "", "") {
 		t.Fatal("no credentials verify in forward mode")
 	}
-	if err := service.Disable(ctx, state); err != nil {
-		t.Fatal(err)
-	}
-	if store.state.Mode != ModeNone || store.state.Header != "" {
-		t.Fatalf("disable must erase the header: %+v", store.state)
+	if _, err := service.ResetPassword(ctx, "a passphrase from root"); !errors.Is(err, ErrNoPassword) {
+		t.Fatalf("reset password in forward mode: %v", err)
 	}
 }
 
@@ -364,10 +361,10 @@ func TestVerify_RightOperatorBehindAShortQueue_Passes(t *testing.T) {
 	}
 }
 
-// Une requête autorisée sous un état ne s'applique pas à un autre : le
-// mot de passe changé ou l'interface rouverte entre-temps, elle est refusée
+// Une requête autorisée sous un état ne s'applique pas à un autre : le mot
+// de passe changé entre-temps, par l'interface ou par root, elle est refusée
 // et rien n'est écrit.
-func TestChangePasswordAndDisable_RefuseAnAuthorizingStateThatChanged(t *testing.T) {
+func TestChangePassword_RefusesAnAuthorizingStateThatChanged(t *testing.T) {
 	service, store := newTestService(t)
 	ctx := context.Background()
 	authorizing, err := service.EnableNative(ctx, none, issueCode(t, service), "lucas", "correct horse battery")
@@ -381,20 +378,14 @@ func TestChangePasswordAndDisable_RefuseAnAuthorizingStateThatChanged(t *testing
 	if _, err := service.ChangePassword(ctx, authorizing, "", "correct horse battery", "a third long passphrase"); !errors.Is(err, ErrStateChanged) {
 		t.Fatalf("change under the old state: %v, want ErrStateChanged", err)
 	}
-	if err := service.Disable(ctx, authorizing); !errors.Is(err, ErrStateChanged) {
-		t.Fatalf("disable under the old state: %v, want ErrStateChanged", err)
-	}
 	if !store.state.Same(changed) {
 		t.Fatalf("a refused request wrote: %+v, want %+v", store.state, changed)
 	}
-	if err := service.Disable(ctx, changed); err != nil {
-		t.Fatalf("disable under the current state: %v", err)
+	if _, err := service.ResetPassword(ctx, "a passphrase from root"); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := service.ChangePassword(ctx, changed, "", "correct horse battery", "a third long passphrase"); !errors.Is(err, ErrStateChanged) {
-		t.Fatalf("change after the interface reopened: %v, want ErrStateChanged", err)
-	}
-	if store.state.Mode != ModeNone {
-		t.Fatalf("a refused change reclosed the interface: %+v", store.state)
+	if _, err := service.ChangePassword(ctx, changed, "", "another long passphrase", "a third long passphrase"); !errors.Is(err, ErrStateChanged) {
+		t.Fatalf("change after root reset the password: %v, want ErrStateChanged", err)
 	}
 }
 

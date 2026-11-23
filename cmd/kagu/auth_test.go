@@ -51,7 +51,7 @@ func enableIn(t *testing.T, stateDir string) {
 	}
 }
 
-func TestAuthCommand_StatusThenDisableReopensTheInterface(t *testing.T) {
+func TestAuthCommand_StatusShowsTheAccountButNeverTheHash(t *testing.T) {
 	configPath, stateDir := writeConfig(t)
 	enableIn(t, stateDir)
 
@@ -65,33 +65,9 @@ func TestAuthCommand_StatusThenDisableReopensTheInterface(t *testing.T) {
 	if strings.Contains(out.String(), "$2") {
 		t.Fatal("status must not print the hash")
 	}
-
-	out.Reset()
-	if err := authCommand([]string{"disable", "-config", configPath}, &out); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "désactivée") {
-		t.Fatalf("disable: %q", out.String())
-	}
-
-	out.Reset()
-	if err := authCommand([]string{"status", "-config", configPath}, &out); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "mode : none") {
-		t.Fatalf("status after disable: %q", out.String())
-	}
-
-	out.Reset()
-	if err := authCommand([]string{"disable", "-config", configPath}, &out); err != nil {
-		t.Fatalf("disabling twice is not an error: %v", err)
-	}
-	if !strings.Contains(out.String(), "déjà") {
-		t.Fatalf("disable twice: %q", out.String())
-	}
 }
 
-func TestAuthCommand_StatusShowsTheForwardHeaderAndDisableReopens(t *testing.T) {
+func TestAuthCommand_StatusShowsTheForwardHeader(t *testing.T) {
 	configPath, stateDir := writeConfig(t)
 	root, err := openStateDir(stateDir)
 	if err != nil {
@@ -119,23 +95,21 @@ func TestAuthCommand_StatusShowsTheForwardHeaderAndDisableReopens(t *testing.T) 
 		t.Fatalf("forward mode has no stored username: %q", out.String())
 	}
 
-	out.Reset()
-	if err := authCommand([]string{"disable", "-config", configPath}, &out); err != nil {
-		t.Fatal(err)
-	}
-	out.Reset()
-	if err := authCommand([]string{"status", "-config", configPath}, &out); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "mode : none") {
-		t.Fatalf("status after disable: %q", out.String())
-	}
 }
 
+// « auth disable » rouvrait la première configuration à qui atteint le port :
+// il n'existe plus (R-A2-10), et rien n'a été écrit.
 func TestAuthCommand_RefusesAnUnknownSubcommand(t *testing.T) {
+	configPath, stateDir := writeConfig(t)
+	enableIn(t, stateDir)
 	var out bytes.Buffer
-	if err := authCommand([]string{"enable"}, &out); err == nil {
-		t.Fatal("enable is not offered from the command line")
+	for _, command := range []string{"enable", "disable"} {
+		if err := authCommand([]string{command, "-config", configPath}, &out); err == nil {
+			t.Fatalf("%s is not offered from the command line", command)
+		}
+	}
+	if err := authCommand([]string{"status", "-config", configPath}, &out); err != nil || !strings.Contains(out.String(), "mode : native") {
+		t.Fatalf("status after a refused disable: %q, %v", out.String(), err)
 	}
 	if err := authCommand(nil, &out); err == nil {
 		t.Fatal("a subcommand is required")

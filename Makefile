@@ -62,8 +62,9 @@ e2e: front $(FRONT_DIR)/node_modules/.stamp
 	cd $(FRONT_DIR) && npx playwright install chromium && npm run e2e
 
 # dev/ est ton /etc et ton /var/lib locaux : créé une fois, jamais effacé.
+# serve crée dev/state lui-même, en 0700 : ouvert, il refuse de démarrer.
 run: build
-	@mkdir -p dev/state
+	@mkdir -p dev
 	@test -f dev/config.toml || printf 'listen = "127.0.0.1:8080"\nstate_dir = "%s/dev/state"\n' "$(CURDIR)" > dev/config.toml
 	./bin/opencloud serve -config dev/config.toml
 

@@ -595,6 +595,23 @@ func (s *Server) revokeAPIToken(w http.ResponseWriter, r *http.Request) {
 	s.finishAPIAction(w, r, s.apiTokens.Revoke(r.Context(), r.PathValue("id")), apitoken.ErrNotFound)
 }
 
+type revokedAPITokensResponse struct {
+	Revoked int `json:"revoked"`
+}
+
+// revokeAllAPITokens révoque tous les jetons d'API : root, par la socket
+// seulement.
+func (s *Server) revokeAllAPITokens(w http.ResponseWriter, r *http.Request) {
+	if !s.readEmptyBody(w, r) {
+		return
+	}
+	revoked, err := s.apiTokens.RevokeAll(r.Context())
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	s.writeAPI(w, http.StatusOK, revokedAPITokensResponse{Revoked: revoked})
+}
+
 // mcpEnvOf tire de l'adresse d'écoute l'hôte où mcp-maison écoute (MCP_HOST)
 // et l'adresse où il joint openCloud (OPENCLOUD_URL). Un hôte joker ou vide
 // vaut la boucle locale.

@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | L'opérateur | L'opérateur, dans un navigateur | Le front React, chargé une fois avec la page, qui lit l'API JSON et affiche. Tant qu'aucun compte n'existe, l'écran de première configuration à la place de l'interface : il crée le compte, puis l'interface s'ouvre |
 | La machine Kagu | Le VPS où Kagu est installé | `opencloud serve` : l'API, le front embarqué, la base. **Et son agent, `opencloud agent`, comme toute machine** : `serve` n'observe rien de sa propre machine. La ligne qui l'installe s'affiche dès la première configuration (« La machine Kagu ») |
-| La commande locale | `opencloud export` et `opencloud apply`, lancées sur la machine Kagu, sous le compte du service ou en root | Rien de son côté : elles parlent au `serve` qui tourne par la socket `state_dir/control.sock`. `export` écrit ce qu'il répond ; `apply` lit un fichier, montre le plan que le serveur en tire, demande confirmation, puis lui demande de l'écrire. Elles n'ouvrent pas la base |
+| La commande locale | `opencloud export` et `opencloud apply`, lancées sur la machine Kagu, sous le compte du service ou en root ; `opencloud admin`, en root seulement | Rien de son côté : elles parlent au `serve` qui tourne par la socket `state_dir/control.sock`. `export` écrit ce qu'il répond ; `apply` lit un fichier, montre le plan que le serveur en tire, demande confirmation, puis lui demande de l'écrire ; `admin` porte les gestes de secours de root (« Le canal local de root »). Elles n'ouvrent pas la base |
 | Une machine | Un VPS, une VM, un NAS, que Kagu gère sans l'héberger | `opencloud agent` : le démon qui parle à Kagu, mesure la machine et veille son Docker, **sous un compte dédié (`opencloud-agent`), root sur demande**. Un agent à la fois par machine ; ses droits sont cochés à l'installation, écrits dans son fichier, rapportés à chaque connexion et **appliqués** : un ordre hors de ses droits est refusé. Il exécute les **ordres signés** par la clé du serveur qu'il a épinglée à l'enrôlement, et refuse tout autre. Les familles : l'agent (`agent.*`), la sauvegarde de la base (`backup.*`), les dépôts restic (`restic.*`), Docker (`docker.*`), Proxmox (`proxmox.vm.*`). La liste est fermée et ne se recopie pas : `agentwire.OrderKinds` la donne, chaque famille a sa section plus bas |
 | Docker | Le démon de conteneurs d'une machine, s'il y en a un | Les services et leurs réseaux : pour observer, l'agent le lit par sa socket, en lecture seule. Il ne lui écrit que par `docker compose up`, pour déployer un service déclaré, avec le droit `docker.deploy` ou `docker.update` (« Comment un service se déploie ») |
 | Traefik | Le proxy de la machine Kagu | Termine TLS et transmet à Kagu sur la boucle locale |
@@ -81,7 +81,7 @@ Trait double : chiffré. Trait simple : en clair, mais sans quitter la machine.
 
 | Flux | D'où à où | Chiffrement | Qui prouve quoi |
 | --- | --- | --- | --- |
-| Interface | navigateur → Traefik | TLS de Traefik | L'opérateur, par une session (mode `native`) : la page de connexion échange le compte créé à la première configuration contre un cookie `__Host-kagu_session` (`Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`) que le navigateur joint à chaque requête, `/api/events` et les flux de journaux compris ; le mot de passe ne voyage qu'à la connexion. Un en-tête `Authorization: Basic` n'est lu par aucun mode. En mode `forward`, le SSO qui authentifie (Authelia derrière Traefik) : Kagu ne croit l'en-tête d'identité (`Remote-User` par défaut), présent une seule fois, que d'un pair de `trusted_proxies` qui porte aussi le secret partagé quand il est configuré (`forward_secret_file`, en-tête `X-OpenCloud-Proxy-Secret`), et répond `401` à tout le reste ; c'est au mandataire (Traefik) d'écraser l'en-tête envoyé par le client. La première requête admise ouvre aussi une session et pose le même cookie : elle lie flux et audit, **sans jamais remplacer l'en-tête**, que chaque requête repasse (R-A2-17). Une identité ainsi prouvée mais absente d'une liste `forward_users` non vide reçoit `403 auth.forward_forbidden`. Un jeton d'API (`Authorization: Bearer`) remplace l'un et l'autre mode, sur sa liste fermée de lectures, plus les verbes qu'il porte en écriture (« Comment un agent IA lit Kagu »). Mode `none` (installation neuve, ou après `opencloud auth disable`) : aucun compte, le serveur ne sert que la première configuration et répond `401 auth.setup_required` au reste ; la création du compte exige le code de première configuration (« Comment l'opérateur entre dans l'interface »). Le front charge la page, puis parle à `/api/…` en JSON |
+| Interface | navigateur → Traefik | TLS de Traefik | L'opérateur, par une session (mode `native`) : la page de connexion échange le compte créé à la première configuration contre un cookie `__Host-kagu_session` (`Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`) que le navigateur joint à chaque requête, `/api/events` et les flux de journaux compris ; le mot de passe ne voyage qu'à la connexion. Un en-tête `Authorization: Basic` n'est lu par aucun mode. En mode `forward`, le SSO qui authentifie (Authelia derrière Traefik) : Kagu ne croit l'en-tête d'identité (`Remote-User` par défaut), présent une seule fois, que d'un pair de `trusted_proxies` qui porte aussi le secret partagé quand il est configuré (`forward_secret_file`, en-tête `X-OpenCloud-Proxy-Secret`), et répond `401` à tout le reste ; c'est au mandataire (Traefik) d'écraser l'en-tête envoyé par le client. La première requête admise ouvre aussi une session et pose le même cookie : elle lie flux et audit, **sans jamais remplacer l'en-tête**, que chaque requête repasse (R-A2-17). Une identité ainsi prouvée mais absente d'une liste `forward_users` non vide reçoit `403 auth.forward_forbidden`. Un jeton d'API (`Authorization: Bearer`) remplace l'un et l'autre mode, sur sa liste fermée de lectures, plus les verbes qu'il porte en écriture (« Comment un agent IA lit Kagu »). Mode `none` (installation neuve ; rien n'y ramène, R-A2-10) : aucun compte, le serveur ne sert que la première configuration et répond `401 auth.setup_required` au reste ; la création du compte exige le code de première configuration (« Comment l'opérateur entre dans l'interface »). Le front charge la page, puis parle à `/api/…` en JSON |
 | Interface | Traefik → Kagu | En clair, sur `127.0.0.1` de la même machine | Toute écriture de l'API exige `Content-Type: application/json`, même sans corps, et un `Sec-Fetch-Site` présent doit valoir `same-origin` ou `none`. Toute requête sous `/api/…` exige un `Host` reconnu (hôte de `public_url`, `localhost`, IP littérale, hôte de `listen`), contre le DNS rebinding : sinon `403 bad_host`. Un `%2F` dans le chemin brut d'une route `/api/…` est refusé `400 bad_path` avant tout routage ; les fichiers du front compilé ne s'ouvrent sans session que sur la route du front, jugée sur le chemin encodé (R-A2-13). Le cookie de session est `SameSite=Strict` : une page tierce ne l'emporte pas ; cette garde s'y ajoute. Un flux de l'opérateur (`GET /api/events`, `GET /api/containers/{id}/logs/stream`) exige en plus `Sec-Fetch-Site` absent ou `same-origin` (`none` compris refusé) et un `Origin`, s'il est présent, égal à celui de `public_url` (sans `public_url`, à l'adresse de la page) : sinon `403 bad_origin`, jugé avant l'accès. Le flux public de la page de statut et celui de l'agent n'ont pas cette garde |
 | Direct | navigateur → `/api/events`, une connexion par onglet | TLS de Traefik | L'opérateur, par sa session ou par le SSO, comme l'interface ; refusé en mode `none` (`401 auth.setup_required`). Le flux ne dit que « les machines ont changé », « les tâches ont changé », jamais lesquelles. Il se ferme dans la seconde où meurt la session qui l'a ouvert (R-A2-12), et au ping de 15 s si l'état de l'accès a changé. Plafond de 64 onglets, comptés par le serveur et non par les abonnés du bus (la page de statut y est abonnée aussi), `503` au-delà |
 | Agent | machine → Traefik | TLS de Traefik, ou empreinte épinglée par `-pin` si pas de domaine | Ed25519 : l'agent signe un aléa qu'il tire, l'identifiant de sa machine et l'heure (protocole 2), Kagu vérifie avec la clé enrôlée. Le signal porte les mesures de la machine et ce que son Docker a montré, dans un débit borné par machine ; les journaux d'un conteneur remontent par `POST /agent/logs/…`, jeton de session |
@@ -101,7 +101,7 @@ Trait double : chiffré. Trait simple : en clair, mais sans quitter la machine.
 | Agent IA | client MCP → Traefik → mcp-maison | TLS de Traefik | OAuth de mcp-maison, délégué à l'IdP OIDC de l'opérateur (Authelia, Authentik, Keycloak, GitLab) : Kagu n'y voit rien et n'y prouve rien |
 | Agent IA | mcp-maison → Kagu, `/api/…` | En clair, sur l'adresse de `listen`, sans sortir de la machine | Un Bearer, jeton d'API créé sous Paramètres, à échéance de 30, 90 (défaut) ou 365 jours, ou sans échéance si l'opérateur le choisit. Il est jugé **avant le mode** d'authentification de l'interface (ni la session ni l'en-tête du mandataire), sauf en mode `none` où il est ignoré, et n'ouvre que 32 lectures, plus, pour un jeton en écriture, les routes des seuls verbes cochés, à débit borné par jeton (« Comment un agent IA lit Kagu »). Le jeton est haché avant d'être cherché, et son dernier usage noté au plus une fois par minute. La première configuration de l'interface les révoque tous |
 | Vérification de mcp-maison | Kagu → `mcp_url`, `GET /health` | Celui de l'adresse réglée : en clair vers la machine ou un réseau privé, le lien-local est refusé | Personne : on lit un état, rien ne s'écrit. Trois secondes, une redirection n'est pas suivie, 64 Kio au plus ; déclenchée par la carte de Paramètres, jamais en fond |
-| Commande locale | `opencloud export` et `opencloud apply` → `state_dir/control.sock` | Aucun : une socket Unix de la machine, rien ne passe par le réseau | Les droits Unix : la socket est en 0600 et `state_dir` doit être fermé au groupe et aux autres (sinon `serve` ne l'ouvre pas), il faut tourner sous le compte du service ou en root. Aucune garde d'opérateur ni de même-origine, aucun navigateur n'y passe ; elle ne sert que les quatre routes `/api/manifest/…` (export, plan, apply, journal), chacune avec sa méthode, tout le reste y répond 404. Elle **écrit** l'annuaire : qui l'atteint peut déjà lire la base et la clé de chiffrement, c'est le même raisonnement que pour `opencloud auth`. L'acteur du journal est `cli` et son nom est celui que la commande déclare : indicatif |
+| Commande locale | `opencloud export`, `opencloud apply` et `opencloud admin` → `state_dir/control.sock` | Aucun : une socket Unix de la machine, rien ne passe par le réseau | Les droits Unix : la socket est en 0600 et `state_dir` doit être fermé au groupe et aux autres (sinon `serve` ne démarre pas), il faut tourner sous le compte du service ou en root. Aucune garde d'opérateur ni de même-origine, aucun navigateur n'y passe ; elle sert les quatre routes `/api/manifest/…` (export, plan, apply, journal) et les cinq routes `POST /control/admin/…`, ces dernières au seul pair d'uid 0, lu par `SO_PEERCRED` (« Le canal local de root ») ; chacune a sa méthode, tout le reste y répond 404. Elle **écrit** l'annuaire : qui l'atteint peut déjà lire la base et la clé de chiffrement, c'est le même raisonnement que pour `opencloud auth`. L'acteur du journal est `cli` ; son nom est `uid:<uid>` du pair, puis, pour un apply, le compte que la commande déclare : indicatif |
 | Alerte par e-mail | Kagu → le relais SMTP | STARTTLS exigé (défaut, 587) ou TLS dès la connexion (465), certificat vérifié contre le magasin du système ; `none` seulement si l'adresse jointe est sur la boucle locale ou un réseau privé, vérifié à la connexion | Kagu s'authentifie par AUTH PLAIN ou LOGIN, après le chiffrement. Un relais qui ne propose pas STARTTLS est refusé : jamais de repli en clair. Au-delà du relais, le message voyage comme tout courrier, et son destinataire le garde |
 | Alerte Matrix | Kagu → le serveur d'accueil | TLS : le serveur d'accueil est exigé en `https://` | Kagu écrit au nom du bot par `Authorization: Bearer <jeton>`, le jeton du canal ; qui a ce jeton parle au nom du bot partout où il est invité. Le serveur d'accueil prouve qui il est par son certificat. Le message dit ce que dit le corps d'un webhook, et le salon le garde |
 | Hyperviseur | Kagu → l'API de Proxmox (`https://hôte:8006`), en lecture, toutes les cinq minutes | TLS : le certificat se juge par le magasin du système, ou par l'**empreinte SHA-256** que l'opérateur a épinglée (un Proxmox livre un certificat auto-signé) ; pas de redirection suivie | Un jeton d'API Proxmox en lecture seule (rôle `PVEAuditor`, plus un droit sur le stockage des sauvegardes : « Lire les sauvegardes »), dans `Authorization: PVEAPIToken=…` ; le jeton ne voyage nulle part ailleurs. Voir « Comment un hôte Proxmox se lit » |
@@ -140,7 +140,7 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `opencloud.db` | Les clés SSH autorisées que chaque agent relève (migration `011_ssh_keys.sql`) : `ssh_reports` (une ligne par machine : relevé tronqué ou non, instant), `ssh_accounts` (machine, compte, uid, état `read`, `none`, `denied`, `unsafe` ou `too_large`, relevé tronqué, lignes ignorées) et `ssh_keys` (compte, fichier `authorized_keys` ou `authorized_keys2`, **empreinte SHA256**, type, taille en bits, commentaire borné à 64 octets, noms d'options reconnus). **Jamais le contenu d'un fichier ni la clé publique entière** : l'empreinte ne remonte pas à la clé | Remplacé en entier à chaque relevé retenu, dans une transaction : ce qu'une machine ne dit plus disparaît. Pas de purge d'âge. La machine retirée emporte tout (`ON DELETE CASCADE`), et le plan de suppression compte « clés SSH relevées » |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les unités systemd que chaque agent relève (migration `029_systemd_units.sql`) : `systemd_reports` (une ligne par machine : systemd lu ou non, raison, relevé tronqué ou non, instant) et `systemd_units` (machine, **nom** de l'unité de service, état de chargement, état d'activité, sous-état : trois mots de listes fermées). **Jamais** la description, le fichier de l'unité, ses `Environment=`, son processus ni son groupe de contrôle | Remplacé en entier à chaque relevé retenu, dans une transaction : une unité que la machine ne dit plus disparaît. Pas de purge d'âge. La machine retirée emporte tout (`ON DELETE CASCADE`), et le plan de suppression compte « unités systemd relevées » |
 | Machine Kagu, **mémoire du processus `serve`** | aucun fichier | Qui a joint quels ports de l'hôte de chaque machine (`hostconn.Service`) : **une vue = un port, une source (compte, adresse du réseau local ou Internet), première et dernière vue**. Aucune migration. Au plus 2 000 vues par machine (les plus anciennes partent) | Perdu à l'arrêt de `serve` : chaque agent redit son rapport à l'ouverture de son flux, les vues repartent de zéro. Jamais dans la base, ni dans une sauvegarde, ni dans le journal d'audit |
-| Machine Kagu, **mémoire du processus `serve`** | aucun fichier | Les fins de session que des flux de l'opérateur attendent (`internal/fact/auth/session_watch.go`) : par session, un canal, le nombre de flux qui l'attendent, un minuteur posé à son échéance. Rien de la session elle-même | Perdu à l'arrêt de `serve`, avec les flux. Une session effacée par un autre processus (`opencloud auth disable`) n'est vue qu'au ping du flux (15 s) |
+| Machine Kagu, **mémoire du processus `serve`** | aucun fichier | Les fins de session que des flux de l'opérateur attendent (`internal/fact/auth/session_watch.go`) : par session, un canal, le nombre de flux qui l'attendent, un minuteur posé à son échéance. Rien de la session elle-même | Perdu à l'arrêt de `serve`, avec les flux. Une session effacée hors de `serve` (la base modifiée à la main) n'est vue qu'au ping du flux (15 s) ; le canal local de root passe par `serve` et ferme les flux tout de suite |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les liens entre instances (migration `030_links.sql`) : la table `links`, une ligne par lien : l'instance de départ et celle d'arrivée (**machine et clé stable**, `compose:projet/service`, `container:nom` ou `systemd:unité.service`, jamais un identifiant Docker), la nature (`order`, `config`), la **preuve** (`declared`), le **signal** (`depends_on`, `container_link`, `operator`), un port facultatif, la première et la dernière vue. Aucune valeur de configuration, aucun environnement | Jamais effacé parce qu'on ne le revoit plus : la dernière vue vieillit, l'écran dit « Ancien » après 7 jours. Un lien d'outil se rafraîchit au rapport suivant ; un lien de l'opérateur ne se retire que par lui (`DELETE /api/directory/links/{id}`). Au plus 2 000 liens par machine. La machine retirée emporte les siens (`ON DELETE CASCADE`) |
 | Machine Kagu, `state_dir` | `opencloud.db` | L'hôte Proxmox qu'une machine porte et ce que son API en a dit (migration `013_proxmox.sql`) : `machine_proxmox` (une ligne par machine : adresse de l'API, identifiant du jeton, **secret du jeton chiffré**, empreinte épinglée, nœud, version, instant de la déclaration et du dernier relevé réussi, clé du refus du dernier relevé qui a échoué), `proxmox_guests` (VM et conteneurs : numéro, type `qemu` ou `lxc`, nom, état, modèle ou non, vCPU, mémoire et disque **alloués**, machine enrôlée rapprochée, dernière sauvegarde connue et sa taille ; depuis la migration `020`, le stockage de la plus récente, le nombre d'archives vzdump vues et leur taille totale) et `proxmox_storages` (nœud, nom, type, total, utilisé, libre, contenus acceptés, actif ; depuis la migration `035`, si le jeton lit les archives du stockage). **Jamais le contenu d'une VM** | Le secret du jeton est chiffré comme les autres (« Ce que le chiffrement couvre ») ; il ne sort jamais de l'API ni des journaux. Les VM et les stockages sont remplacés en entier à chaque relevé réussi, dans une transaction : ce que l'hôte ne montre plus disparaît, un relevé qui échoue garde le précédent. Pas d'historique, pas de purge d'âge. La machine retirée emporte l'hôte et ses relevés (`ON DELETE CASCADE`) ; une VM rapprochée d'une machine retirée reste, sans lien. Le plan de suppression compte « hôtes Proxmox déclarés » et « VM Proxmox rapprochées » |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les rôles que l'agent reconnaît sur sa machine (migration `014_machine_roles.sql`) : `machine_roles` (machine, rôle de la liste fermée `proxmox_ve`, version trouvée ; aujourd'hui le seul rôle). **Aucun secret, aucun droit** : un rôle se montre, il n'ouvre rien | Un reflet du dernier rapport, remplacé en entier à chaque rapport retenu : un rôle que l'agent ne voit plus disparaît. Pas d'historique, pas de purge d'âge. La machine retirée l'emporte (`ON DELETE CASCADE`) |
@@ -153,8 +153,8 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `opencloud.db` | Le dernier constat sur chaque image d'une machine dans `image_checks` (issue, empreinte tirée, empreinte publiée, tag plus récent et son empreinte, type déduit) ; sur la fiche `containers`, ce que Compose dit du service (`compose_service`, `compose_dir`, `compose_file`). La politique de l'opérateur ne vit plus sur la fiche : elle est sur l'unité (`service_units.update_policy`) | Écrasé à chaque vérification ; purgé après 30 jours sans vérification ; la machine retirée emporte tout. Le dossier du projet Compose est un chemin de la machine, en clair |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les alertes dans `alerts` (type, gravité, objet et son nom recopié, machine, service déclaré, détails en JSON, dates dont le début du calme, la lecture (`acknowledged_at`), la dernière annonce (`notified_at`) et le rappel parti (`reminded_at`) ; l'objet et le service en clés étrangères `set null`), les canaux dans `alert_channels` (**URL et secret chiffrés** — le jeton du bot pour Matrix —, format, destinataires d'un e-mail ou salon Matrix dans `destination`, gravité minimale, `categories` : les familles reçues, séparées par des virgules, **vide = toutes**), les livraisons dans `alert_deliveries` (événement, essais, motif, code, heure de l'essai suivant, ou retenue par la limite du canal, ou tue par un silence), les silences dans `mutes` (cible en clé étrangère, type, fenêtre, motif, auteur, et `announce` avec `public_title` quand le silence s'annonce en maintenance) | Résolues purgées après 90 jours, livraisons avec leur alerte, canaux sans purge. Silences finis depuis plus de 90 jours purgés avec les alertes (au départ, puis une fois par jour) ; une machine (avec ses conteneurs), un service déclaré, une sonde ou une tâche retirée emporte ses silences par la clé étrangère (`cascade`), une pause ou un archivage les garde ; le plan de suppression les compte. **L'URL et le secret d'un canal sont chiffrés** (AES-256-GCM, clé du serveur, liés à leur ligne) : un webhook Discord, Slack ou ntfy porte son jeton dans le chemin de l'URL, c'est un secret autant que la clé de signature. Il faut pouvoir les rejouer au récepteur, un haché ne servirait à rien ; l'API ne renvoie jamais le secret. Pour Matrix, c'est le jeton d'accès du bot : le déconnecter du compte du bot le révoque |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les jetons d'API dans `api_tokens` (empreinte SHA-256, préfixe affiché, portée `read` ou `write`, nom, échéance de 30, 90 ou 365 jours ou aucune, dernier usage) et leurs verbes dans `api_token_verbs` (migration `016_api_token_verbs.sql` : un verbe du registre par ligne, aucune ligne : aucune action ; `ON DELETE CASCADE`), leur portée dans `api_tokens.machines_limited` et `guests_limited` et les tables `api_token_machines` et `api_token_guests` (migration `023_api_token_reach.sql` : « La portée d'un jeton »), et les demandes de verbe à confirmation que ces jetons déposent dans `verb_requests` (migration `025_verb_requests.sql` : « Les verbes à confirmation ») | Rien n'est en clair : une copie de la base n'ouvre rien. Révoquer **efface** la ligne, ses verbes, sa portée et ses demandes en attente ; purge des jetons échus toutes les 15 minutes ; 16 jetons au plus ; activer l'authentification de l'interface les efface tous |
-| Machine Kagu, `state_dir` | `opencloud.db` | L'accès de l'opérateur à l'interface dans `auth_settings` (une ligne) : le mode (`none`, `native`, `forward` ; une base en `basic` devient `native` à la migration `044`, même nom, même empreinte), l'identifiant, l'empreinte **bcrypt** du mot de passe (coût 12), le nom de l'en-tête d'identité du mode `forward` (`forward_header`), la date d'activation | Le mot de passe n'est jamais stocké ni renvoyé ; une copie de la base donne l'identifiant, pas l'accès. L'identité transmise par le SSO arrive avec chaque requête ; elle n'est stockée que dans la session qu'elle ouvre (`operator_sessions.identity`). `none` ne veut plus dire « ouvert » : aucun compte, l'installation attend sa première configuration. Désactiver efface identifiant, empreinte et en-tête, toutes les sessions, et y ramène |
-| Machine Kagu, `state_dir` | `opencloud.db` | Les sessions de l'opérateur dans `operator_sessions` (migration `044`) : `id` (16 hexadécimaux, montré dans la liste et dans l'audit), `token_hash` (SHA-256 du jeton du cookie, `ident.HashToken`), `identity` (le compte, ou l'identité du SSO en `forward`), `created_at`, `seen_at` (écrit au plus une fois par minute), `expires_at` (fin absolue, 12 h), `reauth_at` (nul : la redemande viendra le poser), `source` (adresse au /64), `user_agent` (200 octets au plus, nettoyé) | Le jeton (256 bits) n'est jamais stocké : une copie de la base n'ouvre aucune session. Une session meurt à 2 h sans requête, à 12 h, à la déconnexion, quand le mot de passe change (les autres), au retour en `none` (toutes), et en `forward` quand son cookie arrive sans la garde du mandataire ou avec une autre identité. Les mortes sont effacées quand on les présente, à chaque ouverture et à l'échéance d'une session qu'un flux attend |
+| Machine Kagu, `state_dir` | `opencloud.db` | L'accès de l'opérateur à l'interface dans `auth_settings` (une ligne) : le mode (`none`, `native`, `forward` ; une base en `basic` devient `native` à la migration `044`, même nom, même empreinte), l'identifiant, l'empreinte **bcrypt** du mot de passe (coût 12), le nom de l'en-tête d'identité du mode `forward` (`forward_header`), la date d'activation | Le mot de passe n'est jamais stocké ni renvoyé ; une copie de la base donne l'identifiant, pas l'accès. L'identité transmise par le SSO arrive avec chaque requête ; elle n'est stockée que dans la session qu'elle ouvre (`operator_sessions.identity`). `none` ne veut plus dire « ouvert » : aucun compte, l'installation attend sa première configuration ; une fois le compte créé, rien n'y ramène (R-A2-10). Root change le mot de passe ou le mode par le canal local (« Le canal local de root ») |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les sessions de l'opérateur dans `operator_sessions` (migration `044`) : `id` (16 hexadécimaux, montré dans la liste et dans l'audit), `token_hash` (SHA-256 du jeton du cookie, `ident.HashToken`), `identity` (le compte, ou l'identité du SSO en `forward`), `created_at`, `seen_at` (écrit au plus une fois par minute), `expires_at` (fin absolue, 12 h), `reauth_at` (nul : la redemande viendra le poser), `source` (adresse au /64), `user_agent` (200 octets au plus, nettoyé) | Le jeton (256 bits) n'est jamais stocké : une copie de la base n'ouvre aucune session. Une session meurt à 2 h sans requête, à 12 h, à la déconnexion, quand le mot de passe change (les autres), quand root refait le mot de passe, change le mode ou ferme tout par le canal local (toutes), et en `forward` quand son cookie arrive sans la garde du mandataire ou avec une autre identité. Les mortes sont effacées quand on les présente, à chaque ouverture et à l'échéance d'une session qu'un flux attend |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les réglages de l'opérateur dans `settings`, une seule ligne : la langue de l'interface ; le délai du rappel des alertes de danger (`danger_reminder_hours`, 12 par défaut, 0 le coupe) ; le relais d'e-mails (`mail_host`, `mail_port`, `mail_tls`, `mail_username`, `mail_from`, et **`mail_password` chiffré** : il faut le rejouer au relais, un haché ne servirait à rien ; l'API ne le renvoie jamais, `has_password` dit seulement qu'il y en a un) ; la fin de support (`lifecycle_disabled`, à 0 tant qu'elle est activée) | Chaque écrivain relit, modifie sa clé et réécrit dans une seule transaction : la langue et le relais changés en même temps survivent tous deux, même depuis deux processus. **Le mot de passe du relais est chiffré** comme les autres secrets saisis dans l'interface, lié à la ligne des réglages |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les seuils des alertes de ressources dans `alert_thresholds` (migration `037_alert_thresholds.sql`) : une ligne par ressource (`cpu`, `memory`, `disk`) et par périmètre, `machine_id` à NULL pour le réglage global ou la machine qu'elle surcharge (clé étrangère en `cascade`) ; seuil d'attention, seuil de danger, fenêtre en secondes (0 : la dernière lecture, le disque). Le seuil de retour n'est pas stocké | Deux index uniques partiels : une règle par ressource pour le global, une par machine et ressource. Les seuils du disque déjà réglés sous Paramètres passent au global à la migration, tels quels |
 | Machine Kagu, `state_dir` | `secret.key` | La clé qui chiffre les secrets ci-dessus : une ligne `key-v1:<id>:<clé>`, AES-256, 32 octets tirés au hasard, jamais en base. `<id>` est l'empreinte courte de la clé, inscrite aussi dans chaque chiffré ; le temps d'une rotation, le fichier porte plusieurs lignes (quatre au plus) : un chiffré s'ouvre avec la clé de son `<id>`, la première ligne scelle | Mode 0600, écriture atomique, refusée si un autre compte peut la lire. `serve` la crée au premier démarrage par une création exclusive (un lien dur d'un temporaire écrit et synchronisé : si le fichier existe, elle échoue) ; deux `serve` lancés ensemble sur une base neuve tirent chacun une clé, un seul gagne, l'autre relit la sienne. `opencloud secrets rotate` en tire une neuve et rescelle chaque secret, l'ancienne gardée sous `secret.key.rotated-<horodatage>` ; `opencloud secrets forget` remplace une clé perdue, l'ancienne gardée sous `secret.key.forgotten-<horodatage>`. **À sauvegarder à part, une fois** : sans elle, la base garde ses données mais perd ses secrets. `opencloud secrets forget` repart d'une clé neuve (voir `installation.md`) |
@@ -163,7 +163,7 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `opencloud.db` | La sauvegarde de la base : `backup_keyring` (une ligne : la clé **publique** `age1…` en clair, la privée `identity_sealed` scellée par la phrase de passe, l'empreinte), `backup_destinations` (nom, machine en `restrict`, chemin), `backup_plans` (le sujet, unique, le libellé, le type de source `database` ou `agent`, la machine source en `restrict`, le producteur, la sélection, la destination en `restrict`, combien garder, la dernière tentative, la clé de son refus, le dernier ordre en `set null`). **La phrase de passe n'est écrite nulle part** : ni base, ni journal, ni audit | La clé privée n'est lisible qu'avec la phrase ; la publique ne chiffre que |
 | Machine Kagu, `state_dir` | `outgoing/<colis>/` | Les colis des ordres longs, de deux sortes. *À télécharger* (la base, `backup.receive`) : l'instantané de la base (`VACUUM INTO`) le temps de l'emballer, puis l'archive chiffrée jusqu'à son téléchargement par l'agent, **la vie de son ordre au plus** (`action.ParcelLifetime` : 2 min pour être pris, une heure pour finir). *À téléverser* (`backup.produce`, `Outbox.CreateForUpload`) : un colis que la machine **source** remplit par `PUT /agent/parcels/{colis}/{nom}` (l'archive chiffrée d'une VM, 64 Gio au plus, 1 Gio libre de marge ; la clé scellée y est déposée par `serve`), jusqu'à ce que la destination l'ait téléchargé ; `serve` le jette dès la cible traitée, et **un seul vit à la fois**. Vidé au démarrage de `serve`. Aucune sauvegarde n'est gardée sur cette machine | `0700`, `0600`, même disque et mêmes droits que la base ; l'instantané en clair est effacé avant l'envoi ; un téléversement n'apporte que du chiffré |
 | Machine Kagu, `state_dir` | `lifecycle.json` | La dernière lecture d'endoflife.date : quel dépôt d'images est quel produit, et les branches des produits que les services utilisent (nom, maintenue ou non, date de fin, dernière version). Absent tant que la fin de support n'a jamais été activée | Données publiques, 0600, écriture atomique, remplacé d'un bloc à chaque lecture réussie ; l'effacer coûte une lecture de la source |
-| Machine Kagu, `state_dir` | `control.sock` | La socket de commande, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/api/manifest/…`. Une socket que personne n'écoute (arrêt brutal) est remplacée au démarrage suivant ; celle d'un `serve` vivant n'est jamais touchée | Mode 0600, et `state_dir` fermé au groupe et aux autres, sans quoi elle n'est pas ouverte. Elle n'est pas à sauvegarder |
+| Machine Kagu, `state_dir` | `control.sock` | La socket de commande, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/api/manifest/…` et, pour root seul, `/control/admin/…`. Une socket que personne n'écoute (arrêt brutal) est remplacée au démarrage suivant ; celle d'un `serve` vivant n'est jamais touchée | Mode 0600, et `state_dir` fermé au groupe et aux autres, sans quoi `serve` ne démarre pas. Elle n'est pas à sauvegarder |
 | Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` (au compte de l'agent, `opencloud-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, identifiant de la machine et de l'agent (`agent_id`), adresse de Kagu, empreinte du certificat, langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`) | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (la clé change seule pendant une rotation, par l'ordre `agent.server_key`) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/opencloud`**, que le compte du serveur possède sur la machine Kagu : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
 | Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` | `bin/` et `update.json` | `bin/opencloud-<version>` (la courante et la précédente, rien d'autre), les liens `bin/current` (ce que le lanceur exécute) et `bin/previous` (la version d'avant la dernière bascule), et le **marqueur** `update.json` : une mise à jour (ou un retour arrière) en attente de confirmation, avec son échéance, ou ce que le lanceur en a fait (« Comment un agent se met à jour », décision 9). Aucun secret : états, numéros de version, identifiant d'ordre | `0600` au compte de l'agent. Le marqueur disparaît à la confirmation, ou une fois son rapport livré au serveur ; un marqueur illisible est écarté |
 | Toute machine, la machine Kagu comprise, `/usr/local/lib/opencloud-agent` | `opencloud-guard` | Le **lanceur stable** : une copie du binaire, posée une fois par root (`root:root`, `0755`), que l'unité systemd lance. L'agent, qui écrit son état et `bin/`, ne le remplace jamais | Se repose à la main si le lanceur change (`GuardVersion`) ; l'agent le sait par la variable `OPENCLOUD_AGENT_GUARD` |
@@ -4642,9 +4642,9 @@ plus (R-A2-1) : un en-tête `Authorization: Basic` n'est lu par aucun mode.
   l'interface s'ouvre. **La
   création du compte exige le code de première configuration** (R-A2-5) :
   8 chiffres, 30 minutes, un seul usage, 5 essais faux au total puis il est
-  brûlé (le bon compris). `opencloud admin setup-code` le tire, par la
-  socket de commande (`POST /control/admin/setup-code`, servie par la socket
-  seule, jamais par le port) ; la base ne garde que son empreinte SHA-256
+  brûlé (le bon compris). `sudo opencloud admin setup-code` le tire, par le
+  canal local de root (`POST /control/admin/setup-code`, « Le canal local de
+  root ») ; refusé une fois le compte créé ; la base ne garde que son empreinte SHA-256
   (`setup_code_hash`, `setup_code_expires`, `setup_code_failures` dans
   `auth_settings`, migration `042`) et tout changement d'état de l'accès
   l'efface. Le champ `setup_code` de `POST /api/auth/setup` le porte,
@@ -4652,13 +4652,11 @@ plus (R-A2-1) : un en-tête `Authorization: Basic` n'est lu par aucun mode.
   `422 auth.setup_code_wrong` (faux, compté), `409 auth.setup_code_unusable`
   (aucun tiré, échu ou brûlé). Il tient après un redémarrage, jusqu'à son
   échéance. Le tirage est au journal d'audit (`auth.setup_code_issue`, acteur `cli`, échéance, jamais la valeur). `serve` écrit en `WARN` « première configuration en attente »
-  au démarrage en `none`. La contrepartie : la machine Kagu doit être
-  atteinte (accès au compte du service ou root) pour créer le compte, et cinq
-  essais faux de n'importe qui brûlent le code (il se remplace). L'empreinte
-  d'un code de huit chiffres se retrouve par force brute pour qui lit la
-  base, qui peut de toute façon y écrire ; la socket n'a que son mode `0600`
-  (la garde par uid 0 viendra avec la commande `admin` complète). Rien ne se
-  fait sans compte, pas même lire.
+  au démarrage en `none`. La contrepartie : il faut root sur la machine Kagu
+  pour créer le compte, et cinq essais faux de n'importe qui brûlent le code
+  (il se remplace). L'empreinte d'un code de huit chiffres se retrouve par
+  force brute pour qui lit la base, qui peut de toute façon y écrire. Rien ne
+  se fait sans compte, pas même lire.
 - **`native`** : un compte, créé à la première configuration : identifiant
   (64 caractères, sans `:`), mot de passe de 12 caractères au moins et 72
   octets au plus (au-delà, bcrypt ne lit plus). Sans session, les routes de
@@ -4697,7 +4695,7 @@ plus (R-A2-1) : un en-tête `Authorization: Basic` n'est lu par aucun mode.
   `/api/events` et le suivi des journaux attendent la fin de leur session sur
   un canal (`WatchSession`, le patron de `machine.Session.Done`), que ferment
   la déconnexion, la fermeture depuis la liste, le changement de mot de
-  passe, le retour en `none`, l'écart d'identité en `forward` et un minuteur
+  passe, le canal local de root, l'écart d'identité en `forward` et un minuteur
   posé à l'échéance (2 h sans requête, 12 h). Le flux se termine dans la
   seconde ; le navigateur revient et reçoit `401`. Au ping (15 s),
   `authorizationLapsed` relit aussi la session : c'est le filet pour une
@@ -4722,7 +4720,8 @@ plus (R-A2-1) : un en-tête `Authorization: Basic` n'est lu par aucun mode.
   `trusted_proxies`, **qui prouve être passée par le mandataire** (le reverse proxy ; voir
   ci-dessous) **et** qui porte cet en-tête non vide ; tout le reste
   répond `401`, sans `WWW-Authenticate` : pas de double connexion. Hors `/api/`, le corps dit en une ligne de passer par
-  le SSO, et que `opencloud auth disable -config …` rouvre l'accès.
+  le SSO, et que, SSO en panne, `sudo opencloud admin auth-mode native
+  -username <nom>` rend un compte sur la machine.
   L'identité voyage dans le contexte de la requête jusqu'à `/api/auth`, et
   la barre latérale dit « Protégé · SSO · identité ». Sous Paramètres, la
   section Accès le dit en phrase (l'en-tête cru, l'identité reçue) et montre
@@ -4796,10 +4795,8 @@ plus (R-A2-1) : un en-tête `Authorization: Basic` n'est lu par aucun mode.
     est refusé (`422 auth.forward_user_not_listed`) : même garde-fou que
     l'en-tête absent, on ne s'enferme pas en activant.
   - **Une liste posée après l'activation** peut, elle, enfermer l'opérateur :
-    la sortie est de corriger `config.toml` et de redémarrer `serve`.
-    `opencloud auth disable` n'en sort pas (réactiver depuis une identité hors
-    liste reste refusé) et ouvre la première configuration à toute identité
-    que le SSO laisse passer.
+    la sortie est de corriger `config.toml` et de redémarrer `serve`, ou de
+    revenir à un compte par `sudo opencloud admin auth-mode native`.
   - **Un jeton d'API n'est pas une identité du SSO** : il est jugé
     avant le mode (« Comment un agent IA lit Kagu ») et la liste ne le
     juge pas. Retirer quelqu'un de la liste ne révoque donc pas les jetons
@@ -4849,8 +4846,8 @@ d'une écriture est donc lu en entier (jusqu'à 1 Mio, la borne commune ; un
 corps trop gros est rendu tel quel au handler, qui répond comme avant), puis
 l'état relu : s'il a changé entre-temps, `409 auth.state_changed`. Un anonyme
 face à une interface gardée est refusé avant toute lecture du corps. L'état
-qui a admis la requête voyage dans son contexte. Changer le mot de passe,
-désactiver et activer le comparent à l'état stocké **dans la même transaction
+qui a admis la requête voyage dans son contexte. Changer le mot de passe
+et activer le comparent à l'état stocké **dans la même transaction
 que l'écriture** : de deux activations simultanées, une seule gagne. Les
 écritures qui accordent une autorité durable (jeton d'API, jeton
 d'enrôlement, réenrôlement) le comparent aussi juste avant d'agir, sous un
@@ -4911,8 +4908,7 @@ la requête —, en-tête en `forward`, `forward_insecure` quand le mode
 `null` quand elle est vide et dans les autres modes —, date d'activation,
 longueur minimale ; jamais l'empreinte), `POST /api/auth/actions/enable`
 `{username,password}` ou `{mode:"forward",header}`,
-`POST /api/auth/actions/disable` (l'installation revient à sa première
-configuration), `PUT /api/auth/password` `{current,password}`
+`PUT /api/auth/password` `{current,password}`
 (`409 auth.no_password` en `forward`) ; refus en clés `auth.*`. **Changer le
 mot de passe exige le mot de passe actuel** : absent ou faux, `403
 auth.current_password_wrong`, rien n'est écrit, et le nouveau n'est même pas
@@ -4922,8 +4918,8 @@ bornée) et sous le même limiteur par adresse : un faux compte comme un
 suffit donc plus à changer le mot de passe. La réponse ajoute `api_tokens`,
 le nombre de jetons d'API vivants : l'écran le dit après le changement et
 renvoie à la liste des jetons pour les révoquer. **Coût** : un mot de passe perdu
-ne se change pas par cette route ; le secours passe par la machine Kagu
-(`auth disable`, puis une première configuration). Seuls
+ne se change pas par cette route ; le secours passe par la machine Kagu, en
+root (« Le canal local de root »). Seuls
 `GET /api/auth` et l'activation répondent en mode `none` ; une fois un
 compte en place, l'activation exige ce compte et répond `409
 auth.already_enabled`. **Garde-fou
@@ -4935,16 +4931,69 @@ l'est aussi (`422 auth.forward_secret_required`) tant que le secret manque
 et que la boucle locale est de confiance, et (`422
 auth.forward_user_not_listed`) si l'identité qui active n'est pas dans une
 liste `forward_users` non vide. Mot de passe perdu ou SSO en
-panne : `opencloud auth disable -config …` sous le compte du service, que
-`serve` suit à la requête suivante sans redémarrer. **C'est voulu : la
-commande ramène à la première configuration**, qui exige un code neuf
-(`opencloud admin setup-code`) : rouvrir ne l'offre pas à qui atteint le
-port ; les jetons d'API tirés sous l'ancien compte restent
-jusqu'à cette activation, qui les révoque. La commande écrit dans la base
-directement (pas par la socket de commande) : qui peut la lancer lit déjà
-`state_dir`. `opencloud auth status` dit le mode et l'identifiant, ou
-l'en-tête et les identités admises en `forward` (la liste de `config.toml`
-telle que la commande la lit, que `serve` ait été redémarré ou non).
+panne : le canal local de root, ci-dessous. `opencloud auth status` (sous
+le compte du service, lecture seule de la base) dit le mode et
+l'identifiant, ou l'en-tête et les identités admises en `forward` (la liste
+de `config.toml` telle que la commande la lit, que `serve` ait été
+redémarré ou non).
+
+### Le canal local de root
+
+Ce qui refait un accès perdu n'est pas un geste de l'interface (R-A2-10) :
+c'est root, sur la machine Kagu, par la socket `state_dir/control.sock`.
+`opencloud auth disable`, `POST /api/auth/actions/disable` et le bouton
+« Désactiver » sont retirés : plus rien ne ramène l'installation à la
+première configuration.
+
+**Qui entre.** Les routes `POST /control/admin/…` ne sont servies que par
+la socket, jamais par le port, et au seul pair d'uid 0 (R-A2-11). L'uid est
+lu par `SO_PEERCRED`, une fois par connexion, par `internal/kit/peercred`
+(`Listen`, `Peer`, `ConnContext`, `OnlyUID`), seul code du dépôt qui lit
+l'uid d'un pair ; il juge l'uid, jamais le groupe. Tout autre uid, ou un
+pair dont l'uid ne se lit pas, reçoit `403`, `setup-code` compris (avant
+T02-08, tout pair de la socket pouvait tirer le code). `/api/manifest/…`
+reste servi au compte du service comme à root.
+
+**La commande** : `sudo opencloud admin <geste> [-config chemin]`, serveur
+en marche (sinon « le serveur ne tourne pas »). Un compte qui n'est pas
+root est refusé par la commande (« Réservé à root ») avant toute saisie, et
+par le serveur de toute façon, par l'uid.
+
+| Geste | Route | Effet |
+| --- | --- | --- |
+| `setup-code` | `setup-code` | Tire le code de première configuration (ci-dessus) ; refusé une fois le compte créé |
+| `reset-password` | `reset-password` | Nouveau mot de passe, demandé deux fois sur le terminal (`/dev/tty`), sans écho, jamais sur l'entrée standard. Ferme **toutes** les sessions ; ne révoque pas les jetons d'API. Refusé en `forward` (pas de mot de passe) et sans compte (le compte se crée par la première configuration, avec un code) |
+| `auth-mode native -username <nom>` | `auth-mode` | Passe à un compte, mot de passe demandé deux fois. Ferme toutes les sessions |
+| `auth-mode forward [-header Remote-User]` | `auth-mode` | Passe derrière le SSO, ou change l'en-tête en `forward`. Ferme toutes les sessions |
+| `sessions close-all` | `sessions/close-all` | Ferme toutes les sessions (un `WARN` au journal de `serve`, pas de ligne d'audit) |
+| `tokens revoke-all` | `tokens/revoke-all` | Révoque tous les jetons d'API |
+
+`auth-mode` ne ramène jamais à `none` ; il est refusé sans compte, et
+quand il ne change rien (`native` vers `native` : c'est `reset-password`).
+`serve` suit à la requête suivante, sans redémarrer : `State` relit la base
+à chaque requête.
+
+**Pourquoi `serve` refuse de démarrer** si `state_dir` est ouvert au groupe
+ou aux autres : la base et ce canal y seraient à leur portée, et sans canal
+local sûr root n'a plus de secours. Le message dit la raison et
+`chmod 700 <state_dir>`. Avant, la socket n'était simplement pas ouverte,
+avec un `WARN`. Les autres échecs d'ouverture (chemin de plus de 107 octets,
+autre `serve` déjà là) restent un `WARN` : `serve` tourne sans socket, donc
+sans `export`, `apply` ni `admin`.
+
+**La contrepartie.** Qui perd root sur la machine Kagu n'a plus de
+secours ; qui l'a refait n'importe quel accès sans connaître l'ancien. Passer
+en `forward` par la commande ne vérifie pas que le SSO pose l'en-tête (le
+garde-fou `auth.forward_header_missing` est celui de l'écran) : s'il ne le
+pose pas, l'interface refuse tout le monde, et `auth-mode native` rend un
+compte. `reset-password` laisse vivre les jetons d'API : `tokens
+revoke-all` les coupe à part.
+
+**L'écran** le dit sans rien faire : Réglages › Accès a une ligne qui
+renvoie à `sudo opencloud admin reset-password` et `auth-mode` ; la page de
+connexion, à `reset-password` ; la page `401` du mode `forward`, à
+`auth-mode native -username <nom>`. La première configuration n'a plus de
+ligne « mot de passe perdu ».
 
 ### Ce qu'un client peut tenir ouvert
 
@@ -5036,13 +5085,15 @@ l'acteur du journal, et un moyen de voir si mcp-maison répond.
 4. **Révoquer efface la ligne** : présenté ensuite, le jeton est inconnu, comme
    un faux. Un jeton échu est refusé, sort de la liste, et la purge (toutes les
    15 minutes) l'efface.
-5. **Activer l'authentification de l'interface** (`none` → `basic` ou
-   `forward`) les révoque tous : depuis la première configuration, il n'y en a
-   qu'après la commande de secours, tirés sous l'ancien compte. La réponse de
+5. **Activer l'authentification de l'interface** (`none` → `native` ou
+   `forward`) les révoque tous : à la première configuration, il n'y en a
+   normalement aucun, sauf une base reprise d'ailleurs. La réponse de
    `POST /api/auth/actions/enable` dit combien (`api_tokens_revoked`) ;
-   l'écran de première configuration ne l'affiche pas. Changer le mot de passe
-   ou désactiver ne révoque rien : le changement **propose** de les révoquer
-   (la réponse dit combien vivent), il ne le fait pas d'office.
+   l'écran de première configuration ne l'affiche pas. Changer le mot de
+   passe, `admin reset-password` ou `admin auth-mode` ne révoque rien : le
+   changement de l'écran **propose** de les révoquer (la réponse dit combien
+   vivent), il ne le fait pas d'office. `sudo opencloud admin tokens
+   revoke-all` les révoque tous (« Le canal local de root »).
 
 ### L'admission
 
@@ -6521,7 +6572,7 @@ une session, et vérifie que chacun porte l'opérateur et aucun secret.
 | --- | --- | --- |
 | `operator` | En mode `native`, la session : `actor_name` est son identifiant (`operator:<id>`), `actor_label` le compte ; en mode `forward`, l'identité transmise par le SSO ; vide à la première configuration, seul geste admis sans compte (un en-tête Basic, qu'aucun mode ne lit, ne nomme personne ; le compte créé se lit dans les détails). Borné, sans caractère de contrôle | `server`, sur toute route de l'opérateur, juste après `requireOperator` (`withOperatorActor`) |
 | `api` | L'identifiant du jeton d'API ; la personne au nom de qui l'agent appelle est dans `details.on_behalf_of` (en-tête `X-MCP-Maison-User`, bornée à 200 caractères), indicative, pas une preuve. Le **nom du jeton**, recopié à l'écriture, est dans `actor_label` | `server`, sur une route admise par jeton (`admitAPIToken`), pour ses lectures, ses verbes et ses refus (`api_token.deny`) |
-| `cli` | Le compte système que la commande déclare : indicatif, pas une preuve | La socket de commande (`markControlSocket`), puis `apply` sous le nom qu'il porte déjà dans `applies` ; `opencloud auth disable` et `opencloud secrets forget`, qui écrivent sur la base |
+| `cli` | Sur la socket, `uid:<uid>` du pair, lu par `SO_PEERCRED` (le noyau l'atteste) ; pour un apply, ensuite, le compte que la commande déclare : indicatif, pas une preuve | La socket de commande (`markControlSocket`), puis `apply` sous le nom qu'il porte déjà dans `applies` ; `opencloud secrets forget`, qui écrit sur la base. Les lignes `auth.disable` d'avant T02-08 portent le nom que la commande déclarait |
 | `rule` | Vide | `serve`, sur son contexte racine : ses boucles de fond et ce qu'il fait au démarrage (une sonde qui porte des identifiants mise en pause, la fenêtre d'une maintenance qui s'ouvre ou se ferme) |
 | `agent` | L'identifiant de la machine que l'agent présente | `agentapi` : l'enrôlement, et les sections du signal : des observations, que rien ne journalise, et le refus d'un ordre (`action.refused`) |
 | `unknown` | Vide | Personne : un oubli de câblage, montré au lieu d'être tu |
@@ -6592,8 +6643,8 @@ l'acteur de l'apply et avec son `apply_id`.
 | Silence (`mutes`) | `mute.create`, `.delete` | Le silence, au nom de l'objet tu | `kind`, `target_kind`, `target_id`, `reason`, `starts_at`, `ends_at`, `announce`, `public_title` |
 | Marquer une alerte, une sélection, comme lue | `alert.acknowledge` | L'alerte ; une sélection n'a pas d'objet | `kind`, `object_kind`, `object_id` ; pour une sélection `alert_ids` et `acknowledged` |
 | Réglage | `settings.update` | `language`, `mail_relay`, `disk` ou `lifecycle` | La valeur ; le relais sans son mot de passe, avec `password_changed` et `previous_host` ; le mot de passe gardé n'est gardé que si hôte, port et mode TLS sont inchangés, sinon `settings.mail_password_required` |
-| Accès à l'interface | `auth.enable`, `.disable`, `.change_password` | `interface` | `mode`, `username`, `header` ; jamais le mot de passe ni son empreinte |
-| Jeton d'API, tous les jetons | `api_token.create`, `.revoke`, `.deny` | Le jeton ; tous (à l'activation de l'authentification) sans objet | `scope`, `verbs`, `expires_at` ; pour `.deny`, `verb` (l'identifiant du registre que le jeton a tenté sans le porter, jamais ce que le client a écrit) ; pour tous `all`, `api_tokens` ; jamais le jeton ni son préfixe |
+| Accès à l'interface | `auth.enable`, `.change_password` ; `.reset_password`, `.change_mode` (root, par le canal local) ; `.disable` ne s'écrit plus depuis T02-08, les anciennes lignes se lisent | `interface` | `mode`, `username`, `header` ; jamais le mot de passe ni son empreinte |
+| Jeton d'API, tous les jetons | `api_token.create`, `.revoke`, `.deny` | Le jeton ; tous (à l'activation de l'authentification, ou par `admin tokens revoke-all`) sans objet | `scope`, `verbs`, `expires_at` ; pour `.deny`, `verb` (l'identifiant du registre que le jeton a tenté sans le porter, jamais ce que le client a écrit) ; pour tous `all`, `api_tokens` ; jamais le jeton ni son préfixe |
 | Demande d'un verbe à confirmation | `verb.request` (acteur `api`), `verb.reject` (opérateur), `verb.expire` (acteur `rule:verb_requests`), `verb.lapse` (opérateur) | La demande, nommée par l'objet visé | `verb`, `object_id` ; le geste confirmé porte `request_id` (« Les verbes à confirmation ») |
 | Anciennes lignes du MCP, lues seulement | `mcp.*`, `mcp_token.*`, `mcp_session.*` | Le client OAuth, le jeton, la famille coupée | Ce qu'elles portaient ; plus aucune ne s'écrit |
 | Clé perdue, secrets oubliés | `secrets.forget` | — | `channels_disabled`, `ping_tokens_renewed` |

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/peercred"
 	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
@@ -51,12 +52,7 @@ func writeShortConfig(t *testing.T) (configPath, stateDir string) {
 // socket de commande de state_dir.
 func serveOnControlSocket(t *testing.T, stateDir string, handler http.Handler) {
 	t.Helper()
-	root, err := os.OpenRoot(stateDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { root.Close() })
-	control := startControlSocket(slog.New(slog.DiscardHandler), root, stateDir, handler)
+	control := startControlSocket(slog.New(slog.DiscardHandler), stateDir, handler, peercred.Peer)
 	if control == nil {
 		t.Fatal("the control socket did not open")
 	}
@@ -214,12 +210,7 @@ func TestExportCommand_RefusesStrayArguments(t *testing.T) {
 
 func TestControlSocket_IsPrivateAndGoneAfterShutdown(t *testing.T) {
 	_, stateDir := writeShortConfig(t)
-	root, err := os.OpenRoot(stateDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	control := startControlSocket(slog.New(slog.DiscardHandler), root, stateDir, exportHandler())
+	control := startControlSocket(slog.New(slog.DiscardHandler), stateDir, exportHandler(), peercred.Peer)
 	if control == nil {
 		t.Fatal("the control socket did not open")
 	}
@@ -249,11 +240,6 @@ func waitGone(t *testing.T, path string) {
 
 func TestControlSocket_ReplacesAStaleSocketButNeverAnotherFile(t *testing.T) {
 	_, stateDir := writeShortConfig(t)
-	root, err := os.OpenRoot(stateDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
 	path := filepath.Join(stateDir, brand.ControlSocketFile)
 
 	stale, err := net.Listen("unix", path)
@@ -262,7 +248,7 @@ func TestControlSocket_ReplacesAStaleSocketButNeverAnotherFile(t *testing.T) {
 	}
 	stale.(*net.UnixListener).SetUnlinkOnClose(false)
 	_ = stale.Close()
-	control := startControlSocket(slog.New(slog.DiscardHandler), root, stateDir, exportHandler())
+	control := startControlSocket(slog.New(slog.DiscardHandler), stateDir, exportHandler(), peercred.Peer)
 	if control == nil {
 		t.Fatal("a stale socket from a killed server must be replaced")
 	}
@@ -272,7 +258,7 @@ func TestControlSocket_ReplacesAStaleSocketButNeverAnotherFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("à moi"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if control := startControlSocket(slog.New(slog.DiscardHandler), root, stateDir, exportHandler()); control != nil {
+	if control := startControlSocket(slog.New(slog.DiscardHandler), stateDir, exportHandler(), peercred.Peer); control != nil {
 		t.Fatal("a file that is not a socket must stop the socket from opening")
 	}
 	if kept, err := os.ReadFile(path); err != nil || string(kept) != "à moi" {
@@ -286,12 +272,7 @@ func TestControlSocket_TooLongAPathLeavesServeRunning(t *testing.T) {
 	if err := os.Mkdir(long, 0o700); err != nil {
 		t.Skipf("cannot create a long directory: %v", err)
 	}
-	root, err := os.OpenRoot(long)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	if control := startControlSocket(slog.New(slog.DiscardHandler), root, long, exportHandler()); control != nil {
+	if control := startControlSocket(slog.New(slog.DiscardHandler), long, exportHandler(), peercred.Peer); control != nil {
 		_ = control.Close()
 		t.Fatal("a path over 107 bytes cannot hold a socket")
 	}
@@ -299,19 +280,14 @@ func TestControlSocket_TooLongAPathLeavesServeRunning(t *testing.T) {
 
 func TestControlSocket_ASecondServeNeverTakesTheLiveSocket(t *testing.T) {
 	configPath, stateDir := writeShortConfig(t)
-	root, err := os.OpenRoot(stateDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	first := startControlSocket(slog.New(slog.DiscardHandler), root, stateDir, exportHandler())
+	first := startControlSocket(slog.New(slog.DiscardHandler), stateDir, exportHandler(), peercred.Peer)
 	if first == nil {
 		t.Fatal("the first serve must get its socket")
 	}
 	defer first.Close()
 
 	// Un second serve sur le même state_dir : il n'ouvre rien et ne retire rien.
-	if second := startControlSocket(slog.New(slog.DiscardHandler), root, stateDir, exportHandler()); second != nil {
+	if second := startControlSocket(slog.New(slog.DiscardHandler), stateDir, exportHandler(), peercred.Peer); second != nil {
 		_ = second.Close()
 		t.Fatal("a live socket must not be replaced")
 	}
@@ -321,23 +297,23 @@ func TestControlSocket_ASecondServeNeverTakesTheLiveSocket(t *testing.T) {
 	}
 }
 
-func TestControlSocket_RefusesAStateDirOpenToOthers(t *testing.T) {
-	_, stateDir := writeShortConfig(t)
-	root, err := os.OpenRoot(stateDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
+// Un state_dir ouvert au groupe ou aux autres : serve ne démarre pas, dit
+// pourquoi et la commande qui le ferme, et n'a rien ouvert ni créé
+// (R-A2-11 : sans canal local sûr, root n'a plus de secours).
+func TestServe_RefusesAStateDirOpenToOthers(t *testing.T) {
+	configPath, stateDir := writeShortConfig(t)
 	for _, mode := range []os.FileMode{0o750, 0o705, 0o755} {
 		if err := os.Chmod(stateDir, mode); err != nil {
 			t.Fatal(err)
 		}
-		if control := startControlSocket(slog.New(slog.DiscardHandler), root, stateDir, exportHandler()); control != nil {
-			_ = control.Close()
-			t.Fatalf("a state_dir in %v must not hold the socket", mode)
+		err := runServe([]string{"-config", configPath})
+		var refused *refusal
+		if !errors.As(err, &refused) || !strings.Contains(err.Error(), "chmod 700 "+stateDir) {
+			t.Fatalf("serve on a state_dir in %v: %v, want a refusal naming chmod 700 %s", mode, err, stateDir)
 		}
-		if _, err := os.Lstat(filepath.Join(stateDir, brand.ControlSocketFile)); !errors.Is(err, fs.ErrNotExist) {
-			t.Fatalf("a socket was created in a %v directory: %v", mode, err)
+		entries, readErr := os.ReadDir(stateDir)
+		if readErr != nil || len(entries) != 0 {
+			t.Fatalf("serve wrote in a %v state_dir: %v %v", mode, entries, readErr)
 		}
 	}
 }

@@ -281,16 +281,33 @@ func TestWatchSession_EndsWithEachDeathOfItsSession(t *testing.T) {
 			}
 		})
 	}
-	t.Run("authentication disabled", func(t *testing.T) {
-		service, _, state, _, watched := signedIn(t)
-		ended := watch(t, service, watched.ID)
-		if err := service.Disable(ctx, state); err != nil {
-			t.Fatal(err)
-		}
-		if !isEnded(ended) {
-			t.Fatal("a stream outlived the return to the first setup")
-		}
-	})
+	// Le canal local de root ferme toutes les sessions, et leurs flux.
+	everyOne := map[string]func(*Service) error{
+		"reset-password": func(service *Service) error {
+			_, err := service.ResetPassword(ctx, "a passphrase from root")
+			return err
+		},
+		"auth-mode": func(service *Service) error {
+			_, _, err := service.SetMode(ctx, ModeChange{Mode: ModeForward, Header: DefaultForwardHeader})
+			return err
+		},
+		"sessions close-all": func(service *Service) error {
+			_, err := service.CloseAllSessions(ctx)
+			return err
+		},
+	}
+	for name, die := range everyOne {
+		t.Run(name, func(t *testing.T) {
+			service, _, _, _, watched := signedIn(t)
+			ended := watch(t, service, watched.ID)
+			if err := die(service); err != nil {
+				t.Fatal(err)
+			}
+			if !isEnded(ended) {
+				t.Fatal("a stream outlived its session closed on the local channel")
+			}
+		})
+	}
 }
 
 // Une session déjà morte, ou inconnue, rend un canal fermé ; morte, elle est

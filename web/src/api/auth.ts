@@ -100,10 +100,6 @@ export async function closeOtherSessions(): Promise<void> {
   await api.send(route("POST /api/auth/sessions/actions/close-others"));
 }
 
-export async function disableAuth(): Promise<void> {
-  return api.send(route("POST /api/auth/actions/disable"));
-}
-
 // Ce que le serveur dit d'un changement réussi : les autres sessions sont
 // fermées, la courante reste ; les jetons d'API ne tombent pas avec l'ancien
 // mot de passe, l'écran propose de les révoquer.

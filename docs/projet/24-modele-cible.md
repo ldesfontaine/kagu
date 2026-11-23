@@ -1102,7 +1102,7 @@ rien appliquer. Ce que le code a tranché en l'écrivant, et que la 4b lit :
 | **Sections refusées** : tout ce qui n'est pas dans la liste de la section 3 ci-dessus (canaux, pages, réglages, sauvegardes), avec sa ligne | Mieux vaut refuser que lire en ignorant : un fichier qui semble tout dire et ne dit pas tout |
 | **Durées avec unité** (`60s`, `5m`, `24h`) ; une sonde en secondes entières, une tâche en minutes entières | Ce que la base sait stocker ; une durée ronde sinon refusée plutôt qu'arrondie |
 | **Lecture par nœuds, pas décodée d'un coup** : clé inconnue, clé répétée, alias, plusieurs documents, type inattendu, plus de 256 Kio sont refusés à leur ligne | Un refus cite une ligne ; le décodage direct ne voit pas les doublons et lit `"1"` comme `1` |
-| **La socket `state_dir/control.sock`** (0600, `state_dir` fermé au groupe et aux autres, jamais prise à un `serve` vivant) sert `/api/manifest/…` et rien d'autre ; la commande `opencloud export` passe par elle | Pas d'identifiants à saisir sur une machine où l'on est déjà le compte du service ; la commande n'ouvre pas la base et ne crée donc pas de fichier au nom de root |
+| **La socket `state_dir/control.sock`** (0600, `state_dir` fermé au groupe et aux autres, jamais prise à un `serve` vivant) sert `/api/manifest/…` et rien d'autre (T02-08 y ajoute `/control/admin/…`, à root seul : `22-fonctionnement.md`, « Le canal local de root ») ; la commande `opencloud export` passe par elle | Pas d'identifiants à saisir sur une machine où l'on est déjà le compte du service ; la commande n'ouvre pas la base et ne crée donc pas de fichier au nom de root |
 
 ## 9. Ce que l'annuaire (4b/7) a fixé
 

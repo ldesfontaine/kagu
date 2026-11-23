@@ -108,13 +108,14 @@ func enableBasicByAPI(t *testing.T, server *testServer) {
 	}
 }
 
-// resetAccount : la commande de secours, puis une nouvelle première
-// configuration. Même identifiant et même mot de passe, mais un autre état :
-// l'empreinte bcrypt a changé de sel.
+// resetAccount : root refait le mot de passe par le canal local. Même
+// identifiant et même mot de passe, mais un autre état : l'empreinte bcrypt
+// a changé de sel.
 func (ts *testServer) resetAccount(t *testing.T) {
 	t.Helper()
-	ts.rescue(t)
-	enableBasicByAPI(t, ts)
+	if _, err := ts.operator.ResetPassword(context.Background(), testPassword); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestAuthTransition_AHeldPasswordChangeDoesNotOutliveAReset(t *testing.T) {
@@ -133,18 +134,6 @@ func TestAuthTransition_AHeldPasswordChangeDoesNotOutliveAReset(t *testing.T) {
 	}
 }
 
-func TestAuthTransition_AHeldDisableDoesNotOutliveAReset(t *testing.T) {
-	server := newTestServer(t)
-	held := holdWrite(t, server, http.MethodPost, "/api/auth/actions/disable", `{}`)
-	server.resetAccount(t)
-	if status := held.release(); status != http.StatusConflict {
-		t.Fatalf("held disable: status %d, want 409", status)
-	}
-	if state, _ := server.operator.State(context.Background()); state.Mode != auth.ModeNative {
-		t.Fatalf("the new account was disabled: %+v", state)
-	}
-}
-
 func TestAuthTransition_AHeldTokenRequestMintsNothingAfterAReset(t *testing.T) {
 	server := newTestServer(t)
 	held := holdWrite(t, server, http.MethodPost, "/api/settings/api-tokens", `{"name":"held","expires_in_days":0}`)
@@ -154,7 +143,7 @@ func TestAuthTransition_AHeldTokenRequestMintsNothingAfterAReset(t *testing.T) {
 	}
 	tokens, err := server.apiTokens.List(context.Background())
 	if err != nil || len(tokens) != 0 {
-		t.Fatalf("tokens after the activation: %+v %v", tokens, err)
+		t.Fatalf("tokens after the reset: %+v %v", tokens, err)
 	}
 }
 
@@ -294,7 +283,7 @@ func TestAuthTransition_WritesThatGrantLastingAuthorityAreRefusedUnderAChangedSt
 	})
 }
 
-func TestAuthTransition_PasswordDisableAndEnableAreRefusedUnderAChangedState(t *testing.T) {
+func TestAuthTransition_PasswordAndEnableAreRefusedUnderAChangedState(t *testing.T) {
 	ctx := context.Background()
 	changePassword := func(server *testServer) func() {
 		return func() {
@@ -314,14 +303,6 @@ func TestAuthTransition_PasswordDisableAndEnableAreRefusedUnderAChangedState(t *
 		requireStateChanged(t, staleWrite(t, server, server.changeAuthPassword, http.MethodPut, "/api/auth/password", `{"current":"`+testPassword+`","password":"attacker chosen passphrase"}`, "", changePassword(server)))
 		if got := callAs(server.Server, http.MethodGet, "/api/counts", testUsername, "the operator's new passphrase"); got.Code != http.StatusOK {
 			t.Fatalf("the operator's new password was replaced: %d", got.Code)
-		}
-	})
-	t.Run("disable", func(t *testing.T) {
-		server := newFirstSetupServer(t)
-		server.enableNative(t)
-		requireStateChanged(t, staleWrite(t, server, server.disableAuth, http.MethodPost, "/api/auth/actions/disable", `{}`, "", changePassword(server)))
-		if state, _ := server.operator.State(ctx); state.Mode != auth.ModeNative {
-			t.Fatalf("the interface was reopened: %+v", state)
 		}
 	})
 	t.Run("enable", func(t *testing.T) {

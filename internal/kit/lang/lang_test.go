@@ -189,8 +189,8 @@ func TestLoad_ExpandsPlaceholders(t *testing.T) {
 			t.Errorf("%s: app.name = %q, want %q", code, got, brand.ProductName)
 		}
 		for _, key := range []string{"auth.forward_unauthorized"} {
-			if got := catalog.Get(key); !strings.Contains(got, brand.Command+" auth disable") {
-				t.Errorf("%s: %s = %q, want the command %q", code, key, got, brand.Command+" auth disable")
+			if got := catalog.Get(key); !strings.Contains(got, "sudo "+brand.Command+" admin auth-mode") {
+				t.Errorf("%s: %s = %q, want the command %q", code, key, got, "sudo "+brand.Command+" admin auth-mode")
 			}
 		}
 		// La ligne que l'agent cite quand le jeton manque est celle de l'installation.

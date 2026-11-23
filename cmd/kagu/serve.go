@@ -26,6 +26,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/live"
+	"github.com/ldesfontaine/kagu/internal/kit/peercred"
 	"github.com/ldesfontaine/kagu/internal/kit/proxysecret"
 	"github.com/ldesfontaine/kagu/internal/kit/version"
 )
@@ -72,6 +73,9 @@ func runServe(args []string) error {
 		return err
 	}
 	defer stateDir.Close()
+	if err := requirePrivateStateDir(stateDir, cfg.StateDir); err != nil {
+		return err
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -235,7 +239,7 @@ func runServe(args []string) error {
 	if err != nil {
 		return err
 	}
-	control := startControlSocket(logger, stateDir, cfg.StateDir, server.ControlHandler())
+	control := startControlSocket(logger, cfg.StateDir, server.ControlHandler(), peercred.Peer)
 	return listenUntilSignal(ctx, logger, newHTTPServer(cfg.Listen, server), listener, control, cfg)
 }
 

@@ -168,9 +168,14 @@ const (
 
 	SettingsUpdate Action = "settings.update"
 
-	AuthEnable         Action = "auth.enable"
+	AuthEnable Action = "auth.enable"
+	// Plus écrite depuis le retrait de « auth disable » (T02-08) : les lignes
+	// d'avant se lisent et se traduisent encore.
 	AuthDisable        Action = "auth.disable"
 	AuthChangePassword Action = "auth.change_password" // #nosec G101 -- un nom, pas un secret.
+	// Root refait le mot de passe, ou change le mode, par le canal local.
+	AuthResetPassword Action = "auth.reset_password" // #nosec G101 -- un nom, pas un secret.
+	AuthChangeMode    Action = "auth.change_mode"
 	// Le code de première configuration tiré : l'échéance, jamais sa valeur.
 	AuthSetupCodeIssue Action = "auth.setup_code_issue" // #nosec G101 -- un nom, pas un secret.
 
@@ -264,7 +269,7 @@ func Actions() []Action {
 		MuteCreate, MuteDelete,
 		AlertAcknowledge,
 		SettingsUpdate,
-		AuthEnable, AuthDisable, AuthChangePassword, AuthSetupCodeIssue,
+		AuthEnable, AuthDisable, AuthChangePassword, AuthResetPassword, AuthChangeMode, AuthSetupCodeIssue,
 		APITokenCreate, APITokenUpdate, APITokenRevoke, APITokenDeny,
 		SecretsForget, SecretsRotate, SecretsRotateServerKey, SecretsFinishServerKey,
 		ActionOrder, ActionRefused, ActionRolledBack,

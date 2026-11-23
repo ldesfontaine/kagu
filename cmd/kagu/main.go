@@ -18,10 +18,9 @@ Commandes :
             agent trust list | add | remove : les ancres de confiance locales de l'agent, en root (option -state)
   guard     lanceur stable de l'agent : lance bin/current et revient à la version
             précédente si une mise à jour n'est pas confirmée (option -state)
-  auth      status | disable : état de l'authentification de l'interface,
-            ou la couper en cas de mot de passe oublié (option -config)
-  admin     setup-code : tire le code de première configuration, par le serveur
-            qui tourne (option -config)
+  auth      status : état de l'authentification de l'interface (option -config)
+  admin     setup-code | reset-password | auth-mode | sessions | tokens : les
+            gestes de root par le serveur qui tourne (option -config)
   export    écrit l'annuaire dans un fichier YAML, par le serveur qui tourne
             (options -config -o -propose)
   apply     applique un fichier YAML à l'annuaire, après avoir montré le plan et

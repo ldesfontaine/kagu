@@ -76,6 +76,16 @@ type authPasswordResponse struct {
 // Le corps d'une action qui n'a rien à dire : {} ou rien.
 type emptyRequest struct{}
 
+// readEmptyBody accepte un corps absent ou {} ; tout autre corps est refusé
+// (400), et le handler n'a plus qu'à rendre la main.
+func (s *Server) readEmptyBody(w http.ResponseWriter, r *http.Request) bool {
+	if r.ContentLength == 0 {
+		return true
+	}
+	var request emptyRequest
+	return s.readAPI(w, r, &request)
+}
+
 // authViewer dit qui lit l'état d'accès : l'identité transmise par le
 // mandataire (forward), ou la session native de la requête.
 type authViewer struct {
@@ -161,8 +171,8 @@ func (s *Server) setupAuth(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// Un jeton d'API tiré sous un accès d'avant (laissé par la commande de
-	// secours) ne survit pas à la première configuration. Après elle, et non
+	// Un jeton d'API tiré sous un accès d'avant (une base reprise d'une
+	// autre installation) ne survit pas à la première configuration. Après elle, et non
 	// avant, pour qu'un jeton créé entre les deux tombe aussi.
 	revoked, err := s.apiTokens.RevokeAll(r.Context())
 	if err != nil {
@@ -185,7 +195,7 @@ func (s *Server) setupMode(w http.ResponseWriter, r *http.Request, request authS
 		state, identity, ok := s.enableForward(w, r, request.SetupCode, request.Header)
 		return state, authViewer{identity: identity}, ok
 	default:
-		s.apiRefuse(w, http.StatusUnprocessableEntity, "auth.mode_invalid")
+		s.failed(w, r, auth.ErrModeInvalid, nil)
 		return auth.State{}, authViewer{}, false
 	}
 }
@@ -295,11 +305,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 // logout ferme la session de la requête et efface le cookie ; sans session,
 // il n'efface que le cookie.
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	if r.ContentLength != 0 {
-		var request emptyRequest
-		if !s.readAPI(w, r, &request) {
-			return
-		}
+	if !s.readEmptyBody(w, r) {
+		return
 	}
 	if !s.closePresentedSession(w, r) {
 		return
@@ -380,11 +387,8 @@ type closedSessionsResponse struct {
 
 // closeOtherSessions garde la session de la requête et ferme toutes les autres.
 func (s *Server) closeOtherSessions(w http.ResponseWriter, r *http.Request) {
-	if r.ContentLength != 0 {
-		var request emptyRequest
-		if !s.readAPI(w, r, &request) {
-			return
-		}
+	if !s.readEmptyBody(w, r) {
+		return
 	}
 	current, _ := sessionFrom(r.Context())
 	closed, err := s.auth.CloseOtherSessions(r.Context(), current.ID)
@@ -430,20 +434,6 @@ func (s *Server) changeAuthPassword(w http.ResponseWriter, r *http.Request) {
 	s.writeAPI(w, http.StatusOK, authPasswordResponse{authResponse: authToJSON(state, viewerOf(r)), APITokens: len(tokens)})
 }
 
-func (s *Server) disableAuth(w http.ResponseWriter, r *http.Request) {
-	if r.ContentLength != 0 {
-		var request emptyRequest
-		if !s.readAPI(w, r, &request) {
-			return
-		}
-	}
-	authorizing, _ := authorizingStateFrom(r.Context())
-	if s.failed(w, r, s.auth.Disable(r.Context(), authorizing), nil) {
-		return
-	}
-	s.writeAPI(w, http.StatusOK, authToJSON(auth.State{Mode: auth.ModeNone}, authViewer{}))
-}
-
 type setupCodeResponse struct {
 	Code      string    `json:"code"`
 	ExpiresAt time.Time `json:"expires_at"`
@@ -458,4 +448,67 @@ func (s *Server) issueSetupCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeAPI(w, http.StatusCreated, setupCodeResponse{Code: issued.Code, ExpiresAt: issued.ExpiresAt})
+}
+
+// Le nouveau mot de passe, que la commande a demandé deux fois.
+type resetPasswordRequest struct {
+	Password string `json:"password"`
+}
+
+// resetPassword refait le mot de passe et ferme toutes les sessions : root,
+// par la socket seulement (R-A2-10, R-CNX-4).
+func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
+	var request resetPasswordRequest
+	if !s.readAPI(w, r, &request) {
+		return
+	}
+	closed, err := s.auth.ResetPassword(r.Context(), request.Password)
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	s.writeAPI(w, http.StatusOK, closedSessionsResponse{Closed: closed})
+}
+
+// Mode vaut native ou forward. Username et Password ne servent qu'en native,
+// Header qu'en forward.
+type authModeRequest struct {
+	Mode     string `json:"mode"`
+	Header   string `json:"header"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type authModeResponse struct {
+	Mode     string `json:"mode"`
+	Username string `json:"username,omitempty"`
+	Header   string `json:"header,omitempty"`
+	Closed   int    `json:"closed"`
+}
+
+// setAuthMode change le mode d'accès d'une installation configurée : root,
+// par la socket seulement. Elle ne ramène jamais à la première configuration.
+func (s *Server) setAuthMode(w http.ResponseWriter, r *http.Request) {
+	var request authModeRequest
+	if !s.readAPI(w, r, &request) {
+		return
+	}
+	state, closed, err := s.auth.SetMode(r.Context(), auth.ModeChange{
+		Mode: auth.Mode(request.Mode), Header: request.Header, Username: request.Username, Password: request.Password,
+	})
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	s.writeAPI(w, http.StatusOK, authModeResponse{Mode: string(state.Mode), Username: state.Username, Header: state.Header, Closed: closed})
+}
+
+// closeAllSessions ferme toutes les sessions : root, par la socket seulement.
+func (s *Server) closeAllSessions(w http.ResponseWriter, r *http.Request) {
+	if !s.readEmptyBody(w, r) {
+		return
+	}
+	closed, err := s.auth.CloseAllSessions(r.Context())
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	s.writeAPI(w, http.StatusOK, closedSessionsResponse{Closed: closed})
 }

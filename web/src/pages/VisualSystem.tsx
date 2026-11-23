@@ -322,9 +322,9 @@ export function VisualSystem() {
                 </Button>
               </SettingFoot>
               <DangerZone>
-                <SettingRow label={t("auth.title")}>
-                  <ConfirmInline variant="danger" icon="x" question={t("auth.disable_confirm")} onConfirm={() => undefined}>
-                    {t("auth.disable")}
+                <SettingRow label={t("visual.modal.confirm_title")}>
+                  <ConfirmInline variant="danger" icon="x" question={t("visual.modal.confirm_question")} onConfirm={() => undefined}>
+                    {t("visual.modal.confirm_label")}
                   </ConfirmInline>
                 </SettingRow>
               </DangerZone>

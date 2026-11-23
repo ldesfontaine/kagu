@@ -1,12 +1,11 @@
 import { useState } from "react";
 
-import { changePassword, disableAuth, useOpenSessions, type AuthState, type PasswordChange } from "../../api/auth";
+import { changePassword, useOpenSessions, type AuthState, type PasswordChange } from "../../api/auth";
 import { Button } from "../../components/Button";
 import { Note } from "../../components/Card";
-import { ConfirmInline } from "../../components/ConfirmInline";
 import { Failure } from "../../components/Failure";
 import { Pill } from "../../components/Pill";
-import { DangerZone, SettingBlock, SettingRow } from "../../components/SettingRow";
+import { SettingBlock, SettingRow } from "../../components/SettingRow";
 import { useAction } from "../../hooks/useAction";
 import { useNow } from "../../hooks/useNow";
 import { useT } from "../../i18n/context";
@@ -24,10 +23,10 @@ function reloadPage() {
 // connexion native : l'identifiant, les sessions ouvertes, le changement de
 // mot de passe. Changer le mot de passe ferme les autres sessions et garde
 // la courante : l'écran le dit, avec les jetons d'API qui vivent encore.
-// Désactiver ramène l'installation à sa première configuration : il est dans
-// la zone de danger, derrière une confirmation en ligne. En mode SSO, il n'y
-// a rien à saisir après coup : la section montre l'en-tête, l'identité que le
-// SSO transmet, et qui peut entrer.
+// Refaire un accès perdu ou changer de mode ne se fait pas ici : root le fait
+// sur la machine, par le canal local (R-A2-10), et la section le dit. En mode
+// SSO, il n'y a rien à saisir après coup : la section montre l'en-tête,
+// l'identité que le SSO transmet, et qui peut entrer.
 export function AccessSection({ state }: { state: AuthState }) {
   const t = useT();
   const now = useNow();
@@ -37,9 +36,6 @@ export function AccessSection({ state }: { state: AuthState }) {
   const sessions = useOpenSessions(native);
   const [changed, setChanged] = useState<PasswordChange | null>(null);
 
-  const disable = () => {
-    action.run(() => disableAuth(), { onDone: reloadPage });
-  };
   const changeTo = (current: string, password: string) => {
     action.run(() => changePassword(current, password), {
       onDone: (change) => {
@@ -106,13 +102,9 @@ export function AccessSection({ state }: { state: AuthState }) {
         </SettingBlock>
       )}
       {enabled && (
-        <DangerZone>
-          <SettingRow label={t("auth.title")} description={state.enabled_at === null ? undefined : t("auth.enabled_since", ago(t, state.enabled_at, now))}>
-            <ConfirmInline variant="danger" icon="x" disabled={action.busy} question={t("auth.disable_confirm")} onConfirm={disable}>
-              {t("auth.disable")}
-            </ConfirmInline>
-          </SettingRow>
-        </DangerZone>
+        <SettingRow label={t("auth.title")} description={state.enabled_at === null ? undefined : t("auth.enabled_since", ago(t, state.enabled_at, now))} block>
+          <Note tone="neutral">{t("auth.rescue_local")}</Note>
+        </SettingRow>
       )}
     </SettingsSection>
   );

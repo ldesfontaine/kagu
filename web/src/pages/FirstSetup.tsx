@@ -71,7 +71,6 @@ export function FirstSetup({ state, onConfigured }: { state: AuthState; onConfig
           <CardHeader title={t("auth.setup_title")} />
           <CardBody>
             <p>{t("auth.setup_intro")}</p>
-            <p className="secondary">{t("auth.setup_rescue")}</p>
             <Field label={t("auth.setup_code_label")} htmlFor="auth-setup-code" help={t("auth.setup_code_help")}>
               <Input
                 id="auth-setup-code"
