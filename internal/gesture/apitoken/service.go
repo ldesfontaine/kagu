@@ -177,7 +177,7 @@ func (s *Service) RevokeAll(ctx context.Context) (int, error) {
 // Verify accepte un jeton vivant et note son usage, au plus une fois par
 // minute : un client peut enchaîner les lectures.
 func (s *Service) Verify(ctx context.Context, bearer string) (Token, error) {
-	token, err := s.store.GetAPIToken(ctx, ident.HashSecret(bearer))
+	token, err := s.store.GetAPIToken(ctx, ident.HashToken(bearer))
 	if errors.Is(err, ErrNotFound) {
 		return Token{}, ErrInvalid
 	}

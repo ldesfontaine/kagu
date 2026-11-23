@@ -13,6 +13,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/fact/probe"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/seal"
 )
 
@@ -64,7 +65,7 @@ func SaveLocalMachine(t testing.TB, db *store.DB, at time.Time) {
 	}
 	local := machine.Machine{ID: machine.LocalID, Hostname: localHostname, CreatedAt: at}
 	agent := machine.Agent{ID: localAgentID, PublicKey: public, Version: "v0.0.1", EnrolledAt: at}
-	if _, err := db.Enroll(ctx, machine.HashToken(cleartext), local, agent, at); err != nil {
+	if _, err := db.Enroll(ctx, ident.HashToken(cleartext), local, agent, at); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // La purge efface les jetons périmés jamais servis et les consommés depuis
@@ -17,7 +18,7 @@ func TestPurgeTokens_ExpiredPendingAndOldConsumedOnly(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	enrolledAt := func(name string, at time.Time) (string, machine.Machine) {
 		token := issueToken(t, db, name, "", at)
-		enrolled, err := db.Enroll(ctx, machine.HashToken(token), candidate(t), newAgent(t, at), at)
+		enrolled, err := db.Enroll(ctx, ident.HashToken(token), candidate(t), newAgent(t, at), at)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,7 +56,7 @@ func TestPurgeTokens_ExpiredPendingAndOldConsumedOnly(t *testing.T) {
 		{"expired pending", expired, machine.ErrTokenNotFound},
 	}
 	for _, c := range cases {
-		if _, err := db.Enroll(ctx, machine.HashToken(c.token), candidate(t), newAgent(t, now), now); !errors.Is(err, c.want) {
+		if _, err := db.Enroll(ctx, ident.HashToken(c.token), candidate(t), newAgent(t, now), now); !errors.Is(err, c.want) {
 			t.Errorf("%s: %v, want %v", c.name, err, c.want)
 		}
 	}

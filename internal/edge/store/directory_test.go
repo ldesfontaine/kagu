@@ -10,6 +10,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/domain/directory"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // Une machine qui porte un service déclaré ne se retire pas, et rien n'est
@@ -19,7 +20,7 @@ func TestDeleteMachine_WithDeclaredServices_IsRefused(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
 	token := issueToken(t, db, "vps", "", now)
-	enrolled, err := db.Enroll(ctx, machine.HashToken(token), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(token), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +62,7 @@ func TestUpdateDeclaredService_RefusesAnUnitIDItDoesNotOwn(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
 	token := issueToken(t, db, "vps", "", now)
-	enrolled, err := db.Enroll(ctx, machine.HashToken(token), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(token), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +125,7 @@ func TestListDeclaredServices_FilterKeepsAllLinksOfKeptServices(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
 	token := issueToken(t, db, "vps", "", now)
-	enrolled, err := db.Enroll(ctx, machine.HashToken(token), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(ctx, ident.HashToken(token), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +195,7 @@ func enrolledMachine(t *testing.T, db *DB, name string) string {
 	t.Helper()
 	now := time.Unix(1_800_000_000, 0)
 	token := issueToken(t, db, name, "", now)
-	enrolled, err := db.Enroll(context.Background(), machine.HashToken(token), candidate(t), newAgent(t, now), now)
+	enrolled, err := db.Enroll(context.Background(), ident.HashToken(token), candidate(t), newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -471,6 +471,76 @@ func TestOneDefinition_UntrustedText(t *testing.T) {
 	}
 }
 
+// tokenHashHandWritten relève les fonctions d'un seul paramètre chaîne qui
+// rendent hex.EncodeToString(sha256.Sum256([]byte(paramètre))[:]) : une
+// deuxième empreinte de jeton. Un site qui hache autre chose qu'un jeton
+// (contenu, clé, plan) a plus d'un paramètre ou n'est pas cette forme.
+func tokenHashHandWritten(fileSet *token.FileSet, file *ast.File) []string {
+	var found []string
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Body == nil {
+			continue
+		}
+		param, ok := singleStringParam(function)
+		if !ok || !hashesParamAsHex(function, param) {
+			continue
+		}
+		found = append(found, fileSet.Position(function.Pos()).String()+": "+function.Name.Name)
+	}
+	return found
+}
+
+// singleStringParam rend le nom du seul paramètre, s'il est de type string.
+func singleStringParam(function *ast.FuncDecl) (string, bool) {
+	params := function.Type.Params.List
+	if len(params) != 1 || len(params[0].Names) != 1 || !isIdent(params[0].Type, "string") {
+		return "", false
+	}
+	return params[0].Names[0].Name, true
+}
+
+// hashesParamAsHex dit si le corps appelle sha256.Sum256([]byte(param)) et
+// rend tel quel hex.EncodeToString du résultat : une empreinte coupée ou
+// suivie d'un autre texte n'est pas celle d'un jeton.
+func hashesParamAsHex(function *ast.FuncDecl, param string) bool {
+	hashes, returnsHex := false, false
+	ast.Inspect(function.Body, func(node ast.Node) bool {
+		if returned, ok := node.(*ast.ReturnStmt); ok && len(returned.Results) == 1 {
+			_, isHex := isSelectorCall(returned.Results[0], "hex", "EncodeToString")
+			returnsHex = returnsHex || isHex
+		}
+		if call, ok := isSelectorCall(node, "sha256", "Sum256"); ok && len(call.Args) == 1 {
+			convert, ok := call.Args[0].(*ast.CallExpr)
+			hashes = hashes || (ok && len(convert.Args) == 1 && isIdent(convert.Args[0], param))
+		}
+		return true
+	})
+	return hashes && returnsHex
+}
+
+// Une empreinte de jeton s'écrit par ident.HashToken, nulle part ailleurs :
+// la changer rendrait faux tous les jetons en base. Les tests ont
+// testkit.SHA256Hex, qui prend un contenu, pas un jeton.
+func TestOneDefinition_TokenHash(t *testing.T) {
+	checked := 0
+	forEachGoFile(t, moduleRoot(), true, func(path string, fileSet *token.FileSet, file *ast.File) {
+		if isUnder(path, identDir, testkitDir) {
+			return
+		}
+		checked++
+		if isException(path) {
+			return
+		}
+		for _, at := range tokenHashHandWritten(fileSet, file) {
+			t.Errorf("%s : l'empreinte d'un jeton est ident.HashToken ; une autre forme se déclare dans oneDefinitionExceptions", at)
+		}
+	})
+	if checked == 0 {
+		t.Fatal("no source file seen: the guard no longer sees the code")
+	}
+}
+
 // Les gardes ne valent que si elles échouent sur la faute : on leur donne
 // un source fautif.
 func TestOneDefinition_GuardsCatchTheirFault(t *testing.T) {
@@ -507,6 +577,11 @@ func newID() string {
 	_, _ = rand.Read(raw)
 	return hex.EncodeToString(raw)
 }
+
+func hashToken(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
+}
 `
 	fileSet := token.NewFileSet()
 	file, err := parser.ParseFile(fileSet, "faulty_test.go", faulty, parser.SkipObjectResolution)
@@ -533,6 +608,9 @@ func newID() string {
 	}
 	if got := controlChecks(fileSet, file); len(got) != 1 {
 		t.Errorf("hand-written control check not caught: %v", got)
+	}
+	if got := tokenHashHandWritten(fileSet, file); len(got) != 1 {
+		t.Errorf("copied token hash not caught: %v", got)
 	}
 }
 

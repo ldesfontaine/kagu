@@ -59,7 +59,7 @@ func (s *Service) IssueSetupCode(ctx context.Context) (IssuedSetupCode, error) {
 	}
 	s.setupMu.Lock()
 	defer s.setupMu.Unlock()
-	saved, err := s.store.SaveSetupCodeIfNone(ctx, SetupCode{Hash: ident.HashSecret(issued.Code), Expires: issued.ExpiresAt}, s.now())
+	saved, err := s.store.SaveSetupCodeIfNone(ctx, SetupCode{Hash: ident.HashToken(issued.Code), Expires: issued.ExpiresAt}, s.now())
 	if err != nil {
 		return IssuedSetupCode{}, err
 	}
@@ -91,7 +91,7 @@ func (s *Service) requireSetupCode(ctx context.Context, given string) error {
 	if stored.Hash == "" || !s.now().Before(stored.Expires) || stored.Failures >= MaxSetupCodeFailures {
 		return ErrSetupCodeUnusable
 	}
-	if !hmac.Equal([]byte(ident.HashSecret(given)), []byte(stored.Hash)) {
+	if !hmac.Equal([]byte(ident.HashToken(given)), []byte(stored.Hash)) {
 		if err := s.store.RecordSetupCodeFailure(ctx); err != nil {
 			return err
 		}

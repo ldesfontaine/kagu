@@ -12,6 +12,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
 	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
 	"github.com/ldesfontaine/kagu/internal/domain/settings"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/seal"
 )
 
@@ -232,7 +233,7 @@ func TestWritesSealWhatTheyStore(t *testing.T) {
 			t.Errorf("%s is stored in the clear: %q", name, value)
 		}
 	}
-	if lookup := rawColumn(t, db, `SELECT token_lookup FROM heartbeats`); lookup != heartbeat.HashToken(plainPingToken) {
+	if lookup := rawColumn(t, db, `SELECT token_lookup FROM heartbeats`); lookup != ident.HashToken(plainPingToken) {
 		t.Errorf("token_lookup %q is not the hash of the token", lookup)
 	}
 

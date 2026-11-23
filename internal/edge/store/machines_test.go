@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // Une base d'avant R-A1-11 peut garder une machine enrôlée sous une autre
@@ -22,7 +23,7 @@ func TestEnroll_RefusesAnIDEqualToAnExistingOneWithoutCaseOrDashes(t *testing.T)
 	legacy := candidate(t)
 	canonical := legacy.ID
 	legacy.ID = strings.ToUpper(strings.ReplaceAll(canonical, "-", ""))
-	if _, err := db.Enroll(ctx, machine.HashToken(issueToken(t, db, "ancienne", "", now)), legacy, newAgent(t, now), now); err != nil {
+	if _, err := db.Enroll(ctx, ident.HashToken(issueToken(t, db, "ancienne", "", now)), legacy, newAgent(t, now), now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -30,7 +31,7 @@ func TestEnroll_RefusesAnIDEqualToAnExistingOneWithoutCaseOrDashes(t *testing.T)
 		token := issueToken(t, db, "nouvelle-"+strconv.Itoa(i), "", now)
 		wanted := candidate(t)
 		wanted.ID = lookalike
-		if _, err := db.Enroll(ctx, machine.HashToken(token), wanted, newAgent(t, now), now); !errors.Is(err, machine.ErrBadID) {
+		if _, err := db.Enroll(ctx, ident.HashToken(token), wanted, newAgent(t, now), now); !errors.Is(err, machine.ErrBadID) {
 			t.Fatalf("%q beside %q: got %v, want ErrBadID", lookalike, legacy.ID, err)
 		}
 		pending, err := db.ListPendingTokens(ctx, now)
@@ -42,7 +43,7 @@ func TestEnroll_RefusesAnIDEqualToAnExistingOneWithoutCaseOrDashes(t *testing.T)
 		}
 	}
 
-	if _, err := db.Enroll(ctx, machine.HashToken(issueToken(t, db, "autre", "", now)), candidate(t), newAgent(t, now), now); err != nil {
+	if _, err := db.Enroll(ctx, ident.HashToken(issueToken(t, db, "autre", "", now)), candidate(t), newAgent(t, now), now); err != nil {
 		t.Fatalf("a distinct id was refused: %v", err)
 	}
 }

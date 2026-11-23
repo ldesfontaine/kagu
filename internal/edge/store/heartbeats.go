@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/heartbeat"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 const heartbeatColumns = `h.id, h.token_sealed, h.name, h.machine_id, COALESCE(m.name, ''), h.status,
@@ -26,7 +27,7 @@ func (db *DB) InsertHeartbeat(ctx context.Context, h heartbeat.Heartbeat) error 
 	_, err = db.sql.ExecContext(ctx, `
 		INSERT INTO heartbeats (id, token_sealed, token_lookup, name, machine_id, status, interval_seconds, grace_seconds, next_deadline_at, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		h.ID, sealedToken, heartbeat.HashToken(h.Token), h.Name, nullableString(h.MachineID), string(h.Status),
+		h.ID, sealedToken, ident.HashToken(h.Token), h.Name, nullableString(h.MachineID), string(h.Status),
 		int64(h.Interval.Seconds()), int64(h.Grace.Seconds()), nullableTime(h.NextDeadlineAt), h.CreatedAt.Unix())
 	if err != nil {
 		return fmt.Errorf("insert heartbeat: %w", err)
@@ -45,7 +46,7 @@ func (db *DB) GetHeartbeat(ctx context.Context, id string) (heartbeat.Heartbeat,
 }
 
 func (db *DB) GetHeartbeatByToken(ctx context.Context, token string) (heartbeat.Heartbeat, error) {
-	row := db.sql.QueryRowContext(ctx, `SELECT `+heartbeatColumns+heartbeatFrom+` WHERE h.token_lookup = ?`, heartbeat.HashToken(token))
+	row := db.sql.QueryRowContext(ctx, `SELECT `+heartbeatColumns+heartbeatFrom+` WHERE h.token_lookup = ?`, ident.HashToken(token))
 	return db.scanHeartbeat(row)
 }
 

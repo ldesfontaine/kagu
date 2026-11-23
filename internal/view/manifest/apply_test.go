@@ -19,6 +19,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 	"github.com/ldesfontaine/kagu/internal/view/manifest"
 	"github.com/ldesfontaine/kagu/internal/view/status"
@@ -344,7 +345,7 @@ ignored:
 		t.Fatal(err)
 	}
 	everything := string(encoded)
-	for _, secret := range []string{token, pingSecret, "hb_", heartbeat.HashToken(token)} {
+	for _, secret := range []string{token, pingSecret, "hb_", ident.HashToken(token)} {
 		if strings.Contains(everything, secret) {
 			t.Errorf("a secret reached the plan or the journal: %q", secret)
 		}
