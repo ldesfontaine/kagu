@@ -1,4 +1,7 @@
-import { changePassword, disableAuth, type AuthState } from "../../api/auth";
+import { useState } from "react";
+
+import { changePassword, disableAuth, signIn, type AuthState } from "../../api/auth";
+import { Button } from "../../components/Button";
 import { Note } from "../../components/Card";
 import { ConfirmInline } from "../../components/ConfirmInline";
 import { Failure } from "../../components/Failure";
@@ -17,8 +20,9 @@ function reloadPage() {
 }
 
 // L'accès à l'interface, tel que la première configuration l'a posé.
-// Changer le mot de passe rend caducs les identifiants du navigateur : la
-// page se recharge, et le navigateur les demande dans sa propre fenêtre.
+// Changer le mot de passe rend caducs les identifiants du navigateur : les
+// nouveaux lui sont confiés, puis la page se recharge, après avoir dit les
+// jetons d'API qui vivent encore.
 // Désactiver ramène l'installation à sa première configuration : il est dans
 // la zone de danger, derrière une confirmation en ligne. En mode SSO, il n'y
 // a rien à saisir après coup : la section montre l'en-tête, l'identité que le
@@ -28,12 +32,23 @@ export function AccessSection({ state }: { state: AuthState }) {
   const now = useNow();
   const action = useAction();
   const enabled = state.mode !== "none";
+  const [livingTokens, setLivingTokens] = useState(0);
 
   const disable = () => {
     action.run(() => disableAuth(), { onDone: reloadPage });
   };
-  const changeTo = (password: string) => {
-    action.run(() => changePassword(password), { onDone: reloadPage });
+  // Le changement rend caducs les identifiants du navigateur : signIn lui
+  // confie les nouveaux, pour que l'écran reste utilisable le temps de dire
+  // les jetons d'API qui vivent encore.
+  const changeTo = (current: string, password: string) => {
+    action.run(
+      async () => {
+        const change = await changePassword(current, password);
+        await signIn(state.username, password);
+        return change;
+      },
+      { onDone: (change) => (change.api_tokens === 0 ? reloadPage() : setLivingTokens(change.api_tokens)) },
+    );
   };
 
   return (
@@ -73,7 +88,16 @@ export function AccessSection({ state }: { state: AuthState }) {
           </SettingRow>
         </>
       )}
-      {state.mode === "basic" && <AccessPasswordForm minLength={state.password_min_length} busy={action.busy} onSubmit={changeTo} />}
+      {livingTokens > 0 ? (
+        <SettingBlock>
+          <Note tone="warn">{t("auth.tokens_remain", livingTokens)}</Note>
+          <Button variant="primary" icon="check" onClick={reloadPage}>
+            {t("auth.tokens_continue")}
+          </Button>
+        </SettingBlock>
+      ) : (
+        state.mode === "basic" && <AccessPasswordForm minLength={state.password_min_length} busy={action.busy} onSubmit={changeTo} />
+      )}
       {action.error !== null && (
         <SettingBlock>
           <Failure error={action.error} />

@@ -4846,8 +4846,18 @@ la requête —, en-tête en `forward`, `forward_insecure` quand le mode
 longueur minimale ; jamais l'empreinte), `POST /api/auth/actions/enable`
 `{username,password}` ou `{mode:"forward",header}`,
 `POST /api/auth/actions/disable` (l'installation revient à sa première
-configuration), `PUT /api/auth/password` `{password}`
-(`409 auth.no_password` en `forward`) ; refus en clés `auth.*`. Seuls
+configuration), `PUT /api/auth/password` `{current,password}`
+(`409 auth.no_password` en `forward`) ; refus en clés `auth.*`. **Changer le
+mot de passe exige le mot de passe actuel** : absent ou faux, `403
+auth.current_password_wrong`, rien n'est écrit, et le nouveau n'est même pas
+haché. Il est jugé par la même vérification bcrypt que la connexion (file
+bornée) et sous le même limiteur par adresse : un faux compte comme un
+échec de connexion, `429` après la rafale. Une session ouverte seule ne
+suffit donc plus à changer le mot de passe. La réponse ajoute `api_tokens`,
+le nombre de jetons d'API vivants : l'écran le dit après le changement et
+renvoie à la liste des jetons pour les révoquer. **Coût** : un mot de passe perdu
+ne se change pas par cette route ; le secours passe par la machine Kagu
+(`auth disable`, puis une première configuration). Seuls
 `GET /api/auth` et l'activation répondent en mode `none` ; une fois un
 compte en place, l'activation exige ce compte et répond `409
 auth.already_enabled`. **Garde-fou
@@ -4965,7 +4975,8 @@ l'acteur du journal, et un moyen de voir si mcp-maison répond.
    qu'après la commande de secours, tirés sous l'ancien compte. La réponse de
    `POST /api/auth/actions/enable` dit combien (`api_tokens_revoked`) ;
    l'écran de première configuration ne l'affiche pas. Changer le mot de passe
-   ou désactiver ne révoque rien.
+   ou désactiver ne révoque rien : le changement **propose** de les révoquer
+   (la réponse dit combien vivent), il ne le fait pas d'office.
 
 ### L'admission
 

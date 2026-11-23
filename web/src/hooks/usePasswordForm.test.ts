@@ -4,7 +4,7 @@ import { submitPasswordForm } from "./usePasswordForm";
 
 function submitWith(password: string, confirmation: string) {
   const sent: string[] = [];
-  const refusal = submitPasswordForm({ username: "admin", password, confirmation }, 12, (values) => sent.push(values.password));
+  const refusal = submitPasswordForm({ username: "admin", current: "le-mot-de-passe-actuel", password, confirmation }, 12, (values) => sent.push(values.password));
   return { refusal, sent };
 }
 
@@ -18,4 +18,10 @@ test("une confirmation différente est refusée, rien n'est envoyé", () => {
 
 test("un mot de passe juste appelle onValid une fois, sans refus", () => {
   expect(submitWith("un-mot-de-passe-long", "un-mot-de-passe-long")).toEqual({ refusal: null, sent: ["un-mot-de-passe-long"] });
+});
+
+test("le mot de passe actuel part avec le nouveau", () => {
+  const sent: string[][] = [];
+  submitPasswordForm({ username: "", current: "le-mot-de-passe-actuel", password: "un-mot-de-passe-long", confirmation: "un-mot-de-passe-long" }, 12, (values) => sent.push([values.current, values.password]));
+  expect(sent).toEqual([["le-mot-de-passe-actuel", "un-mot-de-passe-long"]]);
 });

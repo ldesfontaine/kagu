@@ -147,7 +147,7 @@ func TestVerify_RemembersUntilThePasswordChanges(t *testing.T) {
 	if verifies(t, service, state, "other", "correct horse battery") {
 		t.Fatal("a wrong username passed")
 	}
-	changed, err := service.ChangePassword(ctx, state, "another long passphrase")
+	changed, err := service.ChangePassword(ctx, state, "correct horse battery", "another long passphrase")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestEnableForward_StoresTheHeaderAndNoCredentials(t *testing.T) {
 	if _, err := service.EnableBasic(ctx, state, issueCode(t, service), "lucas", "correct horse battery"); !errors.Is(err, ErrAlreadyEnabled) {
 		t.Fatalf("basic over forward: %v", err)
 	}
-	if _, err := service.ChangePassword(ctx, state, "another long passphrase"); !errors.Is(err, ErrNoPassword) {
+	if _, err := service.ChangePassword(ctx, state, "correct horse battery", "another long passphrase"); !errors.Is(err, ErrNoPassword) {
 		t.Fatalf("change password in forward mode: %v", err)
 	}
 	if verifies(t, service, store.state, "", "") {
@@ -404,11 +404,11 @@ func TestChangePasswordAndDisable_RefuseAnAuthorizingStateThatChanged(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	changed, err := service.ChangePassword(ctx, authorizing, "another long passphrase")
+	changed, err := service.ChangePassword(ctx, authorizing, "correct horse battery", "another long passphrase")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.ChangePassword(ctx, authorizing, "a third long passphrase"); !errors.Is(err, ErrStateChanged) {
+	if _, err := service.ChangePassword(ctx, authorizing, "correct horse battery", "a third long passphrase"); !errors.Is(err, ErrStateChanged) {
 		t.Fatalf("change under the old state: %v, want ErrStateChanged", err)
 	}
 	if err := service.Disable(ctx, authorizing); !errors.Is(err, ErrStateChanged) {
@@ -420,7 +420,7 @@ func TestChangePasswordAndDisable_RefuseAnAuthorizingStateThatChanged(t *testing
 	if err := service.Disable(ctx, changed); err != nil {
 		t.Fatalf("disable under the current state: %v", err)
 	}
-	if _, err := service.ChangePassword(ctx, changed, "a third long passphrase"); !errors.Is(err, ErrStateChanged) {
+	if _, err := service.ChangePassword(ctx, changed, "correct horse battery", "a third long passphrase"); !errors.Is(err, ErrStateChanged) {
 		t.Fatalf("change after the interface reopened: %v, want ErrStateChanged", err)
 	}
 	if store.state.Mode != ModeNone {
@@ -459,5 +459,27 @@ func TestStateSame_ComparesEveryField(t *testing.T) {
 		if base.Same(other) {
 			t.Errorf("a different %s must not be the same state", name)
 		}
+	}
+}
+
+func TestChangePassword_RefusesAWrongCurrentPasswordBeforeHashing(t *testing.T) {
+	service, store := newTestService(t)
+	ctx := context.Background()
+	state, err := service.EnableBasic(ctx, none, issueCode(t, service), "lucas", "correct horse battery")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Un nouveau mot de passe trop court n'est dit qu'au hachage : la
+	// réponse prouve que le mot de passe actuel a été jugé avant.
+	for _, current := range []string{"", "wrong password here", "Correct horse battery"} {
+		if _, err := service.ChangePassword(ctx, state, current, "short"); !errors.Is(err, ErrCurrentPasswordWrong) {
+			t.Fatalf("current %q: %v, want ErrCurrentPasswordWrong", current, err)
+		}
+		if !store.state.Same(state) {
+			t.Fatalf("current %q: a refused change wrote %+v", current, store.state)
+		}
+	}
+	if _, err := service.ChangePassword(ctx, state, "correct horse battery", "short"); !errors.Is(err, ErrPasswordTooShort) {
+		t.Fatalf("right current, short new: %v, want ErrPasswordTooShort", err)
 	}
 }

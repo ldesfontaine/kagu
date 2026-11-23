@@ -308,7 +308,7 @@ func TestAuthAPI_EnableChangeDisable(t *testing.T) {
 	}
 
 	const newPassword = "another long passphrase"
-	changed := callBasicJSON(server.Server, http.MethodPut, "/api/auth/password", `{"password":"`+newPassword+`"}`, testPassword)
+	changed := callBasicJSON(server.Server, http.MethodPut, "/api/auth/password", `{"current":"`+testPassword+`","password":"`+newPassword+`"}`, testPassword)
 	if changed.Code != http.StatusOK {
 		t.Fatalf("change: %d %s", changed.Code, changed.Body.String())
 	}
@@ -336,7 +336,7 @@ func TestAuthAPI_EnableChangeDisable(t *testing.T) {
 	// passe ne passent.
 	requireSetupRequired(t, callAs(server.Server, http.MethodGet, "/api/counts", "", ""))
 	requireSetupRequired(t, callAPI(server.Server, http.MethodPost, "/api/auth/actions/disable", struct{}{}))
-	requireSetupRequired(t, callAPI(server.Server, http.MethodPut, "/api/auth/password", authPasswordRequest{Password: newPassword}))
+	requireSetupRequired(t, callAPI(server.Server, http.MethodPut, "/api/auth/password", authPasswordRequest{Current: testPassword, Password: newPassword}))
 }
 
 // Activer l'authentification révoque tous les jetons d'API et dit combien.
@@ -373,7 +373,7 @@ func TestAuthAPI_EnableRevokesEveryAPITokenAndPasswordChangeDoesNot(t *testing.T
 	var after apiTokenCreated
 	decodeAPI(t, created, &after)
 	const newPassword = "another long passphrase"
-	if got := callBasicJSON(server.Server, http.MethodPut, "/api/auth/password", `{"password":"`+newPassword+`"}`, testPassword); got.Code != http.StatusOK {
+	if got := callBasicJSON(server.Server, http.MethodPut, "/api/auth/password", `{"current":"`+testPassword+`","password":"`+newPassword+`"}`, testPassword); got.Code != http.StatusOK {
 		t.Fatalf("change: %d %s", got.Code, got.Body.String())
 	}
 	if got := callBearer(server.Server, "/api/counts", after.Token); got.Code != http.StatusOK {
@@ -671,7 +671,7 @@ func TestAuthAPI_EnableForwardRequiresTheIdentityFromATrustedProxy(t *testing.T)
 	if got := callAPI(server.Server, http.MethodGet, "/api/auth", nil); got.Code != http.StatusUnauthorized {
 		t.Fatalf("after enabling, a request without identity: %d", got.Code)
 	}
-	change := callForwardedJSON(server.Server, http.MethodPut, "/api/auth/password", `{"password":"another long passphrase"}`, trustedPeer, remoteUser, testUsername)
+	change := callForwardedJSON(server.Server, http.MethodPut, "/api/auth/password", `{"current":"`+testPassword+`","password":"another long passphrase"}`, trustedPeer, remoteUser, testUsername)
 	if change.Code != http.StatusConflict || errorCode(t, change) != "auth.no_password" {
 		t.Fatalf("change password in forward mode: %d %s", change.Code, change.Body.String())
 	}

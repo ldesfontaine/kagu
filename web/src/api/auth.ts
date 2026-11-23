@@ -63,6 +63,13 @@ export async function disableAuth(): Promise<void> {
   return api.send(route("POST /api/auth/actions/disable"));
 }
 
-export async function changePassword(password: string): Promise<void> {
-  return api.send(route("PUT /api/auth/password"), { password });
+// Ce que le serveur dit d'un changement réussi : les jetons d'API ne tombent
+// pas avec l'ancien mot de passe, l'écran propose de les révoquer.
+export interface PasswordChange {
+  api_tokens: number;
+}
+
+// Le serveur refuse (403) sans le mot de passe actuel juste.
+export async function changePassword(current: string, password: string): Promise<PasswordChange> {
+  return api.send<PasswordChange>(route("PUT /api/auth/password"), { current, password });
 }

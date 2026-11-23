@@ -1,12 +1,14 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 type authResponse struct {
@@ -46,8 +48,17 @@ type authEnableRequest struct {
 	Header    string `json:"header"`
 }
 
+// Current est le mot de passe en vigueur : sans lui juste, rien ne change.
 type authPasswordRequest struct {
+	Current  string `json:"current"`
 	Password string `json:"password"`
+}
+
+// Changer le mot de passe ne révoque pas les jetons d'API : la réponse dit
+// combien vivent, l'écran propose de les révoquer.
+type authPasswordResponse struct {
+	authResponse
+	APITokens int `json:"api_tokens"`
 }
 
 // Le corps d'une action qui n'a rien à dire : {} ou rien.
@@ -189,12 +200,34 @@ func (s *Server) changeAuthPassword(w http.ResponseWriter, r *http.Request) {
 	if !s.readAPI(w, r, &request) {
 		return
 	}
+	// Le mot de passe actuel faux compte comme un échec de connexion : sans
+	// ce frein, la route serait un oracle de mot de passe.
+	source := s.clientAddress(r)
+	if !s.authLimit.Allow(source) {
+		s.logger.Warn("interface password change rate limited", "source", source)
+		httpx.WriteTooMany(w)
+		return
+	}
 	authorizing, _ := authorizingStateFrom(r.Context())
-	state, err := s.auth.ChangePassword(r.Context(), authorizing, request.Password)
+	state, err := s.auth.ChangePassword(r.Context(), authorizing, request.Current, request.Password)
+	switch {
+	case errors.Is(err, auth.ErrCurrentPasswordWrong):
+		s.logger.Warn("interface password change refused: current password wrong", "source", source)
+		key, _ := refusal.KeyOf(err)
+		s.apiRefuse(w, http.StatusForbidden, key)
+		return
+	case errors.Is(err, auth.ErrVerificationQueueFull):
+		s.logger.Warn("interface password change queue full", "source", source)
+		httpx.WriteTooMany(w)
+		return
+	case s.failed(w, r, err, nil):
+		return
+	}
+	tokens, err := s.apiTokens.List(r.Context())
 	if s.failed(w, r, err, nil) {
 		return
 	}
-	s.writeAPI(w, http.StatusOK, authToJSON(state, ""))
+	s.writeAPI(w, http.StatusOK, authPasswordResponse{authResponse: authToJSON(state, ""), APITokens: len(tokens)})
 }
 
 func (s *Server) disableAuth(w http.ResponseWriter, r *http.Request) {

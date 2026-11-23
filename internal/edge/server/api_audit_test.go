@@ -140,7 +140,7 @@ func TestAudit_OperatorGesturesAreJournaledUnderTheirIdentityWithoutSecrets(t *t
 	decodeAPI(t, enrollment, &enrollmentToken)
 	secrets = append(secrets, apiToken.Token, enrollmentToken.Token)
 
-	expect(callAsOperator(server.Server, http.MethodPut, "/api/auth/password", testPassword, authPasswordRequest{Password: newPassword}), http.StatusOK)
+	expect(callAsOperator(server.Server, http.MethodPut, "/api/auth/password", testPassword, authPasswordRequest{Current: testPassword, Password: newPassword}), http.StatusOK)
 
 	journal := callAsOperator(server.Server, http.MethodGet, "/api/audit?limit=200", newPassword, nil)
 	expect(journal, http.StatusOK)
