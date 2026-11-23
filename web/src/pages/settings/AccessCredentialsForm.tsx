@@ -1,10 +1,7 @@
-import { useState } from "react";
-
 import { Field, Input } from "../../components/Field";
 import { FormActions, FormBody } from "../../components/FormBody";
-import { useForm } from "../../hooks/useForm";
+import { usePasswordForm } from "../../hooks/usePasswordForm";
 import { useT } from "../../i18n/context";
-import { emptyCredentialsForm, passwordFormError } from "../../lib/auth";
 
 // Le formulaire de création du compte, à la première configuration
 // (identifiant, mot de passe, confirmation). Il vit dans une carte, à côté
@@ -20,15 +17,7 @@ export function AccessCredentialsForm({
   onSubmit: (username: string, password: string) => void;
 }) {
   const t = useT();
-  const { values, change } = useForm(emptyCredentialsForm);
-  const [error, setError] = useState<string | null>(null);
-  const submit = () => {
-    const refusal = passwordFormError(values.password, values.confirmation, minLength);
-    setError(refusal);
-    if (refusal === null) {
-      onSubmit(values.username, values.password);
-    }
-  };
+  const { values, change, error, submit } = usePasswordForm(minLength, (valid) => onSubmit(valid.username, valid.password));
   return (
     <FormBody onSubmit={submit} error={error} actions={<FormActions submitLabel={t("auth.setup_create")} submitIcon="shield" busy={busy} />}>
       <p className="field-label">{t("auth.setup_account")}</p>
