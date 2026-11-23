@@ -33,7 +33,10 @@ export interface ActionRun {
   // La raison de l'agent, ou « undelivered » ; vide sinon.
   reason: string;
   seq: number;
+  // L'acteur enregistré et signé (la session d'un opérateur) ; l'écran
+  // montre requested_by_label, le compte ou le nom du jeton, vide sans libellé.
   requested_by: string;
+  requested_by_label: string;
   requested_at: string;
   not_after: string;
   finished_at: string | null;

@@ -75,9 +75,13 @@ type Run struct {
 	Reason      string
 	NotAfter    time.Time
 	Seq         int64
-	// L'acteur du journal d'audit, recopié : « operator:lucas ».
+	// L'acteur du journal d'audit, recopié et signé : « operator:<session> »
+	// pour un opérateur connecté (A2 §5), « api:<jeton> » pour un jeton.
 	RequestedBy string
-	RequestedAt time.Time
+	// Le nom lisible de cet acteur à l'instant de la demande (Actor.Label) :
+	// le compte de la session, le nom du jeton. C'est lui que l'écran montre.
+	RequestedByLabel string
+	RequestedAt      time.Time
 	// Zéro tant que le run n'est pas fini.
 	FinishedAt time.Time
 	Output     []LogLine

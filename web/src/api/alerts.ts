@@ -196,9 +196,11 @@ export interface Mute {
   starts_at: string;
   ends_at: string;
   active: boolean;
-  // L'acteur du journal d'audit ; vide pour un silence venu d'avant.
+  // L'acteur du journal d'audit ; vide pour un silence venu d'avant. Le
+  // libellé (le compte d'une session, le nom d'un jeton) est ce que l'écran montre.
   created_by_kind: string;
   created_by_name: string;
+  created_by_label: string;
   created_at: string;
   // Annoncé, le silence se montre en maintenance sur les pages de statut,
   // sous ce titre public ; sinon il reste interne.

@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 
 import { auditPath } from "../api/audit";
 import type { Translate } from "../i18n/context";
-import { actionLabel, actorLabel, isSingletonKind, actorParts, actorTone, detailEntries, objectLabel, verbOf } from "./audit";
+import { actionLabel, actorLabel, isSingletonKind, actorParts, actorTone, detailEntries, objectLabel, shownActorName, verbOf } from "./audit";
 
 // Un faux catalogue : la clé et ses arguments, pour lire ce qui est demandé.
 const t: Translate = (key, ...args) => [key, ...args].join(":");
@@ -80,4 +80,12 @@ test("la révocation de tous les jetons se dit en entier, avec ou sans jeton", (
 test("l'accès à l'interface n'a qu'une instance : sa sorte suffit", () => {
   expect(isSingletonKind("auth")).toBe(true);
   expect(isSingletonKind("probe")).toBe(false);
+});
+
+// Essai E00-01 : le libellé recopié au geste (le compte d'une session) est ce
+// que l'écran montre ; sans libellé, l'identifiant, comme avant.
+test("shownActorName montre le compte d'une session, jamais son identifiant", () => {
+  expect(shownActorName("5e55105e55105e55", "lucas")).toBe("lucas");
+  expect(shownActorName("admin", "")).toBe("admin");
+  expect(shownActorName("admin", null)).toBe("admin");
 });

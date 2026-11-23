@@ -10,6 +10,7 @@ import { useAction } from "../../hooks/useAction";
 import { useNow } from "../../hooks/useNow";
 import { useT, type Translate } from "../../i18n/context";
 import { muteStateOf, muteTargets, newMutePath, type MuteState } from "../../lib/alerts";
+import { shownActorName } from "../../lib/audit";
 import type { Tone } from "../../lib/tone";
 import { formatClock } from "../../lib/time";
 
@@ -118,5 +119,6 @@ function authorOf(t: Translate, mute: Mute): string {
     return "—";
   }
   const kind = t(`audit.actor_${mute.created_by_kind}`);
-  return mute.created_by_name !== "" ? `${kind} · ${mute.created_by_name}` : kind;
+  const name = shownActorName(mute.created_by_name, mute.created_by_label);
+  return name !== "" ? `${kind} · ${name}` : kind;
 }

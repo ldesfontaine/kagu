@@ -41,7 +41,9 @@ func (ts *testServer) seedActions(t *testing.T) {
 		requested := testNow.Add(time.Duration(index) * time.Minute)
 		run := action.Run{
 			ID: outcome.RunID, Kind: agentwire.KindAgentPing, MachineID: remoteID, MachineName: status.Name, AgentID: status.Agent.ID,
-			State: action.StateSent, NotAfter: requested.Add(action.OrderLifetime), RequestedBy: "operator:lucas", RequestedAt: requested,
+			State: action.StateSent, NotAfter: requested.Add(action.OrderLifetime), RequestedAt: requested,
+			// Comme une demande réelle : la session enregistrée, le compte montré.
+			RequestedBy: "operator:" + testSessionID, RequestedByLabel: testUsername,
 		}
 		if _, err := ts.db.InsertRun(ctx, run); err != nil {
 			t.Fatal(err)
@@ -88,7 +90,7 @@ func TestActions_PingIsSignedSentAndAnsweredThroughTheSignal(t *testing.T) {
 		t.Fatal(err)
 	}
 	if body.RunID != sent.ID || body.MachineID != remoteID || body.AgentID != enrolled.Agent.ID || body.Kind != agentwire.KindAgentPing ||
-		body.Seq != 1 || body.NotAfter != testNow.Add(action.OrderLifetime).Unix() {
+		body.Seq != 1 || body.NotAfter != testNow.Add(action.OrderLifetime).Unix() || body.Actor != "operator:"+testSessionID {
 		t.Fatalf("order %+v", body)
 	}
 
