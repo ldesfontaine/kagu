@@ -5173,8 +5173,10 @@ reste servi au compte du service comme à root.
 
 **La commande** : `sudo opencloud admin <geste> [-config chemin]`, serveur
 en marche (sinon « le serveur ne tourne pas »). Un compte qui n'est pas
-root est refusé par la commande (« Réservé à root ») avant toute saisie, et
-par le serveur de toute façon, par l'uid.
+root est refusé par la commande, pour tout geste, avant la configuration,
+toute saisie et la socket : « Réservé à root », code de sortie 2 (E02-12).
+Le serveur le refuse de toute façon, par l'uid ; son `403` se dit par le
+même refus.
 
 | Geste | Route | Effet |
 | --- | --- | --- |
