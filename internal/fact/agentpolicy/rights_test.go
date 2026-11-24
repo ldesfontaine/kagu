@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // formatSet écrit les droits d'un jeu tels que la fiche A3 (§5) les liste.
@@ -102,15 +103,20 @@ func TestR_A3_10_PolicyOnlyRightsAreRefusedOutsideThePolicy(t *testing.T) {
 	}
 }
 
-// R-A3-10, dans la politique : terminal.host s'y lit, sous un compte (root
-// sans valeur), et un compte mal formé est refusé ; les trois autres droits
-// de la politique seule y restent inconnus tant que la table ne les ouvre
-// pas. Ce que l'agent rapporte se lit avec la même grammaire.
-func TestR_A3_10_TheHostTerminalIsReadInThePolicy(t *testing.T) {
+// R-A3-10, dans la politique : les quatre droits de la politique seule s'y
+// lisent avec leur grammaire, terminal.host sous un compte (root sans valeur),
+// network.private sous un nombre de pairs (1 sans valeur) ; une valeur mal
+// formée est refusée. Ce que l'agent rapporte se lit avec la même grammaire.
+func TestR_A3_10_PolicyOnlyRightsAreReadInThePolicy(t *testing.T) {
 	for text, want := range map[string]string{
-		"terminal.host":        "observe,terminal.host=root",
-		"terminal.host=admin":  "observe,terminal.host=admin",
-		"terminal.host=_svc-1": "observe,terminal.host=_svc-1",
+		"terminal.host":                   "observe,terminal.host=root",
+		"terminal.host=admin":             "observe,terminal.host=admin",
+		"terminal.host=_svc-1":            "observe,terminal.host=_svc-1",
+		"terminal.container":              "observe,terminal.container",
+		"service.free":                    "observe,service.free",
+		"network.private":                 "observe,network.private=1",
+		"network.private=254":             "observe,network.private=254",
+		"service.free,terminal.container": "observe,terminal.container,service.free",
 	} {
 		rights, err := ParsePolicyRights(text)
 		if err != nil || FormatCapabilities(rights) != want {
@@ -122,19 +128,112 @@ func TestR_A3_10_TheHostTerminalIsReadInThePolicy(t *testing.T) {
 			t.Errorf("%q: %v, want a bad account", text, err)
 		}
 	}
-	for _, text := range []string{"terminal.container", "service.free", "network.private=1", "network.private"} {
-		if _, err := ParsePolicyRights(text); !errors.Is(err, ErrCapabilityUnknown) {
-			t.Errorf("%q: %v, want still closed", text, err)
+	for _, text := range []string{"network.private=0", "network.private=255", "network.private=01", "network.private=+1", "network.private=1:2", "network.private=-1", "network.private=un"} {
+		if _, err := ParsePolicyRights(text); !errors.Is(err, ErrCapabilityPeers) {
+			t.Errorf("%q: %v, want a bad number of peers", text, err)
 		}
 	}
-	document, err := Decode([]byte("version = 1\nmachine_id = 'm'\n[[right]]\nname = 'terminal.host'\nvalue = 'admin'\n"))
-	if err != nil || FormatCapabilities(document.Rights) != "observe,terminal.host=admin" {
-		t.Fatalf("the policy does not read terminal.host: %+v %v", document, err)
+	for _, text := range []string{"service.free=/srv", "terminal.container=x"} {
+		if _, err := ParsePolicyRights(text); !errors.Is(err, ErrCapabilityScope) {
+			t.Errorf("%q: %v, want no value", text, err)
+		}
 	}
-	if _, err := Decode([]byte("version = 1\nmachine_id = 'm'\n[[right]]\nname = 'service.free'\n")); !errors.Is(err, ErrUnreadable) {
-		t.Fatalf("service.free read in the policy: %v", err)
+	document, err := Decode([]byte("version = 1\nmachine_id = 'm'\n[[right]]\nname = 'terminal.host'\nvalue = 'admin'\n[[right]]\nname = 'network.private'\nvalue = '2'\n"))
+	if err != nil || FormatCapabilities(document.Rights) != "observe,terminal.host=admin,network.private=2" {
+		t.Fatalf("the policy does not read its own rights: %+v %v", document, err)
 	}
-	if _, err := document.Revoke([]string{CapabilityTerminalHost}); err != nil {
-		t.Fatalf("terminal.host does not revoke: %v", err)
+	if _, err := Decode([]byte("version = 1\nmachine_id = 'm'\n[[right]]\nname = 'network.private'\nvalue = '999'\n")); !errors.Is(err, ErrUnreadable) {
+		t.Fatalf("a bad number of peers read in the policy: %v", err)
+	}
+	if _, err := document.Revoke([]string{CapabilityTerminalHost, CapabilityNetworkPrivate, CapabilityServiceFree}); err != nil {
+		t.Fatalf("the policy-only rights do not revoke: %v", err)
+	}
+}
+
+// R-A3-7 : --set remplace les droits des jeux par ceux du jeu, sans
+// échéance, et garde le reste : ancres, clé du serveur, droits hors jeu et
+// leur échéance, dont backup.receive de la machine du serveur.
+func TestR_A3_7_GrantSetReplacesTheSetAndKeepsTheRest(t *testing.T) {
+	clock := Clock{Now: time.Date(2026, 11, 24, 10, 0, 0, 0, time.UTC), Boot: "boot", Uptime: time.Hour}
+	rights, err := ParsePolicyRights("files.write=/srv/static,terminal.host,backup.receive=/var/lib/opencloud-agent/database-backups,observe.env,docker.deploy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := Document{MachineID: "m", Anchors: map[string][]string{"backup.guest": {"5012"}}, ServerKeys: []ServerKey{{Key: []byte("k")}}}
+	before, err = before.Grant(rights, Term{}, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err = before.Grant([]Capability{{Name: CapabilityObserveEnv}}, Term{Duration: time.Hour}, clock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := SetHost{ServicesRoot: "/srv/workspace"}
+	for set, want := range map[Set]string{
+		SetObserve: "observe,probe.lan,observe.env,backup.receive=/var/lib/opencloud-agent/database-backups",
+		SetManage: "observe,probe.lan,observe.env,agent.update,docker.deploy,docker.update,backup.receive=/var/lib/opencloud-agent/database-backups," +
+			"files.write=/srv/workspace,restic.produce,restic.docker,restic.restore,terminal.container",
+		SetRoot: "observe,probe.lan,observe.env,agent.update,docker.deploy,docker.update,backup.receive=/var/lib/opencloud-agent/database-backups," +
+			"files.write=/srv/workspace,restic.produce,restic.docker,restic.restore,terminal.container,terminal.host=root,service.free,network.private=1",
+	} {
+		after, err := before.GrantSet(set, host)
+		if err != nil {
+			t.Fatalf("%s: %v", set, err)
+		}
+		if got := FormatCapabilities(after.Rights); got != want {
+			t.Errorf("%s: %s\nwant %s", set, got, want)
+		}
+		if !maps.EqualFunc(after.Anchors, before.Anchors, slices.Equal) || len(after.ServerKeys) != 1 || after.MachineID != "m" {
+			t.Errorf("%s: anchors, key or machine lost: %+v", set, after)
+		}
+		// terminal.host, posé pour deux heures seul, est sans échéance dans
+		// le jeu ; observe.env garde la sienne.
+		if names := slices.Sorted(maps.Keys(after.Expiries)); !slices.Equal(names, []string{CapabilityObserveEnv}) {
+			t.Errorf("%s: expiries %v, want observe.env alone", set, names)
+		}
+	}
+	proxmox, err := before.GrantSet(SetRoot, SetHost{ServicesRoot: "/srv/workspace", Proxmox: true})
+	if err != nil || !CoversProducer(proxmox.Rights, ProducerProxmoxVzdump) || !HasCapability(proxmox.Rights, CapabilityProxmoxSnapshot) {
+		t.Errorf("root on Proxmox: %s %v", FormatCapabilities(proxmox.Rights), err)
+	}
+	// Un jeu reposé ne change rien ; un autre hôte retire ce qu'il posait.
+	again, _ := proxmox.GrantSet(SetRoot, SetHost{ServicesRoot: "/srv/workspace", Proxmox: true})
+	if !again.Same(proxmox) {
+		t.Error("the same set twice changes the policy")
+	}
+	if manage, _ := proxmox.GrantSet(SetManage, host); HasCapability(manage.Rights, CapabilityBackupProduce) || HasCapability(manage.Rights, CapabilityProxmoxPower) {
+		t.Errorf("manage off Proxmox keeps %s", FormatCapabilities(manage.Rights))
+	}
+	if _, err := before.GrantSet("admin", host); !errors.Is(err, ErrSetUnknown) {
+		t.Errorf("unknown set: %v", err)
+	}
+	if _, err := before.GrantSet(SetManage, SetHost{ServicesRoot: "/"}); !errors.Is(err, ErrCapabilityPath) {
+		t.Errorf("a bad services root: %v", err)
+	}
+	if !CoversSet(proxmox.Rights, SetRoot) || CoversSet(before.Rights, SetManage) {
+		t.Error("CoversSet")
+	}
+}
+
+// R-A3-8, R-A3-12 : ce que chaque droit demande au système est figé ici :
+// le groupe docker (qui vaut root) et la porte root (A5).
+func TestR_A3_8_WhatEachRightAsksOfTheSystem(t *testing.T) {
+	var docker, gate []string
+	for _, name := range Names() {
+		if NeedsDockerGroup([]Capability{{Name: name}}) {
+			docker = append(docker, name)
+		}
+		gate = append(gate, RootGateRights([]Capability{{Name: name}})...)
+	}
+	if want := []string{"docker.deploy", "docker.update", "restic.docker", "terminal.container", "service.free"}; !slices.Equal(docker, want) {
+		t.Errorf("docker group: %v, want %v", docker, want)
+	}
+	if want := []string{"backup.produce", "terminal.host", "network.private"}; !slices.Equal(gate, want) {
+		t.Errorf("root gate: %v, want %v", gate, want)
+	}
+	for _, name := range docker {
+		if NoticeOf(Capability{Name: name}).RiskKey != manageRisk {
+			t.Errorf("%s does not say it is worth root", name)
+		}
 	}
 }

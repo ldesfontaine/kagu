@@ -44,6 +44,16 @@ type PolicyOptions struct {
 	// Clock lit l'horloge de la machine (une échéance se pose dessus) ; nil :
 	// SystemClock.
 	Clock func() agentpolicy.Clock
+	// System est ce que grant et revoke touchent aussi (R-A3-8) ; nil :
+	// HostSystem, la machine.
+	System System
+}
+
+func (o PolicyOptions) system() System {
+	if o.System == nil {
+		return HostSystem{}
+	}
+	return o.System
 }
 
 func (o PolicyOptions) clock() agentpolicy.Clock {
@@ -54,7 +64,8 @@ func (o PolicyOptions) clock() agentpolicy.Clock {
 }
 
 // PolicyChange est ce qu'un geste change dans la politique : la politique
-// d'avant et d'après, et les droits posés et retirés sous leur forme texte.
+// d'avant et d'après, et les droits posés et retirés sous leur forme texte ;
+// ce qu'il demande au système, et ce qui en est posé (R-A3-8).
 type PolicyChange struct {
 	// First : la machine n'avait pas de politique ; Before est ce dont la
 	// première part, et chaque droit qu'elle porte est dit posé.
@@ -64,6 +75,13 @@ type PolicyChange struct {
 	Added      []string
 	Removed    []string
 	AuditError error
+	// Prerequisites : le plan, dit avant la question ; Laid : ce qui en est
+	// posé, dans l'ordre.
+	Prerequisites []Prerequisite
+	Laid          []Prerequisite
+	// RootOnServer : la machine du serveur passe en « Gérer en root » ; qui
+	// entre dans l'interface y devient root (R-DROIT-5).
+	RootOnServer bool
 }
 
 // Changed dit si le geste change quelque chose ; sinon rien ne s'écrit.
@@ -76,6 +94,19 @@ func (c PolicyChange) Changed() bool {
 func GrantRights(opts PolicyOptions, granted []agentpolicy.Capability, term agentpolicy.Term, confirm func(PolicyChange) error) (PolicyChange, error) {
 	return changePolicy(opts, "grant", func(document agentpolicy.Document) (agentpolicy.Document, error) {
 		return document.Grant(granted, term, opts.clock())
+	}, confirm)
+}
+
+// GrantSet remplace les droits des jeux par ceux de set (R-A3-7), sans
+// échéance, pour la racine des services de l'agent et selon que la machine
+// est un hôte Proxmox.
+func GrantSet(opts PolicyOptions, set agentpolicy.Set, confirm func(PolicyChange) error) (PolicyChange, error) {
+	return changePolicy(opts, "grant", func(document agentpolicy.Document) (agentpolicy.Document, error) {
+		identity, err := loadIdentityAsRoot(opts.StateDir, opts.StatePath)
+		if err != nil {
+			return agentpolicy.Document{}, err
+		}
+		return document.GrantSet(set, agentpolicy.SetHost{ServicesRoot: identity.Root(), Proxmox: opts.system().Proxmox()})
 	}, confirm)
 }
 
@@ -117,7 +148,31 @@ func changePolicy(opts PolicyOptions, verb string, change func(agentpolicy.Docum
 	if err != nil {
 		return PolicyChange{}, err
 	}
-	return writePolicy(opts, dir, verb, PolicyChange{First: first, Before: before, After: after}, confirm)
+	planned := PolicyChange{First: first, Before: before, After: after}
+	if err := planChange(opts, identity, &planned); err != nil {
+		return PolicyChange{}, err
+	}
+	return writePolicy(opts, dir, verb, planned, confirm)
+}
+
+// planChange lit ce que le changement de droits demande au système, et si la
+// machine du serveur passe en « Gérer en root » (R-DROIT-5).
+func planChange(opts PolicyOptions, identity Identity, change *PolicyChange) error {
+	if agentpolicy.SameCapabilities(change.Before.Rights, change.After.Rights) {
+		return nil
+	}
+	account, err := agentAccountOf(opts.StateDir)
+	if err != nil {
+		return err
+	}
+	system := opts.system()
+	change.Prerequisites, err = planPrerequisites(system, account, identity.Root(), change.Before.Rights, change.After.Rights)
+	if err != nil {
+		return fmt.Errorf("read what the rights ask of the system: %w", err)
+	}
+	becomesRoot := agentpolicy.CoversSet(change.After.Rights, agentpolicy.SetRoot) && !agentpolicy.CoversSet(change.Before.Rights, agentpolicy.SetRoot)
+	change.RootOnServer = becomesRoot && system.ServerMachine()
+	return nil
 }
 
 // policyWriterIdentity juge qui écrit la politique : root, sur l'état d'un
@@ -157,8 +212,26 @@ func writePolicy(opts PolicyOptions, dir *os.Root, verb string, change PolicyCha
 		change.AuditError = opts.Audit(fmt.Sprintf("policy %s +[%s] -[%s] digest %s (uid %d)",
 			verb, strings.Join(change.Added, " "), strings.Join(change.Removed, " "), agentpolicy.Digest(content), opts.EUID))
 	}
+	// La politique d'abord : un retrait vaut dès qu'elle est relue, même si
+	// le système ne suit pas ; ce qui est posé se dit, l'échec aussi.
+	change.Laid, err = layPrerequisites(opts.system(), change.Prerequisites)
+	if err != nil {
+		return change, &PrerequisiteError{Change: change, Err: err}
+	}
 	return change, nil
 }
+
+// PrerequisiteError : la politique est écrite, la pose du système s'est
+// arrêtée à un pas ; Change dit ce qui est posé.
+type PrerequisiteError struct {
+	Change PolicyChange
+	Err    error
+}
+
+func (e *PrerequisiteError) Error() string {
+	return "policy written, system not fully prepared: " + e.Err.Error()
+}
+func (e *PrerequisiteError) Unwrap() error { return e.Err }
 
 // openPolicyDir ouvre le dossier de la politique, le crée à root en 0755 s'il
 // manque, et le juge comme l'agent le jugera.

@@ -44,6 +44,10 @@ const (
 	// (agentpolicy.FormatRightsUntil), redite avec eux. Absent quand aucun
 	// n'échoit, et chez un agent plus vieux.
 	HeaderAgentRightsUntil = brand.HeaderPrefix + "Agent-Rights-Until"
+	// Ce que vaut le compte de l'agent sur sa machine (R-A3-12) : « true »
+	// quand il est root, dans le groupe docker, ou porte terminal.host ;
+	// « false » sinon. Absent chez un agent plus vieux.
+	HeaderAgentRootEquivalent = brand.HeaderPrefix + "Agent-Root-Equivalent"
 	// L'empreinte de la clé du serveur que l'agent a épinglée à son
 	// enrôlement (KeyFingerprint), redite à chaque ouverture du flux : le
 	// serveur la garde pour montrer qu'un agent ne vérifierait pas ses ordres.

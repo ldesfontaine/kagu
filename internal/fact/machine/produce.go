@@ -22,9 +22,9 @@ const (
 	// à moitié écrite ou refusée par visudo ne vaut jamais rien.
 	SudoersTempFile = "/etc/sudoers.d/." + brand.AgentAccount + ".tmp"
 	// Le drop-in de l'unité : NoNewPrivileges=true interdit tout sudo, c'est le
-	// seul desserrement que ce droit demande.
-	ProduceDropInDir  = "/etc/systemd/system/" + brand.AgentUnit + ".d"
-	ProduceDropInFile = ProduceDropInDir + "/produce.conf"
+	// seul desserrement que ce droit demande. « agent grant » ne le pose ni ne
+	// le retire : ce qui demande root passera par la porte (A5, étape 14).
+	ProduceDropInFile = UnitDropInDir + "/produce.conf"
 	// Les archives en cours de production, dans l'état de l'agent.
 	ProduceDir = brand.AgentStateDir + "/" + brand.AgentProduceDir
 )

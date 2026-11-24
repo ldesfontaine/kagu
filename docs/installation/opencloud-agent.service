@@ -16,7 +16,8 @@ Type=simple
 #   il n'écrit que son état et les dossiers de ses droits. Il ne lit pas ce
 #   qu'un compte non root ne lit pas.
 # - avec Docker : le compte est dans le groupe docker (usermod -aG docker, fait
-#   par la préparation). systemd en lit les groupes au démarrage, d'où pas de
+#   par la préparation, ou par « opencloud agent grant » quand un droit le
+#   demande ; « revoke » l'en retire quand plus aucun ne le demande). systemd en lit les groupes au démarrage, d'où pas de
 #   SupplementaryGroups= ici : un groupe absent empêcherait l'unité de démarrer
 #   sur une machine sans Docker. Le groupe docker ÉQUIVAUT À ROOT : la socket
 #   lance un conteneur privilégié qui monte « / ». Ce compte protège des
@@ -74,20 +75,24 @@ RestartPreventExitStatus=2
 #   [Service]
 #   NoNewPrivileges=false
 # (voir « backup.produce équivaut à root » dans installation.md). Ne le posez
-# pas ailleurs, et ne changez pas cette ligne-ci.
+# pas ailleurs, et ne changez pas cette ligne-ci. « opencloud agent grant » ne
+# pose ni ne retire jamais ce drop-in : ce qui demande root passera par la
+# porte root.
 NoNewPrivileges=true
 ProtectSystem=strict
-# Un droit qui écrit ailleurs (backup.receive=/srv/backups) demande un
-# dossier créé d'avance au nom du compte (la préparation de l'interface le
-# fait : install -d -m 0700 -o opencloud-agent -g opencloud-agent /srv/backups ;
-# systemd refuse de démarrer sur un ReadWritePaths absent) et un drop-in, pas
-# une édition de ce fichier :
+# Un droit qui écrit ailleurs (backup.receive=/srv/backups, restic.target,
+# files.write) demande un dossier créé d'avance au nom du compte et un drop-in,
+# pas une édition de ce fichier :
 # /etc/systemd/system/opencloud-agent.service.d/droits.conf
 #   [Service]
-#   ReadWritePaths=/srv/backups
-# puis systemctl daemon-reload && systemctl restart opencloud-agent.
-# Déployer des services (docker.deploy, docker.update) demande de même la
-# racine des services : ReadWritePaths=/srv/workspace (ou celle de -root-dir).
+#   ReadWritePaths=-/srv/backups
+# puis systemctl daemon-reload && systemctl restart opencloud-agent. Le « - »
+# laisse l'unité démarrer si le dossier manque. Déployer des services
+# (docker.deploy, docker.update) demande de même la racine des services :
+# ReadWritePaths=-/srv/workspace (ou celle de -root-dir). « opencloud agent
+# grant » fait les trois (dossier, drop-in, relance) et réécrit droits.conf en
+# entier ; un autre drop-in posé à la main s'ajoute à lui (systemd additionne
+# les ReadWritePaths) : grant le dit, il n'y touche pas.
 ProtectHome=read-only
 PrivateTmp=true
 UMask=0077

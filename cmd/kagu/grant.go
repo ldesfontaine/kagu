@@ -20,10 +20,11 @@ import (
 )
 
 // opencloud agent rights | grant <droit>[=valeur]… [--for <durée>|permanent]
-// | revoke <droit>… : la politique de l'agent (fiche A3), root seul. grant et
-// revoke disent ce qui change, demandent [o/N] (R-A3-15), écrivent la
-// politique d'un coup sous son verrou et tracent le changement au journal du
-// système (journald).
+// | grant --set observe|manage|root | revoke <droit>… : la politique de
+// l'agent (fiche A3), root seul. grant et revoke disent ce qui change, et ce
+// qu'ils font aussi sur le système, demandent [o/N] (R-A3-15), écrivent la
+// politique d'un coup sous son verrou, tracent le changement au journal du
+// système (journald), puis posent ce que les droits demandent (R-A3-8).
 
 // Les verbes de la politique, à côté de « trust ».
 const (
@@ -37,13 +38,14 @@ const (
 type policyPlacer func(stateDir *os.Root) (agent.PolicyPlace, error)
 
 // policyCommand est ce qu'une commande de la politique reçoit, ses arguments
-// à part : où elle écrit, le terminal de la question, le compte qui la lance
-// et où vit la politique.
+// à part : où elle écrit, le terminal de la question, le compte qui la lance,
+// où vit la politique et le système que grant prépare (nil : la machine).
 type policyCommand struct {
 	out          io.Writer
 	openTerminal terminalOpener
 	euid         int
 	place        policyPlacer
+	system       agent.System
 }
 
 func runAgentPolicy(verb string, args []string, command policyCommand) error {
@@ -51,6 +53,7 @@ func runAgentPolicy(verb string, args []string, command policyCommand) error {
 	stateDir := flags.String("state", defaultAgentStateDir, "répertoire d'état de l'agent")
 	yes := flags.Bool("yes", false, "confirme sans poser la question (obligatoire sans terminal)")
 	forTerm := flags.String("for", "", "grant : la durée des droits posés, de 5m à 168h, ou permanent")
+	setName := flags.String("set", "", "grant : remplace les droits des jeux par ceux de observe, manage ou root")
 	names, err := parseWordsAndFlags(flags, args)
 	if err != nil {
 		return err
@@ -60,7 +63,8 @@ func runAgentPolicy(verb string, args []string, command policyCommand) error {
 		return err
 	}
 	text := catalogs.For(lang.Default)
-	if (verb == policyRights) != (len(names) == 0) || (verb != policyGrant && *forTerm != "") {
+	withSet := *setName != ""
+	if (verb == policyRights || withSet) != (len(names) == 0) || (verb != policyGrant && (*forTerm != "" || withSet)) || (withSet && *forTerm != "") {
 		return &refusal{message: text.Format("agent.policy_usage", brand.Command)}
 	}
 	term, err := agentpolicy.ParseTerm(*forTerm)
@@ -84,7 +88,7 @@ func runAgentPolicy(verb string, args []string, command policyCommand) error {
 	if err != nil {
 		return err
 	}
-	opts := agent.PolicyOptions{StateDir: root, StatePath: *stateDir, Place: place, EUID: command.euid, Audit: auditToSystemJournal}
+	opts := agent.PolicyOptions{StateDir: root, StatePath: *stateDir, Place: place, EUID: command.euid, Audit: auditToSystemJournal, System: command.system}
 	if verb == policyRights {
 		report, err := agent.ReadPolicyAsRoot(opts)
 		if err != nil {
@@ -97,7 +101,12 @@ func runAgentPolicy(verb string, args []string, command policyCommand) error {
 		printPolicyChange(command.out, text, change)
 		return confirmChange(command.out, command.openTerminal, *yes, text)
 	}
-	change, err := changeRights(verb, opts, names, term, confirm)
+	change, err := changeRights(verb, opts, names, *setName, term, confirm)
+	var partial *agent.PrerequisiteError
+	if errors.As(err, &partial) {
+		printPolicyDone(command.out, text, partial.Change)
+		return &refusal{message: text.Format("agent.prerequisites_failed", partial.Err.Error())}
+	}
 	if err != nil {
 		return explainPolicyError(err, text)
 	}
@@ -122,11 +131,19 @@ func parseWordsAndFlags(flags *flag.FlagSet, args []string) ([]string, error) {
 	}
 }
 
-// changeRights joue grant ou revoke. Les droits se lisent avant d'ouvrir la
-// politique : un droit mal écrit ne prend pas le verrou.
-func changeRights(verb string, opts agent.PolicyOptions, names []string, term agentpolicy.Term, confirm func(agent.PolicyChange) error) (agent.PolicyChange, error) {
+// changeRights joue grant, grant --set ou revoke. Les droits et le jeu se
+// lisent avant d'ouvrir la politique : un droit mal écrit ne prend pas le
+// verrou.
+func changeRights(verb string, opts agent.PolicyOptions, names []string, setName string, term agentpolicy.Term, confirm func(agent.PolicyChange) error) (agent.PolicyChange, error) {
 	if verb == policyRevoke {
 		return agent.RevokeRights(opts, names, confirm)
+	}
+	if setName != "" {
+		set, err := agentpolicy.ParseSet(setName)
+		if err != nil {
+			return agent.PolicyChange{}, err
+		}
+		return agent.GrantSet(opts, set, confirm)
 	}
 	granted, err := agentpolicy.ParsePolicyRights(strings.Join(names, agentpolicy.RightSeparator))
 	if err != nil {
@@ -136,7 +153,8 @@ func changeRights(verb string, opts agent.PolicyOptions, names []string, term ag
 }
 
 // printPolicyChange dit, avant la question, chaque droit, chaque ancre et
-// chaque clé du serveur posés et retirés (R-A3-15).
+// chaque clé du serveur posés et retirés, puis ce que la commande fait aussi
+// sur le système (R-A3-15, R-A3-8).
 func printPolicyChange(out io.Writer, text lang.Catalog, change agent.PolicyChange) {
 	if change.First {
 		fmt.Fprintln(out, text.Get("agent.policy_first"))
@@ -152,6 +170,40 @@ func printPolicyChange(out io.Writer, text lang.Catalog, change agent.PolicyChan
 	printRightNotices(out, text, change)
 	printAnchorChanges(out, change.Before.Anchors, change.After.Anchors)
 	printServerKeyChanges(out, text, change.Before.ServerKeys, change.After.ServerKeys)
+	if len(change.Prerequisites) > 0 {
+		fmt.Fprintln(out, text.Get("agent.prerequisites"))
+		for _, step := range change.Prerequisites {
+			fmt.Fprintln(out, "  "+prerequisiteText(text, step))
+		}
+	}
+	if change.RootOnServer {
+		fmt.Fprintln(out, text.Get("agent.policy_root_on_server"))
+	}
+}
+
+// prerequisiteText dit un pas de la pose des prérequis.
+func prerequisiteText(text lang.Catalog, step agent.Prerequisite) string {
+	switch step.Kind {
+	case agent.PrerequisiteDockerJoin:
+		return text.Format("agent.prerequisite_docker_join", step.Detail)
+	case agent.PrerequisiteDockerLeave:
+		return text.Format("agent.prerequisite_docker_leave", step.Detail)
+	case agent.PrerequisiteDockerMissing:
+		return text.Get("agent.prerequisite_docker_missing")
+	case agent.PrerequisiteFolder:
+		return text.Format("agent.prerequisite_folder", step.Detail)
+	case agent.PrerequisiteDropIn:
+		return text.Format("agent.prerequisite_drop_in", step.Detail)
+	case agent.PrerequisiteDropInRemoved:
+		return text.Format("agent.prerequisite_drop_in_removed", step.Detail)
+	case agent.PrerequisiteOtherDropIn:
+		return text.Format("agent.prerequisite_other_drop_in", step.Detail)
+	case agent.PrerequisiteRootGate:
+		return text.Format("agent.prerequisite_root_gate", step.Detail)
+	case agent.PrerequisiteRestart:
+		return text.Format("agent.prerequisite_restart", step.Detail)
+	}
+	return string(step.Kind) + " " + step.Detail
 }
 
 // printExpiryChanges dit l'échéance de chaque droit qui en prend une, ou qui
@@ -168,16 +220,19 @@ func printExpiryChanges(out io.Writer, text lang.Catalog, before, after agentpol
 	}
 }
 
-// printRightNotices dit, pour chaque droit posé, la phrase de son risque et,
-// posé sous le compte par défaut, la ligne qui le pose sous un autre
-// (R-A3-12, N-M6) : avant la question.
+// printRightNotices dit, pour chaque droit posé, la phrase de son risque,
+// une fois par phrase (« vaut root » sous Gérer pour tous les droits du groupe
+// docker) et, posé sous le compte par défaut, la ligne qui le pose sous un
+// autre (R-A3-12, N-M6) : avant la question.
 func printRightNotices(out io.Writer, text lang.Catalog, change agent.PolicyChange) {
+	var said []string
 	for _, right := range change.After.Rights {
 		if !slices.Contains(change.Added, agentpolicy.FormatCapabilities([]agentpolicy.Capability{right})) {
 			continue
 		}
 		notice := agentpolicy.NoticeOf(right)
-		if notice.RiskKey != "" {
+		if notice.RiskKey != "" && !slices.Contains(said, notice.RiskKey) {
+			said = append(said, notice.RiskKey)
 			fmt.Fprintln(out, text.Get(notice.RiskKey))
 		}
 		if notice.OtherAccount {
@@ -249,6 +304,9 @@ func printPolicyDone(out io.Writer, text lang.Catalog, change agent.PolicyChange
 		return
 	}
 	fmt.Fprintln(out, text.Get("agent.policy_done"))
+	for _, step := range change.Laid {
+		fmt.Fprintln(out, "  ✓ "+prerequisiteText(text, step))
+	}
 	if change.AuditError != nil {
 		fmt.Fprintln(os.Stderr, text.Format("agent.trust_audit_failed", change.AuditError.Error()))
 	}
@@ -288,7 +346,7 @@ func explainPolicyError(err error, text lang.Catalog) error {
 	case errors.Is(err, agentpolicy.ErrUnreadable):
 		return &refusal{message: text.Format("agent.policy_unreadable", err.Error())}
 	case errors.Is(err, agentpolicy.ErrCapabilityUnknown), errors.Is(err, agentpolicy.ErrCapabilityPath), errors.Is(err, agentpolicy.ErrCapabilityScope),
-		errors.Is(err, agentpolicy.ErrCapabilityAccount):
+		errors.Is(err, agentpolicy.ErrCapabilityAccount), errors.Is(err, agentpolicy.ErrCapabilityPeers), errors.Is(err, agentpolicy.ErrSetUnknown):
 		// Un droit mal écrit se dit avec la phrase de son refus.
 		key, _ := kitrefusal.KeyOf(err)
 		return &refusal{message: text.Get(key)}

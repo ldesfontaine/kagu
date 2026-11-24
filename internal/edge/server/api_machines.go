@@ -3,8 +3,8 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -617,20 +617,17 @@ func installPreparation(capabilities []agentpolicy.Capability, number string, lo
 	// de retour arrière et le serveur ne lui envoie aucune mise à jour.
 	lines = append(lines, machine.GuardInstallLines(source)...)
 	lines = append(lines, producePreparation(capabilities, asAccount)...)
-	folders := writtenFolders(capabilities)
-	accountFolders := []string{brand.AgentStateDir}
-	for _, folder := range folders {
-		accountFolders = append(accountFolders, folder.path)
-	}
+	folders := machine.RightFolders(capabilities, brand.WorkspaceRoot)
 	// Un dossier sous un autre dossier du compte vient après lui, sous le compte.
 	var nested []string
 	for _, folder := range folders {
-		comment := " # " + strings.Join(folder.rights, ", ")
-		if insideAny(folder.path, accountFolders) {
-			nested = append(nested, asAccount+"install -d -m "+folder.mode+" "+folder.path+comment)
+		mode := fmt.Sprintf("%04o", folder.Mode)
+		comment := " # " + strings.Join(folder.Rights, ", ")
+		if machine.UnderAccountFolder(folder.Path, folders) {
+			nested = append(nested, asAccount+"install -d -m "+mode+" "+folder.Path+comment)
 			continue
 		}
-		lines = append(lines, "test ! -L "+folder.path+" && install -d -m "+folder.mode+" "+owner+" "+folder.path+comment)
+		lines = append(lines, "test ! -L "+folder.Path+" && install -d -m "+mode+" "+owner+" "+folder.Path+comment)
 	}
 	return strings.Join(append(lines, nested...), "\n")
 }
@@ -651,7 +648,7 @@ func producePreparation(capabilities []agentpolicy.Capability, asAccount string)
 		asAccount + "install -d -m 0700 " + machine.ProduceDir,
 		printfLines(machine.VzdumpWrapperLines()) + " | install -m 0755 -o root -g root /dev/stdin " + brand.VzdumpWrapperPath,
 		sudoersPreparation(),
-		"install -d -m 0755 " + machine.ProduceDropInDir,
+		"install -d -m 0755 " + machine.UnitDropInDir,
 		printfLines(machine.ProduceDropInLines()) + " | install -m 0644 /dev/stdin " + machine.ProduceDropInFile,
 		"systemctl daemon-reload",
 	}
@@ -681,60 +678,6 @@ func proxmoxCommands(capabilities []agentpolicy.Capability) string {
 // une ligne par argument entre apostrophes. Les textes n'en portent pas.
 func printfLines(lines []string) string {
 	return "printf '%s\\n' '" + strings.Join(lines, "' '") + "'"
-}
-
-// insideAny dit si path est sous l'un des dossiers (pas l'un d'eux).
-func insideAny(path string, folders []string) bool {
-	return slices.ContainsFunc(folders, func(folder string) bool {
-		return strings.HasPrefix(path, folder+"/")
-	})
-}
-
-// Un dossier où un droit coché écrit, avec le mode que l'agent lui donne et
-// les droits qui l'utilisent.
-type writtenFolder struct {
-	path   string
-	mode   string
-	rights []string
-}
-
-// writtenFolders liste les dossiers à préparer, chacun une fois, dans l'ordre
-// des droits : la racine des services pour docker.deploy et docker.update, le
-// dossier de backup.receive (0700 : ce sont des sauvegardes), ceux de
-// files.write. Un dossier demandé par deux droits garde le mode du premier.
-func writtenFolders(capabilities []agentpolicy.Capability) []writtenFolder {
-	var folders []writtenFolder
-	add := func(path, mode, right string) {
-		// Les droits viennent normalisés ; un chemin qui ne l'est pas ne
-		// s'écrit pas dans des lignes qu'on colle en root.
-		if !agentpolicy.ValidCapabilityPath(path) {
-			return
-		}
-		for index := range folders {
-			if folders[index].path == path {
-				if !slices.Contains(folders[index].rights, right) {
-					folders[index].rights = append(folders[index].rights, right)
-				}
-				return
-			}
-		}
-		folders = append(folders, writtenFolder{path: path, mode: mode, rights: []string{right}})
-	}
-	for _, capability := range capabilities {
-		switch capability.Name {
-		case agentpolicy.CapabilityDockerDeploy, agentpolicy.CapabilityDockerUpdate:
-			add(brand.WorkspaceRoot, "0755", capability.Name)
-		case agentpolicy.CapabilityBackupReceive:
-			for _, path := range capability.Paths {
-				add(path, "0700", capability.Name)
-			}
-		case agentpolicy.CapabilityFilesWrite:
-			for _, path := range capability.Paths {
-				add(path, "0755", capability.Name)
-			}
-		}
-	}
-	return folders
 }
 
 // Un jeton déjà parti est un jeton annulé : 204 dans les deux cas.

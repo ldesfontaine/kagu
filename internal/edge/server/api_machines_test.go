@@ -157,7 +157,7 @@ func TestInstallPreparation_RootNeverActsOnWhatTheAccountControls(t *testing.T) 
 			target := command[strings.LastIndex(command, " ")+1:]
 			// root ne crée ni ne donne que l'état lui-même (sous /var/lib, à
 			// root) et des dossiers qui ne sont sous aucun dossier du compte.
-			if target != "/var/lib/opencloud-agent" && insideAny(target, accountFolders) {
+			if target != "/var/lib/opencloud-agent" && slices.ContainsFunc(accountFolders, func(folder string) bool { return strings.HasPrefix(target, folder+"/") }) {
 				t.Errorf("line %d: root acts on %s, under a folder of the account: %q", number, target, line)
 			}
 			if strings.Contains(command, "-o opencloud-agent") && target != "/var/lib/opencloud-agent" && !strings.HasPrefix(code, "test ! -L "+target+" && ") {

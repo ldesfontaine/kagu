@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -565,5 +567,50 @@ func TestNewHostChecks_ProduceFindsNoSudoOnAnEmptyPath(t *testing.T) {
 	checks := newHostChecks("/nonexistent.sock", nil)
 	if got := producerReason(context.Background(), checks, agentpolicy.ProducerProxmoxVzdump); got != agentwire.ReasonSudoMissing {
 		t.Errorf("judged %q", got)
+	}
+}
+
+// R-A3-12 : l'agent dit s'il vaut root sur sa machine : root lui-même, le
+// groupe docker, ou terminal.host posé ; un compte sans aucun des trois ne
+// le vaut pas. Le flux le redit à son ouverture.
+func TestR_A3_12_TheAgentReportsWhetherItIsWorthRoot(t *testing.T) {
+	member := allowAll()
+	member.dockerMember = func() bool { return true }
+	observe := []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}}
+	host := []agentpolicy.Capability{{Name: agentpolicy.CapabilityTerminalHost, Paths: []string{"root"}}}
+	for _, test := range []struct {
+		euid   int
+		rights []agentpolicy.Capability
+		checks hostChecks
+		want   bool
+	}{
+		{1000, observe, allowAll(), false},
+		{0, observe, allowAll(), true},
+		{1000, observe, member, true},
+		{1000, host, allowAll(), true},
+	} {
+		if got := rootEquivalent(test.euid, test.rights, test.checks); got != test.want {
+			t.Errorf("euid %d, %s, docker %v: %v, want %v", test.euid, agentpolicy.FormatCapabilities(test.rights), test.checks.dockerMember(), got, test.want)
+		}
+	}
+	server := &fakeServer{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := startAgentWith(t, ctx, server, &bytes.Buffer{}, nil, func(_ *Client, orders *orderRunner) {
+		useHostChecks(orders, member)
+	})
+	waittest.Until(t, "a first stream", func() bool {
+		streams, _, _ := server.snapshot()
+		return len(streams) >= 1
+	})
+	server.mu.Lock()
+	said := server.rootEquivalents[0]
+	server.mu.Unlock()
+	if said != "true" {
+		t.Errorf("the stream said %q, want true", said)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("agent stopped with %v", err)
 	}
 }

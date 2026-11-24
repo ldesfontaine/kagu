@@ -60,6 +60,8 @@ type Store interface {
 	// RecordRightsUntil garde l'échéance de chaque droit rapporté ; une table
 	// vide s'écrit NULL.
 	RecordRightsUntil(ctx context.Context, agentID string, until map[string]time.Time) error
+	// RecordRootEquivalent garde ce que vaut le compte de l'agent.
+	RecordRootEquivalent(ctx context.Context, agentID string, rootEquivalent bool) error
 	SetUpdateLast(ctx context.Context, machineID string, updateLast bool) error
 	SetRole(ctx context.Context, machineID string, role Role) error
 	// SetPlacement pose la correction de type et l'hôte désigné par l'opérateur ;
@@ -702,6 +704,17 @@ func (s *Service) NoteRightsUntil(ctx context.Context, agentID, until string) er
 		parsed = nil
 	}
 	return s.store.RecordRightsUntil(ctx, agentID, parsed)
+}
+
+// NoteRootEquivalent garde ce que l'agent dit valoir sur sa machine (root, le
+// groupe docker, terminal.host : R-A3-12), redit à chaque ouverture du flux.
+// Absent ou illisible : faux, ce qu'un agent d'avant ne dit pas.
+func (s *Service) NoteRootEquivalent(ctx context.Context, agentID, reported string) error {
+	rootEquivalent, err := strconv.ParseBool(reported)
+	if err != nil && reported != "" {
+		s.logger.Warn("agent root equivalence unreadable", "agent_id", agentID, "reported", reported)
+	}
+	return s.store.RecordRootEquivalent(ctx, agentID, err == nil && rootEquivalent)
 }
 
 // SetUpdateLast pose ou retire « à mettre à jour en dernier » : la machine
