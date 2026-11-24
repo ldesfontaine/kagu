@@ -1,17 +1,15 @@
-import { deleteBackupDestination, useBackups, type BackupDestination, type BackupRight } from "../../api/backups";
+import { deleteBackupDestination, useBackups, type BackupDestination } from "../../api/backups";
 import { reasonText } from "../../components/ActionsCard";
 import { Button } from "../../components/Button";
 import { Failure } from "../../components/Failure";
 import { LockedAction } from "../../components/LockedAction";
-import { Pill } from "../../components/Pill";
+import { RightPill } from "../../components/RightPill";
 import { useAction } from "../../hooks/useAction";
 import { useNow } from "../../hooks/useNow";
 import { useT } from "../../i18n/context";
 import { keyringPath, newDestinationPath } from "../../lib/backups";
-import type { Tone } from "../../lib/tone";
 import { formatWhen } from "../../lib/time";
 
-const rightTones: Record<BackupRight, Tone> = { ok: "ok", missing: "danger", unavailable: "warn", unknown: "neutral" };
 
 // Ce dont la base d'openCloud a besoin en plus d'un plan : la clé qui chiffre
 // ses archives, et les machines qui les reçoivent. Ces deux réglages vivaient
@@ -59,9 +57,7 @@ export function DatabaseSetup() {
             {destination.right === "unavailable" && <span className="secondary">{reasonText(t, destination.right_reason ?? "")}</span>}
           </div>
           <span className="backup-setup-end">
-            <Pill small tone={rightTones[destination.right]}>
-              {t(`backup.right_pill_${destination.right}`)}
-            </Pill>
+            <RightPill small state={destination.right} />
             {destination.right === "missing" && <LockedAction fix={{ right: "backup.receive", machine: destination.machine_id }} path={destination.path} short />}
             <Button small variant="ghost" icon="x" disabled={action.busy} onClick={() => remove(destination)}>
               {t("backup.destination_delete")}

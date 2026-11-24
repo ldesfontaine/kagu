@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import type { RightState } from "../../api/machines";
 import { removeResticTarget, type BackupMachine, type BackupOverview, type BackupSource, type BackupTarget } from "../../api/backups";
 import { Button } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmModal";
@@ -8,6 +9,7 @@ import { Failure } from "../../components/Failure";
 import { Icon } from "../../components/Icon";
 import { MoreMenu } from "../../components/MoreMenu";
 import { Pill } from "../../components/Pill";
+import { RightPill } from "../../components/RightPill";
 import { SectionHead } from "../../components/SectionHead";
 import { useAction } from "../../hooks/useAction";
 import { useNow } from "../../hooks/useNow";
@@ -21,7 +23,6 @@ import { InstallBlock } from "./InstallBlock";
 import { sourceIcons } from "./SourceCard";
 
 const resticTones: Record<string, Tone> = { running: "ok", stopped: "danger", error: "danger", pending: "neutral" };
-const rightTones: Record<string, Tone> = { ok: "ok", missing: "danger", unavailable: "warn", unknown: "neutral" };
 
 // « Où ça va » : les cibles restic d'openCloud en grand (leur disque, leur
 // rest-server, ce qu'elles gardent), puis les stockages de Proxmox et les
@@ -284,8 +285,6 @@ function OtherTargetState({ t, target }: { t: Translate; target: BackupTarget })
     );
   }
   return (
-    <Pill small tone={rightTones[target.state] ?? "neutral"}>
-      {t(`backup.right_pill_${target.state}`)}
-    </Pill>
+    <RightPill small state={target.state as RightState} />
   );
 }

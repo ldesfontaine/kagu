@@ -19,6 +19,7 @@ import { Modal, ModalCancel } from "../components/Modal";
 import type { MenuAction } from "../components/MoreMenu";
 import { PageHead } from "../components/PageHead";
 import { Dot, Pill } from "../components/Pill";
+import { RightPill } from "../components/RightPill";
 import { SectionHead } from "../components/SectionHead";
 import { Select } from "../components/Select";
 import { DangerZone, SettingFoot, SettingRow } from "../components/SettingRow";
@@ -253,6 +254,10 @@ export function VisualSystem() {
               <Pill tone="danger">{t("state.failed")}</Pill>
               <Pill tone="neutral">{t("state.stopped")}</Pill>
               <Pill tone="accent">{t("state.proxy")}</Pill>
+              <RightPill state="ok" />
+              <RightPill state="missing" />
+              <RightPill state="unavailable" />
+              <RightPill state="unknown" />
               <Pill tone="neutral" dot={false}>
                 {version}
               </Pill>

@@ -124,10 +124,16 @@ export interface Agent {
   fit: Record<string, RightFit>;
 }
 
-// unknown : l'agent n'a pas encore rapporté ses droits, il jugera lui-même.
+// L'état d'un droit, tel que le serveur le rend (agentpolicy.Fit) : ok, le
+// droit couvre ce qu'on veut ; missing, l'agent en a rapporté et aucun ne le
+// couvre ; unavailable, le droit couvre mais le compte de l'agent ne peut pas
+// l'exercer ; unknown, l'agent n'a pas encore rapporté ses droits, il jugera
+// lui-même.
+export type RightState = "ok" | "missing" | "unavailable" | "unknown";
+
 // reason dit pourquoi un droit porté est unavailable.
 export interface RightFit {
-  state: "ok" | "missing" | "unavailable" | "unknown";
+  state: RightState;
   reason: string;
 }
 

@@ -1,12 +1,17 @@
 import type { ApiError, RefusalFix } from "../api/client";
-import type { Capability, Machine } from "../api/machines";
+import type { Capability, Machine, RightState } from "../api/machines";
 import type { Translate } from "../i18n/context";
 import { detectedProxmox } from "./proxmox";
+import type { Tone } from "./tone";
 import { alwaysGranted, capabilityLabelKey, describeUnavailable } from "./machines";
 
 // Les droits d'un agent manquent ici ou là ; ce fichier dit comment un écran
 // le sait, et où il mène l'opérateur : la ligne grant à lancer en root sur la
 // machine, que l'onglet Agent de sa fiche montre pour le droit voulu.
+
+// Le ton de la pastille d'un état de droit : le serveur juge (agentpolicy.Fit),
+// la table ne fait que traduire.
+export const rightTones: Record<RightState, Tone> = { ok: "ok", missing: "danger", unavailable: "warn", unknown: "neutral" };
 
 // Un droit voulu : son nom et, pour un droit borné, le chemin qu'il doit
 // couvrir (une indication : la ligne du serveur n'en porte pas).
