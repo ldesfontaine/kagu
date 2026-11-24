@@ -26,6 +26,7 @@ type folderBench struct {
 func newFolderBench(t *testing.T) *folderBench {
 	t.Helper()
 	base := t.TempDir()
+	closeToOthers(t, base)
 	b := &folderBench{base: base, owner: fsx.Owner{UID: os.Getuid(), GID: os.Getgid()}}
 	b.system = HostSystem{judgeDir: func(path string, stat *syscall.Stat_t) error {
 		if b.hook != nil {
@@ -39,6 +40,42 @@ func newFolderBench(t *testing.T) *folderBench {
 	return b
 }
 
+// closeToOthers fixe le mode des dossiers que la garde jugera : t.TempDir()
+// et ce que le banc crée héritent du umask (002 sur la VM, en CI), et la
+// garde refuse, à raison, un dossier ouvert au groupe. Le dossier passe en
+// 0700 ; ses ancêtres au compte du test perdent seulement l'écriture du
+// groupe et des autres (jamais rien d'ouvert).
+func closeToOthers(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for parent := filepath.Dir(dir); parent != filepath.Dir(parent); parent = filepath.Dir(parent) {
+		info, err := os.Stat(parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || int(stat.Uid) != os.Getuid() || info.Mode().Perm()&0o022 == 0 {
+			continue
+		}
+		if err := os.Chmod(parent, info.Mode().Perm()&^0o022); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// mkdirClosed crée un dossier et lui fixe son mode, quel que soit le umask.
+func mkdirClosed(t *testing.T, path string, mode fs.FileMode) {
+	t.Helper()
+	if err := os.Mkdir(path, mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (b *folderBench) path(names ...string) string {
 	return filepath.Join(append([]string{b.base}, names...)...)
 }
@@ -48,9 +85,8 @@ func (b *folderBench) path(names ...string) string {
 func (b *folderBench) target(t *testing.T) string {
 	t.Helper()
 	target := b.path("target")
-	if err := os.MkdirAll(filepath.Join(target, "x"), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	mkdirClosed(t, target, 0o700)
+	mkdirClosed(t, filepath.Join(target, "x"), 0o700)
 	return target
 }
 
@@ -115,9 +151,7 @@ func TestMakeFolder_RefusesAParentWritableByOthers(t *testing.T) {
 	for _, mode := range []fs.FileMode{0o777 | fs.ModeSticky, 0o775, 0o757} {
 		b := newFolderBench(t)
 		open := b.path("open")
-		if err := os.Mkdir(open, 0o700); err != nil {
-			t.Fatal(err)
-		}
+		mkdirClosed(t, open, 0o700)
 		if err := os.Chmod(open, mode); err != nil {
 			t.Fatal(err)
 		}
@@ -137,9 +171,7 @@ func TestMakeFolder_RefusesAParentSwappedForALink(t *testing.T) {
 	for _, swapAt := range []string{"before", "after"} {
 		b := newFolderBench(t)
 		target := b.target(t)
-		if err := os.Mkdir(b.path("a"), 0o700); err != nil {
-			t.Fatal(err)
-		}
+		mkdirClosed(t, b.path("a"), 0o700)
 		swapped := false
 		b.hook = func(path string) {
 			if swapped || (swapAt == "before" && path != b.base) || (swapAt == "after" && path != b.path("a")) {
@@ -181,6 +213,7 @@ func TestHostSystem_TheDefaultGuardIsRootOnly(t *testing.T) {
 		t.Skip("the test account is root")
 	}
 	base := t.TempDir()
+	closeToOthers(t, base)
 	err := HostSystem{}.MakeFolder(filepath.Join(base, "x"), 0o755, fsx.Owner{UID: os.Getuid(), GID: os.Getgid()})
 	if err == nil || !strings.Contains(err.Error(), "does not belong to root") {
 		t.Fatalf("default guard: %v", err)
