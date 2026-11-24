@@ -19,6 +19,8 @@ type Verdict struct {
 	// ce que le serveur a signé.
 	Read bool
 	Body agentwire.OrderBody
+	// La clé de la politique qui a signé l'ordre, une fois vérifiée.
+	SigningKey []byte
 	// L'ordre décodé par le registre des genres ; avant le décodage, son
 	// genre seul.
 	Order agentwire.Order
@@ -28,18 +30,17 @@ type Verdict struct {
 }
 
 // Judge juge un ordre contre la politique, dans cet ordre : une clé du
-// serveur ; la signature de cette clé ; le corps lu strictement, à la version
+// serveur ; la signature de l'une de ses clés (une clé échue n'y est plus) ; le corps lu strictement, à la version
 // de l'enveloppe (R-A1-9) ; la machine visée ; l'échéance ; le genre au
 // registre ; le droit qu'il exige ; ses paramètres et son secret lus
 // strictement ; les valeurs qu'il présente aux ancres. L'agent visé et le
 // rang vivent avec l'agent : il les juge lui-même, à leur place.
 func Judge(signed agentwire.SignedOrder, policy agentpolicy.Policy, now time.Time) Verdict {
-	if len(policy.ServerKey) != ed25519.PublicKeySize {
+	if len(policy.ServerKeys) == 0 {
 		return Verdict{Reason: agentwire.ReasonServerKeyMissing}
 	}
-	// Vérifié sous l'étiquette v2 seule : un corps v1, signé sous la sienne, ne
-	// passe pas (R-A1-9).
-	if !ed25519.Verify(policy.ServerKey, agentwire.OrderSigningBytes(agentwire.OrderVersion, signed.Body), signed.Signature) {
+	signingKey := signingKeyOf(signed, policy.ServerKeys)
+	if signingKey == nil {
 		return Verdict{Reason: agentwire.ReasonBadSignature}
 	}
 	// Sans « v », le corps ne se réécrit pas à l'identique : la lecture stricte
@@ -48,9 +49,22 @@ func Judge(signed agentwire.SignedOrder, policy agentpolicy.Policy, now time.Tim
 	if err := agentwire.StrictDecode(signed.Body, &body); err != nil || body.V != agentwire.OrderVersion || body.RunID == "" {
 		return Verdict{Reason: agentwire.ReasonBadOrder}
 	}
-	verdict := Verdict{Read: true, Body: body, Order: agentwire.Order{Kind: body.Kind}}
+	verdict := Verdict{Read: true, Body: body, SigningKey: signingKey, Order: agentwire.Order{Kind: body.Kind}}
 	verdict.Reason = verdict.judgeBody(policy, now)
 	return verdict
+}
+
+// signingKeyOf rend la clé qui a signé l'ordre, nil si aucune. Vérifié sous
+// l'étiquette v2 seule : un corps v1, signé sous la sienne, ne passe pas
+// (R-A1-9).
+func signingKeyOf(signed agentwire.SignedOrder, keys [][]byte) []byte {
+	signedBytes := agentwire.OrderSigningBytes(agentwire.OrderVersion, signed.Body)
+	for _, key := range keys {
+		if len(key) == ed25519.PublicKeySize && ed25519.Verify(key, signedBytes, signed.Signature) {
+			return key
+		}
+	}
+	return nil
 }
 
 // judgeBody juge un corps lu ; il garde l'ordre décodé dès qu'il l'est.

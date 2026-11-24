@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -68,24 +69,25 @@ func identityWith(t *testing.T, rights ...string) Identity {
 }
 
 // Une politique lisible et bien gardée fait foi : ses droits, sa machine, son
-// empreinte ; sans elle, les droits d'identity.json (source identity).
+// empreinte. Sans son dossier, les droits d'identity.json (source identity) ;
+// un dossier sans fichier ne laisse que observe (R-A3-16).
 func TestReadPolicy_ThePolicyWinsOverTheIdentity(t *testing.T) {
 	place := testPolicyPlace(t)
 	identity := identityWith(t, "docker.deploy")
-	applied, err := readPolicy(place, identity)
-	if err != nil || applied.Source != agentpolicy.SourceIdentity || !agentpolicy.HasCapability(applied.Rights, agentpolicy.CapabilityDockerDeploy) {
+	applied, err := readPolicy(place, identity, SystemClock())
+	if !errors.Is(err, errPolicyMissing) || applied.Source != agentpolicy.SourceRefused || agentpolicy.FormatCapabilities(applied.Rights) != agentpolicy.CapabilityObserve {
 		t.Fatalf("without a file: %+v %v", applied, err)
 	}
 	content := policyGranting(t, "m-policy", "probe.lan")
 	writePolicyFile(t, place, content, policyMode)
-	applied, err = readPolicy(place, identity)
+	applied, err = readPolicy(place, identity, SystemClock())
 	if err != nil || applied.Source != agentpolicy.SourcePolicy || applied.MachineID != "m-policy" || applied.Digest != agentpolicy.Digest([]byte(content)) {
 		t.Fatalf("with a file: %+v %v", applied, err)
 	}
 	if agentpolicy.FormatCapabilities(applied.Rights) != "observe,probe.lan" {
 		t.Fatalf("rights %s", agentpolicy.FormatCapabilities(applied.Rights))
 	}
-	if applied, _ := readPolicy(noPolicy, identity); applied.Source != agentpolicy.SourceIdentity {
+	if applied, _ := readPolicy(noPolicy, identity, SystemClock()); applied.Source != agentpolicy.SourceIdentity || !agentpolicy.HasCapability(applied.Rights, agentpolicy.CapabilityDockerDeploy) {
 		t.Fatalf("absent directory: %+v", applied)
 	}
 }
@@ -98,7 +100,7 @@ func TestR_A3_6_AWorldWritablePolicyLeavesObserveOnly(t *testing.T) {
 	granting := policyGranting(t, "m", "docker.deploy,probe.lan")
 	refusedOnly := func(t *testing.T, place PolicyPlace) {
 		t.Helper()
-		applied, err := readPolicy(place, identity)
+		applied, err := readPolicy(place, identity, SystemClock())
 		if err == nil || applied.Source != agentpolicy.SourceRefused || agentpolicy.FormatCapabilities(applied.Rights) != agentpolicy.CapabilityObserve || applied.Digest != "" {
 			t.Fatalf("%+v %v", applied, err)
 		}
@@ -172,7 +174,7 @@ func TestR_A3_6_AWorldWritablePolicyLeavesObserveOnly(t *testing.T) {
 		if err := os.Chmod(filepath.Join(place.Dir, policyFile), 0o666); err != nil {
 			t.Fatal(err)
 		}
-		applied, _ := runner.currentPolicy()
+		applied := runner.currentPolicy()
 		if applied.Source != agentpolicy.SourceRefused || agentpolicy.FormatCapabilities(runner.rights()) != agentpolicy.CapabilityObserve {
 			t.Fatalf("%+v", applied)
 		}
@@ -190,7 +192,7 @@ func TestReadPolicy_ANarrowedStateKeepsObserveOnly(t *testing.T) {
 	writePolicyFile(t, place, policyGranting(t, "m", "docker.deploy"), policyMode)
 	identity := identityWith(t)
 	identity.narrowed = true
-	applied, err := readPolicy(place, identity)
+	applied, err := readPolicy(place, identity, SystemClock())
 	if err != nil || applied.Source != agentpolicy.SourcePolicy || agentpolicy.FormatCapabilities(applied.Rights) != agentpolicy.CapabilityObserve {
 		t.Fatalf("%+v %v", applied, err)
 	}
@@ -229,6 +231,10 @@ func TestR_A3_4_ProbeLANFollowsThePolicyWithoutRestart(t *testing.T) {
 	cancel()
 	<-done
 
+	// root pose la politique (le dossier, puis le fichier) : l'agent la lit.
+	if err := os.Mkdir(b.policy.Dir, policyDirMode); err != nil {
+		t.Fatal(err)
+	}
 	writePolicyFile(t, b.policy, policyGranting(t, enrolled.ID, "probe.lan"), policyMode)
 	created, err := b.probes.Create(context.Background(), probe.Definition{
 		Name: "service local", Kind: probe.KindTCP, Target: target, MachineID: enrolled.ID,

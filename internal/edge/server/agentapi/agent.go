@@ -241,14 +241,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// file que la boucle ci-dessous va lire.
 	h.probes.Assign(r.Context(), authenticated.ID)
 	h.updates.Assign(r.Context(), authenticated.ID)
-	// Pendant une rotation de la clé du serveur, un agent resté sur la
-	// précédente reçoit la neuve, par un ordre que la précédente signe. C'est
-	// serve qui le décide : une règle, au journal.
 	if h.actions != nil {
-		rekeyCtx := audit.WithActor(r.Context(), audit.Rule("server_key_rotation"))
-		if err := h.actions.Rekey(rekeyCtx, authenticated.ID); err != nil {
-			h.logger.Warn("rekey agent", "machine_id", authenticated.ID, "error", err)
-		}
 		// Un agent qui revient avec la version qu'un ordre agent.update visait
 		// a fini de se mettre à jour : c'est ce retour, et non l'agent qui
 		// s'arrête, qui ferme l'ordre.

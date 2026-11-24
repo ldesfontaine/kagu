@@ -2,7 +2,6 @@ package action
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -55,15 +54,13 @@ type Store interface {
 }
 
 // Machines est ce que le composant lit des machines : l'agent courant et
-// s'il tient son flux ; et ce qu'il note quand un agent a pris la clé neuve
-// du serveur.
+// s'il tient son flux.
 type Machines interface {
 	Get(ctx context.Context, id string) (machine.Status, error)
 	List(ctx context.Context) ([]machine.Status, error)
 	// AgentProtocol rend le protocole que parle le flux ouvert de la machine,
 	// vide sans flux.
 	AgentProtocol(machineID string) string
-	NoteServerKey(ctx context.Context, agentID, fingerprint string) error
 }
 
 // Commander pousse une commande à l'agent d'une machine par son flux : le
@@ -181,30 +178,6 @@ func (s *Service) PreviousServerKey() string {
 		return ""
 	}
 	return s.key.PreviousFingerprint()
-}
-
-// Rekey livre la clé courante à l'agent d'une machine resté sur la
-// précédente, pendant une rotation : un ordre agent.server_key, signé par
-// la précédente, qu'il vérifie avec ce qu'il a épinglé. Sans rotation, ou
-// pour un agent déjà à jour, rien ne part. serve l'appelle à l'ouverture de
-// chaque flux.
-func (s *Service) Rekey(ctx context.Context, machineID string) error {
-	if s.key == nil || s.key.PreviousFingerprint() == "" {
-		return nil
-	}
-	target, err := s.machines.Get(ctx, machineID)
-	if err != nil {
-		return err
-	}
-	if target.Agent.ServerKeyFingerprint != s.key.PreviousFingerprint() {
-		return nil
-	}
-	params, err := json.Marshal(agentwire.ServerKeyParams{PublicKey: base64.StdEncoding.EncodeToString(s.key.PublicKey())})
-	if err != nil {
-		return err
-	}
-	_, err = s.Send(ctx, machineID, agentwire.KindServerKey, params)
-	return err
 }
 
 // Ping envoie l'ordre agent.ping : il ne change rien sur la machine et

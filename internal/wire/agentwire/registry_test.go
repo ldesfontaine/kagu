@@ -30,7 +30,6 @@ func serverSamples(t *testing.T) map[Kind]any {
 		KindAgentPing:     nil,
 		KindAgentUpdate:   AgentUpdateParams{Version: "v0.0.1", Parcel: "p1", Binary: "kagu", Files: files},
 		KindAgentRollback: nil,
-		KindServerKey:     ServerKeyParams{PublicKey: "AAAA+/=="},
 		KindBackupReceive: BackupReceiveParams{Parcel: "p1", Path: "/srv/receive", Files: files, Archive: ArchiveGuest},
 		KindBackupPrune:   BackupPruneParams{Path: "/srv/receive", Prefix: "plan-é", Keep: 7},
 		KindBackupProduce: BackupProduceParams{

@@ -1,6 +1,7 @@
 package agentpolicy
 
 import (
+	"encoding/base64"
 	"strings"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
@@ -22,6 +23,22 @@ func GrantLine(right, value string) string {
 		granted += ScopeSeparator + value
 	}
 	return AgentLine("grant", granted)
+}
+
+// TrustServerKey est le nom que « agent trust » donne à la clé du serveur, à
+// côté des types d'ancre.
+const TrustServerKey = "server-key"
+
+// ServerKeyLine écrit la ligne qui remplace la clé du serveur acceptée par
+// celle-ci (R-A3-14) : toujours « trust set », jamais un ajout (N-M2).
+func ServerKeyLine(key []byte) string {
+	return AgentLine("trust", "set", TrustServerKey, base64.StdEncoding.EncodeToString(key))
+}
+
+// MigrateLine écrit la ligne qui recopie dans la politique ce
+// qu'identity.json porte encore (R-A3-16).
+func MigrateLine() string {
+	return AgentLine("policy", "migrate")
 }
 
 // AgentLine écrit une commande de l'agent à lancer en root sur la machine :

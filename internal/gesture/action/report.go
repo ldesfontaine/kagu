@@ -49,12 +49,6 @@ func (s *Service) Record(ctx context.Context, machineID string, report agentwire
 		if run.Kind == agentwire.KindAgentRollback && run.State == StateSucceeded && s.alerter != nil {
 			s.alerter.AgentUpdated(ctx, machineID)
 		}
-		// L'agent a pris la clé courante : c'est elle qui signera ses ordres.
-		if run.Kind == agentwire.KindServerKey && run.State == StateSucceeded && s.key != nil {
-			if err := s.machines.NoteServerKey(ctx, run.AgentID, s.key.Fingerprint()); err != nil {
-				return fmt.Errorf("note the new server key: %w", err)
-			}
-		}
 	}
 	if isChanged {
 		s.changed(machineID)

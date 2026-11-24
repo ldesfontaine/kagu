@@ -32,9 +32,13 @@ const secretsUsage = `Usage : {command} secrets <sous-commande> [-config chemin]
   rotate              tire une clé de chiffrement neuve et rescelle chaque
                       secret avec elle ; l'ancienne est mise de côté.
                       Arrêtez le serveur avant
+  server-key          imprime l'empreinte de la clé qui signe les ordres :
+                      celle que « agent trust set server-key » imprime sur
+                      chaque machine doit être la même
   rotate-server-key   tire une clé neuve pour signer les ordres ; la
-                      précédente reste valable le temps que chaque agent
-                      reçoive la neuve. Prend effet au redémarrage
+                      précédente reste valable le temps que root la pose
+                      sur chaque machine (agent trust set server-key).
+                      Prend effet au redémarrage
   finish-server-key   retire la clé précédente une fois chaque agent passé
                       à la neuve (option -force : sans attendre les agents
                       restés dessus, qui seront à ré-enrôler)
@@ -127,7 +131,7 @@ func secretsCommand(args []string, out io.Writer) error {
 		return &refusal{message: "sous-commande manquante"}
 	}
 	command := args[0]
-	if !slices.Contains([]string{"forget", "rotate", "rotate-server-key", "finish-server-key"}, command) {
+	if !slices.Contains([]string{"forget", "rotate", "server-key", "rotate-server-key", "finish-server-key"}, command) {
 		fmt.Fprint(os.Stderr, strings.ReplaceAll(secretsUsage, "{command}", brand.Command))
 		return &refusal{message: "sous-commande inconnue : " + command}
 	}
@@ -147,6 +151,10 @@ func secretsCommand(args []string, out io.Writer) error {
 		return err
 	}
 	defer stateDir.Close()
+	// L'empreinte se lit dans server.key seul : ni base ni serveur à arrêter.
+	if command == "server-key" {
+		return printServerKey(stateDir, out)
+	}
 	ctx := audit.WithActor(context.Background(), audit.CLI(currentAccount()))
 	db, err := store.Open(ctx, stateDir)
 	if err != nil {

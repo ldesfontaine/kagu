@@ -300,7 +300,6 @@ type ActionService interface {
 	ServerKey() (public []byte, fingerprint string, err error)
 	PreviousServerKey() string
 	Record(ctx context.Context, machineID string, report agentwire.ActionReport) error
-	Rekey(ctx context.Context, machineID string) error
 	OpenParcel(machineID, parcelID, name string) (*os.File, int64, error)
 	ReceiveParcel(uploaderID, parcelID, name string, content io.Reader, size int64, sum string) error
 	// La mise à jour de l'agent : ce que la fiche propose, l'ordre, et la

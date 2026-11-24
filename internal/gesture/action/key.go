@@ -23,8 +23,8 @@ import (
 //
 // Le temps d'une rotation, le fichier porte une seconde ligne : la clé
 // précédente. Le serveur signe alors chaque ordre avec la clé que son agent
-// a épinglée, et livre la neuve à un agent resté sur la précédente par un
-// ordre que celle-ci signe (agent.server_key).
+// dit accepter ; aucun ordre ne livre la neuve : root la pose sur chaque
+// machine par « agent trust set server-key » (R-A3-9, R-A3-14).
 const (
 	keyFileMode     = 0o600
 	maxKeyFileBytes = 1024

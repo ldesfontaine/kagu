@@ -17,7 +17,7 @@
 | L'opérateur | L'opérateur, dans un navigateur | Le front React, chargé une fois avec la page, qui lit l'API JSON et affiche. Tant qu'aucun compte n'existe, l'écran de première configuration à la place de l'interface : il crée le compte, puis l'interface s'ouvre |
 | La machine Kagu | Le VPS où Kagu est installé | `opencloud serve` : l'API, le front embarqué, la base. **Et son agent, `opencloud agent`, comme toute machine** : `serve` n'observe rien de sa propre machine. La ligne qui l'installe s'affiche dès la première configuration (« La machine Kagu ») |
 | La commande locale | `opencloud export` et `opencloud apply`, lancées sur la machine Kagu, sous le compte du service ou en root ; `opencloud admin`, en root seulement | Rien de son côté : elles parlent au `serve` qui tourne par la socket `state_dir/control.sock`. `export` écrit ce qu'il répond ; `apply` lit un fichier, montre le plan que le serveur en tire, demande confirmation, puis lui demande de l'écrire ; `admin` porte les gestes de secours de root (« Le canal local de root »). Elles n'ouvrent pas la base |
-| Une machine | Un VPS, une VM, un NAS, que Kagu gère sans l'héberger | `opencloud agent` : le démon qui parle à Kagu, mesure la machine et veille son Docker, **sous un compte dédié (`opencloud-agent`), root sur demande**. Un agent à la fois par machine ; ses droits sont cochés à l'installation, écrits dans son fichier, rapportés à chaque connexion et **appliqués** : un ordre hors de ses droits est refusé. Il exécute les **ordres signés** par la clé du serveur qu'il a épinglée à l'enrôlement, et refuse tout autre. Les familles : l'agent (`agent.*`), la sauvegarde de la base (`backup.*`), les dépôts restic (`restic.*`), Docker (`docker.*`), Proxmox (`proxmox.vm.*`). La liste est fermée et ne se recopie pas : `agentwire.OrderKinds` la donne, chaque famille a sa section plus bas |
+| Une machine | Un VPS, une VM, un NAS, que Kagu gère sans l'héberger | `opencloud agent` : le démon qui parle à Kagu, mesure la machine et veille son Docker, **sous un compte dédié (`opencloud-agent`), root sur demande**. Un agent à la fois par machine ; ses droits sont cochés à l'installation, écrits dans son fichier, rapportés à chaque connexion et **appliqués** : un ordre hors de ses droits est refusé. Il exécute les **ordres signés** par la clé du serveur que sa politique accepte, et refuse tout autre. Les familles : l'agent (`agent.*`), la sauvegarde de la base (`backup.*`), les dépôts restic (`restic.*`), Docker (`docker.*`), Proxmox (`proxmox.vm.*`). La liste est fermée et ne se recopie pas : `agentwire.OrderKinds` la donne, chaque famille a sa section plus bas |
 | Docker | Le démon de conteneurs d'une machine, s'il y en a un | Les services et leurs réseaux : pour observer, l'agent le lit par sa socket, en lecture seule. Il ne lui écrit que par `docker compose up`, pour déployer un service déclaré, avec le droit `docker.deploy` ou `docker.update` (« Comment un service se déploie ») |
 | Traefik | Le proxy de la machine Kagu | Termine TLS et transmet à Kagu sur la boucle locale |
 | Une tâche | Un cron, une sauvegarde, un script, n'importe où | Un `curl` sur son URL de ping quand elle démarre ou finit |
@@ -158,14 +158,14 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `opencloud.db` | Les réglages de l'opérateur dans `settings`, une seule ligne : la langue de l'interface ; le délai du rappel des alertes de danger (`danger_reminder_hours`, 12 par défaut, 0 le coupe) ; le relais d'e-mails (`mail_host`, `mail_port`, `mail_tls`, `mail_username`, `mail_from`, et **`mail_password` chiffré** : il faut le rejouer au relais, un haché ne servirait à rien ; l'API ne le renvoie jamais, `has_password` dit seulement qu'il y en a un) ; la fin de support (`lifecycle_disabled`, à 0 tant qu'elle est activée) | Chaque écrivain relit, modifie sa clé et réécrit dans une seule transaction : la langue et le relais changés en même temps survivent tous deux, même depuis deux processus. **Le mot de passe du relais est chiffré** comme les autres secrets saisis dans l'interface, lié à la ligne des réglages |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les seuils des alertes de ressources dans `alert_thresholds` (migration `037_alert_thresholds.sql`) : une ligne par ressource (`cpu`, `memory`, `disk`) et par périmètre, `machine_id` à NULL pour le réglage global ou la machine qu'elle surcharge (clé étrangère en `cascade`) ; seuil d'attention, seuil de danger, fenêtre en secondes (0 : la dernière lecture, le disque). Le seuil de retour n'est pas stocké | Deux index uniques partiels : une règle par ressource pour le global, une par machine et ressource. Les seuils du disque déjà réglés sous Paramètres passent au global à la migration, tels quels |
 | Machine Kagu, `state_dir` | `secret.key` | La clé qui chiffre les secrets ci-dessus : une ligne `key-v1:<id>:<clé>`, AES-256, 32 octets tirés au hasard, jamais en base. `<id>` est l'empreinte courte de la clé, inscrite aussi dans chaque chiffré ; le temps d'une rotation, le fichier porte plusieurs lignes (quatre au plus) : un chiffré s'ouvre avec la clé de son `<id>`, la première ligne scelle | Mode 0600, écriture atomique, refusée si un autre compte peut la lire. `serve` la crée au premier démarrage par une création exclusive (un lien dur d'un temporaire écrit et synchronisé : si le fichier existe, elle échoue) ; deux `serve` lancés ensemble sur une base neuve tirent chacun une clé, un seul gagne, l'autre relit la sienne. `opencloud secrets rotate` en tire une neuve et rescelle chaque secret, l'ancienne gardée sous `secret.key.rotated-<horodatage>` ; `opencloud secrets forget` remplace une clé perdue, l'ancienne gardée sous `secret.key.forgotten-<horodatage>`. **À sauvegarder à part, une fois** : sans elle, la base garde ses données mais perd ses secrets. `opencloud secrets forget` repart d'une clé neuve (voir `installation.md`) |
-| Machine Kagu, `state_dir` | `server.key` | La clé qui **signe les ordres** envoyés aux agents : une ligne `ed25519-v1:<graine>`, Ed25519, tirée au premier démarrage de `serve`, jamais en base ; une seconde ligne, la clé précédente, le temps d'une rotation (`opencloud secrets rotate-server-key`, puis `finish-server-key`). Sa moitié publique est livrée à chaque agent à l'enrôlement, qui l'épingle | Les règles de `secret.key` : mode 0600 jugé sur le descripteur, refusée si un autre compte peut la lire, création exclusive (deux `serve` lancés ensemble gardent la même). Illisible ou abîmée, `serve` refuse de démarrer plutôt que d'en tirer une autre. **Qui l'a commande toutes les machines** ; perdue, chaque agent refuse les ordres (`bad_signature`) jusqu'à son ré-enrôlement ; volée, aussi : une rotation se fait sous la signature de l'ancienne clé, elle ne chasse pas qui la tient. À sauvegarder avec `secret.key` |
+| Machine Kagu, `state_dir` | `server.key` | La clé qui **signe les ordres** envoyés aux agents : une ligne `ed25519-v1:<graine>`, Ed25519, tirée au premier démarrage de `serve`, jamais en base ; une seconde ligne, la clé précédente, le temps d'une rotation (`opencloud secrets rotate-server-key`, puis `finish-server-key`). Sa moitié publique est livrée à chaque agent à l'enrôlement, qui l'épingle ; root la pose ensuite dans la politique (`agent trust set server-key`), aucun ordre ne la change | Les règles de `secret.key` : mode 0600 jugé sur le descripteur, refusée si un autre compte peut la lire, création exclusive (deux `serve` lancés ensemble gardent la même). Illisible ou abîmée, `serve` refuse de démarrer plutôt que d'en tirer une autre. **Qui l'a commande toutes les machines** ; perdue ou volée, chaque agent refuse les ordres (`bad_signature`) jusqu'à ce que root pose la neuve sur la machine (`trust set server-key`), sans ré-enrôler. À sauvegarder avec `secret.key` |
 | Machine Kagu, `state_dir` | `opencloud.db` | L'historique des exécutions des plans de sauvegarde dans `backup_runs` (migration `019` : une ligne par cible d'un passage : plan, source, début, fin, résultat `ok`/`failed`/`refused`, raison fermée, taille de l'archive, nom de la destination), lu par l'inventaire et par `GET /api/backups/runs`. Les volumes Docker de chaque machine dans `machine_volumes` (migration `021` : nom, pilote, noms des conteneurs qui le montent ; **jamais le contenu ni la taille**) | L'historique est borné à 400 lignes par plan, purgé à l'écriture ; il survit au plan et à la destination qu'il nomme. Les volumes sont remplacés à chaque inventaire de l'agent ; la machine retirée emporte les siens. Aucun secret dans l'un ni l'autre |
 | Machine Kagu, `state_dir` | `opencloud.db` | La sauvegarde de la base : `backup_keyring` (une ligne : la clé **publique** `age1…` en clair, la privée `identity_sealed` scellée par la phrase de passe, l'empreinte), `backup_destinations` (nom, machine en `restrict`, chemin), `backup_plans` (le sujet, unique, le libellé, le type de source `database` ou `agent`, la machine source en `restrict`, le producteur, la sélection, la destination en `restrict`, combien garder, la dernière tentative, la clé de son refus, le dernier ordre en `set null`). **La phrase de passe n'est écrite nulle part** : ni base, ni journal, ni audit | La clé privée n'est lisible qu'avec la phrase ; la publique ne chiffre que |
 | Machine Kagu, `state_dir` | `outgoing/<colis>/` | Les colis des ordres longs, de deux sortes. *À télécharger* (la base, `backup.receive`) : l'instantané de la base (`VACUUM INTO`) le temps de l'emballer, puis l'archive chiffrée jusqu'à son téléchargement par l'agent, **la vie de son ordre au plus** (`action.ParcelLifetime` : 2 min pour être pris, une heure pour finir). *À téléverser* (`backup.produce`, `Outbox.CreateForUpload`) : un colis que la machine **source** remplit par `PUT /agent/parcels/{colis}/{nom}` (l'archive chiffrée d'une VM, 64 Gio au plus, 1 Gio libre de marge ; la clé scellée y est déposée par `serve`), jusqu'à ce que la destination l'ait téléchargé ; `serve` le jette dès la cible traitée, et **un seul vit à la fois**. Vidé au démarrage de `serve`. Aucune sauvegarde n'est gardée sur cette machine | `0700`, `0600`, même disque et mêmes droits que la base ; l'instantané en clair est effacé avant l'envoi ; un téléversement n'apporte que du chiffré |
 | Machine Kagu, `state_dir` | `lifecycle.json` | La dernière lecture d'endoflife.date : quel dépôt d'images est quel produit, et les branches des produits que les services utilisent (nom, maintenue ou non, date de fin, dernière version). Absent tant que la fin de support n'a jamais été activée | Données publiques, 0600, écriture atomique, remplacé d'un bloc à chaque lecture réussie ; l'effacer coûte une lecture de la source |
 | Machine Kagu, `state_dir` | `control.sock` | La socket de commande, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/api/manifest/…` et, pour root seul, `/control/admin/…`. Une socket que personne n'écoute (arrêt brutal) est remplacée au démarrage suivant ; celle d'un `serve` vivant n'est jamais touchée | Mode 0600, et `state_dir` fermé au groupe et aux autres, sans quoi `serve` ne démarre pas. Elle n'est pas à sauvegarder |
-| Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` (au compte de l'agent, `opencloud-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, identifiant de la machine et de l'agent (`agent_id`), adresse de Kagu, empreinte du certificat, langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul ; ignorés dès que la machine a une politique), la version de politique que son binaire sait lire (`policy_format`), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`) | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (la clé change seule pendant une rotation, par l'ordre `agent.server_key`) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/opencloud`**, que le compte du serveur possède sur la machine Kagu : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
-| Toute machine qui a reçu un `agent grant`, `/etc/opencloud-agent` (à root, `0755`) | `policy.toml`, `policy.toml.lock` | La politique de l'agent : `version`, `machine_id`, un bloc `[[right]]` par droit (« La politique de l'agent ») ; le verrou de `grant` et `revoke`, vide | `policy.toml` en `0640`, `root:opencloud-agent` : l'agent la lit, son compte ne peut ni l'écrire ni la remplacer ; le verrou en `0600` à root. Aucun secret |
+| Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` (au compte de l'agent, `opencloud-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, identifiant de la machine et de l'agent (`agent_id`), adresse de Kagu, empreinte du certificat, langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul ; ignorés dès que le dossier de la politique existe), les ancres (`anchors`), la version de politique que son binaire sait lire (`policy_format`), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`). `agent policy migrate` recopie droits, ancres et clé dans la politique puis les efface d'ici | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (aucun ordre ne change la clé) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/opencloud`**, que le compte du serveur possède sur la machine Kagu : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
+| Toute machine passée par `agent policy migrate`, `/etc/opencloud-agent` (à root, `0755`) | `policy.toml`, `policy.toml.lock` | La politique de l'agent : `version`, `machine_id`, un bloc `[[right]]` par droit, la clé du serveur acceptée (`[[server_key]]`), les ancres (`[anchors]`) (« La politique de l'agent ») ; le verrou de `grant`, `revoke`, `trust` et `policy migrate`, vide | `policy.toml` en `0640`, `root:opencloud-agent` : l'agent la lit, son compte ne peut ni l'écrire ni la remplacer ; le verrou en `0600` à root. Aucun secret |
 | Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` | `bin/` et `update.json` | `bin/opencloud-<version>` (la courante et la précédente, rien d'autre), les liens `bin/current` (ce que le lanceur exécute) et `bin/previous` (la version d'avant la dernière bascule), et le **marqueur** `update.json` : une mise à jour (ou un retour arrière) en attente de confirmation, avec son échéance, ou ce que le lanceur en a fait (« Comment un agent se met à jour », décision 9). Aucun secret : états, numéros de version, identifiant d'ordre | `0600` au compte de l'agent. Le marqueur disparaît à la confirmation, ou une fois son rapport livré au serveur ; un marqueur illisible est écarté |
 | Toute machine, la machine Kagu comprise, `/usr/local/lib/opencloud-agent` | `opencloud-guard` | Le **lanceur stable** : une copie du binaire, posée une fois par root (`root:root`, `0755`), que l'unité systemd lance. L'agent, qui écrit son état et `bin/`, ne le remplace jamais | Se repose à la main si le lanceur change (`GuardVersion`) ; l'agent le sait par la variable `OPENCLOUD_AGENT_GUARD` |
 | Hôte Proxmox, `/var/lib/opencloud-agent` | `proxmox.json` | Le jeton Proxmox **local** de l'agent : identifiant, **secret** et empreinte du certificat (`token_id`, `secret`, `fingerprint`), posé à la main par l'opérateur, jamais envoyé ni stocké par le serveur | `0600`, au compte de l'agent ; sans lui les droits `proxmox.*` sont indisponibles (« Comment un hôte Proxmox agit »). Le secret est en clair dans ce fichier : le protège le compte, pas un chiffrement |
@@ -544,9 +544,7 @@ lisent ; l'écran l'affiche sans le recalculer.
   l'agent) que les autres ne peuvent pas modifier. Un seul qui échoue, ou un
   `stat` en erreur, et l'agent écrit `WARN state dir is not safe, writing
   rights are off` (chemin, propriétaire, mode), **rapporte `observe` seul** et
-  refuse tout ordre qui écrit (`right_missing`). `agent.server_key`, qui ne
-  demande que `observe`, passe encore : qui peut écrire l'état n'a pas besoin
-  de lui pour changer la clé épinglée (`24`, §24). Il ne s'arrête pas, la
+  refuse tout ordre qui écrit (`right_missing`). Il ne s'arrête pas, la
   supervision continue, et la
   fiche montre l'écart « droits rapportés ≠ cochés ». Le fichier n'est pas
   touché : l'état corrigé, un redémarrage rend les droits. Un agent d'avant,
@@ -597,29 +595,30 @@ lisent ; l'écran l'affiche sans le recalculer.
   machine : ils les offrent toutes.
 ### La politique de l'agent
 
-Fiche A3, T03-03. Ce que l'agent peut faire est écrit dans un fichier **à
-root**, sur la machine ; l'agent le lit et ne l'écrit jamais (R-A3-1).
+Fiche A3, T03-03 et T03-04. Ce que l'agent peut faire, sur quoi, et sous
+quelle clé du serveur, est écrit dans un fichier **à root**, sur la machine ; l'agent le lit et ne l'écrit jamais (R-A3-1).
 Remplace la décision 10 (« les changer, c'est ré-enrôler ») : le ré-enrôlement
 ne sert plus qu'à changer la clé de l'agent.
 
 | Quoi | Où, comment |
 | --- | --- |
-| Le fichier | `/etc/opencloud-agent/policy.toml` (`brand.AgentPolicyDir`, `AgentPolicyFile`), `root:opencloud-agent`, `0640` ; le dossier à root, `0755`, créé par le premier `grant` |
-| Le format | TOML décodé strictement (`agentpolicy.Decode` : clé inconnue, autre `version`, `machine_id` absent, droit inconnu, mal borné ou écrit deux fois = illisible). `version = 1`, `machine_id`, un bloc `[[right]]` par droit (`name`, `value` dans la grammaire de `-rights` : `/srv/a:/srv/b`). Ni échéance (T03-05) ni ancre ni clé du serveur (T03-04) : elles restent dans `identity.json` |
-| La relecture | Avant chaque ordre, toutes les 15 s (`policyRereadInterval`) et à `SIGHUP`, flux coupé ou non. Le lanceur `opencloud-guard`, processus principal de l'unité, attrape `SIGHUP` et le relaie à l'agent (`rollback.Guard.Hangups`) : `systemctl kill -s HUP opencloud-agent` ne tue rien. Un changement (droits, source, empreinte, ancres) rouvre le flux pour le rapporter |
+| Le fichier | `/etc/opencloud-agent/policy.toml` (`brand.AgentPolicyDir`, `AgentPolicyFile`), `root:opencloud-agent`, `0640` ; le dossier à root, `0755`, créé par `agent policy migrate` (le compte de l'agent ne peut ni le créer ni l'effacer) |
+| Le format | TOML décodé strictement (`agentpolicy.Decode` : clé inconnue, autre `version`, `machine_id` absent, droit inconnu, mal borné ou écrit deux fois = illisible). `version = 1`, `machine_id`, un bloc `[[right]]` par droit (`name`, `value` dans la grammaire de `-rights` : `/srv/a:/srv/b`), `[[server_key]]` (`key` : clé publique Ed25519 en base64), `[anchors]` (par type, une liste de valeurs, « Les ancres de confiance locales »). Une seule clé du serveur ; une seconde seulement après `trust add server-key … -keep-old`, avec `until`, `granted_at`, `granted_boot`, `granted_uptime`. Plus de deux clés, une échéance sur la première, une seconde sans échéance ni horloge ou égale à la première, une clé qui n'est pas Ed25519 en base64 = illisible. Aucune clé : lisible, mais aucun ordre ne passe (`server_key_missing`). Ni échéance sur un droit (T03-05) |
+| La relecture | Avant chaque ordre, toutes les 15 s (`policyRereadInterval`) et à `SIGHUP`, flux coupé ou non. Le lanceur `opencloud-guard`, processus principal de l'unité, attrape `SIGHUP` et le relaie à l'agent (`rollback.Guard.Hangups`) : `systemctl kill -s HUP opencloud-agent` ne tue rien. Un changement (droits, source, empreinte, ancres, clés du serveur acceptées, dont une gardée qui échoit) rouvre le flux pour le rapporter |
 | `probe.lan`, `observe.env` | Demandés à la politique à chaque sonde et à chaque inventaire Docker (`orderRunner.allows`) : suivent sans redémarrage (R-A3-4) |
 | La machine visée | Celle du fichier (`machine_id`) : un ordre pour une autre est refusé `wrong_machine` |
-| Sans politique | Ni dossier ni fichier : les droits d'`identity.json` (source `identity`). Ce repli se fermera sur une machine installée en v2 (T03-04, R-A3-16) |
+| Sans politique | **Ni dossier** : droits, ancres et clé du serveur d'`identity.json` (source `identity`), une machine d'avant la politique. Dossier présent sans fichier : `observe` seul, aucune clé, aucune ancre (source `refused`, « the agent policy is missing from its directory »). Le dossier seul décide (R-A3-16), jamais une marque dans `identity.json`, que l'agent peut réécrire |
 | Politique refusée | Illisible, pas à root, inscriptible par le groupe ou les autres, un lien, ou un dossier au-dessus mal gardé (`checkChain`, comme l'état de l'agent) : **`observe` seul** (source `refused`), ni les droits d'avant ni ceux d'`identity.json` (R-A3-6). Un état d'agent mal gardé laisse aussi `observe` seul, quelle que soit la source |
-| Le rapport | En-têtes `OpenCloud-Agent-Policy-Source` (`policy`, `identity`, `refused`) et `OpenCloud-Agent-Policy-Digest` (SHA-256 du fichier en hexadécimal, ce que `sha256sum` affiche) à chaque ouverture du flux ; colonnes `agents.policy_source`, `agents.policy_digest` (migration `051`) ; `policy_source` et `policy_digest` dans l'agent de `GET /api/machines…`. Fiche, onglet Agent, sous « Droits » : « Politique » et son empreinte entière (à comparer à `agent rights`), une note rouge pour une politique refusée, une phrase pour une machine sans politique |
+| Le rapport | En-têtes `OpenCloud-Agent-Policy-Source` (`policy`, `identity`, `refused`) et `OpenCloud-Agent-Policy-Digest` (SHA-256 du fichier en hexadécimal, ce que `sha256sum` affiche) à chaque ouverture du flux ; colonnes `agents.policy_source`, `agents.policy_digest` (migration `051`) ; `policy_source` et `policy_digest` dans l'agent de `GET /api/machines…`. Fiche, onglet Agent, sous « Droits » : « Politique » et son empreinte entière (à comparer à `agent rights`), une note rouge pour une politique refusée ; en source `identity`, la note « Droits non protégés » (`rights.unprotected`) et la ligne `sudo opencloud agent policy migrate` à copier (`migrate_line`, rendue par le serveur, vide hors source `identity`) |
 
 **Les commandes**, toutes en root (`RequireTrustRoot`, comme `agent trust`) :
 
 | Commande | Ce qu'elle fait |
 | --- | --- |
-| `opencloud agent rights` | La source, l'empreinte, ou la raison du refus, puis un droit par ligne |
+| `opencloud agent rights` | La source, l'empreinte, ou la raison du refus, puis un droit par ligne ; en source `identity`, la ligne `policy migrate` |
 | `opencloud agent grant <droit>[=valeur]…` | Pose des droits ; une valeur remplace celle du droit déjà posé |
 | `opencloud agent revoke <droit>…` | Retire des droits (`observe` ne se retire pas) |
+| `opencloud agent policy migrate` | Sur une machine d'avant la politique : recopie à l'identique droits, ancres et clé du serveur d'`identity.json` dans la politique, puis les efface d'`identity.json` (qui reste au compte de l'agent, `0600`) ; crée le dossier. La question vient avant la création du dossier : un refus ne change rien. Relancée, elle ne change rien, et efface ce qu'`identity.json` garderait d'une migration interrompue |
 
 `grant` et `revoke` relisent la politique **sous son verrou** (`flock` sur
 `policy.toml.lock`, à root), disent chaque droit posé (`+`) et retiré (`-`),
@@ -627,11 +626,13 @@ demandent `[o/N]` sur `/dev/tty` (`-yes` sans terminal, sinon refus sans rien
 écrire, R-A3-15), puis écrivent d'un coup (temporaire puis renommage,
 `fsx.WriteAtomicOwned`) et tracent le changement au journal du système
 (`authpriv`, empreinte comprise). Deux gestes en même temps se suivent
-(R-A3-3). Le premier `grant` recopie les droits d'`identity.json` et les montre
-tous, chacun en `+` : un droit que le compte de l'agent aurait glissé dans son
-identité se voit avant d'être écrit. Refus sans rien écrire : un compte qui
-n'est pas root, une politique illisible ou mal gardée (root la corrige ou
-l'efface), un agent dont le binaire ne lit pas encore la politique
+(R-A3-3). `policy migrate` montre tout ce qu'il recopie, chaque droit en `+` :
+un droit que le compte de l'agent aurait glissé dans son identité se voit
+avant d'être écrit. Dans un dossier présent sans fichier, le premier `grant`
+(ou `trust`) part d'`observe` seul : rien d'`identity.json` n'y entre. Refus
+sans rien écrire : un compte qui n'est pas root, une machine sans dossier de
+politique (la ligne `policy migrate` est donnée), une politique illisible ou
+mal gardée (root la corrige ou l'efface), un agent dont le binaire ne lit pas encore la politique
 (`identity.json` sans `policy_format`, que l'agent écrit à son démarrage ; un
 binaire plus ancien le perd en réécrivant son identité).
 
@@ -642,8 +643,14 @@ dans le refus d'un ordre (`fix.command`) et, pour chaque droit, dans
 (`brand.Command`), jamais `bin/current`, que le compte de l'agent peut
 remplacer (R-DROIT-10).
 
-Ce que ça coûte : un agent dans le groupe `docker` est root, il peut réécrire
-la politique par un conteneur ; elle borne ce que le **serveur** peut
+Ce que ça coûte : une machine d'avant la politique demande un geste de root
+(`policy migrate`) avant tout `grant` ou `trust` ; l'enrôlement écrit encore
+la clé du serveur dans `identity.json`, une machine neuve passe donc aussi par
+`policy migrate` (`setup` et `join`, qui créeront le dossier et la première
+clé, viennent avec B1). Une politique écrite par T03-03 (sans
+`[[server_key]]`) n'accepte aucune clé : chaque ordre est refusé
+(`server_key_missing`) jusqu'à `trust set server-key`. Un agent dans le groupe
+`docker` est root, il peut réécrire la politique par un conteneur ; elle borne ce que le **serveur** peut
 demander, pas un agent compromis. Le lanceur relaie `SIGHUP` seulement s'il
 est de cette version : un lanceur posé avant en meurt, et systemd relance
 l'agent (le lanceur est une copie que root pose, jamais mise à jour par
@@ -655,8 +662,9 @@ Lot 1 de l'étude « compromission du serveur » (validé par Lucas le 4 novembr
 2026). Le serveur signe les ordres : s'il est compromis, il signe ce qu'il
 veut. Un droit dit **ce que** l'agent sait faire ; une **ancre** dit **sur
 quoi** il le fait. C'est une valeur que seul l'administrateur de la machine
-pose, que l'agent garde dans `identity.json` (`anchors`), rapporte au serveur,
-et qu'**aucun ordre ne peut écrire**.
+pose, que l'agent lit dans sa politique (`[anchors]`, « La politique de
+l'agent » ; dans `identity.json` sur une machine d'avant la politique),
+rapporte au serveur, et qu'**aucun ordre ne peut écrire**.
 
 | Type | Ce qu'il borne | Valeurs | Drapeau du premier lancement | Droit utile |
 | --- | --- | --- | --- | --- |
@@ -674,7 +682,7 @@ et qu'**aucun ordre ne peut écrire**.
   drapeaux et la commande locale le lisent aussi. Un test échoue dès qu'un
   type est ajouté ou retiré sans mise à jour de sa liste attendue. Le lot 2
   (clés d'opérateur, co-signature) ajoutera un type au même registre, avec la
-  même commande. La clé du serveur épinglée (`server_key`) reste où elle est.
+  même commande.
 - **Refus par défaut.** Sans ancre posée, l'ordre borné est refusé ; une
   valeur hors des ancres aussi ; des ancres illisibles aussi. Le juge de
   l'agent le dit après le droit et avant d'écrire le rang :
@@ -684,21 +692,20 @@ et qu'**aucun ordre ne peut écrire**.
   `-rights` (valeurs séparées par des virgules) : une valeur mal écrite refuse
   l'agent avant l'enrôlement (code 2, `agent.anchor_invalid`), le jeton n'est
   pas consommé ; un agent déjà enrôlé les ignore. Ensuite, une seule voie :
-  `sudo opencloud agent trust list | add <type> <valeur> | remove <type> <valeur>`,
+  `sudo opencloud agent trust list | add <type> <valeur> | remove <type> <valeur>`
+  (et la clé du serveur, « La rotation de la clé du serveur »),
   **en root**, depuis `/usr/local/bin/opencloud` (un autre compte : refus, rien n'est écrit). `add` et `remove`
   **disent ce qu'ils changent** (type, valeur, empreinte courte d'un certificat)
   puis demandent `[o/N]` sur `/dev/tty` ; sans terminal, `-yes` est exigé, sinon
-  refus sans rien écrire (R-A3-15). Elle juge l'état
-  comme l'agent (`CheckStateDir`, avec le compte de l'agent pour propriétaire
-  admis : dossier, chaîne de dossiers, fichier d'identité, modes), prend le
-  verrou `identity.json.lock` que l'agent prend aussi, réécrit `identity.json`
-  d'un seul coup en le laissant au compte de l'agent (0600), et **écrit le
+  refus sans rien écrire (R-A3-15). Elle écrit la politique comme `grant` :
+  sous le verrou `policy.toml.lock`, d'un seul coup, et **écrit le
   changement au journal du système** (`syslog`, facilité `authpriv`, lu par
   journald). Un journal injoignable n'annule pas le changement : la commande
   le dit.
-- **Pas de redémarrage.** L'agent relit ses ancres **avant chaque ordre**, et
-  ses propres écritures du fichier (le rang, la clé du serveur) gardent celles
-  du disque. Au signal suivant (30 s), s'il voit un écart avec ce qu'il a
+- **Pas de redémarrage.** L'agent relit ses ancres **avant chaque ordre**. Ses
+  propres écritures d'`identity.json` (le rang) gardent du disque les ancres,
+  les droits et la clé du serveur (`saveKeepingRootFields`) : après
+  `policy migrate`, il ne les y réécrit jamais. Au signal suivant (30 s), s'il voit un écart avec ce qu'il a
   rapporté, il rouvre le flux pour le redire.
 - **Rapportées au serveur** : en-tête `OpenCloud-Agent-Anchors`
   (`backup.recipient=age1…,backup.guest=101:102,restic.target-cert=!` ; `!` : le
@@ -714,7 +721,9 @@ et qu'**aucun ordre ne peut écrire**.
   commande (`fix`, avec sa machine).
 - **Ce que l'écran montre.** La ligne d'installation et la fenêtre
   « Ré-enrôler » demandent les ancres des droits cochés (la clé du trousseau est
-  proposée ; un ré-enrôlement efface le fichier, les ancres posées se redonnent)
+  proposée ; sur une machine d'avant la politique, un ré-enrôlement efface le
+  fichier, les ancres posées se redonnent ; passée à la politique, elles y
+  restent et les drapeaux sont ignorés)
   et la ligne porte les drapeaux. La fiche, onglet Agent, montre chaque type
   dans l'un de ses trois états (**posées**, **aucune posée**, **illisibles**),
   ou dit que l'agent n'est pas à jour. Le bloc « À faire » signale un droit coché
@@ -748,7 +757,7 @@ Ce qui protège de quoi, si le serveur est compromis :
 | Rediriger une source restic vers une cible à lui (`restic.provision`) | oui | `restic.target-cert` |
 | Se donner une ancre par un ordre | oui | aucun genre ne les écrit (test sur tous les genres, test statique des écritures) |
 | Effacer ou fausser ses traces côté agent | partiellement | le journal local de l'agent garde ce qui a été signé |
-| La même chose avec un accès **root** à la machine de l'agent | non | root écrit le fichier d'identité : les ancres bornent le serveur, pas la machine |
+| La même chose avec un accès **root** à la machine de l'agent | non | root écrit la politique : les ancres bornent le serveur, pas la machine |
 | Lire une sauvegarde restic qui passe par son **relais** | non | le serveur détient les mots de passe des dépôts : lot 2 |
 
 Coûts, dits franchement :
@@ -760,8 +769,8 @@ Coûts, dits franchement :
 - Aucune ancre n'est posée tant que l'administrateur ne l'a pas fait : une
   installation qui cochait `backup.produce` voit ses sauvegardes de VM refusées
   jusqu'à la pose, avec la commande à copier.
-- Un fichier d'identité modifié à la main avec des valeurs fausses ferme
-  l'ordre concerné : état « illisibles », corrigé par `agent trust remove`.
+- Une politique (ou, avant elle, un fichier d'identité) modifiée à la main
+  avec des valeurs fausses ferme l'ordre concerné : état « illisibles », corrigé par `agent trust remove`.
 
 ### Supprimer une machine
 
@@ -1482,7 +1491,7 @@ fermée et vit dans le protocole (`agentwire.Kind`) : jamais une chaîne shell.
 
 | | Commandes d'observation | Ordres |
 | --- | --- | --- |
-| Genres | `logs`, `logs_stop`, `probes`, `image_checks` (noms figés par les agents installés) | `agent.ping` : il ne change rien et prouve le chemin ; `agent.server_key`, que le serveur envoie seul pendant une rotation de sa clé ; `backup.receive` et `backup.prune`, les ordres longs de la sauvegarde (« Comment une sauvegarde se fait »). `agent.update`, l'ordre long qui change le binaire de l'agent (« Comment un agent se met à jour »). `docker.deploy` et `docker.update`, les ordres longs du déploiement (« Comment un service se déploie »). `backup.produce`, l'ordre long qui fait produire une sauvegarde par la machine elle-même (voir plus bas). Les autres gestes (`files.write`…) viendront avec #153 étape 5 |
+| Genres | `logs`, `logs_stop`, `probes`, `image_checks` (noms figés par les agents installés) | `agent.ping` : il ne change rien et prouve le chemin ; `backup.receive` et `backup.prune`, les ordres longs de la sauvegarde (« Comment une sauvegarde se fait »). `agent.update`, l'ordre long qui change le binaire de l'agent (« Comment un agent se met à jour »). `docker.deploy` et `docker.update`, les ordres longs du déploiement (« Comment un service se déploie »). `backup.produce`, l'ordre long qui fait produire une sauvegarde par la machine elle-même (voir plus bas). Les autres gestes (`files.write`…) viendront avec #153 étape 5 |
 | Sur le fil | un événement SSE à leur nom, au contenu typé (`agentwire.Command`) | l'événement `order` : le corps JSON tel qu'il a été signé, sa signature, l'empreinte de la clé |
 | Signées | **non** : elles ne font que lire, et ne partent que du serveur qui tient le flux | **oui**, Ed25519, par `server.key` |
 | Écrites avant l'envoi | non | oui : le run dans `action_runs`, l'événement `action.order` au journal d'audit |
@@ -1521,12 +1530,12 @@ fermée et vit dans le protocole (`agentwire.Kind`) : jamais une chaîne shell.
    l'agent trouve toujours un run envoyé. Un flux tombé ou une file pleine :
    le run finit `failed`, raison `undelivered`. L'API rend le run (`201`).
 5. **L'agent juge**, par `judge.Judge` (`internal/wire/judge`, le seul juge
-   d'un ordre signé, qui reçoit la politique et ne lit aucun fichier ; la
-   politique est tirée d'`identity.json` jusqu'à son fichier à elle), plus
-   l'agent visé et le rang, qu'il juge lui-même à leur place. Dans cet ordre,
-   il refuse au premier écart : il a une
-   clé du serveur épinglée (`server_key_missing`) ; la signature est de cette
-   clé, sur ces octets, sous l'étiquette v2 seule, vérifiée avant de lire un
+   d'un ordre signé, qui reçoit la politique avec ses clés du serveur
+   acceptées, `Policy.ServerKeys`, les échues déjà retirées par l'agent, et
+   ne lit aucun fichier), plus l'agent visé et le rang, qu'il juge lui-même à
+   leur place. Dans cet ordre, il refuse au premier écart : il accepte une
+   clé du serveur au moins (`server_key_missing`) ; la signature est de l'une
+   d'elles, sur ces octets, sous l'étiquette v2 seule, vérifiée avant de lire un
    champ (`bad_signature` : un corps v1 signé sous la sienne ne passe pas) ;
    le corps se lit **strictement** et porte `v: 2` (`bad_order` sans `v` ou
    d'une autre version, voir « Le registre des genres » plus bas) ; il vise cette machine (`wrong_machine`) et
@@ -1577,7 +1586,6 @@ relit le JSON, un test le vérifie dans le source. Chaque genre du registre a
 son exécuteur dans la table `executors` de l'agent, et la table n'en a pas
 d'autre (test). Un ordre qui ne se décode pas n'atteint aucun exécuteur.
 6. **Il exécute** : `agent.ping` finit `succeeded`, sortie `pong <version>`.
-   `agent.server_key` épingle la clé qu'il livre, sortie `pinned <empreinte>`.
    `agent.update` télécharge, vérifie, change son binaire et s'arrête (code 3) ;
    `agent.rollback` rebascule sur la version d'avant et s'arrête de même ; le
    run reste « accepté » jusqu'au retour de l'agent (« Comment un agent se met
@@ -1719,32 +1727,62 @@ et `restic.retain` le lisent (« Comment restic sauvegarde »).
 `serve`, à côté de `secret.key`, sous les mêmes règles (« Ce qui est stocké,
 et où »). Sa moitié publique part dans la réponse à l'enrôlement
 (`server_key`), avec l'identifiant de l'agent ; l'agent l'épingle dans
-`identity.json`. C'est une confiance au premier usage, prise au seul moment
+`identity.json`, et `agent policy migrate` la passe dans sa politique
+(`[[server_key]]`). C'est une confiance au premier usage, prise au seul moment
 où l'intention de l'opérateur est prouvée : le jeton d'enrôlement, consommé
 par cette même requête. Un serveur sans clé refuse l'enrôlement
 (`503 server_key_missing`) avant de consommer le jeton. L'agent redit
-l'empreinte épinglée à chaque ouverture du flux (en-tête
-`OpenCloud-Server-Key`) ; le serveur la garde sur l'agent
+l'empreinte de la clé qu'il accepte (la première) à chaque ouverture du flux
+(en-tête `OpenCloud-Server-Key`) ; le serveur la garde sur l'agent
 (`server_key_fingerprint`, vide si la forme n'est pas une empreinte), et la
-carte Ordres la compare à `GET /api/agents/server-key` : un agent qui a
-épinglé une autre clé, ou aucune, refusera chaque ordre, et la carte le dit.
+carte Ordres la compare à `GET /api/agents/server-key` : un agent qui
+accepte une autre clé, ou aucune, refusera chaque ordre, et la carte le dit.
+Ensuite, **aucun ordre ne change la clé** (R-A3-9) : seul root, sur la
+machine, par `agent trust`. `opencloud secrets server-key` imprime
+l'empreinte (`SHA256:…`) de la clé qui signe, en ne lisant que `server.key`
+(sans base, serveur en marche ou non) : c'est à elle que root compare ce que
+`trust` imprime, jamais à un écran.
 
 **La rotation de la clé du serveur.** `opencloud secrets rotate-server-key`
-tire une clé neuve et garde l'ancienne en seconde ligne de `server.key`. Au
-redémarrage, le serveur signe chaque ordre avec la clé que son agent a
-épinglée (`server_key_fingerprint`) : les deux sont valables. À l'ouverture
-du flux, un agent resté sur la précédente reçoit l'ordre `agent.server_key`
-(la clé publique neuve), signé par la précédente, demandé par la règle
-`rule:server_key_rotation` et journalisé comme tout ordre ; il l'épingle
-dans `identity.json`, répond, et le serveur note la neuve sur l'agent.
-`GET /api/agents/server-key` rend aussi `previous_fingerprint`, et la carte
-Ordres dit d'un agent resté dessus qu'il recevra la neuve à sa prochaine
-connexion. `opencloud secrets finish-server-key` retire la précédente ; il
-refuse tant qu'un agent actif l'a encore épinglée, en le nommant, sauf
-`-force` (l'agent sera à ré-enrôler). Une seule rotation à la fois. La
-rotation passe la main d'une clé saine à une autre : la neuve est livrée
-sous la signature de l'ancienne, donc qui a volé l'ancienne peut livrer la
-sienne. Une clé volée se remplace en ré-enrôlant chaque agent.
+tire une clé neuve, garde l'ancienne en seconde ligne de `server.key` et
+imprime la ligne à coller en root sur chaque machine :
+`sudo opencloud agent trust set server-key <clé publique base64>`
+(`agentpolicy.ServerKeyLine`, que `GET /api/agents/server-key` rend aussi,
+`trust_line`). Au redémarrage, le serveur signe chaque ordre avec la clé que
+son agent dit accepter (`server_key_fingerprint`) : les deux sont valables.
+La carte Ordres d'une machine restée sur la précédente, ou sur une autre clé,
+montre la ligne à copier et dit de comparer l'empreinte avec `secrets
+server-key` sur la machine Kagu ; elle ne montre pas l'empreinte à comparer.
+`opencloud secrets finish-server-key` retire la précédente ; il refuse tant
+qu'un agent actif l'accepte encore, en le nommant et en donnant la ligne
+`trust set`, sauf `-force` (l'agent refusera chaque ordre jusqu'à la ligne).
+Une seule rotation à la fois.
+
+Sur la machine, `agent trust` écrit la politique sous son verrou, dit ce qui
+change et demande `[o/N]`, comme `grant` :
+
+| Ligne | Effet |
+| --- | --- |
+| `trust set server-key <clé>` | Remplace la clé acceptée : l'ancienne est refusée dès l'ordre suivant (`bad_signature`) |
+| `trust add server-key <clé> -keep-old <durée>` | Accepte la neuve, garde l'ancienne de 5m à 168h. Elle tombe seule, même sans serveur, à l'heure **ou** quand l'horloge monotone (même démarrage : `boot_id`, `/proc/uptime`) a mesuré la durée : un recul de l'horloge (NTP) ne la prolonge pas (QA-12, la règle des droits à durée de R-A3-5, `agentpolicy.Lapsed`). Après un redémarrage, seule l'heure compte ; une pose datée dans le futur tombe |
+| `trust add server-key <clé>` sans `-keep-old` | Refusé, la ligne `set` proposée : deux clés sans échéance laisseraient une clé volée signer après la rotation (N-M2) |
+
+`set` et `add server-key` impriment l'empreinte de l'ancienne (« retirée » ou
+« gardée jusqu'au … ») et de la neuve ; `trust list` montre celles des clés
+acceptées. Une clé gardée qui échoit change ce que l'agent rapporte : il
+rouvre son flux et ne redit qu'une clé. Le journal local des ordres nomme
+l'empreinte de la clé qui a signé (`signing_key`).
+
+**Une clé volée** se remplace sans ré-enrôler : supprimer `server.key` (ou
+la faire tourner), redémarrer, puis `trust set server-key <neuve>` sur chaque
+machine. La neuve n'est jamais livrée sous la signature de l'ancienne, donc
+qui tient l'ancienne ne peut pas livrer la sienne. Le vidage des pairs
+`kagu0` par `trust set` n'existe pas encore (T14-09).
+
+Ce que ça coûte : une rotation demande de **coller une ligne sur chaque
+machine**, en root ; aucun ordre ne livre la clé. C'est le prix de N-M2 : une
+clé volée ne se donne plus sa remplaçante. Une machine sans politique doit
+d'abord passer par `policy migrate`.
 
 **Ce que la signature prouve, et ce qu'elle ne prouve pas.** Un ordre exécuté
 a été écrit par le serveur qui détient `server.key`, pour cette machine et cet
@@ -7365,7 +7403,7 @@ refusés avant d'envoyer quoi que ce soit.
 | Le groupe `docker` équivaut à root | Le compte dédié de l'agent (`opencloud-agent`, décision 2 du 22 octobre 2026) est dans le groupe `docker` quand la machine a Docker, et la socket de Docker lance un conteneur privilégié qui monte `/` : sur une machine avec Docker, le compte dédié protège des erreurs et d'une compromission maladroite (pas de réécriture directe de `/etc`, `/usr`, des comptes), pas d'un attaquant décidé. Sans Docker, c'est un compte sans privilège. Root reste possible (drop-in `root.conf`), au prix de la machine entière | Un observateur non privilégié et un exécuteur root étroit : seulement si l'usage le demande (décision 2) |
 | Docker muet sur une machine en ligne | La machine signale, mais Docker ne répond plus (ou l'agent dit « Docker absent ») : ses conteneurs gardent leur dernier état, pas encore « Inconnu » | Après #136 point 1 (issue de suite : 12 min, ou tout de suite si l'agent dit « Docker absent ») |
 | Des ordres qui n'existent pas encore | La liste des ordres est `agentwire.OrderKinds` (« Les acteurs »). Aucun ne retire un déploiement (supprimer le service de l'annuaire laisse conteneurs, dossier et `data/` sur la machine), et aucun ne sauvegarde le `data/` ni le `.env` d'un service (« Comment une sauvegarde se fait ») | À décider |
-| Une clé du serveur volée se remplace par un ré-enrôlement | La rotation de `server.key` livre la neuve sous la signature de l'ancienne : elle sert à changer de clé, pas à chasser qui l'a prise. Une clé volée ou perdue se remplace en ré-enrôlant chaque agent. La clé d'un agent ne tourne pas non plus autrement | À décider, si un jour il faut mieux |
+| Une clé du serveur se remplace machine par machine | Volée, perdue ou tournée, la neuve se pose en root sur chaque machine (`agent trust set server-key`) : aucun ordre ne la livre (« La rotation de la clé du serveur »). La clé d'un agent, elle, ne tourne que par un ré-enrôlement | À décider, si un jour il faut mieux |
 | Le journal d'audit ne part que vers les canaux cochés | Aucun canal n'est coché d'office : tant qu'aucun ne reçoit le journal, qui efface la base efface la trace (la page Journal le dit). Un canal en panne plus de 24 h perd les envois de l'intervalle, sans rattrapage. Une ligne du journal qui échoue à s'écrire ne défait pas le geste, elle se lit en erreur au journal du processus | Par conception ; cocher « Recevoir le journal » sur un canal |
 | Les clés SSH ne se relèvent qu'en lecture, dans deux fichiers par compte | Un `AuthorizedKeysFile` personnalisé et `/etc/ssh/authorized_keys.d/` ne sont pas lus. Sous un compte dédié, l'agent ne lit pas les clés des autres comptes (« Illisible pour le compte de l'agent ») ; il ne faut **pas** lui donner `CAP_DAC_READ_SEARCH` pour y remédier : il lirait aussi `/etc/shadow`. L'écriture (`ssh.keys`, #152 étape 2) n'existe pas : ajouter ou retirer une clé reste un geste sur la machine | L'écriture attend une décision (`23-direction.md`, §10 étape 8) |
 | Les unités systemd ne se relèvent qu'au niveau du système, en nom et en état | Les unités d'un utilisateur (`systemctl --user`) ne sont pas vues ; la description, le processus, le fichier et l'environnement d'une unité ne sont jamais lus ; le **port** d'un binaire ne se déduit pas (il demanderait `/proc/<pid>/fd`, donc `ptrace`) : il se déclare. Les liens entre instances viennent avec L3 (déclarés), L4 (déduits) et L5 (environnement, sous `observe.env`) | Une décision de Lucas, si un jour le port doit se déduire (droit élevé : refusé par la décision 5 de l'étude) |

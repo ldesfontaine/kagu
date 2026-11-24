@@ -11,10 +11,12 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/edge/store"
 	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/seal"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // La rotation rescelle chaque secret avec une clé neuve : le serveur
@@ -132,7 +134,9 @@ func TestSecretsServerKey_RotatesThenFinishesOnceTheAgentsFollowed(t *testing.T)
 	if err != nil || rotated.PreviousFingerprint() != old.Fingerprint() || rotated.Fingerprint() == old.Fingerprint() {
 		t.Fatalf("rotated %q/%q %v", rotated.Fingerprint(), rotated.PreviousFingerprint(), err)
 	}
-	if !strings.Contains(out.String(), rotated.Fingerprint()) {
+	// La sortie donne la ligne « trust set » de la neuve, que root colle sur
+	// chaque machine : aucun ordre ne la livre (R-A3-9).
+	if !strings.Contains(out.String(), rotated.Fingerprint()) || !strings.Contains(out.String(), agentpolicy.ServerKeyLine(rotated.PublicKey())) {
 		t.Fatalf("output: %q", out.String())
 	}
 	if err := secretsCommand([]string{"rotate-server-key", "-config", configPath}, &bytes.Buffer{}); !errors.As(err, &refused) || !strings.Contains(refused.message, "déjà en cours") {
@@ -140,7 +144,7 @@ func TestSecretsServerKey_RotatesThenFinishesOnceTheAgentsFollowed(t *testing.T)
 	}
 
 	err = secretsCommand([]string{"finish-server-key", "-config", configPath}, &bytes.Buffer{})
-	if !errors.As(err, &refused) || !strings.Contains(refused.message, "vps-paris-1") {
+	if !errors.As(err, &refused) || !strings.Contains(refused.message, "vps-paris-1") || !strings.Contains(refused.message, agentpolicy.ServerKeyLine(rotated.PublicKey())) {
 		t.Fatalf("an agent still on the previous key: %v", err)
 	}
 	if still, _ := action.LoadKey(root); still.PreviousFingerprint() != old.Fingerprint() {
@@ -159,6 +163,41 @@ func TestSecretsServerKey_RotatesThenFinishesOnceTheAgentsFollowed(t *testing.T)
 	}
 	if err := secretsCommand([]string{"finish-server-key", "-config", configPath}, &bytes.Buffer{}); !errors.As(err, &refused) || !strings.Contains(refused.message, "rien à finir") {
 		t.Fatalf("finishing twice: %v", err)
+	}
+}
+
+// QA-13 : « secrets server-key » imprime l'empreinte de la clé qui signe les
+// ordres, celle que « agent trust set server-key » imprime sur une machine ;
+// rien d'autre, ni la clé privée ni la précédente. Sans clé, un refus.
+func TestSecretsServerKey_PrintsTheFingerprintOnly(t *testing.T) {
+	configPath, stateDir := writeConfig(t)
+	root, db := openState(t, stateDir)
+	db.Close()
+	var refused *refusal
+	if err := secretsCommand([]string{"server-key", "-config", configPath}, &bytes.Buffer{}); !errors.As(err, &refused) {
+		t.Fatalf("without a key: %v", err)
+	}
+	key, _, err := action.LoadOrCreateKey(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyFile, err := root.ReadFile(brand.ServerKeyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := secretsCommand([]string{"server-key", "-config", configPath}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != key.Fingerprint()+"\n" || key.Fingerprint() != agentwire.KeyFingerprint(key.PublicKey()) {
+		t.Fatalf("output %q, want %s", out.String(), key.Fingerprint())
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(keyFile)), "\n") {
+		for _, field := range strings.Fields(line) {
+			if len(field) > 20 && strings.Contains(out.String(), field) {
+				t.Fatalf("server.key leaks into the output: %q", out.String())
+			}
+		}
 	}
 }
 

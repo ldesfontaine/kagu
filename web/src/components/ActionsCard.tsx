@@ -10,6 +10,7 @@ import { reenrollPath } from "../lib/rights";
 import type { Tone } from "../lib/tone";
 import { formatWhen } from "../lib/time";
 import { AgentGate } from "./AgentGate";
+import { TokenBox } from "./Copy";
 import { Button } from "./Button";
 import { Card, CardBody, CardHeader, Empty, KeyValue, Note } from "./Card";
 import { LockedAction } from "./LockedAction";
@@ -88,9 +89,11 @@ export function ActionsCard({ machineID, agent }: { machineID: string; agent: Ag
   );
 }
 
-// La clé que l'agent dit avoir épinglée, comparée à celle de ce serveur :
-// une autre clé, ou aucune, fera refuser chaque ordre. La précédente, pendant
-// une rotation, est encore bonne : l'agent reçoit la neuve à sa connexion.
+// La clé que l'agent dit accepter, comparée à celle de ce serveur : une autre
+// clé, ou aucune, fera refuser chaque ordre. La précédente, pendant une
+// rotation, est encore bonne. Aucun ordre ne livre la neuve : l'écran donne
+// la ligne « trust set » que le serveur rend, et renvoie l'empreinte à
+// comparer à la machine du serveur, jamais à l'écran (R-A3-15).
 function PinnedKey({ machineID, agent }: { machineID: string; agent: Agent }) {
   const t = useT();
   const serverKey = useServerKey();
@@ -98,6 +101,7 @@ function PinnedKey({ machineID, agent }: { machineID: string; agent: Agent }) {
     return (
       <>
         <KeyValue label={t("action.server_key")} value={t("action.server_key_none")} />
+        {serverKey.data && <TokenBox value={serverKey.data.trust_line} />}
         <ReenrollButton machineID={machineID} />
       </>
     );
@@ -106,11 +110,16 @@ function PinnedKey({ machineID, agent }: { machineID: string; agent: Agent }) {
   return (
     <>
       <KeyValue label={t("action.server_key")} value={agent.server_key_fingerprint} mono />
-      {pinned === "previous" && serverKey.data && <Note tone="warn">{t("action.server_key_previous", serverKey.data.fingerprint)}</Note>}
+      {pinned === "previous" && serverKey.data && (
+        <Note tone="warn">
+          <p>{t("action.server_key_previous")}</p>
+          <TokenBox value={serverKey.data.trust_line} />
+        </Note>
+      )}
       {pinned === "differs" && serverKey.data && (
         <Note tone="danger">
-          <p>{t("action.server_key_differs", serverKey.data.fingerprint)}</p>
-          <ReenrollButton machineID={machineID} />
+          <p>{t("action.server_key_differs")}</p>
+          <TokenBox value={serverKey.data.trust_line} />
         </Note>
       )}
     </>

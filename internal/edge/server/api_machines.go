@@ -102,6 +102,9 @@ type agentJSON struct {
 	// qu'il n'a rien dit ; et l'empreinte SHA-256 du fichier de sa politique.
 	PolicySource string `json:"policy_source"`
 	PolicyDigest string `json:"policy_digest"`
+	// Source identity : les droits ne sont pas protégés, et la ligne qui les
+	// recopie dans la politique (R-A3-16) ; vide sinon.
+	MigrateLine string `json:"migrate_line"`
 	// Par droit connu, le verdict d'agentpolicy.Fit : l'écran l'affiche sans
 	// le recalculer.
 	Fit map[string]fitJSON `json:"fit"`
@@ -272,8 +275,16 @@ func agentToJSON(agent machine.Agent) *agentJSON {
 		Anchors:              anchorsToJSON(agent.Anchors),
 		PolicySource:         agent.PolicySource,
 		PolicyDigest:         agent.PolicyDigest,
+		MigrateLine:          migrateLineFor(agent.PolicySource),
 		Fit:                  fitsToJSON(agent),
 	}
+}
+
+func migrateLineFor(source string) string {
+	if source != agentpolicy.SourceIdentity {
+		return ""
+	}
+	return agentpolicy.MigrateLine()
 }
 
 func accountToJSON(account *machine.Account) *accountJSON {

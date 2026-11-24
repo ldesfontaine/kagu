@@ -7,18 +7,25 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // La politique de l'agent (fiche A3) : un fichier à root, hors de l'état de
-// l'agent, que l'agent lit et n'écrit jamais (R-A3-1). Seuls « agent grant »
-// et « agent revoke », en root, l'écrivent (grant.go). L'agent la relit avant
-// chaque ordre, toutes les 15 s et à SIGHUP (R-A3-4). Sans politique, il lit
-// encore les droits d'identity.json (source identity).
+// l'agent, que l'agent lit et n'écrit jamais (R-A3-1). Seuls « agent grant »,
+// « agent revoke », « agent trust » et « agent policy migrate », en root,
+// l'écrivent (grant.go, trust.go, migrate.go). L'agent la relit avant chaque
+// ordre, toutes les 15 s et à SIGHUP (R-A3-4). Sur une machine installée avant
+// elle, reconnue à l'absence de son dossier, il lit encore droits, ancres et
+// clé du serveur dans identity.json (source identity) ; jamais ailleurs
+// (R-A3-16).
 
 const (
 	policyFile     = brand.AgentPolicyFile
@@ -29,9 +36,14 @@ const (
 	policyRereadInterval = 15 * time.Second
 )
 
-// errNoPolicy : ni dossier ni fichier de politique ; les droits viennent
-// d'identity.json.
-var errNoPolicy = errors.New("no agent policy")
+var (
+	// errNoPolicy : pas de dossier de politique, la machine est d'avant elle ;
+	// droits, ancres et clé du serveur viennent d'identity.json.
+	errNoPolicy = errors.New("no agent policy")
+	// errPolicyMissing : le dossier est là, le fichier non ; observe seul,
+	// identity.json ne se lit pas (R-A3-16).
+	errPolicyMissing = errors.New("the agent policy is missing from its directory")
+)
 
 // PolicyPlace est où vit la politique et à qui elle appartient : son dossier,
 // et root avec le groupe du compte de l'agent pour le fichier. Le compte
@@ -64,37 +76,61 @@ type AppliedPolicy struct {
 	// celle de l'identité vaut.
 	MachineID string
 	Rights    []agentpolicy.Capability
+	// Les clés du serveur acceptées à cette lecture, la clé acceptée d'abord ;
+	// une clé gardée échue n'y est plus.
+	ServerKeys [][]byte
+	Anchors    map[string][]string
 	// Source : agentpolicy.SourcePolicy, SourceIdentity ou SourceRefused.
 	Source string
 	// Digest : l'empreinte du fichier lu (source policy seulement).
 	Digest string
-	// anchors : les ancres d'identity.json relues avec elle (forme texte),
-	// rapportées à côté.
-	anchors string
 }
 
 // report est ce qu'une lecture change pour le serveur : la source,
-// l'empreinte, les droits appliqués et les ancres.
+// l'empreinte, les droits appliqués, les ancres et les clés acceptées. Une
+// clé gardée qui échoit le change : le flux se rouvre et ne la redit plus.
 func (p AppliedPolicy) report() string {
-	return p.Source + " " + p.Digest + " " + agentpolicy.FormatCapabilities(p.Rights) + " " + p.anchors
+	return p.Source + " " + p.Digest + " " + agentpolicy.FormatCapabilities(p.Rights) + " " + anchor.FromFile(p.Anchors).Format() + " " + p.serverKeyFingerprints()
 }
 
-// readPolicy rend ce que l'agent applique. Sans dossier ni fichier, les
-// droits d'identity.json (source identity). Une politique qui ne se lit pas,
-// n'appartient pas à root ou s'écrit par un autre compte : observe seul
-// (source refused), et l'erreur dit pourquoi (R-A3-6). Rien ne s'élargit sur
-// une erreur : ni les droits d'avant ni ceux de l'identité. Un état mal gardé
-// (narrowed) n'a que observe, quelle que soit la source.
-func readPolicy(place PolicyPlace, identity Identity) (AppliedPolicy, error) {
+func (p AppliedPolicy) serverKeyFingerprints() string {
+	fingerprints := make([]string, 0, len(p.ServerKeys))
+	for _, key := range p.ServerKeys {
+		fingerprints = append(fingerprints, agentwire.KeyFingerprint(key))
+	}
+	return strings.Join(fingerprints, ",")
+}
+
+// AcceptedServerKey rend la clé du serveur acceptée, celle que l'agent redit
+// au serveur ; nil sans clé.
+func (p AppliedPolicy) AcceptedServerKey() []byte {
+	if len(p.ServerKeys) == 0 {
+		return nil
+	}
+	return p.ServerKeys[0]
+}
+
+// readPolicy rend ce que l'agent applique à l'heure now. Sans dossier, ce
+// qu'identity.json porte (source identity). Un dossier sans fichier (R-A3-16),
+// une politique qui ne se lit pas, n'appartient pas à root ou s'écrit par un
+// autre compte : observe seul, ni clé ni ancre (source refused), et l'erreur
+// dit pourquoi (R-A3-6). Rien ne s'élargit sur une erreur : ni les droits
+// d'avant ni ceux de l'identité. Un état mal gardé (narrowed) n'a que
+// observe, quelle que soit la source.
+func readPolicy(place PolicyPlace, identity Identity, now agentpolicy.Clock) (AppliedPolicy, error) {
 	document, digest, err := loadPolicy(place)
 	var applied AppliedPolicy
 	switch {
 	case errors.Is(err, errNoPolicy):
-		return AppliedPolicy{Rights: identity.Capabilities(), Source: agentpolicy.SourceIdentity}, nil
+		legacy := agentpolicy.Migrate(identity.legacy())
+		return AppliedPolicy{Rights: legacy.Rights, ServerKeys: legacy.LiveServerKeys(now), Anchors: legacy.Anchors, Source: agentpolicy.SourceIdentity}, nil
 	case err != nil:
 		applied = AppliedPolicy{Rights: observeOnly(), Source: agentpolicy.SourceRefused}
 	default:
-		applied = AppliedPolicy{MachineID: document.MachineID, Rights: document.Rights, Source: agentpolicy.SourcePolicy, Digest: digest}
+		applied = AppliedPolicy{
+			MachineID: document.MachineID, Rights: document.Rights, ServerKeys: document.LiveServerKeys(now), Anchors: document.Anchors,
+			Source: agentpolicy.SourcePolicy, Digest: digest,
+		}
 	}
 	if identity.narrowed {
 		applied.Rights = observeOnly()
@@ -126,7 +162,8 @@ func loadPolicy(place PolicyPlace) (agentpolicy.Document, string, error) {
 
 // readPolicyFile lit le fichier après avoir jugé, comme l'état de l'agent,
 // chaque dossier que le chemin traverse et le fichier lui-même : à root (ou
-// à place.Owner), inscriptibles par personne d'autre. errNoPolicy s'il manque.
+// à place.Owner), inscriptibles par personne d'autre. errPolicyMissing s'il
+// manque.
 func readPolicyFile(dir *os.Root, place PolicyPlace) ([]byte, error) {
 	owner := uint32(place.Owner.UID) // #nosec G115 -- un uid.
 	resolved, err := checkOpenedDir(dir, place.Dir, owner)
@@ -134,7 +171,7 @@ func readPolicyFile(dir *os.Root, place PolicyPlace) ([]byte, error) {
 		return nil, err
 	}
 	if _, err := dir.Lstat(policyFile); errors.Is(err, fs.ErrNotExist) {
-		return nil, errNoPolicy
+		return nil, errPolicyMissing
 	}
 	if err := checkStateFile(dir, filepath.Join(resolved, policyFile), policyFile, owner); err != nil {
 		return nil, err
@@ -154,10 +191,17 @@ func notePolicyFormat(stateDir *os.Root, identity Identity, logger *slog.Logger)
 		return identity
 	}
 	identity.PolicyFormat = agentpolicy.FormatVersion
-	noted, err := saveKeepingAnchors(stateDir, identity)
+	noted, err := saveKeepingRootFields(stateDir, identity)
 	if err != nil {
 		logger.Warn("note policy format", "error", err)
 		return identity
 	}
 	return noted
+}
+
+// SystemClock lit l'horloge de la machine : l'heure, le démarrage et le temps
+// écoulé depuis (hostinfo.MonotonicClock).
+func SystemClock() agentpolicy.Clock {
+	boot, uptime := hostinfo.MonotonicClock()
+	return agentpolicy.Clock{Now: time.Now(), Boot: boot, Uptime: uptime}
 }

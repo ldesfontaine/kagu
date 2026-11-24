@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/edge/store"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
@@ -90,8 +91,9 @@ func refuseWhileServing(stateDir *os.Root) error {
 
 // rotateServerKey tire une clé neuve pour signer les ordres. La précédente
 // reste dans server.key : au redémarrage, le serveur signe pour chaque agent
-// avec la clé qu'il a épinglée, et livre la neuve à ceux restés sur la
-// précédente, par un ordre que celle-ci signe.
+// avec la clé qu'il dit accepter. Aucun ordre ne livre la neuve (R-A3-9) :
+// root la pose sur chaque machine par la ligne « trust set » que la commande
+// imprime, et que la fiche de chaque machine restée sur la précédente redit.
 func rotateServerKey(ctx context.Context, stateDir *os.Root, db *store.DB, out io.Writer) error {
 	key, err := loadServerKey(stateDir)
 	if err != nil {
@@ -111,8 +113,9 @@ func rotateServerKey(ctx context.Context, stateDir *os.Root, db *store.DB, out i
 		"fingerprint": rotated.Fingerprint(), "previous_fingerprint": rotated.PreviousFingerprint(),
 	}})
 	_, err = fmt.Fprintf(out, "Nouvelle clé du serveur : %s\nClé précédente, encore valable : %s\n"+
-		"Redémarrez le serveur : chaque agent reçoit la neuve à sa prochaine connexion. Puis lancez `%s secrets finish-server-key`.\n",
-		rotated.Fingerprint(), rotated.PreviousFingerprint(), brand.Command)
+		"Redémarrez le serveur, puis collez sur chaque machine, en root :\n  %s\n"+
+		"Elle imprime l'empreinte de la neuve : comparez-la à celle-ci. Puis lancez `%s secrets finish-server-key`.\n",
+		rotated.Fingerprint(), rotated.PreviousFingerprint(), agentpolicy.ServerKeyLine(rotated.PublicKey()), brand.Command)
 	return err
 }
 
@@ -136,7 +139,7 @@ func finishServerKey(ctx context.Context, stateDir *os.Root, db *store.DB, force
 		return err
 	}
 	if len(behind) > 0 && !force {
-		return &refusal{message: fmt.Sprintf("ces machines ont encore la clé précédente : %s. Attendez leur connexion, ou relancez avec -force (elles seront à ré-enrôler)", strings.Join(behind, ", "))}
+		return &refusal{message: fmt.Sprintf("ces machines ont encore la clé précédente : %s. Collez-y en root « %s », ou relancez avec -force (elles seront à ré-enrôler)", strings.Join(behind, ", "), agentpolicy.ServerKeyLine(key.PublicKey()))}
 	}
 	if err := action.SaveKey(stateDir, finished); err != nil {
 		return err
@@ -150,6 +153,18 @@ func finishServerKey(ctx context.Context, stateDir *os.Root, db *store.DB, force
 	if len(behind) > 0 {
 		_, err = fmt.Fprintf(out, "À ré-enrôler : %s\n", strings.Join(behind, ", "))
 	}
+	return err
+}
+
+// printServerKey imprime l'empreinte de la clé qui signe les ordres : root la
+// compare à celle que « agent trust set server-key » imprime sur une machine,
+// jamais à celle d'un écran (R-A3-15).
+func printServerKey(stateDir *os.Root, out io.Writer) error {
+	key, err := loadServerKey(stateDir)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(out, key.Fingerprint())
 	return err
 }
 

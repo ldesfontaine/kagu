@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { pinnedKeyState, type ServerKey } from "./actions";
 
-const rotating: ServerKey = { public_key: "x", fingerprint: "SHA256:new", previous_fingerprint: "SHA256:old" };
+const rotating: ServerKey = { public_key: "x", fingerprint: "SHA256:new", previous_fingerprint: "SHA256:old", trust_line: "sudo opencloud agent trust set server-key x" };
 
 // Pendant une rotation, la clé précédente est encore bonne ; une autre ne
 // l'est pas.

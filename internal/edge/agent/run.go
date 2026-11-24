@@ -19,6 +19,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/domain/dockerwatch"
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/hostconn"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
@@ -455,20 +456,20 @@ func keepConnected(ctx context.Context, client *Client, identity Identity, pendi
 func connectOnce(ctx context.Context, client *Client, identity Identity, pending *pending, opts Options) error {
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	// La clé du serveur que le flux redit est celle épinglée en ce moment :
-	// une rotation l'a peut-être changée depuis le démarrage.
-	identity.ServerKey = pending.orders.serverKey()
-	// La politique et les ancres relues : ce qu'elles disent est rapporté à
-	// l'ouverture, et un changement plus tard rouvre le flux. Le signal d'un
-	// changement déjà rapporté ici est vidé d'abord.
+	// La politique relue : ce qu'elle dit est rapporté à l'ouverture, et un
+	// changement plus tard rouvre le flux. Le signal d'un changement déjà
+	// rapporté ici est vidé d'abord. La clé du serveur que le flux redit est
+	// celle qu'elle accepte en ce moment : « agent trust set » l'a peut-être
+	// changée depuis le démarrage.
 	select {
 	case <-pending.orders.policyChanged:
 	default:
 	}
-	applied, anchors := pending.orders.currentPolicy()
+	applied := pending.orders.currentPolicy()
+	identity.ServerKey = applied.AcceptedServerKey()
 	client.SetCapabilities(applied.Rights)
 	client.SetPolicy(applied.Source, applied.Digest)
-	client.SetAnchors(anchors)
+	client.SetAnchors(anchor.FromFile(applied.Anchors))
 	// Le compte et la machine ont pu changer depuis la dernière ouverture : un
 	// dossier rendu, un groupe docker ajouté. Les droits se jugent à neuf.
 	pending.judgeRights(streamCtx, client, applied.Rights, identity.Root(), opts.Logger)
