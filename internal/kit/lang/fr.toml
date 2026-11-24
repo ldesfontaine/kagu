@@ -2730,6 +2730,7 @@ mode_forward_done = "Derrière un SSO, en-tête d'identité %s. Sessions fermée
 sessions_closed = "Sessions fermées : %d."
 tokens_revoked = "Jetons d'API révoqués : %d."
 state_dir_open = "state_dir %s est ouvert au groupe ou aux autres (droits %s) : la base et le canal local de root y seraient à leur portée. Le serveur ne démarre pas. Fermez-le : chmod 700 %s"
+listen_without_https = "listen = \"%s\" n'est pas une adresse de boucle locale, et aucun mandataire HTTPS n'est déclaré : sans HTTPS, l'interface n'écoute que sur la machine elle-même. Le serveur ne démarre pas. Écrivez listen = \"127.0.0.1:8080\" et passez par le tunnel SSH, ou, derrière un mandataire HTTPS, public_url = \"https://<domaine>\" et trusted_proxies = [\"<adresse du mandataire>/32\"]"
 
 # L'assistant pas à pas : une étape à l'écran, puis le récapitulatif.
 [wizard]

@@ -53,9 +53,9 @@ type AuthService interface {
 	EnableForward(ctx context.Context, expected auth.State, setupCode, header string) (auth.State, error)
 	IssueSetupCode(ctx context.Context) (auth.IssuedSetupCode, error)
 	Login(ctx context.Context, expected auth.State, username, password, code string, client auth.SessionClient) (auth.OpenedSession, error)
-	ResumeSession(ctx context.Context, state auth.State, token string) (auth.Session, bool, error)
+	ResumeSession(ctx context.Context, state auth.State, token auth.PresentedToken) (auth.Session, bool, error)
 	OpenForwardSession(ctx context.Context, expected auth.State, identity string, client auth.SessionClient) (auth.OpenedSession, error)
-	ResumeForwardSession(ctx context.Context, state auth.State, token, identity string) (auth.Session, bool, error)
+	ResumeForwardSession(ctx context.Context, state auth.State, token auth.PresentedToken, identity string) (auth.Session, bool, error)
 	ClosePresentedSession(ctx context.Context, token string) error
 	SessionAlive(ctx context.Context, id string) (bool, error)
 	WatchSession(ctx context.Context, id string) (<-chan struct{}, func(), error)
@@ -402,7 +402,7 @@ func (s *Server) admitForward(w http.ResponseWriter, r *http.Request, state auth
 	identity, proven := s.checkForward(w, r, state)
 	if !proven {
 		// checkForward a répondu ; il reste à tuer le cookie présenté.
-		if err := s.auth.ClosePresentedSession(r.Context(), s.presentedSessionToken(r)); err != nil {
+		if err := s.auth.ClosePresentedSession(r.Context(), s.presentedSessionToken(r).Value); err != nil {
 			s.logger.Error("operator session not closed after a refused proxy proof", "error", err)
 		}
 		return
@@ -434,15 +434,15 @@ func (s *Server) admitForward(w http.ResponseWriter, r *http.Request, state auth
 // et pose son cookie. En HTTP clair hors de la boucle locale, aucune ne
 // s'ouvre (R-A2-4) : la garde du mandataire suffit à la requête.
 func (s *Server) openForwardSession(w http.ResponseWriter, r *http.Request, state auth.State, identity string) (auth.Session, bool, error) {
-	cookieName, canOpen := s.sessionCookieName(r)
+	cookie, canOpen := s.sessionCookieKind(r)
 	if !canOpen {
 		return auth.Session{}, false, nil
 	}
-	opened, err := s.auth.OpenForwardSession(r.Context(), state, identity, sessionClientOf(r, s.clientAddress(r)))
+	opened, err := s.auth.OpenForwardSession(r.Context(), state, identity, sessionClientOf(r, s.clientAddress(r), cookie))
 	if err != nil {
 		return auth.Session{}, false, err
 	}
-	setSessionCookie(w, cookieName, opened.Token)
+	setSessionCookie(w, cookie, opened.Token)
 	return opened.Session, true, nil
 }
 

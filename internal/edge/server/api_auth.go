@@ -221,17 +221,17 @@ func (s *Server) setupMode(w http.ResponseWriter, r *http.Request, request authS
 // s'ouvrir (R-A2-4) : le compte créé resterait sans personne pour s'y
 // connecter, et le code serait usé pour rien.
 func (s *Server) setupNative(w http.ResponseWriter, r *http.Request, request authSetupRequest) (auth.State, authViewer, bool) {
-	cookieName, ok := s.sessionCookieName(r)
+	cookie, ok := s.sessionCookieKind(r)
 	if !ok {
 		s.apiRefuse(w, http.StatusForbidden, codeHTTPSRequired)
 		return auth.State{}, authViewer{}, false
 	}
 	authorizing, _ := authorizingStateFrom(r.Context())
-	state, opened, err := s.auth.SetupNative(r.Context(), authorizing, request.SetupCode, request.Username, request.Password, sessionClientOf(r, s.clientAddress(r)))
+	state, opened, err := s.auth.SetupNative(r.Context(), authorizing, request.SetupCode, request.Username, request.Password, sessionClientOf(r, s.clientAddress(r), cookie))
 	if s.failed(w, r, err, nil) {
 		return auth.State{}, authViewer{}, false
 	}
-	setSessionCookie(w, cookieName, opened.Token)
+	setSessionCookie(w, cookie, opened.Token)
 	return state, authViewer{session: opened.ID}, true
 }
 
@@ -279,7 +279,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if !s.readAPI(w, r, &request) {
 		return
 	}
-	cookieName, ok := s.sessionCookieName(r)
+	cookie, ok := s.sessionCookieKind(r)
 	if !ok {
 		s.apiRefuse(w, http.StatusForbidden, codeHTTPSRequired)
 		return
@@ -289,7 +289,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	source := s.clientAddress(r)
 	authorizing, _ := authorizingStateFrom(r.Context())
-	opened, err := s.auth.Login(r.Context(), authorizing, request.Username, request.Password, request.Code, sessionClientOf(r, source))
+	opened, err := s.auth.Login(r.Context(), authorizing, request.Username, request.Password, request.Code, sessionClientOf(r, source, cookie))
 	switch {
 	case errors.Is(err, auth.ErrLoginFailed), errors.Is(err, auth.ErrTOTPRequired), errors.Is(err, auth.ErrTOTPWrong):
 		s.logger.Warn("interface sign-in failed", "source", source, "error", err)
@@ -316,7 +316,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if !s.closePresentedSession(w, r) {
 		return
 	}
-	setSessionCookie(w, cookieName, opened.Token)
+	setSessionCookie(w, cookie, opened.Token)
 	s.writeAPI(w, http.StatusOK, s.authJSON(authorizing, authViewer{session: opened.ID}))
 }
 
@@ -348,9 +348,10 @@ func (s *Server) closePresentedSession(w http.ResponseWriter, r *http.Request) b
 	return true
 }
 
-// sessionClientOf dit d'où vient la requête qui ouvre une session.
-func sessionClientOf(r *http.Request, source string) auth.SessionClient {
-	return auth.SessionClient{Address: source, UserAgent: r.UserAgent()}
+// sessionClientOf dit d'où vient la requête qui ouvre une session, et sous
+// quel cookie elle la portera.
+func sessionClientOf(r *http.Request, source string, cookie auth.CookieKind) auth.SessionClient {
+	return auth.SessionClient{Address: source, UserAgent: r.UserAgent(), Cookie: cookie}
 }
 
 type operatorSessionJSON struct {
@@ -452,7 +453,7 @@ func (s *Server) reauth(w http.ResponseWriter, r *http.Request) {
 	if !s.readAPI(w, r, &request) {
 		return
 	}
-	cookieName, ok := s.sessionCookieName(r)
+	cookie, ok := s.sessionCookieKind(r)
 	if !ok {
 		s.apiRefuse(w, http.StatusForbidden, codeHTTPSRequired)
 		return
@@ -466,7 +467,7 @@ func (s *Server) reauth(w http.ResponseWriter, r *http.Request) {
 	if !s.passwordAccepted(w, r, err) {
 		return
 	}
-	setSessionCookie(w, cookieName, token)
+	setSessionCookie(w, cookie, token)
 	w.WriteHeader(http.StatusNoContent)
 }
 

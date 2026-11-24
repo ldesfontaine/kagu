@@ -12,16 +12,16 @@ import (
 
 var _ auth.SessionStore = (*DB)(nil)
 
-const operatorSessionColumns = `id, identity, created_at, seen_at, expires_at, source, user_agent, reauth_at`
+const operatorSessionColumns = `id, identity, created_at, seen_at, expires_at, source, user_agent, reauth_at, cookie_kind`
 
 // CreateSession écrit la session et l'empreinte de son jeton. reauth_at reste
 // nul : la redemande le pose (RenewSessionToken, R-A2-7).
 func (db *DB) CreateSession(ctx context.Context, session auth.Session, tokenHash string) error {
 	_, err := db.sql.ExecContext(ctx, `
-		INSERT INTO operator_sessions (id, token_hash, identity, created_at, seen_at, expires_at, reauth_at, source, user_agent)
-		VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+		INSERT INTO operator_sessions (id, token_hash, identity, created_at, seen_at, expires_at, reauth_at, source, user_agent, cookie_kind)
+		VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
 		session.ID, tokenHash, session.Identity, session.CreatedAt.Unix(), session.SeenAt.Unix(), session.ExpiresAt.Unix(),
-		session.Source, session.UserAgent)
+		session.Source, session.UserAgent, string(session.Cookie))
 	if err != nil {
 		return fmt.Errorf("create operator session: %w", err)
 	}
@@ -126,13 +126,15 @@ func scanOperatorSession(row scanner) (auth.Session, error) {
 	var session auth.Session
 	var createdAt, seenAt, expiresAt int64
 	var reauthAt sql.NullInt64
-	err := row.Scan(&session.ID, &session.Identity, &createdAt, &seenAt, &expiresAt, &session.Source, &session.UserAgent, &reauthAt)
+	var cookie string
+	err := row.Scan(&session.ID, &session.Identity, &createdAt, &seenAt, &expiresAt, &session.Source, &session.UserAgent, &reauthAt, &cookie)
 	if err != nil {
 		return auth.Session{}, err
 	}
 	session.CreatedAt = time.Unix(createdAt, 0)
 	session.SeenAt = time.Unix(seenAt, 0)
 	session.ExpiresAt = time.Unix(expiresAt, 0)
+	session.Cookie = auth.CookieKind(cookie)
 	if reauthAt.Valid {
 		session.ReauthAt = time.Unix(reauthAt.Int64, 0)
 	}

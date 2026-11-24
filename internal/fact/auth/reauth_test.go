@@ -18,7 +18,7 @@ func TestReauth_RenewsTheTokenAndStampsTheSession(t *testing.T) {
 	if token == opened.Token || resumes(t, service, state, opened.Token) {
 		t.Fatal("the token presented before still opens the session")
 	}
-	session, alive, err := service.ResumeSession(context.Background(), state, token)
+	session, alive, err := service.ResumeSession(context.Background(), state, overHTTPS(token))
 	if err != nil || !alive || session.ID != opened.ID {
 		t.Fatalf("renewed session: %+v %v %v", session, alive, err)
 	}
@@ -37,7 +37,7 @@ func TestRequireFreshReauth_FiveMinutesForThisSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, _, _ := service.ResumeSession(context.Background(), state, token)
+	session, _, _ := service.ResumeSession(context.Background(), state, overHTTPS(token))
 	*now = now.Add(ReauthLifetime - time.Second)
 	if err := service.RequireFreshReauth(state, session); err != nil {
 		t.Fatalf("within five minutes: %v", err)
@@ -72,7 +72,7 @@ func TestReauth_Refusals(t *testing.T) {
 	if _, err := service.Reauth(context.Background(), state, opened.ID, "203.0.113.9", testPassword, wrongCodeAt(t, proposal.Secret, *now)); !errors.Is(err, ErrTOTPWrong) {
 		t.Fatalf("wrong code: got %v", err)
 	}
-	session, _, _ := service.ResumeSession(context.Background(), state, opened.Token)
+	session, _, _ := service.ResumeSession(context.Background(), state, overHTTPS(opened.Token))
 	if !session.ReauthAt.IsZero() {
 		t.Fatal("a refused re-authentication stamped the session")
 	}

@@ -20,7 +20,7 @@ func TestDirectoryPublicationAPI_PublishUpdateUnpublishDelete(t *testing.T) {
 	var created projectJSON
 	decodeAPI(t, recorder, &created)
 	if created.Publication == nil || created.Publication.Slug != "client-a" ||
-		created.Publication.PublicURL != "http://example.com/statut/client-a" || created.Publication.Language != "en" {
+		created.Publication.PublicURL != "https://example.com/statut/client-a" || created.Publication.Language != "en" {
 		t.Fatalf("created %+v", created)
 	}
 

@@ -35,7 +35,7 @@ func (a *recordingAlerter) lockCount() int {
 }
 
 func loginFrom(service *Service, state State, source, password, code string) error {
-	_, err := service.Login(context.Background(), state, "lucas", password, code, SessionClient{Address: source})
+	_, err := service.Login(context.Background(), state, "lucas", password, code, SessionClient{Address: source, Cookie: CookieHost})
 	return err
 }
 

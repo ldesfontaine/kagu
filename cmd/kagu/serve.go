@@ -58,6 +58,9 @@ func runServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	if cfg.ServesClearHTTPBeyondLoopback() {
+		return refuseClearListen(cfg.Listen)
+	}
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.SlogLevel()}))
 	for _, warning := range warnings {
 		logger.Warn("config", "detail", warning)

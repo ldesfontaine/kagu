@@ -86,19 +86,30 @@ func callAsWithin(ctx context.Context, server *Server, method, path, username, p
 func signInRequest(server *Server, request *http.Request, username, password string) {
 	request.Header.Set(anonymousHeader, "1")
 	if token := signIn(server, username, password); token != "" {
-		request.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: token})
+		presentOverHTTPS(request, token)
 	}
 }
 
-// signIn ouvre une session par le composant, sans passer par la route ni son
-// limiteur, et rend son jeton ; rien si la connexion est refusée.
+// presentOverHTTPS pose le jeton sous __Host- sur une requête HTTPS, la seule
+// où ce cookie se lit (R-A2-3).
+func presentOverHTTPS(request *http.Request, token string) {
+	presentCookie(request, &http.Cookie{Name: brand.SessionCookie, Value: token})
+}
+
+// signIn ouvre une session sous __Host- par le composant, sans passer par la
+// route ni son limiteur, et rend son jeton ; rien si la connexion est refusée.
 func signIn(server *Server, username, password string) string {
+	return signInUnder(server, username, password, auth.CookieHost)
+}
+
+// signInUnder ouvre une session née sous le cookie donné.
+func signInUnder(server *Server, username, password string, cookie auth.CookieKind) string {
 	ctx := context.Background()
 	state, err := server.auth.State(ctx)
 	if err != nil {
 		return ""
 	}
-	opened, err := server.auth.Login(ctx, state, username, password, "", auth.SessionClient{})
+	opened, err := server.auth.Login(ctx, state, username, password, "", auth.SessionClient{Cookie: cookie})
 	if err != nil {
 		return ""
 	}
@@ -267,7 +278,7 @@ func TestAuthNative_ASessionDoesNotCountAgainstTheLimit(t *testing.T) {
 	token := signIn(server.Server, testUsername, testPassword)
 	for i := range authAttemptBurst * 3 {
 		request := httptest.NewRequest(http.MethodGet, "/api/counts", nil)
-		request.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: token})
+		presentOverHTTPS(request, token)
 		recorder := httptest.NewRecorder()
 		server.ServeHTTP(recorder, request)
 		if recorder.Code != http.StatusOK {
@@ -414,7 +425,7 @@ func TestAuthNative_ResetPasswordOnTheSocketTakesEffectWithoutRestart(t *testing
 func callWithSession(server *Server, path, token string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(http.MethodGet, path, nil)
 	request.Header.Set(anonymousHeader, "1")
-	request.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: token})
+	presentOverHTTPS(request, token)
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	return recorder

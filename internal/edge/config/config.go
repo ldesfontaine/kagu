@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -36,8 +37,8 @@ const (
 )
 
 type Config struct {
-	// Adresse d'écoute du serveur web, hôte:port.
-	Listen string `toml:"listen" validate:"required,hostname_port"`
+	// Adresse d'écoute du serveur web, hôte:port ; une IPv6 entre crochets.
+	Listen string `toml:"listen" validate:"required"`
 	// Répertoire d'état : la base SQLite et le cache lifecycle.json.
 	StateDir string `toml:"state_dir" validate:"required"`
 	// Adresse à laquelle les machines joignent openCloud, mise dans la
@@ -134,6 +135,29 @@ func (c Config) TrustedPrefixes() []netip.Prefix {
 	return prefixes
 }
 
+// ServesClearHTTPBeyondLoopback dit si serve servirait l'interface en HTTP
+// clair hors de la machine, ce que R-CNX-5 interdit : serve ne fait pas TLS ;
+// hors de la boucle locale, l'HTTPS vient d'un mandataire, que la
+// configuration déclare par public_url en https:// et trusted_proxies. Un nom
+// d'hôte n'est pas résolu : rien ne dit qu'il reste sur la boucle.
+func (c Config) ServesClearHTTPBeyondLoopback() bool {
+	return !listensOnLoopback(c.Listen) && !c.declaresHTTPSProxy()
+}
+
+func listensOnLoopback(listen string) bool {
+	host, _, err := net.SplitHostPort(listen)
+	if err != nil {
+		return false
+	}
+	address, err := netip.ParseAddr(host)
+	return err == nil && address.Unmap().IsLoopback()
+}
+
+// declaresHTTPSProxy : public_url en https:// et un mandataire déclaré.
+func (c Config) declaresHTTPSProxy() bool {
+	return strings.HasPrefix(strings.ToLower(c.PublicURL), "https://") && len(c.TrustedProxies) > 0
+}
+
 // Lit le fichier, le valide, et renvoie les clés inconnues en avertissements.
 func Load(path string) (Config, []string, error) {
 	content, err := readFile(path)
@@ -211,7 +235,24 @@ func validate(cfg Config) error {
 	if err := validateForwardUsers(cfg.ForwardUsers); err != nil {
 		return fmt.Errorf("validate config: %w", err)
 	}
+	if err := validateListen(checker, cfg.Listen); err != nil {
+		return fmt.Errorf("validate config: listen %q: %w", cfg.Listen, err)
+	}
 	return nil
+}
+
+// validateListen admet ce qu'admet hostname_port, plus une IPv6 entre
+// crochets ([::1]:8080), que hostname_port ne connaît pas : son port se juge
+// alors seul, par la même règle.
+func validateListen(checker *validator.Validate, listen string) error {
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return err
+	}
+	if address, err := netip.ParseAddr(host); err == nil && address.Is6() {
+		return checker.Var(net.JoinHostPort("localhost", port), "hostname_port")
+	}
+	return checker.Var(listen, "hostname_port")
 }
 
 // validateForwardUsers refuse toute liste que l'opérateur n'a pas pu vouloir.

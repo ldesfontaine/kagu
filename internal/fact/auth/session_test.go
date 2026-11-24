@@ -91,6 +91,11 @@ func (m *memoryStore) RenewSessionToken(_ context.Context, id, tokenHash string,
 
 const testPassword = "correct horse battery"
 
+// overHTTPS présente le jeton sous __Host-, le cookie des sessions du banc.
+func overHTTPS(token string) PresentedToken {
+	return PresentedToken{Value: token, Cookie: CookieHost}
+}
+
 // signedIn rend un service en native, son état, une horloge réglable et une
 // session ouverte par la connexion.
 func signedIn(t *testing.T) (*Service, *memoryStore, State, *time.Time, OpenedSession) {
@@ -99,7 +104,7 @@ func signedIn(t *testing.T) (*Service, *memoryStore, State, *time.Time, OpenedSe
 	now := time.Unix(1_800_000_000, 0)
 	service.SetClock(func() time.Time { return now })
 	state := newNativeState(t, service)
-	opened, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{Address: "2001:db8:1:2:3:4:5:6", UserAgent: "Firefox"})
+	opened, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{Address: "2001:db8:1:2:3:4:5:6", UserAgent: "Firefox", Cookie: CookieHost})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +113,7 @@ func signedIn(t *testing.T) (*Service, *memoryStore, State, *time.Time, OpenedSe
 
 func resumes(t *testing.T, service *Service, state State, token string) bool {
 	t.Helper()
-	_, alive, err := service.ResumeSession(context.Background(), state, token)
+	_, alive, err := service.ResumeSession(context.Background(), state, overHTTPS(token))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,18 +141,18 @@ func TestLogin_RefusesWrongCredentialsAndOtherModes(t *testing.T) {
 	service, store, state, _, _ := signedIn(t)
 	ctx := context.Background()
 	for _, credentials := range [][2]string{{"lucas", "a wrong passphrase"}, {"other", testPassword}, {"", ""}} {
-		if _, err := service.Login(ctx, state, credentials[0], credentials[1], "", SessionClient{}); !errors.Is(err, ErrLoginFailed) {
+		if _, err := service.Login(ctx, state, credentials[0], credentials[1], "", SessionClient{Cookie: CookieHost}); !errors.Is(err, ErrLoginFailed) {
 			t.Fatalf("%q: %v, want ErrLoginFailed", credentials, err)
 		}
 	}
 	if len(store.sessions) != 1 {
 		t.Fatalf("%d sessions after the refusals", len(store.sessions))
 	}
-	if _, err := service.Login(ctx, none, "lucas", testPassword, "", SessionClient{}); !errors.Is(err, ErrStateChanged) {
+	if _, err := service.Login(ctx, none, "lucas", testPassword, "", SessionClient{Cookie: CookieHost}); !errors.Is(err, ErrStateChanged) {
 		t.Fatalf("stale state: %v", err)
 	}
 	other, _ := newTestService(t)
-	if _, err := other.Login(ctx, none, "lucas", testPassword, "", SessionClient{}); !errors.Is(err, ErrDisabled) {
+	if _, err := other.Login(ctx, none, "lucas", testPassword, "", SessionClient{Cookie: CookieHost}); !errors.Is(err, ErrDisabled) {
 		t.Fatalf("mode none: %v", err)
 	}
 }
@@ -155,7 +160,7 @@ func TestLogin_RefusesWrongCredentialsAndOtherModes(t *testing.T) {
 // Deux connexions donnent deux sessions et deux jetons : rien n'est repris.
 func TestLogin_DrawsAFreshSessionEachTime(t *testing.T) {
 	service, store, state, _, first := signedIn(t)
-	second, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{})
+	second, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{Cookie: CookieHost})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +200,7 @@ func TestResumeSession_RefusesAnotherAccountAndUnknownTokens(t *testing.T) {
 // Changer le mot de passe ferme les autres sessions, pas celle qui le change.
 func TestChangePassword_ClosesTheOtherSessions(t *testing.T) {
 	service, _, state, _, kept := signedIn(t)
-	other, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{})
+	other, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{Cookie: CookieHost})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +216,7 @@ func TestChangePassword_ClosesTheOtherSessions(t *testing.T) {
 // Le navigateur se garde nettoyé et borné.
 func TestLogin_BoundsTheUserAgent(t *testing.T) {
 	service, store, state, _, _ := signedIn(t)
-	if _, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{UserAgent: "a\u202eb" + strings.Repeat("x", 500)}); err != nil {
+	if _, err := service.Login(context.Background(), state, "lucas", testPassword, "", SessionClient{UserAgent: "a\u202eb" + strings.Repeat("x", 500), Cookie: CookieHost}); err != nil {
 		t.Fatal(err)
 	}
 	stored := store.sessions[1].UserAgent
@@ -276,7 +281,7 @@ func TestWatchSession_EndsWithEachDeathOfItsSession(t *testing.T) {
 	for name, die := range deaths {
 		t.Run(name, func(t *testing.T) {
 			service, _, state, _, watched := signedIn(t)
-			kept, err := service.Login(ctx, state, "lucas", testPassword, "", SessionClient{})
+			kept, err := service.Login(ctx, state, "lucas", testPassword, "", SessionClient{Cookie: CookieHost})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -354,7 +359,7 @@ func forwardService(t *testing.T) (*Service, *memoryStore, State, OpenedSession)
 	if err != nil {
 		t.Fatal(err)
 	}
-	opened, err := service.OpenForwardSession(context.Background(), state, "lucas", SessionClient{Address: "192.0.2.7"})
+	opened, err := service.OpenForwardSession(context.Background(), state, "lucas", SessionClient{Address: "192.0.2.7", Cookie: CookieHost})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,20 +371,20 @@ func forwardService(t *testing.T) (*Service, *memoryStore, State, OpenedSession)
 func TestResumeForwardSession_AnotherIdentityKillsTheSession(t *testing.T) {
 	service, store, state, opened := forwardService(t)
 	ctx := context.Background()
-	if _, alive, err := service.ResumeForwardSession(ctx, state, opened.Token, "lucas"); err != nil || !alive {
+	if _, alive, err := service.ResumeForwardSession(ctx, state, overHTTPS(opened.Token), "lucas"); err != nil || !alive {
 		t.Fatalf("same identity: %v %v", alive, err)
 	}
-	if _, alive, err := service.ResumeSession(ctx, state, opened.Token); err != nil || alive {
+	if _, alive, err := service.ResumeSession(ctx, state, overHTTPS(opened.Token)); err != nil || alive {
 		t.Fatalf("a forward session resumed as a native one: %v %v", alive, err)
 	}
 	ended := watch(t, service, opened.ID)
-	if _, alive, err := service.ResumeForwardSession(ctx, state, opened.Token, "mallory"); !errors.Is(err, ErrSessionIdentityChanged) || alive {
+	if _, alive, err := service.ResumeForwardSession(ctx, state, overHTTPS(opened.Token), "mallory"); !errors.Is(err, ErrSessionIdentityChanged) || alive {
 		t.Fatalf("another identity: %v %v", alive, err)
 	}
 	if len(store.sessions) != 0 || !isEnded(ended) {
 		t.Fatalf("%d sessions, ended %v", len(store.sessions), isEnded(ended))
 	}
-	if _, alive, err := service.ResumeForwardSession(ctx, state, opened.Token, "lucas"); err != nil || alive {
+	if _, alive, err := service.ResumeForwardSession(ctx, state, overHTTPS(opened.Token), "lucas"); err != nil || alive {
 		t.Fatalf("the killed session came back: %v %v", alive, err)
 	}
 }
@@ -389,11 +394,11 @@ func TestResumeForwardSession_AnotherIdentityKillsTheSession(t *testing.T) {
 func TestForwardSessions_OpenUnderForwardOnlyAndDieWithoutTheProof(t *testing.T) {
 	service, store, state, opened := forwardService(t)
 	ctx := context.Background()
-	if _, err := service.OpenForwardSession(ctx, none, "lucas", SessionClient{}); !errors.Is(err, ErrStateChanged) {
+	if _, err := service.OpenForwardSession(ctx, none, "lucas", SessionClient{Cookie: CookieHost}); !errors.Is(err, ErrStateChanged) {
 		t.Fatalf("stale state: %v", err)
 	}
 	native, _, nativeState, _, _ := signedIn(t)
-	if _, err := native.OpenForwardSession(ctx, nativeState, "lucas", SessionClient{}); !errors.Is(err, ErrDisabled) {
+	if _, err := native.OpenForwardSession(ctx, nativeState, "lucas", SessionClient{Cookie: CookieHost}); !errors.Is(err, ErrDisabled) {
 		t.Fatalf("native: %v", err)
 	}
 	if err := service.ClosePresentedSession(ctx, strings.Repeat("0", 64)); err != nil || len(store.sessions) != 1 {
@@ -403,7 +408,28 @@ func TestForwardSessions_OpenUnderForwardOnlyAndDieWithoutTheProof(t *testing.T)
 	if err := service.ClosePresentedSession(ctx, opened.Token); err != nil || len(store.sessions) != 0 || !isEnded(ended) {
 		t.Fatalf("%v, %d sessions, ended %v", err, len(store.sessions), isEnded(ended))
 	}
-	if _, alive, _ := service.ResumeForwardSession(ctx, state, opened.Token, "lucas"); alive {
+	if _, alive, _ := service.ResumeForwardSession(ctx, state, overHTTPS(opened.Token), "lucas"); alive {
 		t.Fatal("the closed session came back")
+	}
+}
+
+// R-A2-3 : présenté sous un autre cookie que celui de sa naissance, le jeton
+// n'ouvre rien et sa session meurt ; en forward aussi, sans erreur : la garde
+// a admis la requête, une session neuve s'ouvre sous le bon cookie.
+func TestR_A2_3_AnotherCookieKillsTheSession(t *testing.T) {
+	service, store, state, _, signedInSession := signedIn(t)
+	if _, alive, err := service.ResumeSession(context.Background(), state, PresentedToken{Value: signedInSession.Token, Cookie: CookieLocal}); err != nil || alive {
+		t.Fatalf("a __Host- session resumed under the local cookie: %v %v", alive, err)
+	}
+	if len(store.sessions) != 0 || resumes(t, service, state, signedInSession.Token) {
+		t.Fatal("the session survived its token under another cookie")
+	}
+
+	forward, forwardStore, forwardState, opened := forwardService(t)
+	if _, alive, err := forward.ResumeForwardSession(context.Background(), forwardState, PresentedToken{Value: opened.Token, Cookie: CookieLocal}, "lucas"); err != nil || alive {
+		t.Fatalf("forward: a __Host- session resumed under the local cookie: %v %v", alive, err)
+	}
+	if len(forwardStore.sessions) != 0 {
+		t.Fatal("forward: the session survived its token under another cookie")
 	}
 }

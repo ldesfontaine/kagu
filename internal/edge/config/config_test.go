@@ -277,3 +277,53 @@ func TestParse_AccountLimits_ABadValueStopsTheStart(t *testing.T) {
 		}
 	}
 }
+
+// R-CNX-5 : sans mandataire HTTPS déclaré, serve n'écoute que sur la boucle
+// locale. setup --domain (listen sur docker0) et une installation derrière
+// son mandataire démarrent ; public_url en http:// ne déclare pas d'HTTPS.
+func TestR_CNX_5_ServeListensOnLoopbackWithoutAnHTTPSProxy(t *testing.T) {
+	const proxied = "public_url = \"https://kagu.example.org\"\ntrusted_proxies = [\"172.30.0.2/32\"]\n"
+	cases := []struct {
+		name    string
+		content string
+		starts  bool
+	}{
+		{"every IPv4 address", "listen = \"0.0.0.0:8080\"\n", false},
+		{"a public address", "listen = \"192.0.2.1:8080\"\n", false},
+		{"every IPv6 address", "listen = \"[::]:8080\"\n", false},
+		{"every address, no host", "listen = \":8080\"\n", false},
+		{"a host name", "listen = \"kagu.example.org:8080\"\n", false},
+		{"docker0 without a proxy", "listen = \"172.17.0.1:8080\"\n", false},
+		{"https but no proxy", "listen = \"0.0.0.0:8080\"\npublic_url = \"https://kagu.example.org\"\n", false},
+		{"a proxy over http", "listen = \"172.17.0.1:8080\"\npublic_url = \"http://kagu.example.org\"\ntrusted_proxies = [\"172.30.0.2/32\"]\n", false},
+		{"the default", "", true},
+		{"IPv4 loopback", "listen = \"127.0.0.1:8080\"\n", true},
+		{"IPv6 loopback", "listen = \"[::1]:8080\"\n", true},
+		{"docker0 behind its HTTPS proxy", "listen = \"172.17.0.1:8080\"\n" + proxied, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg, _, err := Parse([]byte(c.content))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if refused := cfg.ServesClearHTTPBeyondLoopback(); refused == c.starts {
+				t.Fatalf("listen %q refused: %v, want %v", cfg.Listen, refused, !c.starts)
+			}
+		})
+	}
+}
+
+// listen admet une IPv6 entre crochets ; un port faux ou absent reste refusé.
+func TestParse_ListenTakesABracketedIPv6(t *testing.T) {
+	for _, listen := range []string{"[::1]:8080", "[::]:8080", "127.0.0.1:8080", "kagu.example.org:8080"} {
+		if _, _, err := Parse([]byte("listen = \"" + listen + "\"\n")); err != nil {
+			t.Errorf("%s refused: %v", listen, err)
+		}
+	}
+	for _, listen := range []string{"8080", "[::1]", "[::1]:99999", "[::1]:port", "127.0.0.1:0x50", "::1:8080"} {
+		if _, _, err := Parse([]byte("listen = \"" + listen + "\"\n")); err == nil {
+			t.Errorf("%s accepted", listen)
+		}
+	}
+}

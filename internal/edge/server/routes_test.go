@@ -111,54 +111,73 @@ const anonymousHeader = "X-Test-Anonymous"
 
 // asOperator pose le cookie d'une session du compte de test sur une requête
 // qui ne porte ni Authorization (un Bearer d'API, par exemple) ni cookie. Les
-// routes ouvertes l'ignorent.
+// routes ouvertes l'ignorent. Comme un navigateur : d'un client de boucle
+// locale en HTTP (le banc e2e, le tunnel), le cookie local ; d'ailleurs,
+// __Host- sur HTTPS (R-A2-3).
 func (ts *testServer) asOperator(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		anonymous := r.Header.Get(anonymousHeader) != ""
 		r.Header.Del(anonymousHeader)
 		if !anonymous && r.Header.Get("Authorization") == "" && r.Header.Get("Cookie") == "" {
-			if token := ts.operatorToken(); token != "" {
-				r.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: token})
-			}
+			ts.presentOperatorSession(r)
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
+func (ts *testServer) presentOperatorSession(r *http.Request) {
+	cookie, ok := ts.sessionCookieKind(r)
+	if !ok {
+		overHTTPS(r)
+		cookie = auth.CookieHost
+	}
+	if token := ts.operatorToken(cookie); token != "" {
+		r.AddCookie(&http.Cookie{Name: sessionCookieName(cookie), Value: token})
+	}
+}
+
 // testSessionID et testSessionToken sont la session que le banc pose : fixes,
 // pour que les réponses figées qui nomment l'opérateur (operator:<session>)
-// le restent.
+// le restent. Elle naît sous __Host- ; celle du cookie local (le banc e2e, sur
+// la boucle locale) est à part : un jeton présenté sous l'autre cookie tue sa
+// session (R-A2-3).
 const (
-	testSessionID    = "5e55105e55105e55"
-	testSessionToken = "7e57" + "000000000000000000000000000000000000000000000000000000000000"
+	testSessionID         = "5e55105e55105e55"
+	testSessionToken      = "7e57" + "000000000000000000000000000000000000000000000000000000000000"
+	testLocalSessionID    = "10ca110ca110ca11"
+	testLocalSessionToken = "10ca" + "000000000000000000000000000000000000000000000000000000000000"
 )
 
-// operatorToken rend le jeton de la session du banc, rouverte quand elle est
-// morte (accès désactivé puis recréé, autres sessions fermées) ; rien quand le
-// compte de test ne se connecte plus (mot de passe changé, autre mode), comme
-// Basic n'ouvrait plus rien.
-func (ts *testServer) operatorToken() string {
+// operatorToken rend le jeton de la session du banc née sous cookie, rouverte
+// quand elle est morte (accès désactivé puis recréé, autres sessions fermées) ;
+// rien quand le compte de test ne se connecte plus (mot de passe changé, autre
+// mode), comme Basic n'ouvrait plus rien.
+func (ts *testServer) operatorToken(cookie auth.CookieKind) string {
 	ts.sessionMu.Lock()
 	defer ts.sessionMu.Unlock()
+	id, token := testSessionID, testSessionToken
+	if cookie == auth.CookieLocal {
+		id, token = testLocalSessionID, testLocalSessionToken
+	}
 	ctx := context.Background()
 	state, err := ts.operator.State(ctx)
 	if err != nil || state.Mode != auth.ModeNative {
 		return ""
 	}
-	if _, alive, _ := ts.operator.ResumeSession(ctx, state, testSessionToken); alive {
-		return testSessionToken
+	if _, alive, _ := ts.operator.ResumeSession(ctx, state, auth.PresentedToken{Value: token, Cookie: cookie}); alive {
+		return token
 	}
 	if verified, err := ts.operator.Verify(ctx, state, testUsername, testPassword); err != nil || !verified {
 		return ""
 	}
-	if _, err := ts.db.DeleteSession(ctx, testSessionID); err != nil {
+	if _, err := ts.db.DeleteSession(ctx, id); err != nil {
 		return ""
 	}
-	session := auth.Session{ID: testSessionID, Identity: testUsername, CreatedAt: testNow, SeenAt: testNow, ExpiresAt: testNow.Add(auth.SessionLifetime)}
-	if err := ts.db.CreateSession(ctx, session, ident.HashToken(testSessionToken)); err != nil {
+	session := auth.Session{ID: id, Identity: testUsername, CreatedAt: testNow, SeenAt: testNow, ExpiresAt: testNow.Add(auth.SessionLifetime), Cookie: cookie}
+	if err := ts.db.CreateSession(ctx, session, ident.HashToken(token)); err != nil {
 		return ""
 	}
-	return testSessionToken
+	return token
 }
 
 // newFirstSetupServer est une installation neuve : mode none, aucun compte,

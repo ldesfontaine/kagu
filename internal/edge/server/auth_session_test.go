@@ -34,6 +34,15 @@ func overHTTPS(request *http.Request) {
 	request.TLS = &tls.ConnectionState{}
 }
 
+// presentCookie joint le cookie comme un navigateur : __Host- ne part que sur
+// HTTPS (R-A2-3), la requête l'est donc.
+func presentCookie(request *http.Request, cookie *http.Cookie) {
+	if cookie.Name == brand.SessionCookie {
+		overHTTPS(request)
+	}
+	request.AddCookie(cookie)
+}
+
 func fromLoopback(request *http.Request) {
 	request.RemoteAddr = "127.0.0.1:41000"
 }
@@ -54,7 +63,7 @@ func readWith(server *Server, path string, cookie *http.Cookie, peer string) *ht
 	request := httptest.NewRequest(http.MethodGet, path, nil)
 	request.Header.Set(anonymousHeader, "1")
 	request.RemoteAddr = peer
-	request.AddCookie(cookie)
+	presentCookie(request, cookie)
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	return recorder
@@ -110,7 +119,7 @@ func TestR_CNX_1_ABasicHeaderIsIgnored(t *testing.T) {
 	token := signIn(server.Server, testUsername, testPassword)
 	request := httptest.NewRequest(http.MethodGet, "/api/counts", nil)
 	request.SetBasicAuth("someone", "anything")
-	request.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: token})
+	presentOverHTTPS(request, token)
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
@@ -170,7 +179,7 @@ func TestR_A2_2_ASessionDiesIdleAfterTwoHoursAndAtTwelve(t *testing.T) {
 		request := httptest.NewRequest(http.MethodPost, "/api/auth/logout", strings.NewReader(`{}`))
 		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		request.Header.Set("Content-Type", "application/json")
-		request.AddCookie(cookie)
+		presentCookie(request, cookie)
 		recorder := httptest.NewRecorder()
 		server.ServeHTTP(recorder, request)
 		if recorder.Code != http.StatusNoContent {
@@ -266,7 +275,7 @@ func TestR_A2_3_TheLocalCookieOnlyFromLoopback(t *testing.T) {
 	server := newFirstSetupServer(t)
 	server.enableNative(t)
 	server.trustedProxies = parsePrefixes(t, "127.0.0.1/32")
-	local := &http.Cookie{Name: brand.LocalSessionCookie, Value: signIn(server.Server, testUsername, testPassword)}
+	local := &http.Cookie{Name: brand.LocalSessionCookie, Value: signInUnder(server.Server, testUsername, testPassword, auth.CookieLocal)}
 
 	for _, peer := range []string{"127.0.0.1:41000", "[::1]:41000"} {
 		if got := readWith(server.Server, "/api/counts", local, peer); got.Code != http.StatusOK {
@@ -292,6 +301,90 @@ func TestR_A2_3_TheLocalCookieOnlyFromLoopback(t *testing.T) {
 		if recorder.Code != http.StatusUnauthorized {
 			t.Errorf("local cookie from %s: %d, want 401", name, recorder.Code)
 		}
+	}
+}
+
+// R-A2-3 : une session ne se reprend que sous le cookie où elle est née, et
+// __Host- ne se lit que sur HTTPS. E02-07 : un jeton né sous le cookie local,
+// renommé __Host-, ouvrait /api/machines d'une autre machine en HTTP clair.
+func TestR_A2_3_ASessionOnlyResumesUnderTheCookieItWasBornUnder(t *testing.T) {
+	server := newFirstSetupServer(t)
+	server.enableNative(t)
+	server.trustedProxies = parsePrefixes(t, "127.0.0.1/32")
+	proxiedOver := func(scheme string) func(*http.Request) {
+		return func(request *http.Request) {
+			fromLoopback(request)
+			request.Header.Set("X-Forwarded-For", "198.51.100.7")
+			request.Header.Set("X-Forwarded-Proto", scheme)
+		}
+	}
+	remoteOverHTTP := func(*http.Request) {}
+	// Chaque cas a sa session : un jeton présenté sous un autre cookie la tue.
+	refused := []struct {
+		name      string
+		born      auth.CookieKind
+		presented string
+		shape     func(*http.Request)
+	}{
+		{"E02-07: a local token renamed __Host-, from a remote peer over HTTP", auth.CookieLocal, brand.SessionCookie, remoteOverHTTP},
+		{"a local token renamed __Host-, through a proxy over HTTP", auth.CookieLocal, brand.SessionCookie, proxiedOver("http")},
+		{"a __Host- token renamed local, from loopback", auth.CookieHost, brand.LocalSessionCookie, fromLoopback},
+		{"a __Host- token under its name, from a remote peer over HTTP", auth.CookieHost, brand.SessionCookie, remoteOverHTTP},
+	}
+	for _, c := range refused {
+		token := signInUnder(server.Server, testUsername, testPassword, c.born)
+		request := httptest.NewRequest(http.MethodGet, "/api/machines", nil)
+		request.Header.Set(anonymousHeader, "1")
+		request.AddCookie(&http.Cookie{Name: c.presented, Value: token})
+		c.shape(request)
+		recorder := httptest.NewRecorder()
+		server.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusUnauthorized {
+			t.Errorf("%s: %d, want 401", c.name, recorder.Code)
+		}
+	}
+	local := &http.Cookie{Name: brand.LocalSessionCookie, Value: signInUnder(server.Server, testUsername, testPassword, auth.CookieLocal)}
+	if got := readWith(server.Server, "/api/machines", local, "127.0.0.1:41000"); got.Code != http.StatusOK {
+		t.Fatalf("a local token under its name, from loopback: %d", got.Code)
+	}
+	if got := callWithSession(server.Server, "/api/machines", signIn(server.Server, testUsername, testPassword)); got.Code != http.StatusOK {
+		t.Fatalf("a __Host- token under its name, over HTTPS: %d", got.Code)
+	}
+	proxied := httptest.NewRequest(http.MethodGet, "/api/machines", nil)
+	proxied.Header.Set(anonymousHeader, "1")
+	proxiedOver("https")(proxied)
+	proxied.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: signIn(server.Server, testUsername, testPassword)})
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, proxied)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("a __Host- token under its name, through a proxy over HTTPS: %d", recorder.Code)
+	}
+}
+
+// R-A2-3 : le nom ne suffit pas. Un jeton local recopié sous __Host- et
+// présenté en HTTPS (par le mandataire) n'ouvre rien, et la session meurt :
+// celui qui l'a recopié ne la reprend pas non plus sous son vrai nom.
+func TestR_A2_3_ATokenUnderAnotherCookieKillsItsSession(t *testing.T) {
+	server := newFirstSetupServer(t)
+	server.enableNative(t)
+	server.trustedProxies = parsePrefixes(t, "127.0.0.1/32")
+	bornLocal := signInUnder(server.Server, testUsername, testPassword, auth.CookieLocal)
+	request := httptest.NewRequest(http.MethodGet, "/api/machines", nil)
+	request.Header.Set(anonymousHeader, "1")
+	fromLoopback(request)
+	request.Header.Set("X-Forwarded-Proto", "https")
+	request.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: bornLocal})
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("a local token under __Host- over HTTPS: %d, want 401", recorder.Code)
+	}
+	if sessions := server.countSessions(t); sessions != 0 {
+		t.Fatalf("%d sessions left after a token came under another cookie", sessions)
+	}
+	local := &http.Cookie{Name: brand.LocalSessionCookie, Value: bornLocal}
+	if got := readWith(server.Server, "/api/machines", local, "127.0.0.1:41000"); got.Code != http.StatusUnauthorized {
+		t.Fatalf("the killed session resumed under its name: %d", got.Code)
 	}
 }
 
@@ -381,7 +474,7 @@ func TestR_A2_9_ChangingThePasswordClosesTheOtherSessions(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPut, "/api/auth/password", strings.NewReader(changePasswordBody(testPassword, changedPassword)))
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")
-	request.AddCookie(kept)
+	presentCookie(request, kept)
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
@@ -425,7 +518,7 @@ func TestAuthSessions_ListCloseAndCloseOthers(t *testing.T) {
 		request := httptest.NewRequest(method, path, strings.NewReader(`{}`))
 		request.Header.Set("Sec-Fetch-Site", "same-origin")
 		request.Header.Set("Content-Type", "application/json")
-		request.AddCookie(mine)
+		presentCookie(request, mine)
 		recorder := httptest.NewRecorder()
 		server.ServeHTTP(recorder, request)
 		return recorder
