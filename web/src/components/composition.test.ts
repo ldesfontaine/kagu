@@ -97,9 +97,8 @@ const toneTableCeilings: Record<string, number> = {
   "components/MachineSSHKeys.tsx": 1,
   "components/MachineStorage.tsx": 1,
   "components/PlanView.tsx": 1,
-  "pages/backups/DatabaseSetup.tsx": 1,
   "pages/backups/Restore.tsx": 1,
-  "pages/backups/Targets.tsx": 2,
+  "pages/backups/Targets.tsx": 1,
   "pages/settings/AIAgentSection.tsx": 1,
   "pages/settings/MutesBlock.tsx": 1,
 };

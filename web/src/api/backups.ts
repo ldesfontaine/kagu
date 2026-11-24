@@ -2,6 +2,7 @@ import { useResource, type Resource } from "../hooks/useResource";
 import { api, type RefusalFix } from "./client";
 import { route } from "./routes";
 import type { ActionRun } from "./actions";
+import type { RightState } from "./machines";
 
 // Les sauvegardes : la clé, les destinations, les plans et le dernier ordre
 // de chacun. Sujets du direct : « backups » et « actions » (l'état d'une
@@ -15,19 +16,13 @@ export interface BackupKeyring {
   created_at: string;
 }
 
-// ok : l'agent a rapporté un droit qui couvre le dossier ; missing : il en
-// a rapporté et aucun ne le couvre ; unavailable : le droit couvre le dossier
-// mais le compte de l'agent ne peut pas l'exercer (right_reason dit pourquoi) ;
-// unknown : il n'a rien rapporté encore.
-export type BackupRight = "ok" | "missing" | "unavailable" | "unknown";
-
 export interface BackupDestination {
   id: string;
   name: string;
   machine_id: string;
   machine_name: string;
   path: string;
-  right: BackupRight;
+  right: RightState;
   // La raison de « unavailable » ; absente sinon.
   right_reason?: string;
   created_at: string;
@@ -195,7 +190,7 @@ export interface BackupVerify {
   snapshots: number;
   files: number;
   bytes: number;
-  right: "ok" | "missing" | "unavailable" | "unknown";
+  right: RightState;
   right_reason: string;
   stale: boolean;
 }
@@ -251,21 +246,12 @@ export interface BackupSource {
   protections: BackupProtection[];
 }
 
-// restic : un rest-server d'openCloud ; storage : un stockage Proxmox ;
-// destination : la destination d'un plan d'archives.
-type BackupTargetKind = "restic" | "storage" | "destination";
-
-export interface BackupTarget {
+interface BackupTargetFacts {
   key: string;
-  kind: BackupTargetKind;
   name: string;
   machine_id: string;
   machine_name: string;
   online: boolean;
-  // restic : running, stopped, error (reason binary_missing : rest-server
-  // manque), pending ; storage : active, inactive ; destination : l'état du
-  // droit de l'agent.
-  state: string;
   reason: string;
   host: string;
   port: number;
@@ -285,9 +271,35 @@ export interface BackupTarget {
   holds: string[];
 }
 
+// L'état d'un rest-server d'openCloud : « pending » tant que son agent n'a rien
+// rapporté (restic.targetPending) ; les trois autres viennent de l'agent
+// (agentwire.ResticTargetRunning, Stopped, Error). Pour error, reason dit
+// pourquoi (binary_missing : rest-server manque).
+type ResticTargetState = "running" | "stopped" | "error" | "pending";
+
+// Chaque sorte porte son état : le test de kind réduit celui qu'on lit.
+export interface ResticTarget extends BackupTargetFacts {
+  kind: "restic";
+  state: ResticTargetState;
+}
+
+// Un stockage de Proxmox : actif ou non (restic.targetsOf).
+export interface StorageTarget extends BackupTargetFacts {
+  kind: "storage";
+  state: "active" | "inactive";
+}
+
+// La destination d'un plan d'archives : l'état du droit de l'agent.
+export interface DestinationTarget extends BackupTargetFacts {
+  kind: "destination";
+  state: RightState;
+}
+
+export type BackupTarget = ResticTarget | StorageTarget | DestinationTarget;
+
 export interface BackupMachineRight {
   right: string;
-  state: BackupRight;
+  state: RightState;
   reason: string;
   // Le dossier du droit restic.target.
   path: string;

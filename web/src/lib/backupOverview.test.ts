@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { BackupMachine, BackupOverview, BackupPath, BackupProtection, BackupRetention, BackupSource, BackupTarget, BackupVerify } from "../api/backups";
+import type { BackupMachine, BackupOverview, BackupPath, BackupProtection, BackupRetention, BackupSource, ResticTarget, BackupVerify } from "../api/backups";
 import type { Translate } from "../i18n/context";
 import {
   candidatesFor,
@@ -107,7 +107,7 @@ const machine = (id: string, rights: BackupMachine["rights"], overrides: Partial
   ...overrides,
 });
 
-const target = (overrides: Partial<BackupTarget> = {}): BackupTarget => ({
+const target = (overrides: Partial<ResticTarget> = {}): ResticTarget => ({
   key: "restic:pi",
   kind: "restic",
   name: "pi",

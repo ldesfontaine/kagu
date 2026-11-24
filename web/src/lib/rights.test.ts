@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import { ApiError } from "../api/client";
 import type { Agent, Capability, Machine, RightFit } from "../api/machines";
 import sessionGolden from "../../../internal/edge/server/testdata/session.golden.json";
-import { fixOfRefusal, heldRights, lacksSudo, machineAgentPath, reenrollPath, unfitFor, wantedRightOf } from "./rights";
+import { fixOfRefusal, heldRights, lacksSudo, machineAgentPath, reenrollPath, rightTones, unfitFor, wantedRightOf } from "./rights";
 
 const t = (key: string, ...args: (string | number)[]) => [key, ...args].join("|");
 
@@ -102,4 +102,9 @@ test("lacksSudo : un hôte Proxmox, ou un agent qui dit que sudo manque", () => 
   expect(lacksSudo({ ...base, roles: [{ name: "proxmox_ve", version: "8.2" }] })).toBe(true);
   expect(lacksSudo({ ...base, agent: agentWith([], [{ name: "backup.produce", unavailable: "sudo_missing" }]) })).toBe(true);
   expect(lacksSudo({ ...base, agent: null })).toBe(false);
+});
+
+// Les quatre états que le serveur rend (agentpolicy.Fit), chacun avec son ton.
+test("rightTones gives each state the server renders its tone", () => {
+  expect(rightTones).toEqual({ ok: "ok", missing: "danger", unavailable: "warn", unknown: "neutral" });
 });
