@@ -95,17 +95,17 @@ test("unavailableRights : seuls les droits que le compte ne peut pas exercer, av
   const agent = {
     run_as: { uid: 998, name: "svc" },
     capabilities: [
-      { name: "observe", paths: [], unavailable: "" },
-      { name: "docker.deploy", paths: [], unavailable: "docker_denied" },
-      { name: "backup.receive", paths: ["/srv/backups"], unavailable: "path_denied" },
-      { name: "agent.update", paths: [], unavailable: "" },
+      { name: "observe", paths: [], unavailable: "", until: null },
+      { name: "docker.deploy", paths: [], unavailable: "docker_denied", until: null },
+      { name: "backup.receive", paths: ["/srv/backups"], unavailable: "path_denied", until: null },
+      { name: "agent.update", paths: [], unavailable: "", until: null },
     ],
   };
   expect(unavailableRights(t, agent)).toEqual([
     "machine.capability_unavailable_item:machine.capability_docker_deploy:machine.capability_unavailable_docker_denied",
     "machine.capability_unavailable_item:machine.right_with_paths:machine.capability_backup_receive:/srv/backups:machine.capability_unavailable_path_denied:svc",
   ]);
-  expect(unavailableRights(t, { run_as: null, capabilities: [{ name: "observe", paths: [], unavailable: "" }] })).toEqual([]);
+  expect(unavailableRights(t, { run_as: null, capabilities: [{ name: "observe", paths: [], unavailable: "", until: null }] })).toEqual([]);
 });
 
 test("les droits Proxmox suivent files.write, sans chemin, et ne se proposent qu'à un hôte Proxmox reconnu", () => {

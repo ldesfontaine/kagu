@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/registry"
 )
@@ -28,7 +29,7 @@ func CurrentAccount() machine.Account {
 func accountOf(euid int, lookup lookupUser) machine.Account {
 	account := machine.Account{UID: int64(euid)}
 	found, err := lookup(strconv.Itoa(euid))
-	if err == nil && machine.IsAccountName(found.Username) {
+	if err == nil && agentpolicy.IsAccountName(found.Username) {
 		account.Name = found.Username
 	}
 	return account

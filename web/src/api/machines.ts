@@ -79,9 +79,11 @@ export interface Capability {
 
 // Un droit tel que l'agent le rapporte : unavailable dit pourquoi son compte
 // ne peut pas l'exercer sur la machine (vide quand il le peut). Le droit coché
-// reste coché : l'agent refusera l'ordre, avec cette raison.
+// reste coché : l'agent refusera l'ordre, avec cette raison. until est
+// l'échéance d'un droit à durée (R-A3-5), null sans échéance.
 export interface ReportedCapability extends Capability {
   unavailable: string;
+  until: string | null;
 }
 
 // Le compte système sous lequel l'agent tourne ; name est vide quand il n'a

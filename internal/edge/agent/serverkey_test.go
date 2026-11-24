@@ -292,7 +292,7 @@ func TestR_A3_16_AV2MachineNeverReadsIdentityRights(t *testing.T) {
 	}
 	// Un dossier sans fichier ne se remplit pas non plus par « agent grant » : la
 	// première politique part d'observe seul.
-	change, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}}, accept)
+	change, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}}, agentpolicy.Term{}, accept)
 	if err != nil || !change.First || agentpolicy.FormatCapabilities(change.After.Rights) != "observe,probe.lan" || len(change.After.ServerKeys) != 0 {
 		t.Fatalf("grant on an empty directory: %+v %v", change, err)
 	}
@@ -316,7 +316,7 @@ func TestMigratePolicy_CopiesRightsAnchorsAndKeyThenErasesThem(t *testing.T) {
 		t.Fatal(err)
 	}
 	opts := PolicyOptions{StateDir: b.stateDir, StatePath: b.stateDir.Name(), Place: legacyPolicyPlace(t), EUID: 0}
-	if _, err := GrantRights(opts, nil, accept); !errors.Is(err, ErrNotMigrated) {
+	if _, err := GrantRights(opts, nil, agentpolicy.Term{}, accept); !errors.Is(err, ErrNotMigrated) {
 		t.Fatalf("grant before migrate: %v", err)
 	}
 	if _, err := Trust(opts, TrustRequest{Verb: TrustAdd, Kind: anchor.BackupGuest, Value: "103"}, accept); !errors.Is(err, ErrNotMigrated) {

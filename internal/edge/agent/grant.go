@@ -71,10 +71,11 @@ func (c PolicyChange) Changed() bool {
 	return !c.Before.Same(c.After)
 }
 
-// GrantRights pose des droits (« docker.deploy », « files.write=/srv/a »).
-func GrantRights(opts PolicyOptions, granted []agentpolicy.Capability, confirm func(PolicyChange) error) (PolicyChange, error) {
+// GrantRights pose des droits (« docker.deploy », « files.write=/srv/a »)
+// pour le terme donné, l'échéance posée sur l'horloge de la machine (R-A3-5).
+func GrantRights(opts PolicyOptions, granted []agentpolicy.Capability, term agentpolicy.Term, confirm func(PolicyChange) error) (PolicyChange, error) {
 	return changePolicy(opts, "grant", func(document agentpolicy.Document) (agentpolicy.Document, error) {
-		return document.Grant(granted)
+		return document.Grant(granted, term, opts.clock())
 	}, confirm)
 }
 

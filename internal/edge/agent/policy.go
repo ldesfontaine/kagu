@@ -75,7 +75,10 @@ type AppliedPolicy struct {
 	// MachineID est celle du fichier ; vide hors de la source policy, où
 	// celle de l'identité vaut.
 	MachineID string
-	Rights    []agentpolicy.Capability
+	// Les droits que la politique donne à cette lecture : un droit échu n'y
+	// est plus. Until porte l'échéance de ceux qui en ont une (R-A3-5).
+	Rights []agentpolicy.Capability
+	Until  map[string]time.Time
 	// Les clés du serveur acceptées à cette lecture, la clé acceptée d'abord ;
 	// une clé gardée échue n'y est plus.
 	ServerKeys [][]byte
@@ -87,10 +90,12 @@ type AppliedPolicy struct {
 }
 
 // report est ce qu'une lecture change pour le serveur : la source,
-// l'empreinte, les droits appliqués, les ancres et les clés acceptées. Une
-// clé gardée qui échoit le change : le flux se rouvre et ne la redit plus.
+// l'empreinte, les droits appliqués et leurs échéances, les ancres et les
+// clés acceptées. Un droit ou une clé gardée qui échoit le change : le flux
+// se rouvre et ne les redit plus (R-A3-5).
 func (p AppliedPolicy) report() string {
-	return p.Source + " " + p.Digest + " " + agentpolicy.FormatCapabilities(p.Rights) + " " + anchor.FromFile(p.Anchors).Format() + " " + p.serverKeyFingerprints()
+	return p.Source + " " + p.Digest + " " + agentpolicy.FormatCapabilities(p.Rights) + " " + agentpolicy.FormatRightsUntil(p.Until) + " " +
+		anchor.FromFile(p.Anchors).Format() + " " + p.serverKeyFingerprints()
 }
 
 func (p AppliedPolicy) serverKeyFingerprints() string {
@@ -110,7 +115,8 @@ func (p AppliedPolicy) AcceptedServerKey() []byte {
 	return p.ServerKeys[0]
 }
 
-// readPolicy rend ce que l'agent applique à l'heure now. Sans dossier, ce
+// readPolicy rend ce que l'agent applique à l'heure now : un droit ou une
+// clé gardée échus n'y sont plus, serveur joint ou non. Sans dossier, ce
 // qu'identity.json porte (source identity). Un dossier sans fichier (R-A3-16),
 // une politique qui ne se lit pas, n'appartient pas à root ou s'écrit par un
 // autre compte : observe seul, ni clé ni ancre (source refused), et l'erreur
@@ -127,13 +133,14 @@ func readPolicy(place PolicyPlace, identity Identity, now agentpolicy.Clock) (Ap
 	case err != nil:
 		applied = AppliedPolicy{Rights: observeOnly(), Source: agentpolicy.SourceRefused}
 	default:
+		rights, until := document.LiveRights(now)
 		applied = AppliedPolicy{
-			MachineID: document.MachineID, Rights: document.Rights, ServerKeys: document.LiveServerKeys(now), Anchors: document.Anchors,
+			MachineID: document.MachineID, Rights: rights, Until: until, ServerKeys: document.LiveServerKeys(now), Anchors: document.Anchors,
 			Source: agentpolicy.SourcePolicy, Digest: digest,
 		}
 	}
 	if identity.narrowed {
-		applied.Rights = observeOnly()
+		applied.Rights, applied.Until = observeOnly(), nil
 	}
 	return applied, err
 }

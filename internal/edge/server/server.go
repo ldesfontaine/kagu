@@ -89,6 +89,7 @@ type MachineService interface {
 	NoteServiceRollbackVersion(ctx context.Context, agentID, reported string) error
 	NoteAnchors(ctx context.Context, agentID, reported string) error
 	NotePolicy(ctx context.Context, agentID, source, digest string) error
+	NoteRightsUntil(ctx context.Context, agentID, until string) error
 	SetUpdateLast(ctx context.Context, machineID string, updateLast bool) (machine.Machine, error)
 	SetRole(ctx context.Context, machineID string, role machine.Role) (machine.Machine, error)
 	SetPlacement(ctx context.Context, machineID string, kindOverride machine.Kind, hostOverride string) (machine.Machine, error)

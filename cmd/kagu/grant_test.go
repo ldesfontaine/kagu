@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ldesfontaine/kagu/internal/edge/agent"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
@@ -171,6 +172,12 @@ func TestRunAgentPolicy_RefusalsWriteNothing(t *testing.T) {
 		{[]string{policyGrant, "-state", stateDir}, "Usage"},
 		{[]string{policyRevoke, "-state", stateDir}, "Usage"},
 		{[]string{policyRights, "-state", stateDir, "extra"}, "Usage"},
+		{[]string{policyRevoke, "-state", stateDir, "-yes", "probe.lan", "--for", "5m"}, "Usage"},
+		{[]string{policyGrant, "-state", stateDir, "-yes", "probe.lan", "--for", "4m"}, "de 5m à 168h"},
+		{[]string{policyGrant, "-state", stateDir, "-yes", "probe.lan", "--for", "169h"}, "de 5m à 168h"},
+		{[]string{policyGrant, "-state", stateDir, "-yes", "probe.lan", "--for", "toujours"}, "de 5m à 168h"},
+		{[]string{policyGrant, "-state", stateDir, "-yes", "terminal.host=Root"}, "nom de compte Unix"},
+		{[]string{policyGrant, "-state", stateDir, "-yes", "service.free"}, "n'existe pas"},
 	}
 	for _, tc := range cases {
 		_, err := runPolicy(t, place, noTerminal, tc.args[0], tc.args[1:]...)
@@ -180,5 +187,48 @@ func TestRunAgentPolicy_RefusalsWriteNothing(t *testing.T) {
 	}
 	if policyContent(t, place) != before {
 		t.Fatal("a refused command wrote the policy")
+	}
+}
+
+// N-M6, R-A3-12 : « grant terminal.host » pose terminal.host=root pour deux
+// heures, et dit, avant la question, que l'agent devient l'égal de root au
+// premier terminal, et comment choisir un autre compte. --for change la
+// durée, où qu'il soit sur la ligne ; --for permanent la retire.
+func TestN_M6_GrantHostTerminalTellsItsRiskAndTakesTwoHours(t *testing.T) {
+	stateDir, place := policyState(t)
+	out, err := runPolicy(t, place, fakeTerminal("o\n"), policyGrant, "-state", stateDir, "terminal.host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	risk := "l'agent devient l'égal de root"
+	question := strings.Index(out, "[o/N]")
+	for _, want := range []string{"+ terminal.host=root", "terminal.host   jusqu'au", risk, "Un autre compte : sudo opencloud agent grant terminal.host=<compte> --for 2h"} {
+		if index := strings.Index(out, want); index < 0 || index > question {
+			t.Errorf("%q not said before the question:\n%s", want, out)
+		}
+	}
+	document, err := agentpolicy.Decode([]byte(policyContent(t, place)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiry := document.Expiries[agentpolicy.CapabilityTerminalHost]
+	if agentpolicy.FormatCapabilities(document.Rights) != "observe,terminal.host=root" || expiry.Until.Sub(expiry.Granted.Now) != 2*time.Hour || expiry.Granted.Boot == "" {
+		t.Fatalf("policy:\n%s", policyContent(t, place))
+	}
+
+	out, err = runPolicy(t, place, noTerminal, policyGrant, "-state", stateDir, "terminal.host=admin", "-yes", "--for", "5m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, risk) || strings.Contains(out, "Un autre compte") {
+		t.Fatalf("another account still tells the risk, not the other account line:\n%s", out)
+	}
+	document, _ = agentpolicy.Decode([]byte(policyContent(t, place)))
+	if expiry := document.Expiries[agentpolicy.CapabilityTerminalHost]; expiry.Until.Sub(expiry.Granted.Now) != 5*time.Minute {
+		t.Fatalf("--for 5m:\n%s", policyContent(t, place))
+	}
+	out, err = runPolicy(t, place, noTerminal, policyGrant, "-state", stateDir, "-yes", "--for", "permanent", "terminal.host=admin")
+	if err != nil || !strings.Contains(out, "terminal.host   sans échéance") || strings.Contains(policyContent(t, place), "until") {
+		t.Fatalf("--for permanent: %v\n%s\n%s", err, out, policyContent(t, place))
 	}
 }

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -19,7 +20,7 @@ const machineSelect = `SELECT m.id, m.name, m.hostname, m.address, m.os, m.arch,
 		m.kind, m.kind_override, m.host_override,
 		a.id, a.public_key, a.version, a.root_dir, a.enrolled_at, a.last_seen_at, a.revoked_at,
 		a.server_key_fingerprint, a.run_as_uid, a.run_as_name, t.requested_capabilities, a.rollback_version, a.anchors, a.service_rollback_version,
-		a.policy_source, a.policy_digest, a.protocol
+		a.policy_source, a.policy_digest, a.protocol, a.rights_until
 	FROM machines m
 	LEFT JOIN agents a ON a.id = (
 		SELECT id FROM agents WHERE machine_id = m.id
@@ -203,6 +204,24 @@ func (db *DB) RecordPolicy(ctx context.Context, agentID, source, digest string) 
 		nullableString(source), nullableString(digest), agentID)
 	if err != nil {
 		return fmt.Errorf("record policy: %w", err)
+	}
+	return notFoundIfNoRow(result, machine.ErrNotFound)
+}
+
+// RecordRightsUntil note l'échéance de chaque droit que l'agent rapporte, à
+// l'ouverture du flux ; une table vide s'écrit NULL.
+func (db *DB) RecordRightsUntil(ctx context.Context, agentID string, until map[string]time.Time) error {
+	var stored any
+	if len(until) > 0 {
+		encoded, err := json.Marshal(until)
+		if err != nil {
+			return fmt.Errorf("encode rights until: %w", err)
+		}
+		stored = string(encoded)
+	}
+	result, err := db.sql.ExecContext(ctx, `UPDATE agents SET rights_until = ? WHERE id = ?`, stored, agentID)
+	if err != nil {
+		return fmt.Errorf("record rights until: %w", err)
 	}
 	return notFoundIfNoRow(result, machine.ErrNotFound)
 }
@@ -509,10 +528,10 @@ func scanMachine(row scanner) (machine.Machine, error) {
 	var publicKey []byte
 	var enrolledAt, lastSeenAt, revokedAt, runAsUID sql.NullInt64
 	var rollbackVersion, serviceRollbackVersion sql.NullInt64
-	var anchors, policySource, policyDigest, protocol sql.NullString
+	var anchors, policySource, policyDigest, protocol, rightsUntil sql.NullString
 	err := row.Scan(&m.ID, &m.Name, &m.Hostname, &m.Address, &m.OS, &m.Arch, &createdAt, &m.UpdateLast, &role, &kind, &kindOverride, &hostOverride,
 		&agentID, &publicKey, &version, &rootDir, &enrolledAt, &lastSeenAt, &revokedAt, &serverKey, &runAsUID, &runAsName, &requested, &rollbackVersion, &anchors, &serviceRollbackVersion,
-		&policySource, &policyDigest, &protocol)
+		&policySource, &policyDigest, &protocol, &rightsUntil)
 	if err != nil {
 		return machine.Machine{}, err
 	}
@@ -532,6 +551,10 @@ func scanMachine(row scanner) (machine.Machine, error) {
 	}
 	if runAsUID.Valid {
 		m.Agent.RunAs = &machine.Account{UID: runAsUID.Int64, Name: runAsName.String}
+	}
+	// Des échéances illisibles en base valent « aucune » : l'agent juge.
+	if rightsUntil.Valid {
+		_ = json.Unmarshal([]byte(rightsUntil.String), &m.Agent.RightsUntil)
 	}
 	// Des ancres illisibles en base valent « pas rapportées » : rien n'est jugé.
 	m.Agent.Anchors, _ = anchor.Parse(anchors.String)
@@ -603,7 +626,7 @@ func attachCapabilities(ctx context.Context, q querier, machines []machine.Machi
 		}
 		// Le même ordre que la liste fermée ; une ligne d'une version plus
 		// récente qu'on ne connaît pas reste telle quelle.
-		if normalized, err := agentpolicy.NormalizeCapabilities(capabilities); err == nil {
+		if normalized, err := agentpolicy.NormalizePolicyRights(capabilities); err == nil {
 			capabilities = normalized
 		}
 		agent.Capabilities = capabilities

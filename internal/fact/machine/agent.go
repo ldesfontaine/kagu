@@ -26,6 +26,9 @@ type Agent struct {
 	// vide tant qu'il n'a rien rapporté (un agent d'avant les droits).
 	Capabilities []agentpolicy.Capability
 	ReportedAt   time.Time
+	// L'échéance de chacun des droits rapportés qui en a une (R-A3-5) ; vide
+	// quand aucun n'échoit, et chez un agent qui ne le dit pas.
+	RightsUntil map[string]time.Time
 	// Pourquoi un droit rapporté ne peut pas s'exercer sur la machine (une
 	// raison de UnavailableReasons, par nom de droit) ; vide quand tout est
 	// réalisable, et chez un agent qui ne sait pas le juger. À part de

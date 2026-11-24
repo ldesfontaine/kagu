@@ -4,7 +4,10 @@
 // droit ? » (Fit). Il ne lit aucun fichier.
 package agentpolicy
 
-import "slices"
+import (
+	"slices"
+	"time"
+)
 
 // Les droits d'un agent : cochés à l'émission du jeton, écrits par la ligne
 // d'installation dans le fichier de l'agent, rapportés par lui à chaque
@@ -85,16 +88,56 @@ const (
 	GroupNetwork Group = "network"
 )
 
-// knownRight est un droit que la politique connaît : son groupe, et s'il ne
-// se lit que dans la politique (R-A3-10).
+// knownRight est un droit que la politique connaît : son groupe, où il se
+// lit (R-A3-10), la grammaire de sa valeur, la valeur d'un droit posé sans
+// elle, la durée que « grant » lui donne quand rien n'est dit (zéro : sans
+// échéance) et la phrase de son risque, une clé des catalogues que « grant »
+// imprime avant la question (R-A3-12).
 type knownRight struct {
-	name       string
-	group      Group
-	policyOnly bool
+	name     string
+	group    Group
+	readable readable
+	value    valueGrammar
+	bare     string
+	term     time.Duration
+	risk     string
 }
 
+// readable dit où un droit se lit.
+type readable int
+
+const (
+	// Partout : le jeton, identity.json, -rights, la politique.
+	readEverywhere readable = iota
+	// Dans la politique seule (R-A3-10).
+	readInPolicy
+	// Un droit de la politique seule que rien ne lit encore : il s'ouvre en
+	// passant à readInPolicy, avec sa grammaire.
+	readNowhere
+)
+
+// valueGrammar est la forme de la valeur d'un droit.
+type valueGrammar int
+
+const (
+	valueNone valueGrammar = iota
+	// Un chemin (backup.receive, restic.target).
+	valueOnePath
+	// Un à huit chemins (files.write).
+	valuePaths
+	// Un à quatre producteurs de la liste fermée (backup.produce).
+	valueProducers
+	// Un nom de compte Unix (terminal.host).
+	valueAccount
+)
+
+// hostTerminalTerm : un terminal sur la machine s'ouvre pour deux heures
+// quand « grant » ne dit rien (R-E4-11, N-M6).
+const hostTerminalTerm = 2 * time.Hour
+
 // knownRights est la seule liste des droits, dans l'ordre où ils
-// s'affichent ; un droit nouveau y entre avec son groupe.
+// s'affichent ; un droit nouveau y entre avec son groupe, où il se lit et la
+// forme de sa valeur.
 var knownRights = []knownRight{
 	{name: CapabilityObserve, group: GroupSee},
 	{name: CapabilityProbeLAN, group: GroupSee},
@@ -102,21 +145,46 @@ var knownRights = []knownRight{
 	{name: CapabilityAgentUpdate, group: GroupDeploy},
 	{name: CapabilityDockerDeploy, group: GroupDeploy},
 	{name: CapabilityDockerUpdate, group: GroupDeploy},
-	{name: CapabilityBackupReceive, group: GroupBackup},
-	{name: CapabilityBackupProduce, group: GroupBackup},
-	{name: CapabilityFilesWrite, group: GroupDeploy},
+	{name: CapabilityBackupReceive, group: GroupBackup, value: valueOnePath},
+	{name: CapabilityBackupProduce, group: GroupBackup, value: valueProducers},
+	{name: CapabilityFilesWrite, group: GroupDeploy, value: valuePaths},
 	{name: CapabilityProxmoxPower, group: GroupDeploy},
 	{name: CapabilityProxmoxSnapshot, group: GroupDeploy},
-	{name: CapabilityResticTarget, group: GroupBackup},
+	{name: CapabilityResticTarget, group: GroupBackup, value: valueOnePath},
 	{name: CapabilityResticProduce, group: GroupBackup},
 	{name: CapabilityResticDocker, group: GroupBackup},
 	{name: CapabilityResticVerify, group: GroupBackup},
 	{name: CapabilityResticBrowse, group: GroupBackup},
 	{name: CapabilityResticRestore, group: GroupBackup},
-	{name: CapabilityTerminalContainer, group: GroupEnter, policyOnly: true},
-	{name: CapabilityTerminalHost, group: GroupEnter, policyOnly: true},
-	{name: CapabilityServiceFree, group: GroupDeploy, policyOnly: true},
-	{name: CapabilityNetworkPrivate, group: GroupNetwork, policyOnly: true},
+	{name: CapabilityTerminalContainer, group: GroupEnter, readable: readNowhere},
+	{name: CapabilityTerminalHost, group: GroupEnter, readable: readInPolicy, value: valueAccount, bare: "root", term: hostTerminalTerm,
+		risk: "rights.host_terminal_risk"},
+	{name: CapabilityServiceFree, group: GroupDeploy, readable: readNowhere},
+	{name: CapabilityNetworkPrivate, group: GroupNetwork, readable: readNowhere},
+}
+
+// knownRightOf rend le droit de ce nom ; faux pour un nom inconnu.
+func knownRightOf(name string) (knownRight, bool) {
+	index := slices.IndexFunc(knownRights, func(known knownRight) bool { return known.name == name })
+	if index < 0 {
+		return knownRight{}, false
+	}
+	return knownRights[index], true
+}
+
+// Notice est ce que « grant » dit d'un droit avant la question (R-A3-12,
+// N-M6) : la phrase de son risque (une clé des catalogues, vide s'il n'en a
+// pas) et, pour un droit qui nomme un compte et le pose sous celui par
+// défaut, qu'un autre compte se choisit.
+type Notice struct {
+	RiskKey      string
+	OtherAccount bool
+}
+
+// NoticeOf rend ce que « grant » dit d'un droit normalisé.
+func NoticeOf(capability Capability) Notice {
+	known, _ := knownRightOf(capability.Name)
+	return Notice{RiskKey: known.risk, OtherAccount: known.value == valueAccount && slices.Equal(capability.Paths, []string{known.bare})}
 }
 
 // Names rend tous les droits que la politique connaît, dans l'ordre où ils
@@ -135,7 +203,7 @@ func Names() []string {
 func CapabilityNames() []string {
 	var names []string
 	for _, known := range knownRights {
-		if !known.policyOnly {
+		if known.readable == readEverywhere {
 			names = append(names, known.name)
 		}
 	}

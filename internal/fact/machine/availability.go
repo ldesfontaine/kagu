@@ -2,7 +2,6 @@ package machine
 
 import (
 	"errors"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -33,19 +32,9 @@ const (
 	maxUnavailableText = 2048
 )
 
-// Un nom de compte POSIX portable, en minuscules : ce que useradd accepte par
-// défaut. Un autre (majuscules, point) ne passe pas dans l'en-tête, la fiche
-// montre alors l'uid seul.
-var accountNamePattern = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
-
 // ErrUnavailableUnreadable : l'en-tête des droits indisponibles ne se lit pas.
 // Il est ignoré en entier, comme des droits illisibles.
 var ErrUnavailableUnreadable = errors.New("agent unavailable rights unreadable")
-
-// IsAccountName dit si un nom de compte passe dans l'en-tête.
-func IsAccountName(name string) bool {
-	return accountNamePattern.MatchString(name)
-}
 
 // FormatAccount écrit le compte sous la forme de l'en-tête : « uid:nom ».
 func FormatAccount(account Account) string {
@@ -64,7 +53,9 @@ func ParseAccount(text string) (Account, bool) {
 	if err != nil || uid > maxAccountUID {
 		return Account{}, false
 	}
-	if name != "" && !IsAccountName(name) {
+	// Un nom d'une autre forme (majuscules, point) ne passe pas : la fiche
+	// montre alors l'uid seul.
+	if name != "" && !agentpolicy.IsAccountName(name) {
 		return Account{}, false
 	}
 	return Account{UID: int64(uid), Name: name}, true // #nosec G115 -- borné juste au-dessus par maxAccountUID.

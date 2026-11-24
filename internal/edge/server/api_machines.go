@@ -176,6 +176,8 @@ type reportedCapabilityJSON struct {
 	Name        string   `json:"name"`
 	Paths       []string `json:"paths"`
 	Unavailable string   `json:"unavailable"`
+	// L'échéance que l'agent rapporte pour ce droit ; null sans échéance.
+	Until *time.Time `json:"until"`
 }
 
 type accountJSON struct {
@@ -299,6 +301,7 @@ func reportedCapabilitiesToJSON(agent machine.Agent) []reportedCapabilityJSON {
 	for _, capability := range agent.Capabilities {
 		reported = append(reported, reportedCapabilityJSON{
 			Name: capability.Name, Paths: orEmpty(capability.Paths), Unavailable: agent.UnavailableReason(capability.Name),
+			Until: httpx.TimeOrNil(agent.RightsUntil[capability.Name]),
 		})
 	}
 	return reported

@@ -248,10 +248,13 @@ func (s *Service) send(ctx context.Context, order ServiceOrder) (Run, error) {
 	if !target.Agent.IsActive() {
 		return Run{}, machine.ErrNoAgent
 	}
-	// Le droit que le registre déclare pour le genre, et lui seul (R-A1-1).
-	// Le producteur de backup.produce n'est pas jugé ici : backup le juge
-	// avant d'envoyer (judgeSource), l'agent à la réception.
-	if !target.Agent.ReportedAt.IsZero() && !agentpolicy.HasCapability(target.Agent.Capabilities, spec.Right) {
+	// Le droit que le registre déclare pour le genre, et lui seul (R-A1-1),
+	// porté jusqu'à la fin de l'ordre : un droit qui échoit avant not_after
+	// ne suffit pas (R-A3-5). Le producteur de backup.produce n'est pas jugé
+	// ici : backup le juge avant d'envoyer (judgeSource), l'agent à la
+	// réception.
+	reported := target.Agent
+	if !reported.ReportedAt.IsZero() && !agentpolicy.HeldThrough(reported.Capabilities, reported.RightsUntil, spec.Right, s.now().Add(OrderLifetime)) {
 		return Run{}, refusal.Missing(ErrRightMissing, spec.Right, machineID)
 	}
 	// Une ancre que l'agent a dit tenir et que l'ordre ne satisfait pas : il le

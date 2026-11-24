@@ -1,9 +1,11 @@
 package action_test
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
@@ -63,5 +65,38 @@ func TestR_A1_14_TheServerPrejudgesWithTheRegistry(t *testing.T) {
 	every := newBenchReporting(t, everyRightBut(""))
 	if _, err := every.service.Send(operator(), machineID, agentwire.KindLogs, nil); !errors.Is(err, action.ErrUnknownKind) {
 		t.Errorf("an observation sent as an order: %v", err)
+	}
+}
+
+// R-A3-5 : le serveur pré-juge avec l'échéance que l'agent rapporte. Un droit
+// qui échoit avant not_after de l'ordre ne suffit pas ; un droit qui tient
+// jusque-là, si. Le droit terminal.host, de la politique seule, se lit
+// dans ce que l'agent rapporte.
+func TestPrejudge_ARightThatLapsesBeforeNotAfterIsRefused(t *testing.T) {
+	b := newBenchReporting(t, "agent.update,terminal.host=root")
+	target, err := b.db.GetMachine(context.Background(), machineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !agentpolicy.HasCapability(target.Agent.Capabilities, agentpolicy.CapabilityTerminalHost) {
+		t.Fatalf("terminal.host reported but not kept: %v", target.Agent.Capabilities)
+	}
+	notAfter := benchNow.Add(action.OrderLifetime)
+	report := func(until time.Time) {
+		t.Helper()
+		if err := b.db.RecordRightsUntil(context.Background(), target.Agent.ID, map[string]time.Time{agentpolicy.CapabilityAgentUpdate: until}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report(notAfter.Add(-time.Second))
+	if _, err := b.service.Send(operator(), machineID, agentwire.KindAgentUpdate, nil); !errors.Is(err, action.ErrRightMissing) {
+		t.Fatalf("a right lapsing before not_after: %v", err)
+	}
+	if len(b.pusher.sent) != 0 {
+		t.Fatalf("%d orders left", len(b.pusher.sent))
+	}
+	report(notAfter)
+	if _, err := b.service.Send(operator(), machineID, agentwire.KindAgentUpdate, nil); err != nil {
+		t.Fatalf("a right held through not_after: %v", err)
 	}
 }

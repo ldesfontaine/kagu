@@ -468,6 +468,7 @@ func connectOnce(ctx context.Context, client *Client, identity Identity, pending
 	applied := pending.orders.currentPolicy()
 	identity.ServerKey = applied.AcceptedServerKey()
 	client.SetCapabilities(applied.Rights)
+	client.SetRightsUntil(applied.Until)
 	client.SetPolicy(applied.Source, applied.Digest)
 	client.SetAnchors(anchor.FromFile(applied.Anchors))
 	// Le compte et la machine ont pu changer depuis la dernière ouverture : un

@@ -47,7 +47,7 @@ func (b *policyBench) grant(t *testing.T, text string) PolicyChange {
 	if err != nil {
 		t.Fatal(err)
 	}
-	change, err := GrantRights(b.opts, granted, accept)
+	change, err := GrantRights(b.opts, granted, agentpolicy.Term{}, accept)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestR_A3_3_TwoGrantsAreSerialized(t *testing.T) {
 		failures := make(chan error, len(rights))
 		for _, right := range rights {
 			wg.Go(func() {
-				if _, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: right}}, accept); err != nil {
+				if _, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: right}}, agentpolicy.Term{}, accept); err != nil {
 					failures <- err
 				}
 			})
@@ -160,7 +160,7 @@ func TestR_DROIT_1_OnlyRootWritesThePolicy(t *testing.T) {
 		asked = true
 		return nil
 	}
-	if _, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityDockerDeploy}}, ask); !errors.Is(err, ErrTrustNotRoot) {
+	if _, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityDockerDeploy}}, agentpolicy.Term{}, ask); !errors.Is(err, ErrTrustNotRoot) {
 		t.Fatalf("grant: %v", err)
 	}
 	if _, err := RevokeRights(b.opts, []string{agentpolicy.CapabilityDockerDeploy}, ask); !errors.Is(err, ErrTrustNotRoot) {
@@ -180,7 +180,7 @@ func TestR_DROIT_1_OnlyRootWritesThePolicy(t *testing.T) {
 func TestGrantRights_TheFirstPolicyStartsFromObserveOnly(t *testing.T) {
 	b := newPolicyBench(t, "docker.deploy")
 	var shown PolicyChange
-	change, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}}, func(change PolicyChange) error {
+	change, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}}, agentpolicy.Term{}, func(change PolicyChange) error {
 		shown = change
 		return nil
 	})
@@ -208,14 +208,14 @@ func TestGrantRights_TheFirstPolicyStartsFromObserveOnly(t *testing.T) {
 func TestGrantRights_NothingIsWrittenWithoutConsent(t *testing.T) {
 	b := newPolicyBench(t)
 	declined := errors.New("declined")
-	if _, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}}, func(PolicyChange) error { return declined }); !errors.Is(err, declined) {
+	if _, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}}, agentpolicy.Term{}, func(PolicyChange) error { return declined }); !errors.Is(err, declined) {
 		t.Fatalf("err %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(b.opts.Place.Dir, policyFile)); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("declined grant wrote: %v", err)
 	}
 	b.grant(t, "probe.lan")
-	change, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}}, func(PolicyChange) error {
+	change, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}}, agentpolicy.Term{}, func(PolicyChange) error {
 		t.Fatal("asked about nothing")
 		return nil
 	})
@@ -230,7 +230,7 @@ func TestGrantRights_NothingIsWrittenWithoutConsent(t *testing.T) {
 func TestGrantRights_RefusesWhatItCannotTrust(t *testing.T) {
 	b := newPolicyBench(t)
 	writePolicyFile(t, b.opts.Place, "version = [", policyMode)
-	if _, err := GrantRights(b.opts, nil, accept); !errors.Is(err, agentpolicy.ErrUnreadable) {
+	if _, err := GrantRights(b.opts, nil, agentpolicy.Term{}, accept); !errors.Is(err, agentpolicy.ErrUnreadable) {
 		t.Fatalf("unreadable: %v", err)
 	}
 	writePolicyFile(t, b.opts.Place, policyGranting(t, "m-grant", "observe"), 0o666)
@@ -245,7 +245,7 @@ func TestGrantRights_RefusesWhatItCannotTrust(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := GrantRights(old.opts, nil, accept); !errors.Is(err, ErrAgentTooOld) {
+	if _, err := GrantRights(old.opts, nil, agentpolicy.Term{}, accept); !errors.Is(err, ErrAgentTooOld) {
 		t.Fatalf("old agent: %v", err)
 	}
 	if _, err := RevokeRights(b.opts, []string{agentpolicy.CapabilityObserve}, accept); err == nil {
