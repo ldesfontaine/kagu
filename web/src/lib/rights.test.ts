@@ -17,7 +17,7 @@ function agentWith(requested: string[], reported: { name: string; unavailable?: 
     version: "v0.0.1",
     enrolled_at: "2026-11-01T10:00:00Z",
     revoked_at: null,
-    capabilities: (reported ?? []).map((right) => ({ ...capability(right.name), unavailable: right.unavailable ?? "" })),
+    capabilities: (reported ?? []).map((right) => ({ ...capability(right.name), unavailable: right.unavailable ?? "", until: null })),
     reported_at: reported === null ? null : "2026-11-01T10:00:00Z",
     requested: requested.map(capability),
     capabilities_differ: false,

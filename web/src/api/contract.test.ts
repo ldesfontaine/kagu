@@ -106,7 +106,7 @@ const lifecycle = shape<NonNullable<Machine["lifecycle"]>>("Lifecycle", {
 });
 
 const capability = shape<Capability>("Capability", { name: value, paths: value });
-const reportedCapability = shape<ReportedCapability>("ReportedCapability", { name: value, paths: value, unavailable: value });
+const reportedCapability = shape<ReportedCapability>("ReportedCapability", { name: value, paths: value, unavailable: value, until: value });
 
 const machine = shape<Machine>("Machine", {
   id: value,

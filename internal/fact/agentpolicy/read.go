@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -36,18 +35,17 @@ type policyFile struct {
 // clé gardée par --keep-old, son échéance et l'horloge de sa pose (les champs
 // d'un droit à durée, R-A3-5).
 type fileServerKey struct {
-	Key           string    `toml:"key"`
-	Until         time.Time `toml:"until,omitempty"`
-	GrantedAt     time.Time `toml:"granted_at,omitempty"`
-	GrantedBoot   string    `toml:"granted_boot,omitempty"`
-	GrantedUptime int64     `toml:"granted_uptime,omitempty"`
+	Key string `toml:"key"`
+	fileExpiry
 }
 
-// fileRight est un bloc [[right]] : le nom et, pour un droit borné, sa valeur
-// dans la grammaire d'aujourd'hui (« /srv/a:/srv/b », « proxmox-vzdump »).
+// fileRight est un bloc [[right]] : le nom, sa valeur s'il en a une
+// (« /srv/a:/srv/b », « proxmox-vzdump », « root ») et, pour un droit à
+// durée, son échéance et l'horloge de sa pose (R-A3-5).
 type fileRight struct {
 	Name  string `toml:"name"`
 	Value string `toml:"value,omitempty"`
+	fileExpiry
 }
 
 // Decode lit le fichier de la politique, strictement : une clé inconnue, une
@@ -65,16 +63,7 @@ func Decode(content []byte) (Document, error) {
 	if file.MachineID == "" {
 		return Document{}, fmt.Errorf("%w: no machine_id", ErrUnreadable)
 	}
-	rights := make([]Capability, 0, len(file.Rights))
-	seen := map[string]bool{}
-	for _, right := range file.Rights {
-		if seen[right.Name] {
-			return Document{}, fmt.Errorf("%w: %s written twice", ErrUnreadable, right.Name)
-		}
-		seen[right.Name] = true
-		rights = append(rights, capabilityOf(right))
-	}
-	normalized, err := NormalizeCapabilities(rights)
+	rights, expiries, err := rightsOf(file.Rights)
 	if err != nil {
 		return Document{}, fmt.Errorf("%w: %w", ErrUnreadable, err)
 	}
@@ -82,7 +71,37 @@ func Decode(content []byte) (Document, error) {
 	if err != nil {
 		return Document{}, fmt.Errorf("%w: %w", ErrUnreadable, err)
 	}
-	return Document{MachineID: file.MachineID, ServerKeys: keys, Rights: normalized, Anchors: file.Anchors}, nil
+	return Document{MachineID: file.MachineID, ServerKeys: keys, Rights: rights, Expiries: expiries, Anchors: file.Anchors}, nil
+}
+
+// rightsOf lit les blocs [[right]] : chaque droit une fois, dans la
+// grammaire de la politique, avec son échéance s'il en a une. observe n'en a
+// jamais : il ne se retire pas.
+func rightsOf(blocks []fileRight) ([]Capability, map[string]Expiry, error) {
+	rights := make([]Capability, 0, len(blocks))
+	expiries := map[string]Expiry{}
+	for _, block := range blocks {
+		if HasCapability(rights, block.Name) {
+			return nil, nil, fmt.Errorf("%s written twice", block.Name)
+		}
+		rights = append(rights, capabilityOf(block))
+		expiry, err := block.expiry()
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", block.Name, err)
+		}
+		if expiry.Until.IsZero() {
+			continue
+		}
+		if block.Name == CapabilityObserve {
+			return nil, nil, errors.New("observe carries an expiry")
+		}
+		expiries[block.Name] = expiry
+	}
+	normalized, err := NormalizePolicyRights(rights)
+	if err != nil {
+		return nil, nil, err
+	}
+	return normalized, expiries, nil
 }
 
 // serverKeysOf lit les blocs [[server_key]] : aucun, une clé acceptée sans
@@ -98,13 +117,15 @@ func serverKeysOf(blocks []fileServerKey) ([]ServerKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		kept := ServerKey{Key: key, Until: block.Until, Granted: Clock{
-			Now: block.GrantedAt, Boot: block.GrantedBoot, Uptime: time.Duration(block.GrantedUptime) * time.Second,
-		}}
-		if index == 0 && block != (fileServerKey{Key: block.Key}) {
+		expiry, err := block.expiry()
+		if err != nil {
+			return nil, err
+		}
+		kept := ServerKey{Key: key, Expiry: expiry}
+		if index == 0 && !expiry.Until.IsZero() {
 			return nil, errors.New("the accepted server key carries an expiry")
 		}
-		if index == 1 && (kept.Until.IsZero() || kept.Granted.Now.IsZero() || kept.Granted.Boot == "" || slices.Equal(key, keys[0].Key)) {
+		if index == 1 && (expiry.Until.IsZero() || slices.Equal(key, keys[0].Key)) {
 			return nil, errors.New("the kept server key needs its own key, an expiry and the clock of its grant")
 		}
 		keys = append(keys, kept)

@@ -131,9 +131,9 @@ function agent(over: Partial<Agent> = {}): Agent {
     enrolled_at: "2026-10-01T00:00:00Z",
     revoked_at: null,
     capabilities: [
-      { name: "observe", paths: [], unavailable: "" },
-      { name: "proxmox.power", paths: [], unavailable: "" },
-      { name: "proxmox.snapshot", paths: [], unavailable: "" },
+      { name: "observe", paths: [], unavailable: "", until: null },
+      { name: "proxmox.power", paths: [], unavailable: "", until: null },
+      { name: "proxmox.snapshot", paths: [], unavailable: "", until: null },
     ],
     reported_at: "2026-10-01T00:00:00Z",
     requested: [],
@@ -175,7 +175,7 @@ test("le droit d'un geste : power pour démarrer et arrêter, snapshot pour les 
 });
 
 test("un droit que l'agent n'a pas rapporté grise le geste, et la raison le nomme", () => {
-  const onlyPower = host({ agent: agent({ capabilities: [{ name: "observe", paths: [], unavailable: "" }, { name: "proxmox.power", paths: [], unavailable: "" }] }) });
+  const onlyPower = host({ agent: agent({ capabilities: [{ name: "observe", paths: [], unavailable: "", until: null }, { name: "proxmox.power", paths: [], unavailable: "", until: null }] }) });
   const [start, snapshot] = guestGestures(guest(100, { status: "stopped" }), onlyPower);
   expect(start?.blocked).toBeNull();
   expect(snapshot?.blocked).toEqual({ kind: "right_missing", right: "proxmox.snapshot" });
@@ -183,7 +183,7 @@ test("un droit que l'agent n'a pas rapporté grise le geste, et la raison le nom
 });
 
 test("un droit rapporté mais impossible à exercer grise le geste avec la phrase de la raison", () => {
-  const unsafe = host({ agent: agent({ capabilities: [{ name: "proxmox.power", paths: [], unavailable: "proxmox_token_unsafe" }] }) });
+  const unsafe = host({ agent: agent({ capabilities: [{ name: "proxmox.power", paths: [], unavailable: "proxmox_token_unsafe", until: null }] }) });
   const [start] = guestGestures(guest(100, { status: "stopped" }), unsafe);
   expect(start?.blocked).toEqual({ kind: "right_unavailable", reason: "proxmox_token_unsafe" });
   expect(gestureBlockText(t, { kind: "right_unavailable", reason: "proxmox_token_unsafe" }, null)).toBe("machine.capability_unavailable_proxmox_token_unsafe");

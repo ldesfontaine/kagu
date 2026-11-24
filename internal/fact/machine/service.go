@@ -57,6 +57,9 @@ type Store interface {
 	// RecordPolicy garde la source des droits et l'empreinte de la politique
 	// que l'agent a dites ; "" s'écrit vide.
 	RecordPolicy(ctx context.Context, agentID, source, digest string) error
+	// RecordRightsUntil garde l'échéance de chaque droit rapporté ; une table
+	// vide s'écrit NULL.
+	RecordRightsUntil(ctx context.Context, agentID string, until map[string]time.Time) error
 	SetUpdateLast(ctx context.Context, machineID string, updateLast bool) error
 	SetRole(ctx context.Context, machineID string, role Role) error
 	// SetPlacement pose la correction de type et l'hôte désigné par l'opérateur ;
@@ -502,7 +505,7 @@ func (s *Service) Connect(ctx context.Context, authenticated Machine, address, a
 		Address: address, Version: version, At: now,
 	}
 	if capabilities != "" {
-		reported, err := agentpolicy.ParseCapabilities(capabilities)
+		reported, err := agentpolicy.ParsePolicyRights(capabilities)
 		if err != nil {
 			s.logger.Warn("agent capabilities unreadable", "machine_id", machineID, "error", err)
 		}
@@ -687,6 +690,18 @@ func (s *Service) NotePolicy(ctx context.Context, agentID, source, digest string
 		digest = ""
 	}
 	return s.store.RecordPolicy(ctx, agentID, source, digest)
+}
+
+// NoteRightsUntil garde l'échéance de chaque droit que l'agent rapporte,
+// redite à chaque ouverture du flux : le pré-jugement d'un ordre la lit. Un
+// texte illisible s'écrit vide : l'agent jugera, lui.
+func (s *Service) NoteRightsUntil(ctx context.Context, agentID, until string) error {
+	parsed, err := agentpolicy.ParseRightsUntil(until)
+	if err != nil {
+		s.logger.Warn("agent rights until unreadable", "agent_id", agentID, "error", err)
+		parsed = nil
+	}
+	return s.store.RecordRightsUntil(ctx, agentID, parsed)
 }
 
 // SetUpdateLast pose ou retire « à mettre à jour en dernier » : la machine

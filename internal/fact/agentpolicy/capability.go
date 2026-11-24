@@ -35,25 +35,41 @@ var (
 	ErrCapabilityUnknown = refusal.Invalid("machine.capability_unknown", "unknown agent capability")
 	ErrCapabilityPath    = refusal.Invalid("machine.capability_path", "capability path must be absolute, clean, and made of letters, digits, dot, dash, underscore")
 	ErrCapabilityScope   = refusal.Invalid("machine.capability_scope", "backup.receive and restic.target take one path, files.write one to eight, backup.produce one to four producers, the others none")
+	ErrCapabilityAccount = refusal.Invalid("machine.capability_account", "terminal.host takes one Unix account name: a lowercase letter or underscore, then lowercase letters, digits, underscores or dashes, 32 at most")
 )
 
-// NormalizeCapabilities vérifie une liste de droits, ajoute observe, retire
-// les doublons et la range dans l'ordre de CapabilityNames : deux listes
-// égales s'écrivent pareil.
+// NormalizeCapabilities vérifie une liste de droits lue hors de la politique
+// (le jeton, identity.json, -rights), ajoute observe, retire les doublons et
+// la range dans l'ordre de Names : deux listes égales s'écrivent pareil. Un
+// droit de la politique seule y est inconnu (R-A3-10).
 func NormalizeCapabilities(capabilities []Capability) ([]Capability, error) {
+	return normalize(capabilities, readEverywhere)
+}
+
+// NormalizePolicyRights fait de même pour les droits de la politique, et pour
+// ceux qu'un agent rapporte d'elle : les droits de la politique seule y sont
+// lus, ceux que rien n'ouvre encore restent inconnus.
+func NormalizePolicyRights(capabilities []Capability) ([]Capability, error) {
+	return normalize(capabilities, readInPolicy)
+}
+
+// normalize lit les droits qui se lisent jusqu'à widest (readEverywhere, ou
+// aussi readInPolicy).
+func normalize(capabilities []Capability, widest readable) ([]Capability, error) {
 	byName := map[string]Capability{CapabilityObserve: {Name: CapabilityObserve}}
 	for _, capability := range capabilities {
-		if !slices.Contains(CapabilityNames(), capability.Name) {
+		known, ok := knownRightOf(capability.Name)
+		if !ok || known.readable > widest {
 			return nil, ErrCapabilityUnknown
 		}
-		paths, err := normalizePaths(capability)
+		value, err := normalizeValue(known, capability.Paths)
 		if err != nil {
 			return nil, err
 		}
-		byName[capability.Name] = Capability{Name: capability.Name, Paths: paths}
+		byName[capability.Name] = Capability{Name: capability.Name, Paths: value}
 	}
 	normalized := make([]Capability, 0, len(byName))
-	for _, name := range CapabilityNames() {
+	for _, name := range Names() {
 		if capability, ok := byName[name]; ok {
 			normalized = append(normalized, capability)
 		}
@@ -61,14 +77,26 @@ func NormalizeCapabilities(capabilities []Capability) ([]Capability, error) {
 	return normalized, nil
 }
 
-// normalizePaths juge la portée d'un droit : un chemin pour backup.receive et
-// restic.target, un à huit pour files.write, des producteurs pour backup.produce, rien pour les
-// autres. Elle ressort triée, sans doublon.
-func normalizePaths(capability Capability) ([]string, error) {
-	if capability.Name == CapabilityBackupProduce {
-		return normalizeProducers(capability)
+// normalizeValue juge la valeur d'un droit selon sa grammaire (knownRights) :
+// un chemin, un à huit, des producteurs, un compte, ou rien. Un droit posé
+// sans valeur prend la sienne (terminal.host vaut root). Elle ressort triée,
+// sans doublon.
+func normalizeValue(known knownRight, given []string) ([]string, error) {
+	if len(given) == 0 && known.bare != "" {
+		given = []string{known.bare}
 	}
-	paths := slices.Clone(capability.Paths)
+	switch known.value {
+	case valueProducers:
+		return normalizeProducers(given)
+	case valueAccount:
+		return normalizeAccount(given)
+	case valueNone:
+		if len(given) != 0 {
+			return nil, ErrCapabilityScope
+		}
+		return nil, nil
+	}
+	paths := slices.Clone(given)
 	slices.Sort(paths)
 	paths = slices.Compact(paths)
 	for _, candidate := range paths {
@@ -76,22 +104,28 @@ func normalizePaths(capability Capability) ([]string, error) {
 			return nil, ErrCapabilityPath
 		}
 	}
-	switch capability.Name {
-	case CapabilityBackupReceive, CapabilityResticTarget:
-		if len(paths) != 1 {
-			return nil, ErrCapabilityScope
-		}
-	case CapabilityFilesWrite:
-		if len(paths) == 0 || len(paths) > maxCapabilityPaths {
-			return nil, ErrCapabilityScope
-		}
-	default:
-		if len(paths) != 0 {
-			return nil, ErrCapabilityScope
-		}
-		return nil, nil
+	if (known.value == valueOnePath && len(paths) != 1) || len(paths) == 0 || len(paths) > maxCapabilityPaths {
+		return nil, ErrCapabilityScope
 	}
 	return paths, nil
+}
+
+// Un nom de compte POSIX portable, en minuscules : ce que useradd accepte par
+// défaut (une minuscule ou « _ », puis minuscules, chiffres, « _ » ou « - »).
+var accountNamePattern = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+
+// IsAccountName dit si un nom de compte a la forme portable : la valeur de
+// terminal.host, et le compte que l'agent dit au serveur dans son en-tête.
+func IsAccountName(name string) bool {
+	return accountNamePattern.MatchString(name)
+}
+
+// normalizeAccount juge la valeur d'un droit qui nomme un compte : un seul.
+func normalizeAccount(given []string) ([]string, error) {
+	if len(given) != 1 || !IsAccountName(given[0]) {
+		return nil, ErrCapabilityAccount
+	}
+	return slices.Clone(given), nil
 }
 
 // ValidCapabilityPath : un chemin absolu, déjà propre, jamais la racine :
@@ -148,9 +182,29 @@ func formatCapability(capability Capability) string {
 	return capability.Name + ScopeSeparator + strings.Join(capability.Paths, pathSeparator)
 }
 
-// ParseCapabilities lit la forme texte et la normalise. Un texte vide vaut
+// ParseCapabilities lit la forme texte d'une liste prise hors de la
+// politique et la normalise (NormalizeCapabilities). Un texte vide vaut
 // observe seul.
 func ParseCapabilities(text string) ([]Capability, error) {
+	capabilities, err := splitCapabilities(text)
+	if err != nil {
+		return nil, err
+	}
+	return NormalizeCapabilities(capabilities)
+}
+
+// ParsePolicyRights lit la forme texte de droits de la politique (ce que
+// « grant » reçoit, ce qu'un agent rapporte) et la normalise
+// (NormalizePolicyRights).
+func ParsePolicyRights(text string) ([]Capability, error) {
+	capabilities, err := splitCapabilities(text)
+	if err != nil {
+		return nil, err
+	}
+	return NormalizePolicyRights(capabilities)
+}
+
+func splitCapabilities(text string) ([]Capability, error) {
 	if len(text) > maxCapabilityText {
 		return nil, ErrCapabilityScope
 	}
@@ -167,7 +221,7 @@ func ParseCapabilities(text string) ([]Capability, error) {
 		}
 		capabilities = append(capabilities, capability)
 	}
-	return NormalizeCapabilities(capabilities)
+	return capabilities, nil
 }
 
 // HasCapability dit si la liste porte ce droit. Les chemins d'un droit borné

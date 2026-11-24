@@ -28,13 +28,12 @@ var (
 func Encode(document Document) ([]byte, error) {
 	file := policyFile{Version: FormatVersion, MachineID: document.MachineID, Anchors: document.Anchors}
 	for _, key := range document.ServerKeys {
-		file.ServerKeys = append(file.ServerKeys, fileServerKey{
-			Key: base64.StdEncoding.EncodeToString(key.Key), Until: key.Until,
-			GrantedAt: key.Granted.Now, GrantedBoot: key.Granted.Boot, GrantedUptime: int64(key.Granted.Uptime / time.Second),
-		})
+		file.ServerKeys = append(file.ServerKeys, fileServerKey{Key: base64.StdEncoding.EncodeToString(key.Key), fileExpiry: fileExpiryOf(key.Expiry)})
 	}
 	for _, capability := range document.Rights {
-		file.Rights = append(file.Rights, fileRight{Name: capability.Name, Value: strings.Join(capability.Paths, pathSeparator)})
+		file.Rights = append(file.Rights, fileRight{
+			Name: capability.Name, Value: strings.Join(capability.Paths, pathSeparator), fileExpiry: fileExpiryOf(document.Expiries[capability.Name]),
+		})
 	}
 	content, err := toml.Marshal(file)
 	if err != nil {
@@ -44,18 +43,33 @@ func Encode(document Document) ([]byte, error) {
 }
 
 // Grant pose des droits : un droit déjà posé prend la valeur donnée, qui
-// remplace la sienne.
-func (d Document) Grant(granted []Capability) (Document, error) {
+// remplace la sienne, et l'échéance du terme, posée sur l'horloge clock
+// (R-A3-5) ; sans durée, il n'en a plus. observe n'en prend jamais : il ne
+// se retire pas.
+func (d Document) Grant(granted []Capability, term Term, clock Clock) (Document, error) {
+	if term.Duration != 0 {
+		if err := CheckDuration(term.Duration); err != nil {
+			return Document{}, err
+		}
+	}
 	merged := slices.Clone(d.Rights)
+	names := make([]string, 0, len(granted))
 	for _, capability := range granted {
+		names = append(names, capability.Name)
 		merged = slices.DeleteFunc(merged, func(held Capability) bool { return held.Name == capability.Name })
 		merged = append(merged, capability)
 	}
-	rights, err := NormalizeCapabilities(merged)
+	rights, err := NormalizePolicyRights(merged)
 	if err != nil {
 		return Document{}, err
 	}
-	d.Rights = rights
+	expiries := expiriesWithout(d.Expiries, names)
+	for _, name := range names {
+		if duration := term.DurationOf(name); duration != 0 && name != CapabilityObserve {
+			expiries[name] = expiryAfter(clock, duration)
+		}
+	}
+	d.Rights, d.Expiries = rights, expiries
 	return d, nil
 }
 
@@ -67,12 +81,12 @@ func (d Document) Revoke(names []string) (Document, error) {
 		if name == CapabilityObserve {
 			return Document{}, ErrRevokeObserve
 		}
-		if !slices.Contains(CapabilityNames(), name) {
+		if known, ok := knownRightOf(name); !ok || known.readable > readInPolicy {
 			return Document{}, ErrCapabilityUnknown
 		}
 		rights = slices.DeleteFunc(rights, func(held Capability) bool { return held.Name == name })
 	}
-	d.Rights = rights
+	d.Rights, d.Expiries = rights, expiriesWithout(d.Expiries, names)
 	return d, nil
 }
 
@@ -97,9 +111,7 @@ func (d Document) KeepServerKey(key []byte, keepOld time.Duration, granted Clock
 	if slices.Equal(accepted, key) {
 		return Document{}, ErrServerKeyAlreadyAccepted
 	}
-	kept := ServerKey{Key: accepted, Until: granted.Now.Add(keepOld).UTC().Truncate(time.Second), Granted: granted}
-	kept.Granted.Now = granted.Now.UTC().Truncate(time.Second)
-	kept.Granted.Uptime = granted.Uptime.Truncate(time.Second)
+	kept := ServerKey{Key: accepted, Expiry: expiryAfter(granted, keepOld)}
 	d.ServerKeys = []ServerKey{{Key: slices.Clone(key)}, kept}
 	return d, nil
 }
@@ -120,11 +132,10 @@ func (d Document) LiveServerKeys(now Clock) [][]byte {
 // inchangée ne se réécrit pas.
 func (d Document) Same(other Document) bool {
 	return d.MachineID == other.MachineID &&
-		FormatCapabilities(d.Rights) == FormatCapabilities(other.Rights) &&
+		FormatCapabilities(d.Rights) == FormatCapabilities(other.Rights) && sameExpiries(d.Expiries, other.Expiries) &&
 		maps.EqualFunc(d.Anchors, other.Anchors, slices.Equal) &&
 		slices.EqualFunc(d.ServerKeys, other.ServerKeys, func(first, second ServerKey) bool {
-			return slices.Equal(first.Key, second.Key) && first.Until.Equal(second.Until) && first.Granted.Now.Equal(second.Granted.Now) &&
-				first.Granted.Boot == second.Granted.Boot && first.Granted.Uptime == second.Granted.Uptime
+			return slices.Equal(first.Key, second.Key) && first.Expiry.equal(second.Expiry)
 		})
 }
 

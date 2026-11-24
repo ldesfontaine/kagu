@@ -89,8 +89,10 @@ type Client struct {
 	version string
 	// Le système de la machine, redit à chaque ouverture du flux.
 	system string
-	// Les droits du fichier de l'agent, redits à chaque ouverture du flux.
-	rights string
+	// Les droits du fichier de l'agent et leurs échéances, redits à chaque
+	// ouverture du flux.
+	rights      string
+	rightsUntil string
 	// La racine des services du fichier de l'agent, redite de même.
 	root string
 	// Le compte sous lequel l'agent tourne, et les droits cochés qu'il ne peut
@@ -145,6 +147,12 @@ func (c *Client) SetRoot(root string) {
 // flux : ceux qu'il applique.
 func (c *Client) SetCapabilities(capabilities []agentpolicy.Capability) {
 	c.rights = agentpolicy.FormatCapabilities(capabilities)
+}
+
+// SetRightsUntil fixe les échéances des droits que l'agent rapporte à
+// l'ouverture du flux ; une table vide n'en dit aucune.
+func (c *Client) SetRightsUntil(until map[string]time.Time) {
+	c.rightsUntil = agentpolicy.FormatRightsUntil(until)
 }
 
 // NewClient refuse http:// vers autre chose que la boucle locale, sauf si
@@ -282,6 +290,9 @@ func (c *Client) OpenStream(ctx context.Context, identity Identity) (*Stream, er
 	}
 	if c.rights != "" {
 		request.Header.Set(agentwire.HeaderAgentRights, c.rights)
+	}
+	if c.rightsUntil != "" {
+		request.Header.Set(agentwire.HeaderAgentRightsUntil, c.rightsUntil)
 	}
 	if fingerprint := identity.ServerKeyFingerprint(); fingerprint != "" {
 		request.Header.Set(agentwire.HeaderServerKey, fingerprint)

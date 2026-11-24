@@ -40,6 +40,10 @@ const (
 	// du flux, sous leur forme texte (agentpolicy.FormatCapabilities). Absent
 	// chez un agent plus vieux : rien n'est rapporté.
 	HeaderAgentRights = brand.HeaderPrefix + "Agent-Rights"
+	// L'échéance de chacun des droits rapportés qui en a une
+	// (agentpolicy.FormatRightsUntil), redite avec eux. Absent quand aucun
+	// n'échoit, et chez un agent plus vieux.
+	HeaderAgentRightsUntil = brand.HeaderPrefix + "Agent-Rights-Until"
 	// L'empreinte de la clé du serveur que l'agent a épinglée à son
 	// enrôlement (KeyFingerprint), redite à chaque ouverture du flux : le
 	// serveur la garde pour montrer qu'un agent ne vérifierait pas ses ordres.

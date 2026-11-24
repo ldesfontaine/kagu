@@ -35,8 +35,10 @@ type fakeServer struct {
 	// Ce que l'agent a dit de son compte et de ses droits indisponibles, à
 	// chaque ouverture du flux.
 	accounts, unavailables []string
-	refusedSignals         []time.Time
-	acceptedSignal         int
+	// Les droits et leurs échéances dits à chaque ouverture du flux.
+	rights, rightsUntil []string
+	refusedSignals      []time.Time
+	acceptedSignal      int
 }
 
 func (f *fakeServer) handler() http.Handler {
@@ -54,6 +56,8 @@ func (f *fakeServer) stream(w http.ResponseWriter, r *http.Request) {
 	f.streams = append(f.streams, time.Now())
 	f.accounts = append(f.accounts, r.Header.Get(agentwire.HeaderAgentAccount))
 	f.unavailables = append(f.unavailables, r.Header.Get(agentwire.HeaderAgentUnavailable))
+	f.rights = append(f.rights, r.Header.Get(agentwire.HeaderAgentRights))
+	f.rightsUntil = append(f.rightsUntil, r.Header.Get(agentwire.HeaderAgentRightsUntil))
 	count := len(f.streams)
 	refusal := f.streamRefusal
 	f.mu.Unlock()

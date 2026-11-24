@@ -46,8 +46,8 @@ test("un agent en retard sur le serveur propose la mise à jour, pas un agent pl
 
 test("les droits cochés que le compte ne peut pas exercer se comptent, sauf tant que l'agent n'a rien dit", () => {
   const blocked = [
-    { name: "files.write", paths: [], unavailable: "path_denied" },
-    { name: "observe", paths: [], unavailable: "" },
+    { name: "files.write", paths: [], unavailable: "path_denied", until: null },
+    { name: "observe", paths: [], unavailable: "", until: null },
   ];
   expect(machineTodos(machine({ agent: agent({ capabilities: blocked }) }), [], "v0.4.2")).toEqual([{ kind: "rights_unavailable", count: 1 }]);
   expect(machineTodos(machine({ agent: agent({ capabilities: blocked, reported_at: null }) }), [], "v0.4.2")).toEqual([]);
@@ -60,8 +60,8 @@ test("un droit coché dont l'ancre manque ou ne se lit pas se signale, sauf chez
     { name: "restic.target-cert", right: "restic.produce", max: 4, state: "unreadable" as const, values: [] },
   ];
   const held = [
-    { name: "backup.produce", paths: ["proxmox-vzdump"], unavailable: "" },
-    { name: "restic.produce", paths: [], unavailable: "" },
+    { name: "backup.produce", paths: ["proxmox-vzdump"], unavailable: "", until: null },
+    { name: "restic.produce", paths: [], unavailable: "", until: null },
   ];
   const todos = (reported: boolean, capabilities = held) => machineTodos(machine({ agent: agent({ capabilities, anchors: { reported, kinds } }) }), [], "v0.4.2");
   expect(todos(true)).toEqual([{ kind: "anchors_blocking", count: 2 }]);

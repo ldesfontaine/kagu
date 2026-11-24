@@ -28,8 +28,8 @@ var ErrCapabilityProducer = refusal.Invalid("machine.capability_producer", "back
 
 // normalizeProducers juge la portée de backup.produce : un à quatre
 // producteurs connus, triés, sans doublon.
-func normalizeProducers(capability Capability) ([]string, error) {
-	producers := slices.Clone(capability.Paths)
+func normalizeProducers(given []string) ([]string, error) {
+	producers := slices.Clone(given)
 	slices.Sort(producers)
 	producers = slices.Compact(producers)
 	if len(producers) == 0 || len(producers) > maxCapabilityProducers {

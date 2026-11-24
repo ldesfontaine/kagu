@@ -146,7 +146,7 @@ func TestLapsed_FollowsTheMonotonicClock(t *testing.T) {
 	if Lapsed(time.Time{}, granted, Clock{Now: grantedAt.Add(1000 * time.Hour)}) {
 		t.Fatal("no expiry lapsed")
 	}
-	document := Document{ServerKeys: []ServerKey{{Key: testKey(t)}, {Key: testKey(t), Until: until, Granted: granted}}}
+	document := Document{ServerKeys: []ServerKey{{Key: testKey(t)}, {Key: testKey(t), Expiry: Expiry{Until: until, Granted: granted}}}}
 	if live := document.LiveServerKeys(granted); len(live) != 2 {
 		t.Fatalf("live %d", len(live))
 	}

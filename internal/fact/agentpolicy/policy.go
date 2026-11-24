@@ -43,25 +43,26 @@ func Sources() []string {
 }
 
 // Document est la politique telle que son fichier la porte (fiche A3, §5) :
-// la machine, les clés du serveur, les droits normalisés et les ancres. Les
-// échéances des droits viendront avec T03-05.
+// la machine, les clés du serveur, les droits normalisés avec leurs
+// échéances, et les ancres.
 type Document struct {
 	MachineID string
 	// La première est la clé acceptée ; la seconde, gardée par --keep-old,
 	// porte son échéance (R-A3-14).
 	ServerKeys []ServerKey
 	Rights     []Capability
-	Anchors    map[string][]string
+	// Par nom de droit, l'échéance d'un droit à durée (R-A3-5) ; un droit
+	// qui n'y est pas n'en a pas. LiveRights les applique.
+	Expiries map[string]Expiry
+	Anchors  map[string][]string
 }
 
 // ServerKey est une clé publique Ed25519 du serveur que la politique accepte.
-// Until est nul pour la clé acceptée ; la clé gardée par --keep-old échoit à
-// Until et porte l'horloge de sa pose (Granted), comme un droit à durée
-// (R-A3-5).
+// L'échéance est nulle pour la clé acceptée ; la clé gardée par --keep-old
+// échoit comme un droit à durée (R-A3-5).
 type ServerKey struct {
-	Key     []byte
-	Until   time.Time
-	Granted Clock
+	Key []byte
+	Expiry
 }
 
 // Clock est une lecture de l'horloge de la machine : l'heure affichée, et

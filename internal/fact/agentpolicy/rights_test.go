@@ -4,6 +4,7 @@ import (
 	"errors"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -98,5 +99,42 @@ func TestR_A3_10_PolicyOnlyRightsAreRefusedOutsideThePolicy(t *testing.T) {
 	}
 	if len(CapabilityNames()) != 17 || slices.Contains(CapabilityNames(), CapabilityTerminalHost) {
 		t.Errorf("enrollment rights %v", CapabilityNames())
+	}
+}
+
+// R-A3-10, dans la politique : terminal.host s'y lit, sous un compte (root
+// sans valeur), et un compte mal formé est refusé ; les trois autres droits
+// de la politique seule y restent inconnus tant que la table ne les ouvre
+// pas. Ce que l'agent rapporte se lit avec la même grammaire.
+func TestR_A3_10_TheHostTerminalIsReadInThePolicy(t *testing.T) {
+	for text, want := range map[string]string{
+		"terminal.host":        "observe,terminal.host=root",
+		"terminal.host=admin":  "observe,terminal.host=admin",
+		"terminal.host=_svc-1": "observe,terminal.host=_svc-1",
+	} {
+		rights, err := ParsePolicyRights(text)
+		if err != nil || FormatCapabilities(rights) != want {
+			t.Errorf("%q: %v %v, want %q", text, FormatCapabilities(rights), err, want)
+		}
+	}
+	for _, text := range []string{"terminal.host=Root", "terminal.host=a:b", "terminal.host=/root", "terminal.host=1admin", "terminal.host=" + strings.Repeat("a", 33)} {
+		if _, err := ParsePolicyRights(text); !errors.Is(err, ErrCapabilityAccount) {
+			t.Errorf("%q: %v, want a bad account", text, err)
+		}
+	}
+	for _, text := range []string{"terminal.container", "service.free", "network.private=1", "network.private"} {
+		if _, err := ParsePolicyRights(text); !errors.Is(err, ErrCapabilityUnknown) {
+			t.Errorf("%q: %v, want still closed", text, err)
+		}
+	}
+	document, err := Decode([]byte("version = 1\nmachine_id = 'm'\n[[right]]\nname = 'terminal.host'\nvalue = 'admin'\n"))
+	if err != nil || FormatCapabilities(document.Rights) != "observe,terminal.host=admin" {
+		t.Fatalf("the policy does not read terminal.host: %+v %v", document, err)
+	}
+	if _, err := Decode([]byte("version = 1\nmachine_id = 'm'\n[[right]]\nname = 'service.free'\n")); !errors.Is(err, ErrUnreadable) {
+		t.Fatalf("service.free read in the policy: %v", err)
+	}
+	if _, err := document.Revoke([]string{CapabilityTerminalHost}); err != nil {
+		t.Fatalf("terminal.host does not revoke: %v", err)
 	}
 }
