@@ -246,21 +246,12 @@ export interface BackupSource {
   protections: BackupProtection[];
 }
 
-// restic : un rest-server d'openCloud ; storage : un stockage Proxmox ;
-// destination : la destination d'un plan d'archives.
-type BackupTargetKind = "restic" | "storage" | "destination";
-
-export interface BackupTarget {
+interface BackupTargetFacts {
   key: string;
-  kind: BackupTargetKind;
   name: string;
   machine_id: string;
   machine_name: string;
   online: boolean;
-  // restic : running, stopped, error (reason binary_missing : rest-server
-  // manque), pending ; storage : active, inactive ; destination : l'état du
-  // droit de l'agent.
-  state: string;
   reason: string;
   host: string;
   port: number;
@@ -279,6 +270,32 @@ export interface BackupTarget {
   // Les clés des sources qu'elle garde.
   holds: string[];
 }
+
+// L'état d'un rest-server d'openCloud : « pending » tant que son agent n'a rien
+// rapporté (restic.targetPending) ; les trois autres viennent de l'agent
+// (agentwire.ResticTargetRunning, Stopped, Error). Pour error, reason dit
+// pourquoi (binary_missing : rest-server manque).
+type ResticTargetState = "running" | "stopped" | "error" | "pending";
+
+// Chaque sorte porte son état : le test de kind réduit celui qu'on lit.
+export interface ResticTarget extends BackupTargetFacts {
+  kind: "restic";
+  state: ResticTargetState;
+}
+
+// Un stockage de Proxmox : actif ou non (restic.targetsOf).
+export interface StorageTarget extends BackupTargetFacts {
+  kind: "storage";
+  state: "active" | "inactive";
+}
+
+// La destination d'un plan d'archives : l'état du droit de l'agent.
+export interface DestinationTarget extends BackupTargetFacts {
+  kind: "destination";
+  state: RightState;
+}
+
+export type BackupTarget = ResticTarget | StorageTarget | DestinationTarget;
 
 export interface BackupMachineRight {
   right: string;

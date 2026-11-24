@@ -1,4 +1,4 @@
-import type { BackupForget, BackupVerify, BackupMachine, BackupOverview, BackupPath, BackupProtection, BackupRetention, BackupSource, BackupTarget, RetentionFloor } from "../api/backups";
+import type { BackupForget, BackupVerify, BackupMachine, BackupOverview, BackupPath, BackupProtection, BackupRetention, BackupSource, BackupTarget, ResticTarget, RetentionFloor } from "../api/backups";
 import type { Alert } from "../api/alerts";
 import type { Translate } from "../i18n/context";
 import { counted } from "./counted";
@@ -399,20 +399,20 @@ export function sourceUnfit(t: Translate, source: BackupSource, machines: readon
 // marche, en ligne), ou grisée avec sa raison et son geste.
 interface TargetChoice {
   machine: BackupMachine;
-  target: BackupTarget | null;
+  target: ResticTarget | null;
   unfit: Unfitness | null;
 }
 
 export function targetChoices(t: Translate, overview: BackupOverview, sourceMachineID: string, newTargetPath: (machineID: string) => string): TargetChoice[] {
   const choices = overview.machines.map((machine) => {
-    const target = overview.targets.find((candidate) => candidate.kind === "restic" && candidate.machine_id === machine.machine_id) ?? null;
+    const target = overview.targets.find((candidate): candidate is ResticTarget => candidate.kind === "restic" && candidate.machine_id === machine.machine_id) ?? null;
     return { machine, target, unfit: targetUnfit(t, machine, target, sourceMachineID, newTargetPath) };
   });
   const rank = (choice: TargetChoice) => (choice.unfit === null ? 0 : choice.target !== null ? 1 : rightState(choice.machine, "restic.target").state === "missing" ? 3 : 2);
   return choices.sort((a, b) => rank(a) - rank(b) || a.machine.machine_name.localeCompare(b.machine.machine_name));
 }
 
-function targetUnfit(t: Translate, machine: BackupMachine, target: BackupTarget | null, sourceMachineID: string, newTargetPath: (machineID: string) => string): Unfitness | null {
+function targetUnfit(t: Translate, machine: BackupMachine, target: ResticTarget | null, sourceMachineID: string, newTargetPath: (machineID: string) => string): Unfitness | null {
   if (machine.machine_id === sourceMachineID) {
     return { reason: t("backup.unfit_same_machine") };
   }

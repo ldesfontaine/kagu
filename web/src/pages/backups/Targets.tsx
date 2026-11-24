@@ -1,7 +1,6 @@
 import { useState } from "react";
 
-import type { RightState } from "../../api/machines";
-import { removeResticTarget, type BackupMachine, type BackupOverview, type BackupSource, type BackupTarget } from "../../api/backups";
+import { removeResticTarget, type BackupMachine, type BackupOverview, type BackupSource, type DestinationTarget, type ResticTarget, type StorageTarget } from "../../api/backups";
 import { Button } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmModal";
 import { CardGrid, EntityCard } from "../../components/EntityCard";
@@ -53,7 +52,7 @@ export function TargetsSection({ overview }: { overview: BackupOverview }) {
 
 // Une cible restic : son disque, son rest-server et le plancher qu'elle tient ;
 // rest-server manquant, les commandes pour l'installer sur la machine nommée.
-function ResticTargetCard({ target, sources, machine }: { target: BackupTarget; sources: readonly BackupSource[]; machine: BackupMachine | undefined }) {
+function ResticTargetCard({ target, sources, machine }: { target: ResticTarget; sources: readonly BackupSource[]; machine: BackupMachine | undefined }) {
   const t = useT();
   const action = useAction();
   const [removing, setRemoving] = useState(false);
@@ -120,7 +119,7 @@ function ResticTargetCard({ target, sources, machine }: { target: BackupTarget; 
 
 // L'état de rest-server ; une machine qui ne signale plus est neutre et garde
 // son dernier état connu dessous.
-function TargetState({ target }: { target: BackupTarget }) {
+function TargetState({ target }: { target: ResticTarget }) {
   const t = useT();
   const now = useNow(30_000);
   if (!target.online) {
@@ -152,7 +151,7 @@ function TargetState({ target }: { target: BackupTarget }) {
 }
 
 // Le disque des dépôts : le libre en grand, la jauge en trois parts.
-function TargetDisk({ target }: { target: BackupTarget }) {
+function TargetDisk({ target }: { target: ResticTarget }) {
   const { t, language } = useI18n();
   const now = useNow(30_000);
   const share = diskShare(target);
@@ -198,7 +197,7 @@ function TargetDisk({ target }: { target: BackupTarget }) {
 }
 
 // Ce que la cible garde, une pastille par source.
-function TargetHolds({ target, sources }: { target: BackupTarget; sources: readonly BackupSource[] }) {
+function TargetHolds({ target, sources }: { target: ResticTarget; sources: readonly BackupSource[] }) {
   const t = useT();
   const held = target.holds.map((key) => sources.find((source) => source.key === key)).filter((source): source is BackupSource => source !== undefined);
   return (
@@ -248,7 +247,7 @@ function AddTargetCard({ first }: { first: boolean }) {
 }
 
 // Un stockage de Proxmox ou une destination des archives : une carte d'objet.
-function OtherTargetCard({ target }: { target: BackupTarget }) {
+function OtherTargetCard({ target }: { target: StorageTarget | DestinationTarget }) {
   const { t, language } = useI18n();
   const isStorage = target.kind === "storage";
   const meters =
@@ -276,7 +275,7 @@ function OtherTargetCard({ target }: { target: BackupTarget }) {
   );
 }
 
-function OtherTargetState({ t, target }: { t: Translate; target: BackupTarget }) {
+function OtherTargetState({ t, target }: { t: Translate; target: StorageTarget | DestinationTarget }) {
   if (target.kind === "storage") {
     return (
       <Pill small tone={target.state === "active" ? "ok" : "warn"}>
@@ -284,7 +283,5 @@ function OtherTargetState({ t, target }: { t: Translate; target: BackupTarget })
       </Pill>
     );
   }
-  return (
-    <RightPill small state={target.state as RightState} />
-  );
+  return <RightPill small state={target.state} />;
 }
