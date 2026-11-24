@@ -49,8 +49,15 @@ func runGuard(args []string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// SIGHUP, que systemd adresse au processus principal de l'unité (le
+	// lanceur), est relayé à l'agent : sans cela, le lanceur en mourrait.
+	hangups := make(chan os.Signal, 1)
+	signal.Notify(hangups, syscall.SIGHUP)
+	defer signal.Stop(hangups)
 	binary := filepath.Join(absoluteState, brand.AgentBinDir, brand.AgentCurrentLink)
-	code := rollback.NewGuard(state, bin, binary, flags.Args(), logger).Run(ctx)
+	guard := rollback.NewGuard(state, bin, binary, flags.Args(), logger)
+	guard.Hangups = hangups
+	code := guard.Run(ctx)
 	if code == 0 {
 		return nil
 	}

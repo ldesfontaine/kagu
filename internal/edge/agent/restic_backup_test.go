@@ -442,7 +442,7 @@ func TestResticBackup_IsRefusedWhenResticIsMissing(t *testing.T) {
 	b.runner.checks.findRestic = func() (string, error) { return "", errors.New("not found") }
 	b.service(t, "forgejo")
 	expectResult(t, b.run(t, agentwire.KindResticBackup, serviceBackup("forgejo")), agentwire.ActionRefused, agentwire.ReasonResticMissing)
-	unavailable := judgeRights(context.Background(), b.runner.identity, b.runner.checks)
+	unavailable := judgeRights(context.Background(), b.runner.rights(), b.runner.identity.Root(), b.runner.checks)
 	if unavailable[agentpolicy.CapabilityResticProduce] != agentwire.ReasonResticMissing {
 		t.Fatalf("unavailable %v", unavailable)
 	}

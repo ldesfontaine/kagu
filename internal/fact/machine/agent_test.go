@@ -3,6 +3,7 @@ package machine
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -189,6 +190,35 @@ func TestNoteServerKey_KeepsAFingerprintAndNothingElse(t *testing.T) {
 	}
 }
 
+// La source et l'empreinte de la politique que l'agent redit se gardent si
+// elles en ont la forme ; sinon elles s'écrivent vides. Une source refusée ôte
+// l'écart avec le jeton : la fiche dit le refus à part.
+func TestNotePolicy_KeepsAKnownSourceAndADigestAndNothingElse(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	cleartext, _, err := h.service.CreateToken(ctx, "vps-paris-1", RoleGeneric, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrolled := h.enrollWith(t, cleartext)
+	digest := agentpolicy.Digest([]byte("version = 1"))
+	for _, c := range []struct{ source, digest, keptSource, keptDigest string }{
+		{agentpolicy.SourcePolicy, digest, agentpolicy.SourcePolicy, digest},
+		{agentpolicy.SourceRefused, "", agentpolicy.SourceRefused, ""},
+		{"elsewhere", strings.ToUpper(digest), "", ""},
+		{agentpolicy.SourceIdentity, digest[:63], agentpolicy.SourceIdentity, ""},
+		{"", "", "", ""},
+	} {
+		if err := h.service.NotePolicy(ctx, enrolled.Agent.ID, c.source, c.digest); err != nil {
+			t.Fatal(err)
+		}
+		status, _ := h.service.Get(ctx, enrolled.ID)
+		if status.Agent.PolicySource != c.keptSource || status.Agent.PolicyDigest != c.keptDigest {
+			t.Errorf("%q %q kept as %q %q", c.source, c.digest, status.Agent.PolicySource, status.Agent.PolicyDigest)
+		}
+	}
+}
+
 // La racine que l'agent redit se garde si c'est un chemin de droit ; sinon la
 // base garde ce qu'elle avait.
 func TestNoteRootDir_KeepsAValidPathAndIgnoresTheRest(t *testing.T) {
@@ -331,5 +361,21 @@ func TestAgent_CapabilitiesDifferOnlyWhenBothSidesAreKnown(t *testing.T) {
 	}
 	if (Agent{ID: "agt_1", Capabilities: observeOnly, ReportedAt: testReportedAt}).CapabilitiesDiffer() {
 		t.Fatal("an agent from before the rights: nothing requested, nothing to compare")
+	}
+}
+
+// Les droits rapportés ne se comparent au jeton que s'ils viennent
+// d'identity.json : posés par root dans la politique, ils diffèrent à raison.
+func TestCapabilitiesDiffer_OnlyForRightsFromTheIdentity(t *testing.T) {
+	agent := Agent{
+		Requested:    []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}, {Name: agentpolicy.CapabilityDockerDeploy}},
+		Capabilities: []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}},
+		ReportedAt:   time.Now(),
+	}
+	for source, differ := range map[string]bool{"": true, agentpolicy.SourceIdentity: true, agentpolicy.SourcePolicy: false, agentpolicy.SourceRefused: false} {
+		agent.PolicySource = source
+		if agent.CapabilitiesDiffer() != differ {
+			t.Errorf("source %q: differ %v", source, !differ)
+		}
 	}
 }

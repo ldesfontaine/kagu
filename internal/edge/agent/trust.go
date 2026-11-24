@@ -68,11 +68,8 @@ func Trust(opts TrustOptions, verb, kindName, value string) (TrustResult, error)
 	if err := RequireTrustRoot(opts.EUID); err != nil {
 		return TrustResult{}, err
 	}
-	owner, err := stateOwner(opts.StateDir)
+	owner, err := checkStateAsRoot(opts.StateDir, opts.StatePath)
 	if err != nil {
-		return TrustResult{}, err
-	}
-	if err := CheckStateDirOwnedBy(opts.StateDir, opts.StatePath, uint32(owner.UID)); err != nil { // #nosec G115 -- un uid de stat.
 		return TrustResult{}, err
 	}
 	if verb == TrustList {
@@ -109,6 +106,27 @@ func changeAnchors(stored map[string][]string, verb string, kind anchor.Kind, va
 		return anchor.Add(stored, kind, value)
 	}
 	return anchor.Remove(stored, kind, value)
+}
+
+// checkStateAsRoot juge l'état de l'agent pour root, avec les gardes que
+// l'agent applique (CheckStateDir), et rend le compte qui le possède.
+func checkStateAsRoot(stateDir *os.Root, statePath string) (fsx.Owner, error) {
+	owner, err := stateOwner(stateDir)
+	if err != nil {
+		return fsx.Owner{}, err
+	}
+	if err := CheckStateDirOwnedBy(stateDir, statePath, uint32(owner.UID)); err != nil { // #nosec G115 -- un uid de stat.
+		return fsx.Owner{}, err
+	}
+	return owner, nil
+}
+
+// loadIdentityAsRoot lit l'identité de l'agent pour root, état jugé d'abord.
+func loadIdentityAsRoot(stateDir *os.Root, statePath string) (Identity, error) {
+	if _, err := checkStateAsRoot(stateDir, statePath); err != nil {
+		return Identity{}, err
+	}
+	return LoadIdentity(stateDir)
 }
 
 // stateOwner rend le compte à qui appartient l'état : c'est à lui que le

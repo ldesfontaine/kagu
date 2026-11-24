@@ -113,7 +113,7 @@ func inventoryOf(t *testing.T, readEnvironment bool) (inventory []container.Obse
 	var count atomic.Int64
 	var logged bytes.Buffer
 	client := serve(t, benchDaemon(t, &count))
-	watcher := New(client, newSink(), Options{Logger: slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelDebug})), ReadEnvironment: readEnvironment})
+	watcher := New(client, newSink(), Options{Logger: slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelDebug})), ReadEnvironment: func() bool { return readEnvironment }})
 	inventory, _, err := watcher.inventory(context.Background())
 	if err != nil {
 		t.Fatal(err)

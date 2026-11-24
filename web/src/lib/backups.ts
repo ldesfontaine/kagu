@@ -1,7 +1,7 @@
 import type { BackupDestination, BackupPlan, BackupSourceKind, PlanRequest } from "../api/backups";
 import type { ProxmoxGuest } from "../api/proxmox";
 import type { Translate } from "../i18n/context";
-import { reenrollPath, type Unfit } from "./rights";
+import { machineAgentPath, type Unfit } from "./rights";
 
 // Les adresses de la page et de ses fenêtres.
 export const backupsPath = "/sauvegardes";
@@ -260,7 +260,7 @@ export function planRequestOf(values: PlanFormValues, destination: string): { su
 // qui y remédie. « unknown » (droits pas encore rapportés) laisse choisir.
 export function unfitDestination(t: Translate, destination: Pick<BackupDestination, "machine_id" | "path" | "right">): Unfit | null {
   if (destination.right === "missing") {
-    return { reason: t("backup.right_missing"), link: { to: reenrollPath(destination.machine_id, { name: "backup.receive", path: destination.path }), label: t("machine.reenroll_with_right") } };
+    return { reason: t("backup.right_missing"), link: { to: machineAgentPath(destination.machine_id, { name: "backup.receive", path: destination.path }), label: t("machine.grant_right") } };
   }
   if (destination.right === "unavailable") {
     return { reason: t("backup.right_unavailable"), link: { to: `/machines/${destination.machine_id}`, label: t("machine.fit_open") } };

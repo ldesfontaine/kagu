@@ -97,6 +97,11 @@ type agentJSON struct {
 	RollbackCapable bool `json:"rollback_capable"`
 	// Les ancres de confiance locales que l'agent dit tenir.
 	Anchors anchorsJSON `json:"anchors"`
+	// D'où l'agent tient ses droits : "policy", "identity", "refused" (la
+	// politique ne se lit pas ou est mal gardée : observe seul), vide tant
+	// qu'il n'a rien dit ; et l'empreinte SHA-256 du fichier de sa politique.
+	PolicySource string `json:"policy_source"`
+	PolicyDigest string `json:"policy_digest"`
 	// Par droit connu, le verdict d'agentpolicy.Fit : l'écran l'affiche sans
 	// le recalculer.
 	Fit map[string]fitJSON `json:"fit"`
@@ -265,6 +270,8 @@ func agentToJSON(agent machine.Agent) *agentJSON {
 		RunAs:                accountToJSON(agent.RunAs),
 		RollbackCapable:      agent.CanRollBack(),
 		Anchors:              anchorsToJSON(agent.Anchors),
+		PolicySource:         agent.PolicySource,
+		PolicyDigest:         agent.PolicyDigest,
 		Fit:                  fitsToJSON(agent),
 	}
 }

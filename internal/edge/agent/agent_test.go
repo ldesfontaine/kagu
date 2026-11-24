@@ -47,7 +47,9 @@ type bench struct {
 	sshKeys   *sshkeys.Service
 	roles     *role.Service
 	stateDir  *os.Root
-	logger    *slog.Logger
+	// policy : où l'agent du banc lit sa politique, vide au départ.
+	policy PolicyPlace
+	logger *slog.Logger
 }
 
 func newBench(t *testing.T) *bench {
@@ -83,7 +85,7 @@ func newBench(t *testing.T) *bench {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { agentRoot.Close() })
-	return &bench{url: server.URL, machines: machines, actions: actions, serverKey: serverKey, db: db, resources: resources, probes: probes, sshKeys: sshKeys, roles: roles, stateDir: agentRoot, logger: logger}
+	return &bench{url: server.URL, machines: machines, actions: actions, serverKey: serverKey, db: db, resources: resources, probes: probes, sshKeys: sshKeys, roles: roles, stateDir: agentRoot, policy: testPolicyPlace(t), logger: logger}
 }
 
 // Une borne large : elle ne sert qu'à ne pas bloquer la CI si le code est
@@ -91,7 +93,7 @@ func newBench(t *testing.T) *bench {
 const benchTimeout = 30 * time.Second
 
 func (b *bench) options(token string) Options {
-	return Options{StateDir: b.stateDir, Server: b.url, Token: token, Language: lang.English, Version: "v0.0.1", SignalInterval: 50 * time.Millisecond, SampleInterval: 20 * time.Millisecond, Logger: b.logger, readSSHKeys: benchSSHKeys, detectRoles: benchRoles, readHost: benchHost}
+	return Options{StateDir: b.stateDir, Server: b.url, Token: token, Language: lang.English, Version: "v0.0.1", SignalInterval: 50 * time.Millisecond, SampleInterval: 20 * time.Millisecond, Logger: b.logger, readSSHKeys: benchSSHKeys, detectRoles: benchRoles, readHost: benchHost, policyPlace: &b.policy}
 }
 
 // benchSSHKeys est le relevé des bancs : les tests ne lisent pas les comptes

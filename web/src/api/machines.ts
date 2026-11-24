@@ -113,6 +113,12 @@ export interface Agent {
   rollback_capable: boolean;
   // Les ancres de confiance locales que l'agent dit tenir.
   anchors: AgentAnchors;
+  // D'où l'agent tient ses droits : sa politique (policy_digest en est
+  // l'empreinte SHA-256), identity.json faute de politique, ou rien
+  // (refused : la politique ne se lit pas ou est mal gardée, observe seul).
+  // Vide pour un agent d'avant.
+  policy_source: "" | "policy" | "identity" | "refused";
+  policy_digest: string;
   // Par droit connu, le verdict du serveur : l'écran l'affiche sans le
   // recalculer.
   fit: Record<string, RightFit>;

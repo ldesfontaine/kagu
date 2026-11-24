@@ -52,6 +52,9 @@ type Store interface {
 	RecordServiceRollbackVersion(ctx context.Context, agentID string, version int) error
 	// RecordAnchors garde le texte des ancres que l'agent a dit ; "" ne change rien.
 	RecordAnchors(ctx context.Context, agentID, anchors string) error
+	// RecordPolicy garde la source des droits et l'empreinte de la politique
+	// que l'agent a dites ; "" s'écrit vide.
+	RecordPolicy(ctx context.Context, agentID, source, digest string) error
 	SetUpdateLast(ctx context.Context, machineID string, updateLast bool) error
 	SetRole(ctx context.Context, machineID string, role Role) error
 	// SetPlacement pose la correction de type et l'hôte désigné par l'opérateur ;
@@ -644,6 +647,20 @@ func (s *Service) NoteAnchors(ctx context.Context, agentID, reported string) err
 		reported = ""
 	}
 	return s.store.RecordAnchors(ctx, agentID, reported)
+}
+
+// NotePolicy garde d'où l'agent dit tenir ses droits et l'empreinte de sa
+// politique, redites à chaque ouverture du flux : la fiche montre une machine
+// dont la politique est refusée (observe seul). Une source inconnue ou une
+// empreinte qui n'en a pas la forme s'écrivent vides.
+func (s *Service) NotePolicy(ctx context.Context, agentID, source, digest string) error {
+	if !slices.Contains(agentpolicy.Sources(), source) {
+		source = ""
+	}
+	if !agentpolicy.IsDigest(digest) {
+		digest = ""
+	}
+	return s.store.RecordPolicy(ctx, agentID, source, digest)
 }
 
 // SetUpdateLast pose ou retire « à mettre à jour en dernier » : la machine

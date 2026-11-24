@@ -3,7 +3,7 @@ import type { Alert } from "../api/alerts";
 import type { Translate } from "../i18n/context";
 import { counted } from "./counted";
 import type { MissingSoftware } from "./resticInstall";
-import { reenrollPath, type Unfit } from "./rights";
+import { machineAgentPath, type Unfit } from "./rights";
 import { folded } from "./select";
 import { ago } from "./time";
 import type { Tone } from "./tone";
@@ -449,7 +449,7 @@ export function targetSetupUnfit(t: Translate, machine: BackupMachine | undefine
   }
   const right = rightState(machine, "restic.target");
   if (right.state === "missing") {
-    return { reason: t("backup.unfit_target_right_missing"), link: { to: reenrollPath(machineID, { name: "restic.target" }), label: t("machine.reenroll_with_right") } };
+    return { reason: t("backup.unfit_target_right_missing"), link: { to: machineAgentPath(machineID, { name: "restic.target" }), label: t("machine.grant_right") } };
   }
   if (right.state === "unavailable" && right.reason === "rest_server_missing") {
     return { reason: t("backup.unfit_rest_server_missing"), link: sheet };

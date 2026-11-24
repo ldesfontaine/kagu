@@ -8,7 +8,7 @@ import "./PickList.scss";
 // Un choix parmi des objets riches (une VM, une cible) : une carte par objet,
 // un bouton radio, son nom et une ligne. Un objet qui ne convient pas reste
 // dans la liste, grisé, avec sa raison et le geste qui y remédie : le
-// ré-enrôlement avec le droit qui manque, ou l'écran où aller. Il ne se
+// ligne grant du droit qui manque, ou l'écran où aller. Il ne se
 // choisit pas, mais on voit pourquoi il manque au lieu de le chercher.
 export interface PickOption {
   value: string;

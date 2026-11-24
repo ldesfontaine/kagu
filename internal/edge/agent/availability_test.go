@@ -286,7 +286,7 @@ func reasonsOf(t *testing.T, rights string, checks hostChecks) map[string]string
 		t.Fatal(err)
 	}
 	identity.RootDir = "/srv/workspace"
-	return judgeRights(context.Background(), identity, checks)
+	return judgeRights(context.Background(), identity.Capabilities(), identity.Root(), checks)
 }
 
 // Le rapport pose la question de chaque droit au bon endroit, et ne dit rien
@@ -364,7 +364,7 @@ func TestJudgeRights_ANarrowedAgentSaysNothing(t *testing.T) {
 		writable:    func(string) string { return agentwire.ReasonPathDenied },
 		agentUpdate: func() string { return agentwire.ReasonPathDenied },
 	}
-	if got := judgeRights(context.Background(), identity, denyAll); len(got) != 0 {
+	if got := judgeRights(context.Background(), identity.Capabilities(), identity.Root(), denyAll); len(got) != 0 {
 		t.Errorf("a narrowed agent reported %v", got)
 	}
 }
@@ -485,7 +485,7 @@ func TestJudgeRights_ProduceIsNotJudgedByANarrowedAgent(t *testing.T) {
 	}
 	identity.narrowed = true
 	bench := &produceBench{missing: map[string]bool{"sudo": true}}
-	if got := judgeRights(context.Background(), identity, bench.checks()); len(got) != 0 || len(bench.looked) != 0 {
+	if got := judgeRights(context.Background(), identity.Capabilities(), identity.Root(), bench.checks()); len(got) != 0 || len(bench.looked) != 0 {
 		t.Errorf("a narrowed agent reported %v", got)
 	}
 }

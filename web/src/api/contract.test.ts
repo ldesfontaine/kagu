@@ -135,6 +135,8 @@ const machine = shape<Machine>("Machine", {
       reported: value,
       kinds: shape<AnchorKind>("AnchorKind", { name: value, right: value, max: value, state: value, values: value }),
     }),
+    policy_source: value,
+    policy_digest: value,
     fit: dictionaryOf(shape<RightFit>("RightFit", { state: value, reason: value })),
   }),
   lifecycle: optional(lifecycle),
@@ -870,6 +872,7 @@ const session = shape<Session>("Session", {
   verbs: shape("SessionVerb", { id: value, route: value }),
   roles: shape("SessionRole", { id: value, capabilities: value }),
   rights: value,
+  grant_lines: dictionaryOf(value),
 });
 
 type IncidentUpdateJSON = Incident["updates"][number];

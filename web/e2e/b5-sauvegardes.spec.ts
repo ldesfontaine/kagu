@@ -165,16 +165,11 @@ test("l'explorateur sur une cible sans restic.browse : le refus porte son geste,
   await page.getByRole("menu").getByRole("menuitem", { name: label("backup.browse") }).click();
   const dialog = page.locator("dialog[open]");
   await expect(dialog).toContainText(label("restic.target_browse_right_missing"), { timeout: browseTimeout });
-  const gesture = dialog.getByRole("link", { name: filled("machine.reenroll_with", label("machine.capability_restic_browse")) });
-  await expect(gesture).toBeVisible();
-  await gesture.click();
-  await expect(page).toHaveURL(/\/machines\/[^/]+\/reenroller\?droit=restic\.browse/);
-  await expect(page.locator("dialog[open]").getByRole("checkbox", { name: label("machine.capability_restic_browse") })).toBeChecked();
-  await page.locator("dialog[open]").getByRole("button", { name: label("modal.close") }).first().click();
+  await expect(dialog.locator(".token-box", { hasText: "agent grant restic.browse" })).toBeVisible();
   expect(findings.unknown()).toEqual([]);
 });
 
-test("restaurer sans le droit : le refus nomme le droit et porte « Ré-enrôler avec ce droit »", async ({ page, findings }) => {
+test("restaurer sans le droit : le refus nomme le droit et porte sa ligne grant", async ({ page, findings }) => {
   findings.where = "/sauvegardes/parcourir › restaurer sans restic.restore";
   test.setTimeout(90_000);
   const slow = expect.configure({ timeout: browseTimeout });
@@ -190,12 +185,7 @@ test("restaurer sans le droit : le refus nomme le droit et porte « Ré-enrôler
   await dialog.getByRole("button", { name: label("backup.restore"), exact: true }).click();
   await dialog.getByRole("button", { name: label("confirm.yes") }).click();
   await slow(dialog).toContainText(label("restic.source_restore_right_missing"));
-  const gesture = dialog.getByRole("link", { name: filled("machine.reenroll_with", label("machine.capability_restic_restore")) });
-  await slow(gesture).toBeVisible();
-  await gesture.click();
-  await slow(page).toHaveURL(/\/machines\/[^/]+\/reenroller\?droit=restic\.restore/);
-  await expect(page.locator("dialog[open]").getByRole("checkbox", { name: label("machine.capability_restic_restore") })).toBeChecked();
-  await page.locator("dialog[open]").getByRole("button", { name: label("modal.close") }).first().click();
+  await slow(dialog.locator(".token-box", { hasText: "agent grant restic.restore" })).toBeVisible();
   expect(findings.unknown()).toEqual([]);
 });
 

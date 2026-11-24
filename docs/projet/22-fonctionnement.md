@@ -125,7 +125,7 @@ dit comment. Une migration de plus part de `002`.
 
 | Où | Fichier | Contenu | Protection |
 | --- | --- | --- | --- |
-| Machine Kagu, `state_dir` | `opencloud.db` | Les machines (`machines` : nom, hôte, adresse, système, rôle choisi), leurs agents (`agents` : clé publique Ed25519, version, racine `/srv/workspace`, date d'enrôlement, dernier signe de vie, révocation, l'empreinte de la clé du serveur que l'agent dit avoir épinglée `server_key_fingerprint`, le dernier rang d'ordre donné `last_order_seq`, les ancres de confiance locales que l'agent dit tenir `anchors` (texte de l'en-tête ; NULL tant qu'il n'a rien dit), le compte sous lequel il tourne `run_as_uid` et `run_as_name` (nuls tant qu'il ne l'a pas dit) ; un seul actif par machine, l'index `agents_one_active` le tient), les droits que chaque agent rapporte de son fichier (`agent_capabilities` : droit, chemins, instant du rapport, et `unavailable`, la raison pour laquelle son compte ne peut pas l'exercer, vide s'il le peut), les jetons d'enrôlement (avec les droits demandés, `requested_capabilities`, et l'agent qui l'a consommé, `agent_id`), les champs que l'agent a dits de lui et que le serveur a refusés (`machine_report_refusals`, migration `050` : `hostname`, `system`, `arch`, `version` ; jamais la valeur refusée) | Jetons stockés hachés : une copie de la base n'enrôle personne. Un jeton vaut **1 h** et sert une fois (`machine.TokenLifetime`) ; au démarrage, `serve` efface les jetons périmés jamais servis et les consommés depuis plus de 90 jours, **sauf celui d'un agent actif** : il dit ce qui était demandé, contre quoi se lit ce que l'agent rapporte. La clé publique n'est pas un secret. Une valeur refusée (`machine.RefusedFields` : nom d'hôte RFC 1123, texte de 120 octets sans caractère de contrôle ; au flux, le système par `machine.IsSystemName`) n'est jamais écrite ; son refus l'est, la fiche le rend (`report_rejected`) jusqu'au champ redit valable ou au ré-enrôlement. La `050` a rejugé une fois, par ce même juge, ce qu'une base d'avant gardait : la valeur refusée effacée, son refus noté. Une machine retirée emporte ses agents, leurs droits et ses refus (cascade) |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les machines (`machines` : nom, hôte, adresse, système, rôle choisi), leurs agents (`agents` : clé publique Ed25519, version, racine `/srv/workspace`, date d'enrôlement, dernier signe de vie, révocation, l'empreinte de la clé du serveur que l'agent dit avoir épinglée `server_key_fingerprint`, le dernier rang d'ordre donné `last_order_seq`, les ancres de confiance locales que l'agent dit tenir `anchors` (texte de l'en-tête ; NULL tant qu'il n'a rien dit), le compte sous lequel il tourne `run_as_uid` et `run_as_name` (nuls tant qu'il ne l'a pas dit) ; un seul actif par machine, l'index `agents_one_active` le tient), d'où il tient ses droits `policy_source` (`policy`, `identity`, `refused`) et l'empreinte SHA-256 de sa politique `policy_digest` (migration `051` ; nulles tant qu'il n'a rien dit), les droits que chaque agent rapporte (`agent_capabilities` : droit, chemins, instant du rapport, et `unavailable`, la raison pour laquelle son compte ne peut pas l'exercer, vide s'il le peut), les jetons d'enrôlement (avec les droits demandés, `requested_capabilities`, et l'agent qui l'a consommé, `agent_id`), les champs que l'agent a dits de lui et que le serveur a refusés (`machine_report_refusals`, migration `050` : `hostname`, `system`, `arch`, `version` ; jamais la valeur refusée) | Jetons stockés hachés : une copie de la base n'enrôle personne. Un jeton vaut **1 h** et sert une fois (`machine.TokenLifetime`) ; au démarrage, `serve` efface les jetons périmés jamais servis et les consommés depuis plus de 90 jours, **sauf celui d'un agent actif** : il dit ce qui était demandé, contre quoi se lit ce que l'agent rapporte. La clé publique n'est pas un secret. Une valeur refusée (`machine.RefusedFields` : nom d'hôte RFC 1123, texte de 120 octets sans caractère de contrôle ; au flux, le système par `machine.IsSystemName`) n'est jamais écrite ; son refus l'est, la fiche le rend (`report_rejected`) jusqu'au champ redit valable ou au ré-enrôlement. La `050` a rejugé une fois, par ce même juge, ce qu'une base d'avant gardait : la valeur refusée effacée, son refus noté. Une machine retirée emporte ses agents, leurs droits et ses refus (cascade) |
 | Où tourne chaque machine, `state_dir` | `opencloud.db` | Le type rapporté (`machines.kind`), la correction de l'opérateur (`kind_override`, `host_override`), les cartes réseau (`machine_interfaces` : nom, adresse MAC), les disques physiques (`machine_block_devices` : nom, modèle, taille, nature, amovible), les pools (`machine_storage_pools` : genre, niveau, état, taille, disques) et les grappes d'hyperviseurs (`hypervisor_clusters`, `machine_proxmox.cluster_id`) | Rien de secret : des noms de noyau et des adresses MAC. Chaque rapport de l'agent remplace les listes ; une machine retirée les emporte (cascade), une grappe sans hôte est retirée |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les tâches surveillées et leur jeton de ping, **chiffré** (AES-256-GCM, clé du serveur, lié à sa ligne) : la page doit le réafficher. Pour le retrouver à chaque ping, la colonne `token_lookup` garde son SHA-256 ; le chiffré est dans `token_sealed` | Une copie de la base seule ne livre pas les URL de ping ; elle donne l'empreinte, qui ne remonte pas au jeton (128 bits tirés au hasard). Qui a la base **et** `secret.key` les lit. Le jeton se régénère depuis la page de la tâche : l'ancienne URL cesse aussitôt de répondre, sans recréer la tâche. La machine d'une tâche, facultative, est en `restrict` : une machine à laquelle une tâche est rattachée ne se retire pas (409 `machine.has_heartbeats`), on détache la tâche d'abord |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les pings bruts (forme, source, méthode, corps tronqué à 10 Kio, **en clair**) et les exécutions (début, fin, durée, code, issue dont « manquée » : un retard sans exécution) | Purgés : pings après 7 jours, exécutions après 90 jours |
@@ -164,7 +164,8 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `outgoing/<colis>/` | Les colis des ordres longs, de deux sortes. *À télécharger* (la base, `backup.receive`) : l'instantané de la base (`VACUUM INTO`) le temps de l'emballer, puis l'archive chiffrée jusqu'à son téléchargement par l'agent, **la vie de son ordre au plus** (`action.ParcelLifetime` : 2 min pour être pris, une heure pour finir). *À téléverser* (`backup.produce`, `Outbox.CreateForUpload`) : un colis que la machine **source** remplit par `PUT /agent/parcels/{colis}/{nom}` (l'archive chiffrée d'une VM, 64 Gio au plus, 1 Gio libre de marge ; la clé scellée y est déposée par `serve`), jusqu'à ce que la destination l'ait téléchargé ; `serve` le jette dès la cible traitée, et **un seul vit à la fois**. Vidé au démarrage de `serve`. Aucune sauvegarde n'est gardée sur cette machine | `0700`, `0600`, même disque et mêmes droits que la base ; l'instantané en clair est effacé avant l'envoi ; un téléversement n'apporte que du chiffré |
 | Machine Kagu, `state_dir` | `lifecycle.json` | La dernière lecture d'endoflife.date : quel dépôt d'images est quel produit, et les branches des produits que les services utilisent (nom, maintenue ou non, date de fin, dernière version). Absent tant que la fin de support n'a jamais été activée | Données publiques, 0600, écriture atomique, remplacé d'un bloc à chaque lecture réussie ; l'effacer coûte une lecture de la source |
 | Machine Kagu, `state_dir` | `control.sock` | La socket de commande, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/api/manifest/…` et, pour root seul, `/control/admin/…`. Une socket que personne n'écoute (arrêt brutal) est remplacée au démarrage suivant ; celle d'un `serve` vivant n'est jamais touchée | Mode 0600, et `state_dir` fermé au groupe et aux autres, sans quoi `serve` ne démarre pas. Elle n'est pas à sauvegarder |
-| Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` (au compte de l'agent, `opencloud-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, identifiant de la machine et de l'agent (`agent_id`), adresse de Kagu, empreinte du certificat, langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`) | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (la clé change seule pendant une rotation, par l'ordre `agent.server_key`) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/opencloud`**, que le compte du serveur possède sur la machine Kagu : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
+| Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` (au compte de l'agent, `opencloud-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, identifiant de la machine et de l'agent (`agent_id`), adresse de Kagu, empreinte du certificat, langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul ; ignorés dès que la machine a une politique), la version de politique que son binaire sait lire (`policy_format`), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`) | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (la clé change seule pendant une rotation, par l'ordre `agent.server_key`) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/opencloud`**, que le compte du serveur possède sur la machine Kagu : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
+| Toute machine qui a reçu un `agent grant`, `/etc/opencloud-agent` (à root, `0755`) | `policy.toml`, `policy.toml.lock` | La politique de l'agent : `version`, `machine_id`, un bloc `[[right]]` par droit (« La politique de l'agent ») ; le verrou de `grant` et `revoke`, vide | `policy.toml` en `0640`, `root:opencloud-agent` : l'agent la lit, son compte ne peut ni l'écrire ni la remplacer ; le verrou en `0600` à root. Aucun secret |
 | Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` | `bin/` et `update.json` | `bin/opencloud-<version>` (la courante et la précédente, rien d'autre), les liens `bin/current` (ce que le lanceur exécute) et `bin/previous` (la version d'avant la dernière bascule), et le **marqueur** `update.json` : une mise à jour (ou un retour arrière) en attente de confirmation, avec son échéance, ou ce que le lanceur en a fait (« Comment un agent se met à jour », décision 9). Aucun secret : états, numéros de version, identifiant d'ordre | `0600` au compte de l'agent. Le marqueur disparaît à la confirmation, ou une fois son rapport livré au serveur ; un marqueur illisible est écarté |
 | Toute machine, la machine Kagu comprise, `/usr/local/lib/opencloud-agent` | `opencloud-guard` | Le **lanceur stable** : une copie du binaire, posée une fois par root (`root:root`, `0755`), que l'unité systemd lance. L'agent, qui écrit son état et `bin/`, ne le remplace jamais | Se repose à la main si le lanceur change (`GuardVersion`) ; l'agent le sait par la variable `OPENCLOUD_AGENT_GUARD` |
 | Hôte Proxmox, `/var/lib/opencloud-agent` | `proxmox.json` | Le jeton Proxmox **local** de l'agent : identifiant, **secret** et empreinte du certificat (`token_id`, `secret`, `fingerprint`), posé à la main par l'opérateur, jamais envoyé ni stocké par le serveur | `0600`, au compte de l'agent ; sans lui les droits `proxmox.*` sont indisponibles (« Comment un hôte Proxmox agit »). Le secret est en clair dans ce fichier : le protège le compte, pas un chiffrement |
@@ -352,7 +353,9 @@ Liste de départ prise par Lucas le 21 octobre 2026 (décision 9). **Appliqués
 par l'agent** (#146) : chaque genre de la liste fermée déclare le droit qu'il
 exige (`Spec.Right`, au registre des genres d'`agentwire`, que le serveur
 et l'agent lisent tous deux), et l'agent refuse un ordre dont le droit n'est pas
-dans son fichier. Les changer, c'est ré-enrôler (décision 10, plus bas).
+dans ce qu'il applique : la politique de la machine, sinon son fichier
+(« La politique de l'agent », plus bas). Les changer, c'est `sudo opencloud
+agent grant` ou `revoke` sur la machine (T03-03), plus un ré-enrôlement.
 
 Les noms de droits ne se définissent qu'**une fois**, dans
 `internal/fact/agentpolicy` (B-5 : `TestB5_RightNamesAreDefinedOnlyInAgentpolicy`) ;
@@ -379,15 +382,15 @@ lisent ; l'écran l'affiche sans le recalculer.
 | Droit | Portée | Ce qu'il permet |
 | --- | --- | --- |
 | `observe` | — | Mesurer la machine, lire son Docker, lancer ses sondes : les commandes d'observation, et l'ordre `agent.ping`, qui ne change rien. Toujours là, la case est cochée et grisée |
-| `probe.lan` | — | Que les sondes de l'agent composent vers **le réseau local** (boucle locale, adresses privées, partagée `100.64.0.0/10`, « Comment une cible est sondée »). **Coché par défaut** à l'émission d'un jeton (formulaire) et pour l'agent de la machine Kagu, décochable. Premier droit qu'**aucun ordre n'exige** (aucun `Spec.Right` ne le nomme) : c'est une borne de l'observation, appliquée par l'agent à ses propres sondes. Un agent enrôlé avant ne l'a pas : ses sondes du réseau local tombent « Hors ligne » jusqu'à un ré-enrôlement qui coche le droit (on ne coche rien à la place de l'opérateur) |
-| `observe.env` | — | Que l'agent **lise l'environnement des conteneurs Docker** et en tire les liens entre instances de la machine (« Les liens de l'environnement »). **Refusé par défaut** : décoché dans le formulaire, absent des préréglages de rôle, absent de la ligne de la machine Kagu ; il se coche **machine par machine**, sous « Avancé : droits de l'agent », avec sa note. Comme `probe.lan`, aucun ordre ne l'exige : c'est une borne de l'observation, lue **une fois** au démarrage de l'agent. Un agent enrôlé avant ne l'a pas : la carte **Liens** de la fiche d'un service dit que l'environnement n'est pas lu et porte le bouton **Ré-enrôler avec « Lire l'environnement… »** (fenêtre déjà cochée, geste de U1) |
+| `probe.lan` | — | Que les sondes de l'agent composent vers **le réseau local** (boucle locale, adresses privées, partagée `100.64.0.0/10`, « Comment une cible est sondée »). **Coché par défaut** à l'émission d'un jeton (formulaire) et pour l'agent de la machine Kagu, décochable. Premier droit qu'**aucun ordre n'exige** (aucun `Spec.Right` ne le nomme) : c'est une borne de l'observation, appliquée par l'agent à ses propres sondes. Un agent enrôlé avant ne l'a pas : ses sondes du réseau local tombent « Hors ligne » jusqu'à ce que root le pose (`agent grant probe.lan` ; on ne coche rien à la place de l'opérateur). Demandé à la politique **à chaque sonde** : le poser ou le retirer vaut sans redémarrage (R-A3-4) |
+| `observe.env` | — | Que l'agent **lise l'environnement des conteneurs Docker** et en tire les liens entre instances de la machine (« Les liens de l'environnement »). **Refusé par défaut** : décoché dans le formulaire, absent des préréglages de rôle, absent de la ligne de la machine Kagu ; il se coche **machine par machine**, sous « Avancé : droits de l'agent », avec sa note. Comme `probe.lan`, aucun ordre ne l'exige : c'est une borne de l'observation, demandée à la politique **à chaque inventaire** du veilleur Docker (R-A3-4). Un agent enrôlé avant ne l'a pas : la carte **Liens** de la fiche d'un service dit que l'environnement n'est pas lu et porte la ligne `grant` du droit |
 | `agent.update` | — | Les ordres `agent.update` (mettre à jour l'agent depuis le serveur) et `agent.rollback` (revenir à la version précédente) (« Comment un agent se met à jour »). Un agent qui n'a pas le droit refuse l'ordre ; celui qui l'a le vérifie lui-même avant de changer de binaire, et ne le fait que sous le lanceur stable |
 | `restic.target` | Un dossier | Recevoir des sauvegardes restic : l'agent lance et surveille `rest-server` en écriture seule sur ce dossier (« Comment restic sauvegarde »). **Refusé par défaut**, coché par machine |
 | `restic.produce` | — | Lancer restic sur la machine pour sauvegarder un service ou une VM vers une cible. **Refusé par défaut**, coché par machine. Une VM demande aussi `backup.produce`. Lier la source à une cible (`restic.provision`) demande l'ancre `restic.target-cert` (« Les ancres de confiance locales ») |
 | `restic.docker` | — | Sauvegarder les **volumes nommés** et les **bases** Docker d'un service entier : l'agent lit un volume par le conteneur qui le monte (`docker cp`) et lance l'outil de dump d'une base **dans son conteneur** (`docker exec`). **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Équivaut à la socket Docker que l'agent a déjà. Demandé **en plus** de `restic.produce` dès qu'un service porte un volume ou une base ; sans lui, l'ordre est refusé (`right_missing:restic.docker`) |
-| `restic.verify` | — | Vérifier les dépôts que la machine reçoit : `restic check`, puis la relecture **en mémoire** de fichiers du dernier instantané (« Comment restic se vérifie »). **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Demandé **en plus** de `restic.target` ; sans lui, l'ordre est refusé (`right_missing:restic.verify`) et l'écran propose « Ré-enrôler avec ce droit ». Coût : l'agent déchiffre du contenu (rien n'est écrit sur son disque, rien n'est rapporté) ; il détient déjà le mot de passe du dépôt pour la rétention, le droit le dit en clair |
-| `restic.browse` | — | Parcourir les dépôts que la machine reçoit, pour l'explorateur de la page Sauvegardes (« Comment on parcourt une sauvegarde ») : elle lit les **noms, tailles et dates** des fichiers d'un instantané et les rend à Kagu, qui ne les garde pas. **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Demandé **en plus** de `restic.target` ; sans lui, l'ordre est refusé (`restic.target_browse_right_missing`) et l'écran propose « Ré-enrôler avec ce droit ». Coût : un nom de fichier est déjà une donnée, et il transite par le serveur le temps de la requête (contenu jamais lu). Ce droit est distinct de `restic.verify` : vérifier ne montre aucun nom |
-| `restic.restore` | — | Restaurer sur la **machine source** un fichier ou un dossier d'un instantané, **à côté de l'original** (« Comment on restaure »). **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Sans chemin propre : la destination doit être sous un dossier de `files.write` (liens résolus), donc sous les `ReadWritePaths` de l'unité. Sans le droit, l'ordre est refusé (`restic.source_restore_right_missing`) et l'écran propose « Ré-enrôler avec ce droit ». Coût : l'agent écrit sur sa machine (jamais par-dessus, jamais de suppression) ; deux droits à cocher (`restic.restore` et `files.write`) |
+| `restic.verify` | — | Vérifier les dépôts que la machine reçoit : `restic check`, puis la relecture **en mémoire** de fichiers du dernier instantané (« Comment restic se vérifie »). **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Demandé **en plus** de `restic.target` ; sans lui, l'ordre est refusé (`right_missing:restic.verify`) et l'écran montre la ligne `grant` du droit. Coût : l'agent déchiffre du contenu (rien n'est écrit sur son disque, rien n'est rapporté) ; il détient déjà le mot de passe du dépôt pour la rétention, le droit le dit en clair |
+| `restic.browse` | — | Parcourir les dépôts que la machine reçoit, pour l'explorateur de la page Sauvegardes (« Comment on parcourt une sauvegarde ») : elle lit les **noms, tailles et dates** des fichiers d'un instantané et les rend à Kagu, qui ne les garde pas. **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Demandé **en plus** de `restic.target` ; sans lui, l'ordre est refusé (`restic.target_browse_right_missing`) et l'écran montre la ligne `grant` du droit. Coût : un nom de fichier est déjà une donnée, et il transite par le serveur le temps de la requête (contenu jamais lu). Ce droit est distinct de `restic.verify` : vérifier ne montre aucun nom |
+| `restic.restore` | — | Restaurer sur la **machine source** un fichier ou un dossier d'un instantané, **à côté de l'original** (« Comment on restaure »). **Refusé par défaut**, coché par machine, avec sa note à l'enrôlement. Sans chemin propre : la destination doit être sous un dossier de `files.write` (liens résolus), donc sous les `ReadWritePaths` de l'unité. Sans le droit, l'ordre est refusé (`restic.source_restore_right_missing`) et l'écran montre la ligne `grant` du droit. Coût : l'agent écrit sur sa machine (jamais par-dessus, jamais de suppression) ; deux droits à cocher (`restic.restore` et `files.write`) |
 | `docker.deploy` | — | Déployer un service Compose déclaré, la première fois (`docker.deploy`) |
 | `docker.update` | — | Redéployer un service Compose déjà déployé : versions changées, `.env` remplacé (`docker.update`) |
 | `backup.receive` | un chemin | Recevoir des sauvegardes, dans ce dossier |
@@ -420,16 +423,20 @@ lisent ; l'écran l'affiche sans le recalculer.
   demandait rien.
 - **À l'installation** : `-rights` se juge avant l'enrôlement (refus, code 2,
   `agent.rights_invalid` : le jeton n'est pas consommé), puis s'écrit dans
-  `identity.json` (`rights`). Un agent déjà enrôlé ignore `-rights`.
-- **À chaque connexion** : l'agent redit ce que dit son fichier ; le serveur
+  `identity.json` (`rights`). Un agent déjà enrôlé ignore `-rights`. Ces droits
+  valent tant que la machine n'a pas de politique.
+- **À chaque connexion** : l'agent redit les droits qu'il applique ; le serveur
   le stocke dans `agent_capabilities`, en remplaçant le rapport précédent.
   Un en-tête illisible ne remplace rien, le flux s'ouvre quand même ; un
   agent d'avant les droits n'envoie rien, rien n'est stocké.
 - **L'écart** : la fiche de la machine montre les droits rapportés et ceux
   que le jeton demandait, et le dit quand ils diffèrent
   (`capabilities_differ` : le fichier a été modifié sur la machine, ou la
-  ligne avant d'être jouée). Rien à comparer tant que l'un des deux manque.
-- **Appliqués par l'agent** : c'est le fichier qui fait foi, pas le jeton.
+  ligne avant d'être jouée). Rien à comparer tant que l'un des deux manque, ni
+  quand les droits viennent de la politique (root les a changés) ou qu'elle
+  est refusée (la fiche le dit à part).
+- **Appliqués par l'agent** : c'est la politique, sinon le fichier, qui fait
+  foi, pas le jeton.
   Un ordre dont le droit n'y est pas est refusé, `right_missing:<droit>`
   (« Comment un ordre part et revient »), sans prendre son rang ; le refus
   revient par le signal et s'inscrit au journal d'audit (`action.refused`,
@@ -560,10 +567,15 @@ lisent ; l'écran l'affiche sans le recalculer.
   `right_missing:<droit>` porte le même `fix` (sa machine), et la protection
   restic refusée faute d'un droit aussi : la vue rejuge la source avec les juges
   de l'envoi, rien si le droit est revenu. Le front ne tient aucune table de
-  clés : `LockedAction` lit `fix` et montre, jusqu'à T03-03 (la commande `grant`
-  n'existe pas encore), « Ré-enrôler avec « <droit> » », qui ouvre la fenêtre
-  Ré-enrôler avec ce droit déjà coché (`reenrollPath`) ; l'écran ne donne que le
-  chemin d'un droit borné. `MissingRight` dit un manque connu d'avance
+  clés : `LockedAction` lit `fix` et montre la ligne `grant` à copier
+  (`RootCommand`, le même rendu que la ligne `trust` d'une ancre ; en carte
+  étroite, une ligne tronquée, entière dans l'infobulle) : celle du refus,
+  sinon celle de `/api/session` (`grant_lines`) quand l'écran construit le
+  `fix` lui-même. L'écran ne donne que le chemin d'un droit borné, à côté de la
+  ligne, jamais dedans. Une liste qui ne porte qu'un lien (choix d'une machine,
+  menu d'une VM) mène à l'onglet Agent de la fiche avec `?droit=<nom>`
+  (`&chemin=` pour un droit borné), qui montre la ligne tant que le serveur
+  juge le droit manquant. `MissingRight` dit un manque connu d'avance
   (déployer, mettre à jour un service, mettre à jour l'agent, sondes vers le
   réseau local) et compose `LockedAction`. Un droit coché d'avance reste un
   geste de l'opérateur : rien ne se coche seul, le jeton neuf reste à créer.
@@ -583,16 +595,59 @@ lisent ; l'écran l'affiche sans le recalculer.
   qui sonde (un agent actif), destinations d'un plan (`unfitDestination`).
   Services, tâches, filtres et navigation entre machines ne demandent rien de la
   machine : ils les offrent toutes.
-- **Les changer, c'est ré-enrôler** (décision 10, prise le 21 octobre 2026) :
-  fiche › **Ré-enrôler**, dont la première étape montre les droits cochés du
-  jeton courant ; « Créer le jeton » émet un jeton de ré-enrôlement avec les
-  nouveaux (`POST /api/machines/{id}/actions/reenroll`, corps
-  `{capabilities}` ; sans corps, ceux d'avant : l'écran envoie toujours les
-  droits cochés), et sa ligne porte `-rights`.
-  Jouée sur la machine (`identity.json` supprimé), elle installe un nouvel
-  agent, l'ancien est révoqué ; la machine et son historique restent. Pas de
-  changement signé par une clé de l'opérateur : modifier le fichier à la main
-  se voit comme un écart, et c'est le fichier qui s'applique.
+### La politique de l'agent
+
+Fiche A3, T03-03. Ce que l'agent peut faire est écrit dans un fichier **à
+root**, sur la machine ; l'agent le lit et ne l'écrit jamais (R-A3-1).
+Remplace la décision 10 (« les changer, c'est ré-enrôler ») : le ré-enrôlement
+ne sert plus qu'à changer la clé de l'agent.
+
+| Quoi | Où, comment |
+| --- | --- |
+| Le fichier | `/etc/opencloud-agent/policy.toml` (`brand.AgentPolicyDir`, `AgentPolicyFile`), `root:opencloud-agent`, `0640` ; le dossier à root, `0755`, créé par le premier `grant` |
+| Le format | TOML décodé strictement (`agentpolicy.Decode` : clé inconnue, autre `version`, `machine_id` absent, droit inconnu, mal borné ou écrit deux fois = illisible). `version = 1`, `machine_id`, un bloc `[[right]]` par droit (`name`, `value` dans la grammaire de `-rights` : `/srv/a:/srv/b`). Ni échéance (T03-05) ni ancre ni clé du serveur (T03-04) : elles restent dans `identity.json` |
+| La relecture | Avant chaque ordre, toutes les 15 s (`policyRereadInterval`) et à `SIGHUP`, flux coupé ou non. Le lanceur `opencloud-guard`, processus principal de l'unité, attrape `SIGHUP` et le relaie à l'agent (`rollback.Guard.Hangups`) : `systemctl kill -s HUP opencloud-agent` ne tue rien. Un changement (droits, source, empreinte, ancres) rouvre le flux pour le rapporter |
+| `probe.lan`, `observe.env` | Demandés à la politique à chaque sonde et à chaque inventaire Docker (`orderRunner.allows`) : suivent sans redémarrage (R-A3-4) |
+| La machine visée | Celle du fichier (`machine_id`) : un ordre pour une autre est refusé `wrong_machine` |
+| Sans politique | Ni dossier ni fichier : les droits d'`identity.json` (source `identity`). Ce repli se fermera sur une machine installée en v2 (T03-04, R-A3-16) |
+| Politique refusée | Illisible, pas à root, inscriptible par le groupe ou les autres, un lien, ou un dossier au-dessus mal gardé (`checkChain`, comme l'état de l'agent) : **`observe` seul** (source `refused`), ni les droits d'avant ni ceux d'`identity.json` (R-A3-6). Un état d'agent mal gardé laisse aussi `observe` seul, quelle que soit la source |
+| Le rapport | En-têtes `OpenCloud-Agent-Policy-Source` (`policy`, `identity`, `refused`) et `OpenCloud-Agent-Policy-Digest` (SHA-256 du fichier en hexadécimal, ce que `sha256sum` affiche) à chaque ouverture du flux ; colonnes `agents.policy_source`, `agents.policy_digest` (migration `051`) ; `policy_source` et `policy_digest` dans l'agent de `GET /api/machines…`. Fiche, onglet Agent, sous « Droits » : « Politique » et son empreinte entière (à comparer à `agent rights`), une note rouge pour une politique refusée, une phrase pour une machine sans politique |
+
+**Les commandes**, toutes en root (`RequireTrustRoot`, comme `agent trust`) :
+
+| Commande | Ce qu'elle fait |
+| --- | --- |
+| `opencloud agent rights` | La source, l'empreinte, ou la raison du refus, puis un droit par ligne |
+| `opencloud agent grant <droit>[=valeur]…` | Pose des droits ; une valeur remplace celle du droit déjà posé |
+| `opencloud agent revoke <droit>…` | Retire des droits (`observe` ne se retire pas) |
+
+`grant` et `revoke` relisent la politique **sous son verrou** (`flock` sur
+`policy.toml.lock`, à root), disent chaque droit posé (`+`) et retiré (`-`),
+demandent `[o/N]` sur `/dev/tty` (`-yes` sans terminal, sinon refus sans rien
+écrire, R-A3-15), puis écrivent d'un coup (temporaire puis renommage,
+`fsx.WriteAtomicOwned`) et tracent le changement au journal du système
+(`authpriv`, empreinte comprise). Deux gestes en même temps se suivent
+(R-A3-3). Le premier `grant` recopie les droits d'`identity.json` et les montre
+tous, chacun en `+` : un droit que le compte de l'agent aurait glissé dans son
+identité se voit avant d'être écrit. Refus sans rien écrire : un compte qui
+n'est pas root, une politique illisible ou mal gardée (root la corrige ou
+l'efface), un agent dont le binaire ne lit pas encore la politique
+(`identity.json` sans `policy_format`, que l'agent écrit à son démarrage ; un
+binaire plus ancien le perd en réécrivant son identité).
+
+La ligne qui pose un droit vient du serveur (`agentpolicy.GrantLine`, T03-02) :
+dans le refus d'un ordre (`fix.command`) et, pour chaque droit, dans
+`/api/session` (`grant_lines`). `LockedAction` la montre là où l'écran disait
+« Ré-enrôler avec ce droit ». Elle vise `/usr/local/bin/opencloud`
+(`brand.Command`), jamais `bin/current`, que le compte de l'agent peut
+remplacer (R-DROIT-10).
+
+Ce que ça coûte : un agent dans le groupe `docker` est root, il peut réécrire
+la politique par un conteneur ; elle borne ce que le **serveur** peut
+demander, pas un agent compromis. Le lanceur relaie `SIGHUP` seulement s'il
+est de cette version : un lanceur posé avant en meurt, et systemd relance
+l'agent (le lanceur est une copie que root pose, jamais mise à jour par
+l'agent).
 
 ### Les ancres de confiance locales
 
@@ -2103,7 +2158,7 @@ porte le bouton **Remplacer par Kagu**. En tête de page, la carte
 **Surveillance** montre les alertes de sauvegarde ouvertes, chacune avec son
 geste (« La supervision des sauvegardes ») ; chaque carte de sauvegarde restic
 porte son **Test de restauration** (réussi, jamais testé, périmé, ou ce qui
-l'empêche, avec « Ré-enrôler avec ce droit » quand la cible n'a pas
+l'empêche, avec la ligne `grant` quand la cible n'a pas
 `restic.verify`) et le geste **Vérifier maintenant** au menu « … ».
 
 ### Les mots de passe d'un lien
@@ -2228,7 +2283,7 @@ ouvrir, Espace cocher, Retour arrière remonter, Échap fermer.
 | Ce que ça coûte | Ce que ça rapporte |
 | --- | --- |
 | Un droit d'agent de plus (`restic.browse`), et des noms de fichiers qui passent par le serveur, même sans y rester | On parcourt ses sauvegardes sans mot de passe ni ligne de commande : « où est mon fichier, dans quelle nuit » se lit à l'écran |
-| Une cible hors ligne ou sans le droit ne répond pas (refus dit, geste « Ré-enrôler avec ce droit ») | Les autres parties de la page ne dépendent pas d'elle |
+| Une cible hors ligne ou sans le droit ne répond pas (refus dit, avec la ligne `grant` du droit) | Les autres parties de la page ne dépendent pas d'elle |
 | La réponse de la cible suit le débit des signaux d'une machine (0,5 par seconde, rafale de 30) : un parcours très rapide peut attendre quelques secondes | Le serveur n'ouvre aucune voie de plus vers la cible ; la requête abandonne à 45 s (`restic.browse_timeout`) |
 
 Banc de non-fuite : `agent/restic_browse_test.go` (mot de passe, nom d'hôte,
@@ -3908,8 +3963,8 @@ propose la première machine de la liste.
    (`egress.DialWith`) : boucle locale, adresses privées (RFC 1918 et
    `fc00::/7`), `fec0::/10`, partagée `100.64.0.0/10` (Tailscale), adresse non
    spécifiée (`0.0.0.0`, `::`, que Linux compose vers la boucle) et leurs
-   formes IPv4 écrites en IPv6 (`::ffff:10.0.0.1`). Le droit est lu une fois,
-   au démarrage de l'agent, et passé au vérificateur de sondes, qui l'applique
+   formes IPv4 écrites en IPv6 (`::ffff:10.0.0.1`). Le droit est demandé à la
+   politique une fois par sonde (« La politique de l'agent »), et le vérificateur l'applique
    à **toute** composition : la requête, chaque redirection suivie, le TCP et
    la poignée de main TLS (y compris la poignée de main nue d'une chaîne
    refusée). Sans lui, chaque adresse résolue du réseau local est sautée ; s'il
@@ -5721,7 +5776,7 @@ services, des sondes et des tâches (« Les fenêtres d'une saisie ») :
 | Adresse | Fond | Fenêtre |
 | --- | --- | --- |
 | `/machines/nouvelle` | la liste | Ajouter une machine : trois étapes (nommer et choisir le rôle, droits sous « Avancé » ; les étapes à coller, une case et un bloc chacune ; l'attente de l'agent) |
-| `/machines/{id}/reenroller` | la fiche | Ré-enrôler, aussi pour changer les droits : trois étapes (les droits, cochés comme le jeton de l'agent courant les demandait ; les étapes à coller, la première arrête l'agent en place ; l'attente du nouvel agent). `?droit=<nom>[&chemin=<dossier>]` coche ce droit d'avance : c'est où mène « Ré-enrôler avec ce droit » |
+| `/machines/{id}/reenroller` | la fiche | Ré-enrôler, pour changer la clé de l'agent : trois étapes (les droits, cochés comme le jeton de l'agent courant les demandait ; les étapes à coller, la première arrête l'agent en place ; l'attente du nouvel agent). Les droits se changent par `agent grant` (« La politique de l'agent ») |
 | `/machines/{id}/proxmox` | la fiche | Déclarer (ou modifier) l'hôte Proxmox : un `Wizard` dans la fenêtre, deux étapes (l'accès ; le certificat) puis le récapitulatif |
 
 Le jeton vit dans la fenêtre seule, jamais dans l'adresse ni dans l'historique :
@@ -6276,8 +6331,7 @@ remis (test sur base existante : `TestMigration031_…`).
 « Déduit », signal « Environnement du conteneur », « Vu il y a… », port). Si le
 service tourne dans des conteneurs et que l'agent de sa machine n'a pas le droit,
 une note le dit (« Les liens de l'environnement des conteneurs ne sont pas lus… »)
-avec le bouton **Ré-enrôler avec « Lire l'environnement… »** : la fenêtre s'ouvre
-sur la machine, droit déjà coché, avec sa note (`GET …/links` rend
+avec la ligne `grant` du droit à lancer en root sur la machine (`GET …/links` rend
 `environment: {machine_id, right}` : `granted`, `missing` ou `unknown` tant que
 l'agent n'a rien rapporté de ses droits ; `null` pour un service sur binaire).
 

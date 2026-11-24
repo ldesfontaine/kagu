@@ -45,7 +45,7 @@ type resticRetainJob struct {
 // acceptResticRetain juge la rétention vite (forme, secret, restic présent,
 // plancher, dépôt libre), puis l'accepte : la purge est le travail du worker.
 func (r *orderRunner) acceptResticRetain(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
-	dir, _ := resticTargetDir(r.identity.Capabilities())
+	dir, _ := resticTargetDir(r.rights())
 	job, refused := r.restic.target.judgeRetain(order, dir, r.checks)
 	if refused != nil {
 		r.journal.notAccepted(order, refused.Reason)

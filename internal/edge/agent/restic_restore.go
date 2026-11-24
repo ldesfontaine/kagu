@@ -52,7 +52,7 @@ type resticRestoreJob struct {
 // droit (jugé plus haut), restic présent, le lien provisionné, la destination
 // couverte par files.write (liens résolus) et libre. Un refus ne touche à rien.
 func (r *orderRunner) acceptResticRestore(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
-	job, refused := judgeRestore(order, r.identity.Capabilities(), r.checks, r.restic.source.isProvisioned)
+	job, refused := judgeRestore(order, r.rights(), r.checks, r.restic.source.isProvisioned)
 	if refused != nil {
 		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil

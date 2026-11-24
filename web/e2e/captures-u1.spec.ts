@@ -64,20 +64,14 @@ for (const theme of ["light", "dark"] as const) {
       await shoot(page, "installation-etapes", theme);
     });
 
-    test(`reenrolement avec le droit ${theme}`, async ({ page }) => {
-      await freshToken(page);
+    test(`ligne grant d'un droit ${theme}`, async ({ page }) => {
       await page.goto("/sauvegardes/destinations/nouvelle");
       await page.locator("dialog[open] #backup-destination-machine").click();
       await shoot(page, "destination-menu-machines", theme);
       const note = page.locator("[role=listbox] .select-option-group").first();
-      await note.getByRole("link", { name: label("machine.reenroll_with_right") }).click();
-      const dialog = page.locator("dialog[open]");
-      await expect(dialog.getByRole("checkbox", { name: label("machine.capability_backup_receive") })).toBeChecked();
-      await dialog.locator("#machine-backup-path").fill("/srv/sauvegardes");
-      await shoot(page, "reenroler-droit-coche", theme);
-      await dialog.getByRole("button", { name: label("machine.rights_submit") }).click();
-      await expect(dialog.locator(".checklist-item").first()).toContainText(label("machine.install_stop_title"));
-      await shoot(page, "reenroler-etapes", theme);
+      await note.getByRole("link", { name: label("machine.grant_right") }).click();
+      await expect(page.locator(".note .token-box", { hasText: "agent grant backup.receive" })).toBeVisible();
+      await shoot(page, "agent-ligne-grant", theme);
     });
 
     test(`plan de sauvegarde ${theme}`, async ({ page }) => {
@@ -106,7 +100,7 @@ for (const theme of ["light", "dark"] as const) {
       await page.goto("/machines");
       await page.locator("table a.svc").first().click();
       await page.goto(`${new URL(page.url()).pathname.replace(/\/$/, "")}/agent`);
-      await expect(page.getByRole("link", { name: label("machine.reenroll_with").replace("%s", label("machine.capability_agent_update")) })).toBeVisible();
+      await expect(page.locator(".token-box", { hasText: "agent grant agent.update" })).toBeVisible();
       await shoot(page, "agent-droit-manquant", theme);
     });
   });

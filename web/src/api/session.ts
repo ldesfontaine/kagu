@@ -40,6 +40,9 @@ export interface Session {
   // Les droits qui se cochent à l'enrôlement, dans l'ordre où ils
   // s'affichent : la liste fermée du serveur, jamais recopiée ici.
   rights: string[];
+  // Par droit, la ligne qui le pose en root sur une machine, écrite par le
+  // serveur (sans valeur pour un droit borné) ; vide si elle est refusée.
+  grant_lines: Record<string, string>;
 }
 
 export interface SessionRole {

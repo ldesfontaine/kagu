@@ -59,6 +59,11 @@ const (
 	// aucune n'est posée. Absent chez un agent plus vieux, qui n'applique pas
 	// d'ancres : le serveur ne juge alors rien.
 	HeaderAgentAnchors = brand.HeaderPrefix + "Agent-Anchors"
+	// D'où l'agent tient ses droits (agentpolicy.SourcePolicy, SourceIdentity,
+	// SourceRefused) et l'empreinte du fichier de sa politique
+	// (agentpolicy.Digest), redites à chaque ouverture du flux.
+	HeaderAgentPolicySource = brand.HeaderPrefix + "Agent-Policy-Source"
+	HeaderAgentPolicyDigest = brand.HeaderPrefix + "Agent-Policy-Digest"
 	// La version du retour arrière que l'agent sait faire, un entier : posée
 	// seulement s'il tourne sous le lanceur stable (brand.AgentGuardEnv). Absent
 	// chez un agent plus vieux ou qui n'est pas migré : le serveur refuse

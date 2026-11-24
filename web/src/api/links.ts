@@ -58,7 +58,7 @@ export interface ServiceLink {
 }
 
 // Le droit de lire l'environnement des conteneurs sur la machine du service :
-// « granted », « missing » (la fenêtre « Ré-enrôler » le propose) ou « unknown »
+// « granted », « missing » (la note porte sa ligne grant) ou « unknown »
 // (l'agent n'a encore rien dit de ses droits). null : le service ne tourne pas
 // dans des conteneurs.
 interface EnvironmentRight {

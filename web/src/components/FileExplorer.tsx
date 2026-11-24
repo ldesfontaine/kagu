@@ -65,7 +65,7 @@ interface Props {
   // Le nom de la racine dans le fil d'Ariane (la sauvegarde, la machine).
   rootLabel: string;
   viewsLabel: string;
-  // Un refus de droit y porte son geste (« Ré-enrôler avec ce droit »).
+  // Un refus de droit y porte son geste (sa ligne grant).
   gesture?: RightGesture | undefined;
 }
 

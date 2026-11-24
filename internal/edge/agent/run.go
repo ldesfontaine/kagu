@@ -117,6 +117,12 @@ type Options struct {
 	// PATH. Il ne les télécharge jamais.
 	ResticBinary     string
 	RestServerBinary string
+	// Hangups reçoit SIGHUP : l'agent relit alors sa politique. nil : la
+	// relecture suit les ordres et l'intervalle seuls.
+	Hangups <-chan os.Signal
+	// policyPlace est où lire la politique ; nil vaut le dossier de root.
+	// Non exporté : seuls les tests du paquet le remplacent.
+	policyPlace *PolicyPlace
 	// Roots est le magasin contre lequel les sondes de cette machine
 	// vérifient une chaîne. nil vaut le magasin du système : c'est la
 	// machine qui sonde qui juge, avec les autorités qu'elle connaît.
@@ -142,6 +148,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
+	identity = notePolicyFormat(opts.StateDir, identity, opts.Logger)
 	// Avant tout ce qui lit les droits : le flux les rapporte, le juge des
 	// ordres les applique, et tous deux reçoivent cette identité.
 	if opts.UnsafeState != nil {
@@ -152,7 +159,6 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	client.SetCapabilities(identity.Capabilities())
 	client.SetRoot(identity.Root())
 	client.SetRollbackVersion(opts.GuardVersion)
 	// Le compte est dit à chaque ouverture du flux, et une fois au journal :
@@ -172,13 +178,22 @@ func Run(ctx context.Context, opts Options) error {
 	// La mesure continue pendant une coupure : le tampon rattrape au retour.
 	readings := &buffer{}
 	go sampleLoop(ctx, sampler.New(), readings, opts)
+	// Les ordres signés : jugés et exécutés à leur arrivée, leurs résultats
+	// attendent le signal suivant, qu'ils avancent. Le juge tient aussi la
+	// politique, que les sondes et le veilleur Docker lisent.
+	actions := newActionResults()
+	place := agentPolicyPlace
+	if opts.policyPlace != nil {
+		place = *opts.policyPlace
+	}
+	orders := newOrderRunner(opts.StateDir, identity, place, opts.Version, opts.DockerSocket, actions, opts.Logger)
+	go orders.watchPolicy(ctx, opts.Hangups, policyRereadInterval)
 	// Le veilleur Docker aussi ; ses rapports attendent dans le leur.
 	observed := &reports{}
 	docker := dockerapi.New(opts.DockerSocket)
-	// L'environnement des conteneurs ne se lit que par observe.env, lu une fois
-	// ici comme probe.lan : changer le droit, c'est ré-enrôler.
-	readEnvironment := agentpolicy.HasCapability(identity.Capabilities(), agentpolicy.CapabilityObserveEnv)
-	watcher := dockerwatch.New(docker, observed, dockerwatch.Options{Logger: opts.Logger, ReadEnvironment: readEnvironment})
+	// L'environnement des conteneurs ne se lit que par observe.env, demandé à
+	// la politique à chaque lecture, comme probe.lan.
+	watcher := dockerwatch.New(docker, observed, dockerwatch.Options{Logger: opts.Logger, ReadEnvironment: orders.allows(agentpolicy.CapabilityObserveEnv)})
 	go watcher.Run(ctx)
 	// Les images de la machine se vérifient contre leur registre, avec le
 	// trousseau Docker de la machine ; les constats attendent aussi.
@@ -188,16 +203,11 @@ func Run(ctx context.Context, opts Options) error {
 	// Les sondes tournent tant que l'agent vit : leur jeu vient du serveur,
 	// mais une coupure du flux ne les arrête pas, le tampon garde les essais.
 	checked := &results{}
-	// Le réseau local ne s'ouvre aux sondes que par probe.lan, lu une fois
-	// ici : changer le droit, c'est ré-enrôler. Un état mal gardé n'a que
-	// observe, donc le ferme aussi.
-	allowLAN := agentpolicy.HasCapability(identity.Capabilities(), agentpolicy.CapabilityProbeLAN)
-	prober := probe.NewRunner(checked, probe.NewChecker(opts.Roots, allowLAN), opts.Logger)
+	// Le réseau local ne s'ouvre aux sondes que par probe.lan, demandé à la
+	// politique à chaque sonde. Un état mal gardé n'a que observe, donc le
+	// ferme aussi.
+	prober := probe.NewRunner(checked, probe.NewChecker(opts.Roots, orders.allows(agentpolicy.CapabilityProbeLAN)), opts.Logger)
 	go prober.Run(ctx)
-	// Les ordres signés : jugés et exécutés à leur arrivée, leurs résultats
-	// attendent le signal suivant, qu'ils avancent.
-	actions := newActionResults()
-	orders := newOrderRunner(opts.StateDir, identity, opts.Version, opts.DockerSocket, actions, opts.Logger)
 	// Les ordres longs (recevoir une sauvegarde) s'exécutent à part, un à la
 	// fois, et vivent avec l'agent comme les sondes : une coupure du flux ne
 	// les interrompt pas, seul leur téléchargement échoue.
@@ -307,8 +317,8 @@ type pending struct {
 
 // judgeRights juge ce que le compte de l'agent ne peut pas exercer, le met sur
 // le client pour l'ouverture du flux, et ne le dit au journal que s'il a changé.
-func (p *pending) judgeRights(ctx context.Context, client *Client, identity Identity, logger *slog.Logger) {
-	unavailable := judgeRights(ctx, identity, p.orders.checks)
+func (p *pending) judgeRights(ctx context.Context, client *Client, rights []agentpolicy.Capability, root string, logger *slog.Logger) {
+	unavailable := judgeRights(ctx, rights, root, p.orders.checks)
 	client.SetUnavailable(unavailable)
 	if machine.FormatUnavailable(unavailable) == machine.FormatUnavailable(p.unavailable) {
 		return
@@ -396,8 +406,9 @@ func enroll(ctx context.Context, opts Options) (Identity, error) {
 	return identity, nil
 }
 
-// errAnchorsChanged ferme le flux pour le rouvrir avec les ancres du fichier.
-var errAnchorsChanged = errors.New("anchors changed on disk")
+// errPolicyChanged ferme le flux pour le rouvrir avec ce que la politique et
+// les ancres disent désormais.
+var errPolicyChanged = errors.New("agent policy changed on disk")
 
 func keepConnected(ctx context.Context, client *Client, identity Identity, pending *pending, text lang.Catalog, opts Options) error {
 	delay := minBackoff
@@ -447,13 +458,20 @@ func connectOnce(ctx context.Context, client *Client, identity Identity, pending
 	// La clé du serveur que le flux redit est celle épinglée en ce moment :
 	// une rotation l'a peut-être changée depuis le démarrage.
 	identity.ServerKey = pending.orders.serverKey()
+	// La politique et les ancres relues : ce qu'elles disent est rapporté à
+	// l'ouverture, et un changement plus tard rouvre le flux. Le signal d'un
+	// changement déjà rapporté ici est vidé d'abord.
+	select {
+	case <-pending.orders.policyChanged:
+	default:
+	}
+	applied, anchors := pending.orders.currentPolicy()
+	client.SetCapabilities(applied.Rights)
+	client.SetPolicy(applied.Source, applied.Digest)
+	client.SetAnchors(anchors)
 	// Le compte et la machine ont pu changer depuis la dernière ouverture : un
 	// dossier rendu, un groupe docker ajouté. Les droits se jugent à neuf.
-	pending.judgeRights(streamCtx, client, identity, opts.Logger)
-	// Les ancres aussi : une pose locale (agent trust) entre deux flux est dite
-	// à l'ouverture du suivant.
-	reportedAnchors := pending.orders.currentAnchors()
-	client.SetAnchors(reportedAnchors)
+	pending.judgeRights(streamCtx, client, applied.Rights, identity.Root(), opts.Logger)
 	stream, err := client.OpenStream(streamCtx, identity)
 	if err != nil {
 		return err
@@ -492,12 +510,12 @@ func connectOnce(ctx context.Context, client *Client, identity Identity, pending
 			if err := signal(ctx, client, stream.Session, pending, opts.Logger); err != nil {
 				return err
 			}
-			// Une ancre posée ou retirée à la main : le flux se rouvre pour que
-			// le serveur la sache, sans quoi il refuserait encore l'ordre.
-			if pending.orders.currentAnchors().Format() != reportedAnchors.Format() {
-				opts.Logger.Info("anchors changed on disk, reopening the stream to report them")
-				return errAnchorsChanged
-			}
+		case <-pending.orders.policyChanged:
+			// Un droit ou une ancre posé ou retiré à la main : le flux se
+			// rouvre pour que le serveur le sache, sans quoi il enverrait un
+			// ordre refusé, ou griserait un geste permis.
+			opts.Logger.Info("agent policy changed on disk, reopening the stream to report it")
+			return errPolicyChanged
 		case <-pending.actions.ready:
 			// La réponse à un ordre part sans attendre le prochain signal.
 			if err := signal(ctx, client, stream.Session, pending, opts.Logger); err != nil {

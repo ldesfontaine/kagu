@@ -48,3 +48,7 @@ func (c *execChild) Stop() {
 	}
 	time.AfterFunc(stopGrace, func() { _ = c.command.Process.Kill() })
 }
+
+func (c *execChild) Hangup() {
+	_ = c.command.Process.Signal(syscall.SIGHUP)
+}

@@ -36,6 +36,8 @@ type Child interface {
 	Wait() Exit
 	// Stop demande l'arrêt (SIGTERM), puis tue le binaire s'il tarde.
 	Stop()
+	// Hangup lui relaie SIGHUP : l'agent relit alors sa politique.
+	Hangup()
 }
 
 // Launcher démarre le binaire. Une erreur dit qu'il ne s'est pas lancé du tout
@@ -58,8 +60,12 @@ type Guard struct {
 	Now    func() time.Time
 	// After rend un canal qui reçoit à l'issue du délai ; remplaçable par les
 	// tests, qui ne dorment pas.
-	After  func(time.Duration) <-chan time.Time
-	Logger *slog.Logger
+	After func(time.Duration) <-chan time.Time
+	// Hangups reçoit les SIGHUP adressés au lanceur, que systemd vise (le
+	// processus principal de l'unité) : il les relaie au binaire, sans en
+	// mourir. nil : aucun.
+	Hangups <-chan os.Signal
+	Logger  *slog.Logger
 }
 
 // NewGuard monte le lanceur sur la vraie machine.
@@ -128,6 +134,8 @@ func (g *Guard) watch(ctx context.Context, child Child, marker Marker, present b
 			child.Stop()
 			<-exited
 			return outcome{interrupted: true}
+		case <-g.Hangups:
+			child.Hangup()
 		case <-deadline:
 			deadline = nil
 			current, found := g.loadMarker()

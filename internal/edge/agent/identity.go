@@ -41,11 +41,16 @@ type Identity struct {
 	EnrolledAt time.Time `json:"enrolled_at"`
 	// Les droits cochés par l'opérateur, écrits par la ligne d'installation
 	// (-rights), un par entrée (« observe », « files.write=/srv/a:/srv/b »).
-	// Absents chez un agent d'avant les droits : observe seul. Rapportés au
-	// serveur à chaque ouverture du flux, et appliqués : un ordre dont le
-	// droit n'est pas ici est refusé (orders.go). Les changer, c'est
-	// ré-enrôler avec d'autres droits.
+	// Absents chez un agent d'avant les droits : observe seul. Appliqués tant
+	// que la machine n'a pas de politique (policy.go, source identity) ; le
+	// premier « agent grant » les recopie dans la politique, qui fait foi
+	// ensuite.
 	Rights []string `json:"rights,omitempty"`
+	// La version du fichier de la politique que le binaire de l'agent sait
+	// lire, écrite par lui au démarrage : « agent grant » refuse d'écrire une
+	// politique qu'il ignorerait. Un agent plus ancien la perd en réécrivant
+	// le fichier.
+	PolicyFormat int `json:"policy_format,omitempty"`
 	// L'agent que le serveur a inscrit à l'enrôlement : un ordre pour un
 	// autre agent de la même machine (avant un ré-enrôlement) est refusé.
 	AgentID string `json:"agent_id,omitempty"`
@@ -94,19 +99,18 @@ func (id Identity) ServerKeyFingerprint() string {
 // gardé.
 func (id Identity) Capabilities() []agentpolicy.Capability {
 	if id.narrowed {
-		return []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}}
+		return observeOnly()
 	}
 	capabilities, err := agentpolicy.ParseCapabilities(strings.Join(id.Rights, ","))
 	if err != nil {
-		return []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}}
+		return observeOnly()
 	}
 	return capabilities
 }
 
-// Policy rend ce que l'agent applique, tiré du fichier : la machine, la clé
-// épinglée, les droits (observe seul s'ils ne se lisent pas) et les ancres.
-func (id Identity) Policy() agentpolicy.Policy {
-	return agentpolicy.Policy{MachineID: id.MachineID, ServerKey: id.ServerKey, Rights: id.Capabilities(), Anchors: id.Anchors}
+// observeOnly est ce qui reste quand rien d'autre ne se lit sûrement.
+func observeOnly() []agentpolicy.Capability {
+	return []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}}
 }
 
 // AnchorState rend les ancres du fichier telles que l'agent les applique : un
@@ -142,7 +146,7 @@ func NewIdentity(server, pin string, language lang.Code, capabilities []agentpol
 	}
 	return Identity{
 		MachineID: id, PublicKey: publicKey, PrivateKey: privateKey, Server: server, Pin: pin, Language: language,
-		Rights: rightsOf(capabilities),
+		Rights: rightsOf(capabilities), PolicyFormat: agentpolicy.FormatVersion,
 	}, nil
 }
 
@@ -177,7 +181,7 @@ func SaveIdentity(stateDir *os.Root, identity Identity) error {
 // ancres du disque l'emportent, et l'identité écrite les porte. Un fichier
 // absent (un test) s'écrit tel quel.
 func saveKeepingAnchors(stateDir *os.Root, identity Identity) (Identity, error) {
-	unlock, err := lockIdentity(stateDir, nil)
+	unlock, err := lockFile(stateDir, identityLockFile, nil)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -193,7 +197,7 @@ func saveKeepingAnchors(stateDir *os.Root, identity Identity) (Identity, error) 
 // et « agent trust » (les ancres) ne s'écrasent jamais l'un l'autre. Rend
 // l'identité écrite. Quand owner n'est pas nil, le fichier lui est donné.
 func UpdateIdentity(stateDir *os.Root, owner *fsx.Owner, change func(*Identity) error) (Identity, error) {
-	unlock, err := lockIdentity(stateDir, owner)
+	unlock, err := lockFile(stateDir, identityLockFile, owner)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -218,24 +222,26 @@ func UpdateIdentity(stateDir *os.Root, owner *fsx.Owner, change func(*Identity) 
 	return identity, nil
 }
 
-// lockIdentity prend le verrou exclusif du fichier d'identité (flock sur un
-// fichier à côté) ; unlock le rend. Le verrou tombe avec le processus.
-func lockIdentity(stateDir *os.Root, owner *fsx.Owner) (unlock func(), err error) {
-	lock, err := stateDir.OpenFile(identityLockFile, os.O_RDWR|os.O_CREATE, identityMode)
+// lockFile prend le verrou exclusif d'un fichier que deux écrivains
+// pourraient réécrire ensemble (flock sur name, un fichier à côté, 0600) ;
+// unlock le rend. Le verrou tombe avec le processus. L'identité et la
+// politique se verrouillent ainsi.
+func lockFile(dir *os.Root, name string, owner *fsx.Owner) (unlock func(), err error) {
+	lock, err := dir.OpenFile(name, os.O_RDWR|os.O_CREATE, identityMode)
 	if err != nil {
-		return nil, fmt.Errorf("open identity lock: %w", err)
+		return nil, fmt.Errorf("open lock %s: %w", name, err)
 	}
-	// Créé par root, le verrou appartient pourtant au compte de l'agent : sans
-	// quoi l'agent ne pourrait plus l'ouvrir.
+	// Créé par root, le verrou de l'identité appartient pourtant au compte de
+	// l'agent : sans quoi l'agent ne pourrait plus l'ouvrir.
 	if owner != nil {
 		if err := lock.Chown(owner.UID, owner.GID); err != nil {
 			_ = lock.Close()
-			return nil, fmt.Errorf("chown identity lock: %w", err)
+			return nil, fmt.Errorf("chown lock %s: %w", name, err)
 		}
 	}
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil { // #nosec G115 -- un descripteur tient dans un int.
 		_ = lock.Close()
-		return nil, fmt.Errorf("lock identity: %w", err)
+		return nil, fmt.Errorf("lock %s: %w", name, err)
 	}
 	return func() { _ = lock.Close() }, nil
 }

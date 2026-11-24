@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
@@ -65,9 +66,16 @@ type orderRunner struct {
 
 	mu       sync.Mutex
 	identity Identity
+
+	// La politique : où la lire, ce que la dernière lecture a laissé (lu sans
+	// le verrou par les sondes et le veilleur Docker), et le signal d'un
+	// changement, qui fait rouvrir le flux pour le rapporter.
+	policyPlace   PolicyPlace
+	applied       atomic.Pointer[AppliedPolicy]
+	policyChanged chan struct{}
 }
 
-func newOrderRunner(stateDir *os.Root, identity Identity, version, dockerSocket string, results *actionResults, logger *slog.Logger) *orderRunner {
+func newOrderRunner(stateDir *os.Root, identity Identity, place PolicyPlace, version, dockerSocket string, results *actionResults, logger *slog.Logger) *orderRunner {
 	updater := newSelfUpdater(stateDir, version, logger)
 	checks := newHostChecks(dockerSocket, updater)
 	checks.proxmoxToken = func() string {
@@ -84,6 +92,8 @@ func newOrderRunner(stateDir *os.Root, identity Identity, version, dockerSocket 
 	}
 	runner.journal = newOrderJournal(func() *slog.Logger { return runner.logger })
 	runner.restic.source.inventory = dockerapi.New(dockerSocket)
+	runner.policyPlace, runner.policyChanged = place, make(chan struct{}, 1)
+	runner.reloadPolicy()
 	return runner
 }
 
@@ -164,13 +174,42 @@ func (r *orderRunner) judge(signed agentwire.SignedOrder) (judgedOrder, string) 
 	return order, ""
 }
 
-// policy rend ce que l'agent applique, tiré d'identity.json tant que la
-// politique n'a pas de fichier à elle (T03-03). Les ancres sont relues du
-// disque à chaque ordre, pour qu'une ancre posée par « agent trust » vaille
-// tout de suite.
+// policy rend ce que l'agent applique : la politique relue (les droits, la
+// machine qu'elle nomme), la clé épinglée et les ancres d'identity.json,
+// relues elles aussi, pour qu'un « agent grant » ou un « agent trust » vaille
+// dès l'ordre suivant. Appelé sous le verrou de l'agent.
 func (r *orderRunner) policy() agentpolicy.Policy {
-	r.reloadAnchors()
-	return r.identity.Policy()
+	applied, _ := r.reloadPolicy()
+	machineID := r.identity.MachineID
+	if applied.MachineID != "" {
+		machineID = applied.MachineID
+	}
+	return agentpolicy.Policy{MachineID: machineID, ServerKey: r.identity.ServerKey, Rights: applied.Rights, Anchors: r.identity.Anchors}
+}
+
+// reloadPolicy relit les ancres et la politique, garde ce que l'agent
+// applique désormais et rend aussi les ancres. Quand ce qu'il rapporte au
+// serveur a changé, il le dit au journal et le signale (policyChanged) : le
+// flux se rouvre pour le rapporter. Appelé sous le verrou de l'agent.
+func (r *orderRunner) reloadPolicy() (AppliedPolicy, anchor.State) {
+	anchors := r.reloadAnchors()
+	applied, err := readPolicy(r.policyPlace, r.identity)
+	applied.anchors = anchors.Format()
+	previous := r.applied.Swap(&applied)
+	if previous != nil && previous.report() == applied.report() {
+		return applied, anchors
+	}
+	if err != nil {
+		r.logger.Warn("agent policy refused, only observe applies", "error", err)
+	}
+	if previous != nil {
+		r.logger.Info("agent policy changed", "source", applied.Source, "digest", applied.Digest, "rights", agentpolicy.FormatCapabilities(applied.Rights))
+		select {
+		case r.policyChanged <- struct{}{}:
+		default:
+		}
+	}
+	return applied, anchors
 }
 
 // reloadAnchors relit les ancres du fichier d'identité et rend ce que l'agent
@@ -190,12 +229,43 @@ func (r *orderRunner) reloadAnchors() anchor.State {
 	return r.identity.AnchorState()
 }
 
-// currentAnchors rend les ancres du fichier, pour l'ouverture du flux et pour
-// savoir si une pose locale demande de la rouvrir.
-func (r *orderRunner) currentAnchors() anchor.State {
+// currentPolicy relit la politique et les ancres, pour l'ouverture du flux et
+// pour la relecture sans ordre (watchPolicy).
+func (r *orderRunner) currentPolicy() (AppliedPolicy, anchor.State) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.reloadAnchors()
+	return r.reloadPolicy()
+}
+
+// rights rend les droits que l'agent applique, tels que la dernière lecture
+// les a laissés ; sûr hors du verrou.
+func (r *orderRunner) rights() []agentpolicy.Capability {
+	return r.applied.Load().Rights
+}
+
+// allows rend la question « la politique porte-t-elle ce droit ? », posée à
+// chaque usage : probe.lan et observe.env suivent la politique sans
+// redémarrage (R-A3-4).
+func (r *orderRunner) allows(name string) func() bool {
+	return func() bool { return agentpolicy.HasCapability(r.rights(), name) }
+}
+
+// watchPolicy relit la politique toutes les every et à chaque signal reçu sur
+// hangups (SIGHUP), même flux coupé : les sondes et le veilleur Docker suivent
+// sans attendre un ordre.
+func (r *orderRunner) watchPolicy(ctx context.Context, hangups <-chan os.Signal, every time.Duration) {
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		case <-hangups:
+			r.logger.Info("hangup received, reading the agent policy again")
+		}
+		r.currentPolicy()
+	}
 }
 
 // keepSeq écrit le nouveau rang ; un échec d'écriture laisse l'ancien en
@@ -280,7 +350,7 @@ func (r *orderRunner) ping(order judgedOrder) agentwire.ActionResult {
 // de l'agent, ou dessous. Le droit est lu ici, sous le verrou : le worker ne
 // touche pas à l'identité.
 func (r *orderRunner) coversBackupPath() coveringPath {
-	capabilities := r.identity.Capabilities()
+	capabilities := r.rights()
 	return func(path string) (string, bool) {
 		return agentpolicy.CoveringPath(capabilities, agentpolicy.CapabilityBackupReceive, path)
 	}
@@ -319,7 +389,7 @@ func (r *orderRunner) acceptBackupPrune(order judgedOrder) (agentwire.ActionResu
 // le producteur, emballer et téléverser est le travail du worker. Les droits
 // sont lus ici, sous le verrou.
 func (r *orderRunner) acceptBackupProduce(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
-	job, refused := readBackupProduce(order, r.identity.Capabilities(), r.produce.producers)
+	job, refused := readBackupProduce(order, r.rights(), r.produce.producers)
 	if refused != nil {
 		r.journal.notAccepted(order, refused.Reason)
 		return *refused, nil

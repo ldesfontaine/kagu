@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router";
+import { Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 
 import { useMachineContainers } from "../api/containers";
 import type { Lifecycle } from "../api/lifecycle";
@@ -18,6 +18,7 @@ import { Failure } from "../components/Failure";
 import { MachineHead, Tabs } from "../components/MachineHead";
 import { MachineHypervisor } from "../components/MachineHypervisor";
 import { MachineIdentity } from "../components/MachineIdentity";
+import { MissingRight } from "../components/MissingRight";
 import { MachineStorage } from "../components/MachineStorage";
 import { MachineTodoCard } from "../components/MachineTodoCard";
 import { MachineSSHKeys } from "../components/MachineSSHKeys";
@@ -35,12 +36,12 @@ import { Subject, Table } from "../components/Table";
 import { useAgentHint } from "../hooks/useAgentHint";
 import { useNow } from "../hooks/useNow";
 import { useScrollToHash } from "../hooks/useScrollToHash";
-import { useT } from "../i18n/context";
+import { useRightNames, useT } from "../i18n/context";
 import { renamedMachineTabs, resolveMachineTab } from "../lib/machineTabs";
 import { engineNote, filterContainers, type Filter } from "../lib/containers";
 import { lifecycleHasDetails } from "../lib/lifecycle";
-import { lacksSudo } from "../lib/rights";
-import { describeAccount, describeCapability, isArchived, unavailableRights } from "../lib/machines";
+import { lacksSudo, wantedRightOf } from "../lib/rights";
+import { alwaysGranted, capabilityLabelKey, describeAccount, describeCapability, isArchived, unavailableRights } from "../lib/machines";
 import { formatWhen } from "../lib/time";
 import { NotFound } from "./NotFound";
 import "./Machine.scss";
@@ -154,10 +155,13 @@ function SystemSupport({ lifecycle }: { lifecycle: Lifecycle }) {
 
 // L'agent de la machine : sa version, depuis quand, s'il est révoqué, et ses
 // droits, tels qu'il les rapporte et tels que sa commande d'installation les
-// demandait. Il applique ceux de son fichier ; les changer, c'est le
-// ré-enrôler, dans la fenêtre du même nom.
+// demandait, avec la politique d'où il les tient. Ils se changent en root sur
+// la machine (agent grant) : un lien qui nomme un droit (?droit=) mène ici,
+// où sa ligne se montre tant qu'il manque.
 function AgentCard({ machineID, agent, reportRejected, updateLast, withoutSudo, now }: { machineID: string; agent: Agent | null; reportRejected: string[]; updateLast: boolean; withoutSudo: boolean; now: number }) {
   const t = useT();
+  const [search] = useSearchParams();
+  const wanted = wantedRightOf(useRightNames(), search);
   if (agent === null) {
     return (
       <Card>
@@ -170,6 +174,8 @@ function AgentCard({ machineID, agent, reportRejected, updateLast, withoutSudo, 
   }
   const account = describeAccount(agent.run_as);
   const unavailable = agent.revoked_at === null && agent.reported_at !== null ? unavailableRights(t, agent) : [];
+  const wantedFit = wanted === null ? undefined : agent.fit[wanted.name];
+  const wantedMissing = wanted !== null && agent.revoked_at === null && (wantedFit === undefined || wantedFit.state === "missing");
   return (
     <Card>
       <CardHeader title={t("machine.agent_title")} />
@@ -185,6 +191,12 @@ function AgentCard({ machineID, agent, reportRejected, updateLast, withoutSudo, 
           label={t("machine.agent_rights")}
           value={agent.reported_at === null ? t("machine.agent_rights_unreported") : agent.capabilities.map((capability) => describeCapability(t, capability)).join(" · ")}
         />
+        <PolicySource agent={agent} />
+        {wantedMissing && (
+          <MissingRight machineID={machineID} right={wanted.name} path={wanted.path}>
+            {t("machine.fit_right_missing", t(capabilityLabelKey(wanted.name)))}
+          </MissingRight>
+        )}
         {agent.requested.length > 0 && (
           <KeyValue label={t("machine.agent_rights_requested")} value={agent.requested.map((capability) => describeCapability(t, capability)).join(" · ")} />
         )}
@@ -204,6 +216,23 @@ function AgentCard({ machineID, agent, reportRejected, updateLast, withoutSudo, 
       </CardBody>
     </Card>
   );
+}
+
+// D'où l'agent tient ses droits, tel qu'il le rapporte : sa politique (son
+// empreinte, à comparer avec « agent rights » sur la machine), identity.json
+// faute de politique, ou une politique refusée. Rien pour un agent d'avant.
+function PolicySource({ agent }: { agent: Agent }) {
+  const t = useT();
+  if (agent.policy_source === "refused") {
+    return <Note tone="danger">{t("machine.agent_policy_refused", t(capabilityLabelKey(alwaysGranted)))}</Note>;
+  }
+  if (agent.policy_source === "policy") {
+    return <KeyValue label={t("machine.agent_policy")} value={agent.policy_digest} mono />;
+  }
+  if (agent.policy_source === "identity") {
+    return <p className="secondary">{t("machine.agent_policy_identity")}</p>;
+  }
+  return null;
 }
 
 // L'onglet Disponibilité : les sondes que cette machine exécute,
@@ -320,7 +349,7 @@ function MachineLogs({ machineID }: { machineID: string }) {
   );
 }
 
-// Ré-enrôler (une fenêtre, aussi pour changer les droits) donne un nouveau
+// Ré-enrôler (une fenêtre) donne un nouveau
 // jeton pour le même id et remet une machine archivée en service. Supprimer la
 // machine est un seul geste : garder l'historique l'archive, sinon elle est
 // effacée après confirmation sur le plan (ce qui la retient, ce qui part avec

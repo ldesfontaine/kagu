@@ -201,23 +201,24 @@ func writableReason(err error) string {
 	return agentwire.ReasonPathUnwritable
 }
 
-// judgeRights dit, pour chaque droit du fichier de l'agent, pourquoi son compte
+// judgeRights dit, pour chaque droit que l'agent applique, pourquoi son compte
 // ne peut pas l'exercer sur la machine ; un droit réalisable n'y figure pas.
 // observe n'est pas jugé : l'état de Docker se lit déjà par le moteur. Un
-// état mal gardé (narrowed) ne laisse que observe : rien à juger.
-func judgeRights(ctx context.Context, identity Identity, checks hostChecks) map[string]string {
+// état mal gardé (narrowed) ne laisse que observe : rien à juger. root est la
+// racine des services.
+func judgeRights(ctx context.Context, rights []agentpolicy.Capability, root string, checks hostChecks) map[string]string {
 	unavailable := map[string]string{}
 	note := func(right, reason string) {
 		if reason != "" {
 			unavailable[right] = reason
 		}
 	}
-	for _, capability := range identity.Capabilities() {
+	for _, capability := range rights {
 		switch capability.Name {
 		case agentpolicy.CapabilityAgentUpdate:
 			note(capability.Name, checks.agentUpdate())
 		case agentpolicy.CapabilityDockerDeploy, agentpolicy.CapabilityDockerUpdate:
-			note(capability.Name, dockerRightReason(ctx, checks, identity.Root()))
+			note(capability.Name, dockerRightReason(ctx, checks, root))
 		case agentpolicy.CapabilityBackupReceive, agentpolicy.CapabilityFilesWrite:
 			note(capability.Name, firstPathReason(checks, capability.Paths))
 		case agentpolicy.CapabilityBackupProduce:

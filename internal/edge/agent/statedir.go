@@ -54,33 +54,44 @@ func CheckStateDir(opened *os.Root, path string) error {
 // donné : celui que root accepte quand « agent trust » écrit le fichier d'un
 // autre compte, le compte de l'agent.
 func checkStateDirFor(opened *os.Root, path string, owner uint32) error {
+	resolved, err := checkOpenedDir(opened, path, owner)
+	if err != nil {
+		return err
+	}
+	return checkStateFile(opened, filepath.Join(resolved, identityFile), identityFile, owner)
+}
+
+// checkOpenedDir juge chaque dossier que path traverse (checkChain), puis que
+// le dossier ouvert est bien celui que path désigne ; rend le chemin réel.
+// L'état de l'agent et le dossier de sa politique se jugent ainsi.
+func checkOpenedDir(opened *os.Root, path string, owner uint32) (string, error) {
 	// Pas de filepath.Abs : il nettoie « lien/.. » à la lettre, le noyau
 	// remonte depuis la cible. Le chemin se suit comme le noyau le suit.
 	if !filepath.IsAbs(path) {
 		wd, err := os.Getwd()
 		if err != nil {
-			return fmt.Errorf("state dir is not safe: %w", err)
+			return "", fmt.Errorf("state dir is not safe: %w", err)
 		}
 		path = wd + string(filepath.Separator) + path
 	}
 	resolved, err := checkChain(path, lstatOwner, os.Readlink, owner)
 	if err != nil {
-		return err
+		return "", err
 	}
 	openedInfo, err := opened.Stat(".")
 	if err != nil {
-		return fmt.Errorf("state dir is not safe: stat opened %s: %w", path, err)
+		return "", fmt.Errorf("state dir is not safe: stat opened %s: %w", path, err)
 	}
 	// Plus personne d'autre ne peut changer ce que resolved désigne : chaque
 	// dossier au-dessus vient d'être jugé.
 	judgedInfo, err := os.Stat(resolved)
 	if err != nil {
-		return fmt.Errorf("state dir is not safe: stat %s: %w", resolved, err)
+		return "", fmt.Errorf("state dir is not safe: stat %s: %w", resolved, err)
 	}
 	if !os.SameFile(openedInfo, judgedInfo) {
-		return fmt.Errorf("state dir is not safe: %s changed between its opening and its check", path)
+		return "", fmt.Errorf("state dir is not safe: %s changed between its opening and its check", path)
 	}
-	return checkStateFile(opened, filepath.Join(resolved, identityFile), identityFile, owner)
+	return resolved, nil
 }
 
 // CheckStateDirOwnedBy est CheckStateDir pour un administrateur qui n'est pas le

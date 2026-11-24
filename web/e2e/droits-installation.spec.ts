@@ -120,20 +120,10 @@ test("Destination de sauvegarde : les machines sans le droit sont grisées, avec
   // Cliquer la ligne grisée ne la choisit pas.
   await first.click({ position: { x: 8, y: 8 }, force: true });
   await expect(list).toBeVisible();
-  // Le lien mène à « Ré-enrôler » avec le droit déjà coché.
-  await note.getByRole("link", { name: label("machine.reenroll_with_right") }).click();
-  await expect(page).toHaveURL(/\/machines\/[^/]+\/reenroller\?droit=backup\.receive/);
-  const reenroll = page.locator("dialog[open]");
-  await expect(reenroll.getByRole("checkbox", { name: label("machine.capability_backup_receive") })).toBeChecked();
-  await expect(reenroll.getByRole("checkbox", { name: label("machine.capability_observe") })).toBeChecked();
-
-  // Créer le jeton : la première étape est d'arrêter l'agent en place.
-  await reenroll.locator("#machine-backup-path").fill("/srv/sauvegardes");
-  await reenroll.getByRole("button", { name: label("machine.rights_submit") }).click();
-  const items = reenroll.locator(".checklist-item");
-  await expect(items.first()).toContainText(label("machine.install_stop_title"));
-  await reenroll.getByRole("button", { name: label("wizard.next") }).click();
-  await reenroll.locator(".modal-foot").getByRole("button", { name: label("modal.close") }).click();
+  // Le lien mène à l'onglet Agent de la machine, qui montre la ligne grant.
+  await note.getByRole("link", { name: label("machine.grant_right") }).click();
+  await expect(page).toHaveURL(/\/machines\/[^/]+\/agent\?droit=backup\.receive/);
+  await expect(page.locator(".note .token-box", { hasText: "agent grant backup.receive" })).toBeVisible();
   expect(findings.unknown()).toEqual([]);
 });
 

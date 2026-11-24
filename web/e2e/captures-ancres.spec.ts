@@ -44,7 +44,7 @@ test("la fenêtre Ré-enrôler ouverte : les ancres demandées avec le droit", a
 test("la page Sauvegardes : la passe refusée par une ancre, la commande à coller", async ({ page }) => {
   await open(page, "/sauvegardes");
   const card = page.locator("article.backup-source").filter({ has: page.locator("h3", { hasText: /^compta$/ }) });
-  await expect(card.locator(".anchor-fix")).toBeVisible();
+  await expect(card.locator(".root-command")).toBeVisible();
   await card.scrollIntoViewIfNeeded();
   await shoot(page, "sauvegardes");
 });
