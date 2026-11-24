@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"golang.org/x/crypto/bcrypt"
@@ -17,6 +19,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/edge/server"
 	"github.com/ldesfontaine/kagu/internal/edge/store"
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/live"
 	"github.com/ldesfontaine/kagu/internal/kit/peercred"
 )
@@ -112,8 +115,8 @@ func TestAdminResetPassword_AsksTwiceAndNeverPrintsIt(t *testing.T) {
 	}
 }
 
-// Deux saisies différentes, pas de terminal, ou un compte qui n'est pas root :
-// rien ne part au serveur.
+// Deux saisies différentes ou pas de terminal : rien ne part au serveur. Le
+// compte qui n'est pas root : TestE02_12_EveryAdminGestureRefusesANonRootAccountBeforeTheSocket.
 func TestAdminResetPassword_RefusesBeforeSendingAnything(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -123,7 +126,6 @@ func TestAdminResetPassword_RefusesBeforeSendingAnything(t *testing.T) {
 	}{
 		{"two different entries", fakeTerminal(newPassword + "\n" + "another passphrase\n"), 0, "pas identiques"},
 		{"no terminal", noTerminal, 0, "terminal"},
-		{"not root", typedTwice, 1000, "root"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -136,6 +138,36 @@ func TestAdminResetPassword_RefusesBeforeSendingAnything(t *testing.T) {
 			}
 			if len(fake.received) != 0 {
 				t.Fatalf("the server received %v", fake.received)
+			}
+		})
+	}
+}
+
+// E02-12, R-A2-11 : sous un compte qui n'est pas root, chaque geste d'admin
+// rend le refus commun (code de sortie 2) sans ouvrir la socket ; la socket
+// d'essai, qui refuserait comme la vraie, ne voit passer aucune requête.
+func TestE02_12_EveryAdminGestureRefusesANonRootAccountBeforeTheSocket(t *testing.T) {
+	catalogs, err := lang.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := catalogs.For(lang.Default).Get("admin.root_only")
+	for gesture := range adminPaths {
+		t.Run(gesture, func(t *testing.T) {
+			configPath, stateDir := writeShortConfig(t)
+			var reached atomic.Int32
+			serveOnControlSocket(t, stateDir, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				reached.Add(1)
+				w.WriteHeader(http.StatusForbidden)
+			}))
+			args := append(strings.Fields(gesture), "-config", configPath)
+			err := adminCommand(args, &bytes.Buffer{}, typedTwice, 1000)
+			var refused *refusal
+			if !errors.As(err, &refused) || refused.Error() != want {
+				t.Fatalf("got %v, want the refusal %q (exit status 2)", err, want)
+			}
+			if reached.Load() != 0 {
+				t.Fatalf("the socket was opened: %d requests", reached.Load())
 			}
 		})
 	}

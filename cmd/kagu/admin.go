@@ -45,7 +45,8 @@ var adminPaths = map[string]string{
 
 // opencloud admin : les gestes de root sur la machine Kagu, par la socket
 // locale du serveur qui tourne (R-A2-10, R-A2-11). Le serveur juge l'uid du
-// pair : seul root passe.
+// pair : seul root passe ; la commande refuse un autre compte avant, pour
+// dire « sudo » plutôt que le droit d'ouvrir la socket.
 func runAdmin(args []string) error {
 	return adminCommand(args, os.Stdout, openSilentTerminal, os.Geteuid())
 }
@@ -57,7 +58,6 @@ type adminRun struct {
 	text         lang.Catalog
 	out          io.Writer
 	openTerminal terminalOpener
-	euid         int
 }
 
 func adminCommand(args []string, out io.Writer, openTerminal terminalOpener, euid int) error {
@@ -87,11 +87,16 @@ func adminCommand(args []string, out io.Writer, openTerminal terminalOpener, eui
 	if err := flags.Parse(rest); err != nil {
 		return err
 	}
+	// Tout geste d'admin est réservé à root (R-A2-11) : refusé ici, avant la
+	// configuration, la saisie et la socket.
+	if euid != 0 {
+		return rootOnlyRefusal(text)
+	}
 	cfg, _, err := config.Load(*configPath)
 	if err != nil {
 		return err
 	}
-	run := adminRun{client: newControlClient(cfg.StateDir), text: text, out: out, openTerminal: openTerminal, euid: euid}
+	run := adminRun{client: newControlClient(cfg.StateDir), text: text, out: out, openTerminal: openTerminal}
 	ctx := context.Background()
 	switch gesture {
 	case adminSetupCode:
@@ -279,7 +284,7 @@ var adminHints = map[error]string{
 // est celui de la socket : le pair n'est pas root.
 func (a adminRun) refusalOf(status int, body []byte) error {
 	if status == http.StatusForbidden {
-		return &refusal{message: a.text.Get("admin.root_only")}
+		return rootOnlyRefusal(a.text)
 	}
 	var refused struct {
 		Error string `json:"error"`
@@ -295,13 +300,15 @@ func (a adminRun) refusalOf(status int, body []byte) error {
 	return &refusal{message: a.text.Get(catalogKey(refused.Error))}
 }
 
+// rootOnlyRefusal est le refus d'un compte qui n'est pas root, que la
+// commande le voie elle-même ou que la socket rende 403 : code de sortie 2.
+func rootOnlyRefusal(text lang.Catalog) error {
+	return &refusal{message: text.Get("admin.root_only")}
+}
+
 // readNewPassword demande le nouveau mot de passe deux fois, sur le terminal
-// et sans écho : jamais sur l'entrée standard, jamais affiché. Un compte qui
-// n'est pas root est refusé avant : le serveur le refuserait après la saisie.
+// et sans écho : jamais sur l'entrée standard, jamais affiché.
 func (a adminRun) readNewPassword() (string, error) {
-	if a.euid != 0 {
-		return "", &refusal{message: a.text.Get("admin.root_only")}
-	}
 	terminal, err := a.openTerminal()
 	if err != nil {
 		return "", &refusal{message: a.text.Get("admin.password_needs_tty")}
