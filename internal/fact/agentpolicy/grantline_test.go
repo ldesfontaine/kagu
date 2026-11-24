@@ -29,14 +29,38 @@ func TestR_A3_15_AHostileValueGivesARefusalWithoutLine(t *testing.T) {
 		"/srv\nreboot",
 		"/srv\rreboot",
 		"/srv || true",
+		"/srv `id`",
+		"/srv & id",
+		"/srv > /etc/passwd",
+		"/srv < /etc/shadow",
+		"/srv\x1b[2J",
+		"/srv\tid",
+		"/srv\x00id",
 	}
 	for _, value := range hostile {
 		if line := GrantLine(CapabilityFilesWrite, value); line != "" {
 			t.Errorf("GrantLine(files.write, %q) = %q, want no line", value, line)
 		}
+		if line := AgentLine("trust", "add", "backup.guest", value); line != "" {
+			t.Errorf("AgentLine(trust add, %q) = %q, want no line", value, line)
+		}
 	}
-	if line := AgentLine("trust", "add", "server-key", "abc;reboot"); line != "" {
-		t.Errorf("AgentLine with a hostile word = %q, want no line", line)
+}
+
+// Les valeurs réelles des ancres et d'un droit borné passent : le refus ne
+// mord que sur ce qui enchaîne ou cache.
+func TestAgentLine_KeepsTheRealValues(t *testing.T) {
+	values := []string{
+		"SHA256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU",
+		"age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p",
+		"5012",
+		"/srv/restore",
+		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+	}
+	for _, value := range values {
+		if line := AgentLine("trust", "add", "backup.guest", value); line != "sudo "+brand.Command+" agent trust add backup.guest "+value {
+			t.Errorf("AgentLine refused the real value %q: %q", value, line)
+		}
 	}
 }
 
