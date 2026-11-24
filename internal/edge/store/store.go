@@ -197,6 +197,11 @@ func (db *DB) applyContent(ctx context.Context, name string, version int, conten
 	if _, err := tx.ExecContext(ctx, content); err != nil {
 		return fmt.Errorf("apply migration %s: %w", name, err)
 	}
+	if step := migrationSteps[version]; step != nil {
+		if err := step(ctx, tx); err != nil {
+			return fmt.Errorf("apply migration %s: %w", name, err)
+		}
+	}
 	if err := checkForeignKeys(ctx, tx); err != nil {
 		return fmt.Errorf("migration %s: %w", name, err)
 	}
@@ -209,6 +214,12 @@ func (db *DB) applyContent(ctx context.Context, name string, version int, conten
 		return fmt.Errorf("commit migration %s: %w", name, err)
 	}
 	return nil
+}
+
+// migrationSteps : ce qu'une migration fait en Go après son SQL, dans la même
+// transaction. Une règle qui vit dans un composant ne se recopie pas en SQL.
+var migrationSteps = map[int]func(ctx context.Context, tx *sql.Tx) error{
+	50: rejudgeReportedFields,
 }
 
 // checkForeignKeys refuse une base où une clé étrangère pend : la première

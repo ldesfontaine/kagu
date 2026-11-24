@@ -196,25 +196,7 @@ func (db *DB) MachineStorage(ctx context.Context, machineID string) (hostinfo.St
 // attachMACs pose sur chaque machine les adresses MAC que son agent a
 // rapportées, en une requête pour toute la liste.
 func attachMACs(ctx context.Context, q querier, machines []machine.Machine) error {
-	rows, err := q.QueryContext(ctx, `SELECT machine_id, mac FROM machine_interfaces ORDER BY machine_id, name`)
-	if err != nil {
-		return fmt.Errorf("list machine macs: %w", err)
-	}
-	type owned struct{ machineID, mac string }
-	entries, err := collect(rows, func(row scanner) (owned, error) {
-		var entry owned
-		err := row.Scan(&entry.machineID, &entry.mac)
-		return entry, err
-	})
-	if err != nil {
-		return fmt.Errorf("scan machine macs: %w", err)
-	}
-	for _, entry := range entries {
-		for index := range machines {
-			if machines[index].ID == entry.machineID {
-				machines[index].MACs = append(machines[index].MACs, entry.mac)
-			}
-		}
-	}
-	return nil
+	return attachToMachines(ctx, q, machines, "machine macs",
+		`SELECT machine_id, mac FROM machine_interfaces ORDER BY machine_id, name`,
+		func(m *machine.Machine, mac string) { m.MACs = append(m.MACs, mac) })
 }

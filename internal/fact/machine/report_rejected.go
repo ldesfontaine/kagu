@@ -1,62 +1,62 @@
 package machine
 
 import (
-	"slices"
-	"sync"
+	"context"
+	"fmt"
 
 	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 )
 
-// Les champs qu'un agent dit à l'ouverture du flux, et qui peuvent être refusés.
+// Les champs qu'un agent dit de lui, et qui peuvent être refusés. Le nom
+// d'hôte et l'architecture ne se disent qu'à l'enrôlement ; le système et la
+// version aussi à l'ouverture du flux.
 const (
-	ReportFieldSystem  = "system"
-	ReportFieldVersion = "version"
+	ReportFieldHostname = "hostname"
+	ReportFieldSystem   = "system"
+	ReportFieldArch     = "arch"
+	ReportFieldVersion  = "version"
 )
 
-// reportRefusals garde, par machine, les champs que son agent a dits et que le
-// serveur a refusés. Rien n'est écrit en base : le refus vaut pour la session
-// en cours, un redémarrage l'efface, le champ redit valable aussi.
-type reportRefusals struct {
-	mu      sync.Mutex
-	byField map[string]map[string]bool
+// Reported est ce que l'agent dit de lui à l'enrôlement, et ce que la base en
+// garde.
+type Reported struct {
+	Hostname string
+	System   string
+	Arch     string
+	Version  string
 }
 
-func (r *reportRefusals) note(machineID, field string, refused bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if !refused {
-		delete(r.byField[machineID], field)
-		return
+// RefusedFields rend, dans l'ordre, les champs que le jugement d'aujourd'hui
+// refuse ; nil s'ils passent tous. Un champ vide est un agent qui ne le dit pas.
+// C'est le juge de l'enrôlement, et celui qui rejuge une base d'avant (050).
+func RefusedFields(reported Reported) []string {
+	var refused []string
+	if reported.Hostname != "" && !IsHostname(reported.Hostname) {
+		refused = append(refused, ReportFieldHostname)
 	}
-	if r.byField == nil {
-		r.byField = make(map[string]map[string]bool)
+	if !isReportedText(reported.System) {
+		refused = append(refused, ReportFieldSystem)
 	}
-	if r.byField[machineID] == nil {
-		r.byField[machineID] = make(map[string]bool)
+	if !isReportedText(reported.Arch) {
+		refused = append(refused, ReportFieldArch)
 	}
-	r.byField[machineID][field] = true
-}
-
-func (r *reportRefusals) forget(machineID string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.byField, machineID)
-}
-
-// of rend les champs refusés d'une machine, dans l'ordre ; nil sans refus.
-func (r *reportRefusals) of(machineID string) []string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	var fields []string
-	for field := range r.byField[machineID] {
-		fields = append(fields, field)
+	if !isReportedText(reported.Version) {
+		refused = append(refused, ReportFieldVersion)
 	}
-	slices.Sort(fields)
-	return fields
+	return refused
 }
 
 // isReportedText juge un texte que l'agent dit de lui : borné, sans caractère
 // de contrôle. Vide, c'est un agent qui ne le dit pas.
 func isReportedText(text string) bool {
 	return len(text) <= MaxSystemLength && !untrusted.HasControl(text)
+}
+
+// noteRefusal garde en base le refus d'un champ dit au flux, ou l'efface quand
+// le champ est redit valable : la fiche le lit, un redémarrage ne l'efface pas.
+func (s *Service) noteRefusal(ctx context.Context, machineID, field string, refused bool) error {
+	if err := s.store.NoteReportRefusal(ctx, machineID, field, refused); err != nil {
+		return fmt.Errorf("note %s refusal: %w", field, err)
+	}
+	return nil
 }

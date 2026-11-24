@@ -41,6 +41,9 @@ func (db *DB) ListMachines(ctx context.Context) ([]machine.Machine, error) {
 	if err := attachMACs(ctx, db.sql, machines); err != nil {
 		return nil, err
 	}
+	if err := attachReportRefusals(ctx, db.sql, machines); err != nil {
+		return nil, err
+	}
 	return machines, nil
 }
 
@@ -60,7 +63,38 @@ func (db *DB) GetMachine(ctx context.Context, id string) (machine.Machine, error
 	if err := attachMACs(ctx, db.sql, machines); err != nil {
 		return machine.Machine{}, err
 	}
+	if err := attachReportRefusals(ctx, db.sql, machines); err != nil {
+		return machine.Machine{}, err
+	}
 	return machines[0], nil
+}
+
+// attachToMachines lit en une requête les couples (machine_id, valeur) de
+// toute la liste et confie chaque valeur à attach, sur sa machine. Ce que le
+// store pose ainsi après machineSelect (MAC, refus) y passe ; what nomme la
+// lecture dans les erreurs.
+func attachToMachines(ctx context.Context, q querier, machines []machine.Machine, what, query string, attach func(m *machine.Machine, value string)) error {
+	rows, err := q.QueryContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("list %s: %w", what, err)
+	}
+	type owned struct{ machineID, value string }
+	entries, err := collect(rows, func(row scanner) (owned, error) {
+		var entry owned
+		err := row.Scan(&entry.machineID, &entry.value)
+		return entry, err
+	})
+	if err != nil {
+		return fmt.Errorf("scan %s: %w", what, err)
+	}
+	for _, entry := range entries {
+		for index := range machines {
+			if machines[index].ID == entry.machineID {
+				attach(&machines[index], entry.value)
+			}
+		}
+	}
+	return nil
 }
 
 // MachineExists dit si la machine est connue : une sonde ou une tâche qui
@@ -372,6 +406,11 @@ func reenroll(ctx context.Context, tx *sql.Tx, m machine.Machine, now time.Time)
 	}
 	if err := notFoundIfNoRow(result, machine.ErrNotFound); err != nil {
 		return err
+	}
+	// Tout ce que l'agent dit de lui vient d'être redit et jugé : les refus
+	// d'avant ne décrivent plus rien.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM machine_report_refusals WHERE machine_id = ?`, m.ID); err != nil {
+		return fmt.Errorf("clear report refusals: %w", err)
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE agents SET revoked_at = ? WHERE machine_id = ? AND revoked_at IS NULL`, now.Unix(), m.ID)
 	if err != nil {
