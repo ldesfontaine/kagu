@@ -139,7 +139,7 @@ func withTOTP(t *testing.T) (*Service, *memoryStore, State, string, *time.Time) 
 }
 
 func login(service *Service, state State, code string) error {
-	_, err := service.Login(context.Background(), state, "lucas", testPassword, code, SessionClient{})
+	_, err := service.Login(context.Background(), state, "lucas", testPassword, code, SessionClient{Cookie: CookieHost})
 	return err
 }
 
@@ -211,7 +211,7 @@ func TestLogin_WithTOTP_AsksTheCodeAfterThePassword(t *testing.T) {
 	limits := DefaultAccountLimits()
 	limits.TOTPFailures = MaxTOTPFailures + 1
 	service.SetAccountLimits(limits)
-	if _, err := service.Login(context.Background(), state, "lucas", "a wrong passphrase", codeAt(t, secret, *now), SessionClient{}); !errors.Is(err, ErrLoginFailed) {
+	if _, err := service.Login(context.Background(), state, "lucas", "a wrong passphrase", codeAt(t, secret, *now), SessionClient{Cookie: CookieHost}); !errors.Is(err, ErrLoginFailed) {
 		t.Fatalf("wrong password with a right code: got %v, want ErrLoginFailed", err)
 	}
 	if err := login(service, state, ""); !errors.Is(err, ErrTOTPRequired) {

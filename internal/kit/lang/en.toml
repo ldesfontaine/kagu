@@ -2730,6 +2730,7 @@ mode_forward_done = "Behind an SSO, identity header %s. Sessions closed: %d. If 
 sessions_closed = "Sessions closed: %d."
 tokens_revoked = "API tokens revoked: %d."
 state_dir_open = "state_dir %s is open to the group or others (permissions %s): the database and root's local channel would be within their reach. The server does not start. Close it: chmod 700 %s"
+listen_without_https = "listen = \"%s\" is not a loopback address, and no HTTPS proxy is declared: without HTTPS, the interface listens only on the machine itself. The server does not start. Write listen = \"127.0.0.1:8080\" and go through the SSH tunnel, or, behind an HTTPS proxy, public_url = \"https://<domain>\" and trusted_proxies = [\"<proxy address>/32\"]"
 
 # The step-by-step wizard: one step on screen, then the summary.
 [wizard]

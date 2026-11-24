@@ -53,9 +53,9 @@ type AuthService interface {
 	EnableForward(ctx context.Context, expected auth.State, setupCode, header string) (auth.State, error)
 	IssueSetupCode(ctx context.Context) (auth.IssuedSetupCode, error)
 	Login(ctx context.Context, expected auth.State, username, password, code string, client auth.SessionClient) (auth.OpenedSession, error)
-	ResumeSession(ctx context.Context, state auth.State, token string) (auth.Session, bool, error)
+	ResumeSession(ctx context.Context, state auth.State, token auth.PresentedToken) (auth.Session, bool, error)
 	OpenForwardSession(ctx context.Context, expected auth.State, identity string, client auth.SessionClient) (auth.OpenedSession, error)
-	ResumeForwardSession(ctx context.Context, state auth.State, token, identity string) (auth.Session, bool, error)
+	ResumeForwardSession(ctx context.Context, state auth.State, token auth.PresentedToken, identity string) (auth.Session, bool, error)
 	ClosePresentedSession(ctx context.Context, token string) error
 	SessionAlive(ctx context.Context, id string) (bool, error)
 	WatchSession(ctx context.Context, id string) (<-chan struct{}, func(), error)
@@ -402,7 +402,7 @@ func (s *Server) admitForward(w http.ResponseWriter, r *http.Request, state auth
 	identity, proven := s.checkForward(w, r, state)
 	if !proven {
 		// checkForward a répondu ; il reste à tuer le cookie présenté.
-		if err := s.auth.ClosePresentedSession(r.Context(), s.presentedSessionToken(r)); err != nil {
+		if err := s.auth.ClosePresentedSession(r.Context(), s.presentedSessionToken(r).Value); err != nil {
 			s.logger.Error("operator session not closed after a refused proxy proof", "error", err)
 		}
 		return
@@ -434,15 +434,15 @@ func (s *Server) admitForward(w http.ResponseWriter, r *http.Request, state auth
 // et pose son cookie. En HTTP clair hors de la boucle locale, aucune ne
 // s'ouvre (R-A2-4) : la garde du mandataire suffit à la requête.
 func (s *Server) openForwardSession(w http.ResponseWriter, r *http.Request, state auth.State, identity string) (auth.Session, bool, error) {
-	cookieName, canOpen := s.sessionCookieName(r)
+	cookie, canOpen := s.sessionCookieKind(r)
 	if !canOpen {
 		return auth.Session{}, false, nil
 	}
-	opened, err := s.auth.OpenForwardSession(r.Context(), state, identity, sessionClientOf(r, s.clientAddress(r)))
+	opened, err := s.auth.OpenForwardSession(r.Context(), state, identity, sessionClientOf(r, s.clientAddress(r), cookie))
 	if err != nil {
 		return auth.Session{}, false, err
 	}
-	setSessionCookie(w, cookieName, opened.Token)
+	setSessionCookie(w, cookie, opened.Token)
 	return opened.Session, true, nil
 }
 
@@ -458,13 +458,35 @@ func sessionFrom(ctx context.Context) (auth.Session, bool) {
 // Le refus d'une installation sans compte : le front montre l'écran de
 // première configuration. Hors /api, le texte dit d'ouvrir l'interface.
 func (s *Server) writeSetupRequired(w http.ResponseWriter, r *http.Request) {
+	s.writeInterfaceRefusal(w, r, http.StatusUnauthorized, codeSetupRequired)
+}
+
+// writeInterfaceRefusal répond un refus de l'interface : la clé en JSON sous
+// /api, son texte dans la langue du navigateur ailleurs.
+func (s *Server) writeInterfaceRefusal(w http.ResponseWriter, r *http.Request, status int, code string) {
 	if strings.HasPrefix(r.URL.Path, "/api/") {
-		s.writeAPIError(w, http.StatusUnauthorized, codeSetupRequired)
+		s.writeAPIError(w, status, code)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	catalog := s.catalogs.For(browserLanguage(r))
-	http.Error(w, catalog.Get(codeSetupRequired), http.StatusUnauthorized)
+	http.Error(w, catalog.Get(code), status)
+}
+
+// refuseUnproxiedPeer tient R-CNX-5 à la requête : l'interface de l'opérateur
+// n'est servie qu'à la boucle locale et aux mandataires de trusted_proxies,
+// par qui passe l'HTTPS. Un voisin qui contourne le mandataire parlerait en
+// clair : refusé avant toute lecture du corps, mot de passe compris. Sur un
+// listen de boucle locale, tout pair passe : il est sur la machine.
+func (s *Server) refuseUnproxiedPeer(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.operatorFromAnyPeer || isLoopbackAddress(httpx.PeerHost(r)) || s.trustsPeer(r) {
+			next(w, r)
+			return
+		}
+		s.logger.Debug("interface refused to a peer that is neither loopback nor a trusted proxy", "peer", httpx.PeerHost(r), "path", r.URL.Path)
+		s.writeInterfaceRefusal(w, r, http.StatusForbidden, codeHTTPSRequired)
+	}
 }
 
 // forwardedIdentityKey porte, dans le contexte de la requête, l'identité

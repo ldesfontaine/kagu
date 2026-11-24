@@ -9,6 +9,9 @@
 # comme tout autre. Un voisin qui atteint ce port en direct n'est pas arrêté
 # par l'adresse ; en mode forward, voir forward_secret_file plus bas.
 # Traefik en conteneur : l'IP du pont Docker, par exemple 172.17.0.1:8080.
+# Hors de la boucle locale (127.0.0.1, [::1]), serve ne démarre que si
+# public_url est en https:// et trusted_proxies non vide : sans HTTPS,
+# l'interface n'écoute que sur la machine elle-même (R-CNX-5).
 listen = "127.0.0.1:8080"
 
 # Répertoire d'état : la base SQLite (opencloud.db, avec -wal et -shm), qui

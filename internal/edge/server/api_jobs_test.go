@@ -80,7 +80,7 @@ func TestAPI_GetJob_CarriesThePingURLAndTheSnippets(t *testing.T) {
 	job := server.createJob(t, "job")
 	var response jobResponse
 	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/jobs/"+job.ID, nil), &response)
-	if response.PingURL != "http://example.com/ping/"+job.Token || response.URLLocal || len(response.Snippets) != 4 {
+	if response.PingURL != "https://example.com/ping/"+job.Token || response.URLLocal || len(response.Snippets) != 4 {
 		t.Fatalf("response %+v", response)
 	}
 	server.publicURL = "https://cloud.exemple.fr/"
@@ -172,13 +172,13 @@ func TestAPI_RegenerateToken_ChangesThePingURL(t *testing.T) {
 	}
 	var response jobResponse
 	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/jobs/"+job.ID, nil), &response)
-	if response.PingURL == "http://example.com/ping/"+job.Token || response.Job.ID != job.ID {
+	if response.PingURL == "https://example.com/ping/"+job.Token || response.Job.ID != job.ID {
 		t.Fatalf("the ping URL must change: %+v", response)
 	}
 	if got := ping(server.Server, http.MethodGet, "/ping/"+job.Token, "", ""); got.Code != http.StatusNotFound {
 		t.Fatalf("old URL: %d", got.Code)
 	}
-	newPath := strings.TrimPrefix(response.PingURL, "http://example.com")
+	newPath := strings.TrimPrefix(response.PingURL, "https://example.com")
 	if got := ping(server.Server, http.MethodGet, newPath, "", ""); got.Code != http.StatusOK {
 		t.Fatalf("new URL: %d", got.Code)
 	}

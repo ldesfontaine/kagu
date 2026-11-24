@@ -289,7 +289,7 @@ commenté : [`installation/config.toml`](installation/config.toml).
 
 | Clé | Défaut | Rôle |
 | --- | --- | --- |
-| `listen` | `127.0.0.1:8080` | Adresse d'écoute, `hôte:port`, en HTTP. Le seul port de Kagu |
+| `listen` | `127.0.0.1:8080` | Adresse d'écoute, `hôte:port`, en HTTP. Le seul port de Kagu. Hors de la boucle locale, exige `public_url` en `https://` et `trusted_proxies` |
 | `state_dir` | `/var/lib/opencloud` | La base `opencloud.db` (et `-wal`, `-shm`), réglages de l'interface compris, et le cache `lifecycle.json`. Créé en `0700` s'il manque ; ouvert au groupe ou aux autres, `serve` refuse de démarrer (`chmod 700 <state_dir>`) |
 | `public_url` | vide | L'adresse publique, par exemple `https://opencloud.example.org`. Voir ci-dessous |
 | `trusted_proxies` | `[]` | Les mandataires dont les en-têtes `X-Forwarded-*` sont crus, en CIDR |
@@ -2673,6 +2673,7 @@ Les messages sont ceux que le binaire écrit, tels quels.
 | « Docker n'est pas présent sur cette machine. » alors qu'il tourne | `-docker-socket` ne vise pas la bonne socket | Corriger le chemin dans l'unité de l'agent |
 | La machine Kagu reste hors ligne, sans mesures | Son agent n'est pas installé (installation d'avant les agents, ou ligne de la première configuration pas jouée) | Machines → la machine Kagu → Ré-enrôler, et jouer la ligne sur elle |
 | Agent : « Enrôlement refusé : cette machine est la machine Kagu, et elle a déjà un agent actif. » | Une ligne d'Ajouter une machine jouée sur la machine Kagu, qui a déjà son agent | Ré-enrôler la machine Kagu depuis sa fiche ; le jeton sert à une autre machine |
+| `serve: listen "0.0.0.0:8080" is not a loopback address and no HTTPS proxy is declared…` | `listen` hors de la boucle locale sans mandataire HTTPS (R-CNX-5) | `listen = "127.0.0.1:8080"` et le tunnel SSH ; ou, derrière Traefik, `public_url = "https://…"` et `trusted_proxies` |
 | `serve: listen tcp 172.17.0.1:8080: bind: cannot assign requested address` | `docker0` pas encore là au démarrage | L'unité redémarre seule ; vérifier `After=docker.service` |
 | `serve: listen tcp …: bind: address already in use` | Un autre processus tient le port | `ss -ltnp` ; changer `listen` |
 | Le serveur refuse de démarrer : « opencloud.db contient des secrets chiffrés mais secret.key est absent de state_dir… » | La clé n'a pas été restaurée avec la base | La poser (voir Restaurer) ; perdue : voir [Clé perdue](#clé-perdue) |

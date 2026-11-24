@@ -11,22 +11,24 @@ import (
 )
 
 // Le cookie d'une session native (R-A2-3, R-A2-4). Sur HTTPS, __Host-, Secure,
-// HttpOnly, SameSite=Strict, Path=/. Sur la boucle locale en HTTP (le tunnel
-// SSH), le cookie local, sans Secure, lu seulement d'un client de boucle
-// locale. Ailleurs, en HTTP clair, aucune session ne s'ouvre.
+// HttpOnly, SameSite=Strict, Path=/, lu seulement d'une requête HTTPS. Sur la
+// boucle locale en HTTP (le tunnel SSH), le cookie local, sans Secure, lu
+// seulement d'un client de boucle locale. Ailleurs, en HTTP clair, aucune
+// session ne s'ouvre ni ne se reprend.
 
 // codeHTTPSRequired est le refus d'ouvrir une session en HTTP clair hors de la
 // boucle locale.
 const codeHTTPSRequired = "auth.https_required"
 
-// sessionCookieName rend le cookie que porterait une session ouverte par cette
-// requête, ou faux si aucune ne doit s'ouvrir (R-A2-4).
-func (s *Server) sessionCookieName(r *http.Request) (string, bool) {
+// sessionCookieKind rend le cookie que porte une session de cette requête, ou
+// faux si aucune ne doit s'ouvrir ni se reprendre (R-A2-3, R-A2-4). HTTPS est
+// r.TLS, ou le schéma que transmet un mandataire de confiance (pageAddress).
+func (s *Server) sessionCookieKind(r *http.Request) (auth.CookieKind, bool) {
 	if strings.HasPrefix(s.pageAddress(r), "https://") {
-		return brand.SessionCookie, true
+		return auth.CookieHost, true
 	}
 	if s.isLoopbackClient(r) {
-		return brand.LocalSessionCookie, true
+		return auth.CookieLocal, true
 	}
 	return "", false
 }
@@ -46,25 +48,33 @@ func isLoopbackAddress(text string) bool {
 	return err == nil && prefixesContain(loopbackRanges, address)
 }
 
-// presentedSessionToken rend le jeton que la requête présente. Le cookie
-// __Host- vaut d'où qu'il vienne : le navigateur ne le pose et ne l'envoie
-// qu'en HTTPS. Le cookie local ne vaut que d'un client de boucle locale.
-func (s *Server) presentedSessionToken(r *http.Request) string {
-	if cookie, err := r.Cookie(brand.SessionCookie); err == nil && cookie.Value != "" {
-		return cookie.Value
+// presentedSessionToken rend le jeton que la requête présente sous le seul
+// cookie qu'elle peut porter : __Host- sur HTTPS, le cookie local d'un client
+// de boucle locale. Le nom ne prouve rien, un client l'écrit à sa guise
+// (E02-07) : la session vérifie aussi qu'elle est née sous ce cookie.
+func (s *Server) presentedSessionToken(r *http.Request) auth.PresentedToken {
+	kind, ok := s.sessionCookieKind(r)
+	if !ok {
+		return auth.PresentedToken{}
 	}
-	if !s.isLoopbackClient(r) {
-		return ""
+	cookie, err := r.Cookie(sessionCookieName(kind))
+	if err != nil {
+		return auth.PresentedToken{}
 	}
-	if cookie, err := r.Cookie(brand.LocalSessionCookie); err == nil {
-		return cookie.Value
-	}
-	return ""
+	return auth.PresentedToken{Value: cookie.Value, Cookie: kind}
 }
 
-// setSessionCookie pose le jeton d'une session neuve sous name, et efface
-// l'autre cookie : un seul jeton reste au navigateur.
-func setSessionCookie(w http.ResponseWriter, name, token string) {
+func sessionCookieName(kind auth.CookieKind) string {
+	if kind == auth.CookieHost {
+		return brand.SessionCookie
+	}
+	return brand.LocalSessionCookie
+}
+
+// setSessionCookie pose le jeton d'une session neuve sous le cookie kind, et
+// efface l'autre : un seul jeton reste au navigateur.
+func setSessionCookie(w http.ResponseWriter, kind auth.CookieKind, token string) {
+	name := sessionCookieName(kind)
 	http.SetCookie(w, sessionCookie(name, token, int(auth.SessionLifetime.Seconds())))
 	for _, other := range []string{brand.SessionCookie, brand.LocalSessionCookie} {
 		if other != name {

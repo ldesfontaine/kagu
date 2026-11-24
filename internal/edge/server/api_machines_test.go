@@ -495,7 +495,7 @@ func TestAPI_CreateMachineToken_ShowsTheTokenOnceAndListsItAsPending(t *testing.
 	var response tokenResponse
 	decodeAPI(t, recorder, &response)
 	enroll := stepCommand(response.Steps, stepEnroll)
-	if !tokenValue.MatchString(response.Token) || enroll != "printf '%s\\n' '"+response.Token+"' | runuser -u opencloud-agent -- /var/lib/opencloud-agent/bin/current agent -server http://example.com" || response.URLLocal {
+	if !tokenValue.MatchString(response.Token) || enroll != "printf '%s\\n' '"+response.Token+"' | runuser -u opencloud-agent -- /var/lib/opencloud-agent/bin/current agent -server https://example.com" || response.URLLocal {
 		t.Fatalf("token response %+v", response)
 	}
 	if prepare := stepCommand(response.Steps, stepPrepare); !strings.Contains(prepare, " /tmp/opencloud /var/lib/opencloud-agent/bin/opencloud-"+version.Number()) || strings.Contains(prepare, response.Token) {

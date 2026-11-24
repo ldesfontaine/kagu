@@ -36,6 +36,17 @@ var (
 	ErrSessionIdentityChanged = errors.New("auth: session opened for another identity")
 )
 
+// CookieKind est le cookie sous lequel une session est née (R-A2-3) : elle
+// ne se reprend que présentée sous ce même cookie.
+type CookieKind string
+
+const (
+	// CookieHost : __Host-kagu_session, posé sur HTTPS.
+	CookieHost CookieKind = "host"
+	// CookieLocal : kagu_session_local, posé sur la boucle locale en HTTP.
+	CookieLocal CookieKind = "local"
+)
+
 // Session est ce que la base garde d'une session ; jamais son jeton.
 type Session struct {
 	ID        string
@@ -49,6 +60,14 @@ type Session struct {
 	// ReauthAt : la dernière redemande réussie sur cette session (R-A2-7),
 	// zéro sinon.
 	ReauthAt time.Time
+	// Cookie : vide pour une session née avant que la base ne le garde.
+	Cookie CookieKind
+}
+
+// bornUnder dit si la session est née sous ce cookie. Une session sans sorte
+// connue n'est née sous aucun : elle ne se reprend pas, rien ne la devine.
+func (s Session) bornUnder(cookie CookieKind) bool {
+	return s.Cookie != "" && s.Cookie == cookie
 }
 
 // aliveAt dit si la session vit encore à cet instant.
@@ -73,10 +92,19 @@ type OpenedSession struct {
 	Token string
 }
 
-// SessionClient dit d'où vient la requête qui ouvre la session.
+// SessionClient dit d'où vient la requête qui ouvre la session, et sous quel
+// cookie elle la portera.
 type SessionClient struct {
 	Address   string
 	UserAgent string
+	Cookie    CookieKind
+}
+
+// PresentedToken est le jeton qu'une requête présente, et le cookie qui le
+// porte.
+type PresentedToken struct {
+	Value  string
+	Cookie CookieKind
 }
 
 // Ce que les sessions attendent du store.
@@ -166,6 +194,7 @@ func (s *Service) openSession(ctx context.Context, identity string, client Sessi
 		ExpiresAt: now.Add(SessionLifetime),
 		Source:    ratelimit.SourceKey(client.Address),
 		UserAgent: untrusted.Bound(userAgent, MaxUserAgentLength),
+		Cookie:    client.Cookie,
 	}
 	if err := s.store.CreateSession(ctx, session, ident.HashToken(token)); err != nil {
 		return OpenedSession{}, err
@@ -176,7 +205,7 @@ func (s *Service) openSession(ctx context.Context, identity string, client Sessi
 
 // ResumeSession rend la session du jeton présenté, si elle vit encore sous
 // state. Une session morte, ou ouverte pour un autre compte, est effacée.
-func (s *Service) ResumeSession(ctx context.Context, state State, token string) (Session, bool, error) {
+func (s *Service) ResumeSession(ctx context.Context, state State, token PresentedToken) (Session, bool, error) {
 	if state.Mode != ModeNative {
 		return Session{}, false, nil
 	}
@@ -208,24 +237,31 @@ func (s *Service) OpenForwardSession(ctx context.Context, expected State, identi
 // et porte l'identité que l'en-tête vient de prouver. Une autre identité tue
 // la session : ErrSessionIdentityChanged (R-A2-17). Une session morte est
 // effacée sans erreur : la garde a admis la requête, une neuve s'ouvre.
-func (s *Service) ResumeForwardSession(ctx context.Context, state State, token, identity string) (Session, bool, error) {
+func (s *Service) ResumeForwardSession(ctx context.Context, state State, token PresentedToken, identity string) (Session, bool, error) {
 	if state.Mode != ModeForward {
 		return Session{}, false, nil
 	}
 	return s.resumeSession(ctx, token, identity)
 }
 
-// resumeSession rend la session vivante du jeton, ouverte pour identity.
-func (s *Service) resumeSession(ctx context.Context, token, identity string) (Session, bool, error) {
-	if token == "" {
+// resumeSession rend la session vivante du jeton, ouverte pour identity et
+// présentée sous le cookie où elle est née. Présenté sous un autre, le jeton
+// a été recopié : la session est effacée (R-A2-3).
+func (s *Service) resumeSession(ctx context.Context, token PresentedToken, identity string) (Session, bool, error) {
+	if token.Value == "" {
 		return Session{}, false, nil
 	}
-	session, found, err := s.store.SessionByTokenHash(ctx, ident.HashToken(token))
+	session, found, err := s.store.SessionByTokenHash(ctx, ident.HashToken(token.Value))
 	if err != nil || !found {
 		return Session{}, false, err
 	}
 	now := s.now()
 	if !session.aliveAt(now) {
+		return Session{}, false, s.endSession(ctx, session.ID)
+	}
+	if !session.bornUnder(token.Cookie) {
+		s.logger.Warn("operator session closed: its token came under another cookie", "session", session.ID,
+			"born_under", string(session.Cookie), "presented_under", string(token.Cookie))
 		return Session{}, false, s.endSession(ctx, session.ID)
 	}
 	if session.Identity != identity {

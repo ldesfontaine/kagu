@@ -43,11 +43,11 @@ func TestMigration044_ABasicBaseStartsNativeAndTheOldPasswordOpensASession(t *te
 	if _, err := service.Login(ctx, state, "lucas", "a wrong passphrase", "", auth.SessionClient{}); err == nil {
 		t.Fatal("a wrong password opened a session")
 	}
-	opened, err := service.Login(ctx, state, "lucas", oldPassword, "", auth.SessionClient{Address: "127.0.0.1"})
+	opened, err := service.Login(ctx, state, "lucas", oldPassword, "", auth.SessionClient{Address: "127.0.0.1", Cookie: auth.CookieLocal})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, alive, err := service.ResumeSession(ctx, state, opened.Token); err != nil || !alive {
+	if _, alive, err := service.ResumeSession(ctx, state, auth.PresentedToken{Value: opened.Token, Cookie: auth.CookieLocal}); err != nil || !alive {
 		t.Fatalf("the session opened by the old password does not resume: %v %v", alive, err)
 	}
 }

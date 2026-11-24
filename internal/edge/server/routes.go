@@ -384,6 +384,11 @@ func (s *Server) mux() *http.ServeMux {
 		if bound, ok := ownBoundRoutes[route.method+" "+route.pattern]; ok {
 			handler = boundTo(bound, handler)
 		}
+		// La garde du pair enveloppe tout le reste : rien d'une route de
+		// l'opérateur ne s'exécute pour un pair qui contourne le mandataire.
+		if isOperatorRoute(route.pattern) {
+			handler = s.refuseUnproxiedPeer(handler)
+		}
 		pattern := route.pattern
 		if route.method != anyMethod {
 			pattern = route.method + " " + pattern

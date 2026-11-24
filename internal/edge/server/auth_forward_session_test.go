@@ -180,7 +180,7 @@ func requireEndsWithinASecond(t *testing.T, ended <-chan struct{}, killedAt time
 }
 
 func withCookie(cookie *http.Cookie) func(*http.Request) {
-	return func(request *http.Request) { request.AddCookie(cookie) }
+	return func(request *http.Request) { presentCookie(request, cookie) }
 }
 
 // sendWithCookie joue une écriture de l'API comme le front, sous cookie.
@@ -189,7 +189,7 @@ func sendWithCookie(server *Server, method, path, body string, cookie *http.Cook
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(anonymousHeader, "1")
-	request.AddCookie(cookie)
+	presentCookie(request, cookie)
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	return recorder
@@ -247,7 +247,7 @@ func TestR_A2_12_AStreamClosesWithinASecondOfItsSession(t *testing.T) {
 		// secondes, la fin tombe entre 0,5 et 1,5 s d'ici.
 		now := time.Now()
 		endsAt := now.Add(1500 * time.Millisecond).Truncate(time.Second)
-		session := auth.Session{ID: "deadline", Identity: testUsername, CreatedAt: endsAt.Add(-auth.SessionLifetime), SeenAt: now, ExpiresAt: endsAt}
+		session := auth.Session{ID: "deadline", Identity: testUsername, CreatedAt: endsAt.Add(-auth.SessionLifetime), SeenAt: now, ExpiresAt: endsAt, Cookie: auth.CookieHost}
 		token := strings.Repeat("d", 64)
 		if err := server.db.CreateSession(context.Background(), session, ident.HashToken(token)); err != nil {
 			t.Fatal(err)
@@ -264,7 +264,7 @@ func TestR_A2_12_AStreamClosesWithinASecondOfItsSession(t *testing.T) {
 		cookie := server.openForwardSession(t, testUsername)
 		ended := openSessionStream(t, server, "/api/events", func(request *http.Request) {
 			proxied(testUsername, proxySecret)(request)
-			request.AddCookie(cookie)
+			presentCookie(request, cookie)
 		})
 		killedAt := time.Now()
 		if got := callProxiedOverHTTPS(server.Server, loopbackPeer, "mallory", cookie, proxySecret); got.Code != http.StatusUnauthorized {
@@ -278,7 +278,7 @@ func TestR_A2_12_AStreamClosesWithinASecondOfItsSession(t *testing.T) {
 		cookie := server.openForwardSession(t, testUsername)
 		ended := openSessionStream(t, server, "/api/events", func(request *http.Request) {
 			proxied(testUsername, proxySecret)(request)
-			request.AddCookie(cookie)
+			presentCookie(request, cookie)
 		})
 		killedAt := time.Now()
 		if got := callProxiedOverHTTPS(server.Server, containerPeer, "", cookie); got.Code != http.StatusUnauthorized {

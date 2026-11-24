@@ -2,10 +2,13 @@ package store
 
 import (
 	"context"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // Une session se retrouve par l'empreinte de son jeton, se touche, se liste
@@ -104,5 +107,50 @@ func TestOperatorSessions_ModeNoneDeletesThem(t *testing.T) {
 	}
 	if left := count(t, db, `SELECT COUNT(*) FROM operator_sessions`); left != 0 {
 		t.Fatalf("%d sessions survive the return to none", left)
+	}
+}
+
+// R-A2-3 : la base garde la sorte du cookie, et rien d'autre ; une session née
+// avant 048, sans sorte, ne se reprend sous aucun cookie et s'efface : elle se
+// reconnecte, rien ne devine sous lequel elle était.
+func TestR_A2_3_ASessionWithoutItsCookieKindIsNeverResumed(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	at := time.Unix(1_800_000_000, 0)
+	native := auth.State{Mode: auth.ModeNative, Username: "lucas", PasswordHash: "h", EnabledAt: at}
+	if _, err := db.SaveAuthStateIf(ctx, auth.State{Mode: auth.ModeNone}, native, at); err != nil {
+		t.Fatal(err)
+	}
+	state, err := db.GetAuthState(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := auth.Session{ID: "kept", Identity: "lucas", CreatedAt: at, SeenAt: at, ExpiresAt: at.Add(time.Hour), Cookie: auth.CookieLocal}
+	if err := db.CreateSession(ctx, kept, "hash-kept"); err != nil {
+		t.Fatal(err)
+	}
+	if read, _, err := db.SessionByID(ctx, "kept"); err != nil || read.Cookie != auth.CookieLocal {
+		t.Fatalf("cookie kind read back %q %v", read.Cookie, err)
+	}
+	if _, err := db.sql.ExecContext(ctx, `UPDATE operator_sessions SET cookie_kind = 'other' WHERE id = 'kept'`); err == nil {
+		t.Fatal("an unknown cookie kind was stored")
+	}
+
+	service := auth.New(db, slog.New(slog.DiscardHandler))
+	service.SetClock(func() time.Time { return at })
+	token := strings.Repeat("0", 64)
+	for _, cookie := range []auth.CookieKind{auth.CookieHost, auth.CookieLocal} {
+		_, err := db.sql.ExecContext(ctx, `
+			INSERT INTO operator_sessions (id, token_hash, identity, created_at, seen_at, expires_at)
+			VALUES ('before', ?, 'lucas', ?, ?, ?)`, ident.HashToken(token), at.Unix(), at.Unix(), at.Add(time.Hour).Unix())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, alive, err := service.ResumeSession(ctx, state, auth.PresentedToken{Value: token, Cookie: cookie}); err != nil || alive {
+			t.Fatalf("a session from before 048 resumed under %s: %v %v", cookie, alive, err)
+		}
+		if _, found, _ := db.SessionByID(ctx, "before"); found {
+			t.Fatalf("the session from before 048 survived under %s", cookie)
+		}
 	}
 }

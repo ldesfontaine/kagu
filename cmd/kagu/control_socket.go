@@ -64,3 +64,13 @@ func requirePrivateStateDir(stateDir *os.Root, statePath string) error {
 	}
 	return &refusal{message: catalogs.For(lang.Default).Format("admin.state_dir_open", statePath, fmt.Sprintf("%04o", mode), statePath)}
 }
+
+// refuseClearListen : serve ne démarre pas pour servir l'interface en HTTP
+// clair hors de la machine (R-CNX-5) ; le refus dit quoi écrire.
+func refuseClearListen(listen string) error {
+	catalogs, err := lang.Load()
+	if err != nil {
+		return err
+	}
+	return &refusal{message: catalogs.For(lang.Default).Format("admin.listen_without_https", listen)}
+}

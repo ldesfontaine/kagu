@@ -33,7 +33,9 @@ func openLive(t *testing.T, server *testServer, path, lastEventID string) (func(
 // requête (cookie, en-têtes du mandataire).
 func openLiveAs(t *testing.T, server *testServer, path string, shape func(*http.Request)) (func() string, context.CancelFunc) {
 	t.Helper()
-	liveServer := httptest.NewServer(server.Server)
+	// En HTTPS, comme l'opérateur hors de la boucle locale : le banc y pose
+	// __Host- (asOperator), le cookie des autres tests serveur.
+	liveServer := httptest.NewTLSServer(server.Server)
 	t.Cleanup(liveServer.Close)
 	ctx, cancel := context.WithCancel(context.Background())
 	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, liveServer.URL+path, nil)

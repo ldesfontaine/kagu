@@ -465,6 +465,10 @@ type Server struct {
 	// mandataire transmet. Construit une fois, jamais modifié.
 	forwardUsers map[string]bool
 	listen       string
+	// operatorFromAnyPeer lève la garde du pair (refuseUnproxiedPeer). Aucune
+	// option ne le pose : seul le banc de test, qui joue l'opérateur depuis
+	// 192.0.2.1, l'écrit.
+	operatorFromAnyPeer bool
 	// Le front compilé, embarqué : voir spa.go.
 	app     fs.FS
 	handler http.Handler

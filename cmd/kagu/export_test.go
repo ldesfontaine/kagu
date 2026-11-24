@@ -297,6 +297,25 @@ func TestControlSocket_ASecondServeNeverTakesTheLiveSocket(t *testing.T) {
 	}
 }
 
+// R-CNX-5 : un listen hors de la boucle locale, sans mandataire HTTPS
+// déclaré : serve ne démarre pas, dit quoi écrire, et n'a rien créé.
+func TestR_CNX_5_ServeDoesNotStartOnAPublicListenWithoutHTTPS(t *testing.T) {
+	configPath, stateDir := writeShortConfig(t)
+	content := "listen = \"0.0.0.0:18081\"\nstate_dir = \"" + stateDir + "\"\n"
+	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := runServe([]string{"-config", configPath})
+	var refused *refusal
+	if !errors.As(err, &refused) || !strings.Contains(err.Error(), `listen = "127.0.0.1:8080"`) || !strings.Contains(err.Error(), "trusted_proxies") {
+		t.Fatalf("serve on 0.0.0.0 without HTTPS: %v, want a refusal that says what to write", err)
+	}
+	entries, readErr := os.ReadDir(stateDir)
+	if readErr != nil || len(entries) != 0 {
+		t.Fatalf("serve wrote in its state_dir before refusing: %v %v", entries, readErr)
+	}
+}
+
 // Un state_dir ouvert au groupe ou aux autres : serve ne démarre pas, dit
 // pourquoi et la commande qui le ferme, et n'a rien ouvert ni créé
 // (R-A2-11 : sans canal local sûr, root n'a plus de secours).

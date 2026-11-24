@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
-	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // callLogin joue POST /api/auth/login sur HTTPS depuis ce pair, comme le
@@ -86,7 +85,7 @@ func TestLogin_SignedInOperator_PassesWhileTheQueueIsRefusing(t *testing.T) {
 	token := signIn(server.Server, testUsername, testPassword)
 	server.auth = refusingAuth{AuthService: server.operator, err: auth.ErrVerificationQueueFull}
 	request := httptest.NewRequest(http.MethodGet, "/api/counts", nil)
-	request.AddCookie(&http.Cookie{Name: brand.SessionCookie, Value: token})
+	presentOverHTTPS(request, token)
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
