@@ -1227,8 +1227,16 @@ système (`journalctl -t opencloud-agent`), et l'agent la prend en compte à
 l'ordre suivant, sans redémarrage.
 
 ```sh
-/var/lib/opencloud-agent/bin/current agent trust list
+sudo opencloud agent trust list
 ```
+
+Cette commande tourne en root : elle se lance depuis `/usr/local/bin/opencloud`,
+jamais depuis `bin/current`, que le compte de l'agent peut remplacer. Sur la
+machine Kagu, c'est le binaire du serveur. Sur une autre machine, posez-le une
+fois, en root, depuis une version vérifiée ([Télécharger](#télécharger)), à
+la même version que l'agent : `install -m 0755 -o root -g root opencloud
+/usr/local/bin/opencloud`. Sans `sudo` (Proxmox), lancez la ligne en root sans
+le préfixe. Les lignes `grant` que l'écran donnera suivent la même forme.
 
 `add <type> <valeur>` et `remove <type> <valeur>` complètent `list` ; le type est
 l'un des noms du tableau. Ils disent ce qu'ils changent et demandent `[o/N]` sur

@@ -8,6 +8,18 @@ type Error struct {
 	key        string
 	message    string
 	isConflict bool
+	// fix : ce qui lève un refus de droit (Missing) ; nil pour les autres.
+	fix *Fix
+	// declared : la sentinelle dont ce refus de droit est l'instance.
+	declared *Error
+}
+
+// Fix dit ce qui lève un refus de droit : le droit qui manque et la machine
+// dont l'agent doit le tenir. La ligne à coller, le serveur l'écrit de ces deux
+// faits (agentpolicy.GrantLine) : ce paquet ne connaît pas les droits.
+type Fix struct {
+	Right   string
+	Machine string
 }
 
 // Invalid déclare un refus de la demande elle-même : un champ faux, une
@@ -20,6 +32,24 @@ func Invalid(key, message string) *Error {
 // ailleurs ou plus tard.
 func Conflict(key, message string) *Error {
 	return &Error{key: key, message: message, isConflict: true}
+}
+
+// Missing rend le refus déclaré par la sentinelle (un « *_right_missing »),
+// pour cette machine et ce droit : errors.Is reconnaît toujours la sentinelle,
+// et la réponse porte de quoi lever le refus.
+func Missing(declared *Error, right, machineID string) *Error {
+	return &Error{
+		key: declared.key, message: declared.message, isConflict: declared.isConflict,
+		fix: &Fix{Right: right, Machine: machineID}, declared: declared,
+	}
+}
+
+// Unwrap rend la sentinelle d'un refus de droit ; nil pour une sentinelle.
+func (e *Error) Unwrap() error {
+	if e.declared == nil {
+		return nil
+	}
+	return e.declared
 }
 
 // Error rend le texte du journal ; l'opérateur, lui, lit la clé.
@@ -42,4 +72,14 @@ func KeyOf(err error) (key string, ok bool) {
 func IsConflict(err error) bool {
 	var refused *Error
 	return errors.As(err, &refused) && refused.isConflict
+}
+
+// FixOf rend ce qui lève le premier refus de la chaîne ; ok est faux quand ce
+// n'est pas un refus de droit.
+func FixOf(err error) (fix Fix, ok bool) {
+	var refused *Error
+	if !errors.As(err, &refused) || refused.fix == nil {
+		return Fix{}, false
+	}
+	return *refused.fix, true
 }

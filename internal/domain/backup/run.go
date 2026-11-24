@@ -216,7 +216,7 @@ func (s *Service) prepareDelivery(ctx context.Context, plan Plan) (Keyring, Dest
 		return Keyring{}, Destination{}, machine.Status{}, fmt.Errorf("get machine: %w", err)
 	}
 	if receiveFit(target, destination.Path).State == agentpolicy.FitMissing {
-		return Keyring{}, Destination{}, machine.Status{}, ErrRightMissing
+		return Keyring{}, Destination{}, machine.Status{}, refusal.Missing(ErrRightMissing, agentpolicy.CapabilityBackupReceive, destination.MachineID)
 	}
 	if !target.Online {
 		return Keyring{}, Destination{}, machine.Status{}, ErrMachineOffline

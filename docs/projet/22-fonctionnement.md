@@ -549,16 +549,31 @@ lisent ; l'écran l'affiche sans le recalculer.
   rapporté ses droits sans celui-là est refusé tout de suite,
   `409 action.right_missing`, sans run ni journal. Tant que l'agent n'a rien
   rapporté, l'ordre part et l'agent juge.
-- **Un refus de droit porte son geste** (#447) : partout où l'interface dit qu'un
-  droit manque, elle montre « Ré-enrôler avec « <droit> » », qui ouvre la fenêtre
-  Ré-enrôler avec ce droit déjà coché (`reenrollPath`, `lib/rights.ts`). La cause
-  est corrigée au composant partagé : `Failure` reçoit la machine (`gesture`) et
-  lit le droit dans le refus (`deploy.right_missing`, `backup.right_missing`,
-  `backup.source_right_missing`) ou chez l'écran qui sait quel ordre il a envoyé ;
-  `MissingRight` dit un manque connu d'avance (déployer, mettre à jour un service,
-  mettre à jour l'agent, sondes vers le réseau local, destination, plan, ordres
-  refusés). Un droit coché d'avance reste un geste de l'opérateur : rien ne se
-  coche seul, le jeton neuf reste à créer.
+- **Un refus de droit porte sa ligne** (B-6, T03-02) : chaque refus
+  `*_right_missing` (et `restic.restore_outside_right`) se rend par
+  `refusal.Missing(sentinelle, droit, machine)` ; la réponse, pour la personne
+  comme pour un jeton (R-A4-10), porte `fix` : `right`, `machine` (celle dont
+  l'agent doit tenir le droit : la cible ou la source, le serveur le sait) et
+  `command`, la ligne que root colle, écrite par la seule
+  `agentpolicy.GrantLine` (`sudo opencloud agent grant <droit>`, sans valeur :
+  celle d'un droit borné remplacerait les chemins posés). Un ordre refusé
+  `right_missing:<droit>` porte le même `fix` (sa machine), et la protection
+  restic refusée faute d'un droit aussi : la vue rejuge la source avec les juges
+  de l'envoi, rien si le droit est revenu. Le front ne tient aucune table de
+  clés : `LockedAction` lit `fix` et montre, jusqu'à T03-03 (la commande `grant`
+  n'existe pas encore), « Ré-enrôler avec « <droit> » », qui ouvre la fenêtre
+  Ré-enrôler avec ce droit déjà coché (`reenrollPath`) ; l'écran ne donne que le
+  chemin d'un droit borné. `MissingRight` dit un manque connu d'avance
+  (déployer, mettre à jour un service, mettre à jour l'agent, sondes vers le
+  réseau local) et compose `LockedAction`. Un droit coché d'avance reste un
+  geste de l'opérateur : rien ne se coche seul, le jeton neuf reste à créer.
+- **Une ligne à coller ne porte jamais d'enchaînement** (R-A3-15, N-M3) :
+  `agentpolicy.AgentLine` écrit toutes les lignes `sudo opencloud agent …`
+  (`grant`, et `trust` par `anchor.TrustCommand`) et rend une ligne vide si elle
+  contient `;`, `|`, `&&`, `$(` ou un retour à la ligne : le refus part alors
+  sans ligne. Le binaire est `/usr/local/bin/opencloud`, posé par root depuis
+  une version vérifiée, jamais `bin/current`, que le compte de l'agent peut
+  remplacer (R-DROIT-10 ; installation.md, « Les ancres de confiance »).
 - **Un sélecteur de machine n'offre que celles qui conviennent** (#447) : la liste
   garde toutes les machines, celles qui ne conviennent pas sont grisées avec la
   raison et un lien (`unfitFor`, `MachineSelect`, option `disabled` de `Select`),
@@ -614,8 +629,8 @@ et qu'**aucun ordre ne peut écrire**.
   `-rights` (valeurs séparées par des virgules) : une valeur mal écrite refuse
   l'agent avant l'enrôlement (code 2, `agent.anchor_invalid`), le jeton n'est
   pas consommé ; un agent déjà enrôlé les ignore. Ensuite, une seule voie :
-  `opencloud agent trust list | add <type> <valeur> | remove <type> <valeur>`,
-  **en root** (un autre compte : refus, rien n'est écrit). `add` et `remove`
+  `sudo opencloud agent trust list | add <type> <valeur> | remove <type> <valeur>`,
+  **en root**, depuis `/usr/local/bin/opencloud` (un autre compte : refus, rien n'est écrit). `add` et `remove`
   **disent ce qu'ils changent** (type, valeur, empreinte courte d'un certificat)
   puis demandent `[o/N]` sur `/dev/tty` ; sans terminal, `-yes` est exigé, sinon
   refus sans rien écrire (R-A3-15). Elle juge l'état
@@ -638,10 +653,10 @@ et qu'**aucun ordre ne peut écrire**.
   champ de plus, optionnel : il ne change pas le protocole.
 - **Le serveur n'envoie pas un ordre qu'il sait refusé** (`action.send`, comme
   pour les droits) : `409 anchor.<type>_{missing,outside,unreadable}`, avec la
-  commande exacte à lancer sur la machine dans le corps (`command`). Un agent
+  commande exacte à lancer sur la machine dans le corps (`fix.command`). Un agent
   qui n'a rien dit de ses ancres (v0.6.0 et avant) ne les applique pas : le
   serveur ne juge rien pour lui. Un run refusé par l'agent porte la même
-  commande (`fix_command`).
+  commande (`fix`, avec sa machine).
 - **Ce que l'écran montre.** La ligne d'installation et la fenêtre
   « Ré-enrôler » demandent les ancres des droits cochés (la clé du trousseau est
   proposée ; un ré-enrôlement efface le fichier, les ancres posées se redonnent)
@@ -649,11 +664,11 @@ et qu'**aucun ordre ne peut écrire**.
   dans l'un de ses trois états (**posées**, **aucune posée**, **illisibles**),
   ou dit que l'agent n'est pas à jour. Le bloc « À faire » signale un droit coché
   dont l'ancre manque. Partout où une raison `anchor_*` s'affiche, la commande à coller en
-  root l'accompagne (un seul composant, `AnchorFix`) : le refus d'une requête
-  (`command`, `command_exact`), un ordre refusé de la fiche (`fix_command`,
-  `fix_exact`), la carte d'une source de la page Sauvegardes, dont la dernière
-  passe du plan est refusée (`fix_command` de la protection : la VM de la source
-  et la clé du trousseau, refaites en paramètres de l'ordre). Le serveur la
+  root l'accompagne (`AnchorFix`, que `LockedAction` compose), lue dans le même
+  champ `fix` qu'un droit (`command`, `exact`) : le refus d'une requête, un
+  ordre refusé de la fiche, la carte d'une source de la page Sauvegardes, dont
+  la dernière passe du plan est refusée (la VM de la source et la clé du
+  trousseau, refaites en paramètres de l'ordre). Le serveur la
   calcule (`anchor.FixFor`) : « add <type> <valeur> » quand il connaît la valeur,
   sinon « trust list » et un lien vers la fiche, onglet Agent. Les textes disent
   « ordre refusé » sans dire par qui : l'agent le refuse, ou le serveur, qui le

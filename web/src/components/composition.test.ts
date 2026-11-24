@@ -173,7 +173,6 @@ const absentFromShowcase: string[] = [
   "components/MachineTodoCard.tsx : MachineTodoCard",
   "components/Matrix.tsx : Matrix",
   "components/MissingRight.tsx : MissingRight",
-  "components/MissingRight.tsx : MissingRightButton",
   "components/ModalForm.tsx : ModalForm",
   "components/NetworkGraph.tsx : NetworkGraph",
   "components/NetworkInspector.tsx : NetworkInspector",
@@ -237,14 +236,16 @@ function componentsAbsentFromShowcase(files: Source[], showcase: string): string
 }
 
 // Ce que le serveur sait, le front ne le recalcule pas : les clés de refus
-// `*_right_missing` et les listes d'images de bases.
-const serverRules = /_right_missing|\(\s*postgres\w*\|[^)]*\)|\[\s*"postgres\w*"\s*,/g;
+// `*_right_missing` et leur table vers un droit (le refus porte son fix), et
+// les listes d'images de bases.
+const serverRules = /_right_missing|refusalRights|\(\s*postgres\w*\|[^)]*\)|\[\s*"postgres\w*"\s*,/g;
 
 const serverRuleCeilings: Record<string, number> = {
   "lib/alerts.ts": 1,
   "lib/backupOverview.ts": 4,
   "lib/containers.ts": 1,
-  "lib/rights.ts": 9,
+  // machine.fit_right_missing : une clé du catalogue, pas un refus.
+  "lib/rights.ts": 1,
 };
 
 describe("composition", () => {
@@ -296,6 +297,7 @@ describe("composition", () => {
     expect(countsPerFile(faulty("pages/X.tsx", "await fetch(url)"), /(?<![.\w])fetch\(/g)).toEqual({ "pages/X.tsx": 1 });
     expect(countsPerFile(faulty("pages/X.tsx", "const t: Record<State, Tone> = {}"), toneTables)).toEqual({ "pages/X.tsx": 1 });
     expect(countsPerFile(faulty("lib/x.ts", '"backup.source_right_missing"'), serverRules)).toEqual({ "lib/x.ts": 1 });
+    expect(countsPerFile(faulty("lib/x.ts", "const refusalRights = {}"), serverRules)).toEqual({ "lib/x.ts": 1 });
     expect(countsPerFile(faulty("lib/x.ts", "/^(postgres|mariadb)$/"), serverRules)).toEqual({ "lib/x.ts": 1 });
     expect(componentsAbsentFromShowcase(faulty("components/Y.tsx", "export function Y() {}"), "<Z />")).toEqual(["components/Y.tsx : Y"]);
     expect(ceilingProblems({ "a.tsx": 2 }, { "a.tsx": 1 })).toHaveLength(1);

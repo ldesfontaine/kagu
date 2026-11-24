@@ -334,14 +334,14 @@ func judgeSourceRights(source machine.Status, scope string) error {
 	produce := source.Agent.Fit(agentpolicy.CapabilityResticProduce, "")
 	switch {
 	case produce.State == agentpolicy.FitMissing:
-		return ErrSourceRightMissing
+		return refusal.Missing(ErrSourceRightMissing, agentpolicy.CapabilityResticProduce, source.ID)
 	case produce.State == agentpolicy.FitUnavailable && produce.Reason == agentwire.ReasonResticMissing:
 		return ErrResticMissing
 	case produce.State == agentpolicy.FitUnavailable:
 		return ErrSourceRightUnavailable
 	}
 	if scope == agentwire.ResticScopeVM && source.Agent.Fit(agentpolicy.CapabilityBackupProduce, agentpolicy.ProducerProxmoxVzdump).State == agentpolicy.FitMissing {
-		return ErrSourceVMRightMissing
+		return refusal.Missing(ErrSourceVMRightMissing, agentpolicy.CapabilityBackupProduce, source.ID)
 	}
 	return nil
 }
@@ -354,7 +354,7 @@ func judgeDockerRight(source machine.Status, content ServiceContent) error {
 	}
 	switch source.Agent.Fit(agentpolicy.CapabilityResticDocker, "").State {
 	case agentpolicy.FitMissing:
-		return ErrSourceDockerRightMissing
+		return refusal.Missing(ErrSourceDockerRightMissing, agentpolicy.CapabilityResticDocker, source.ID)
 	case agentpolicy.FitUnavailable:
 		return ErrSourceDockerRightUnavailable
 	}

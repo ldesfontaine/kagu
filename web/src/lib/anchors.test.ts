@@ -1,6 +1,5 @@
 import { expect, test } from "vitest";
 
-import { ApiError } from "../api/client";
 import type { AgentAnchors } from "../api/machines";
 import {
   anchorFieldsOf,
@@ -11,7 +10,6 @@ import {
   anchorsOf,
   areAnchorsModified,
   blockingAnchors,
-  commandOfRefusal,
   splitAnchorValues,
   withKeyringRecipient,
 } from "./anchors";
@@ -82,13 +80,4 @@ test("une raison d'ordre refusé par une ancre nomme son type", () => {
   expect(anchorOfReason("anchor_missing:restic.target-cert")).toEqual({ why: "missing", name: "restic.target-cert" });
   expect(anchorOfReason("right_missing:backup.produce")).toBeNull();
   expect(anchorOfReason("anchor_missing")).toBeNull();
-});
-
-test("la commande d'un refus vient du corps de la réponse", () => {
-  expect(commandOfRefusal(new ApiError(409, "anchor.backup_guest_missing", { error: "x", command: "/x agent trust add backup.guest 101", command_exact: true }))).toEqual({ command: "/x agent trust add backup.guest 101", exact: true });
-  expect(commandOfRefusal(new ApiError(409, "x", { command: "/x agent trust list" }))).toEqual({ command: "/x agent trust list", exact: false });
-  expect(commandOfRefusal(new ApiError(409, "action.right_missing"))).toBeNull();
-  expect(commandOfRefusal(new ApiError(409, "x", { command: "" }))).toBeNull();
-  expect(commandOfRefusal("anchor.backup_guest_missing")).toBeNull();
-  expect(commandOfRefusal(null)).toBeNull();
 });

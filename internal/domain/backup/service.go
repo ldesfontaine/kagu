@@ -16,6 +16,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -221,7 +222,7 @@ func (s *Service) CreateDestination(ctx context.Context, definition DestinationD
 		return Destination{}, ErrPathInvalid
 	}
 	if receiveFit(target, definition.Path).State == agentpolicy.FitMissing {
-		return Destination{}, ErrRightMissing
+		return Destination{}, refusal.Missing(ErrRightMissing, agentpolicy.CapabilityBackupReceive, definition.MachineID)
 	}
 	id, err := ident.New()
 	if err != nil {

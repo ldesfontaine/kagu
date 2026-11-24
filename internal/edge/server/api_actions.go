@@ -13,6 +13,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -45,11 +46,9 @@ type actionRunJSON struct {
 	NotAfter    time.Time     `json:"not_after"`
 	FinishedAt  *time.Time    `json:"finished_at"`
 	Output      []runLineJSON `json:"output"`
-	// La commande à lancer en root sur la machine quand une ancre de confiance
-	// locale a fait refuser l'ordre (anchor_*:<type>) ; vide sinon.
-	FixCommand string `json:"fix_command,omitempty"`
-	// La commande pose la valeur de l'ordre ; faux : « trust list ».
-	FixExact bool `json:"fix_exact,omitempty"`
+	// Ce qui lève le refus de l'ordre par un droit (right_missing:<droit>) ou
+	// une ancre (anchor_*:<type>) ; absent sinon.
+	Fix *fixJSON `json:"fix,omitempty"`
 }
 
 type runLineJSON struct {
@@ -73,14 +72,13 @@ type serverKeyJSON struct {
 }
 
 func actionRunToJSON(run action.Run) actionRunJSON {
-	fix, exact := fixCommandOf(run)
 	params := json.RawMessage(run.Params)
 	if len(params) == 0 {
 		params = json.RawMessage("{}")
 	}
 	return actionRunJSON{
-		FixCommand: fix, FixExact: exact,
-		ID: run.ID, Kind: string(run.Kind), Params: params,
+		Fix: runFixOf(run),
+		ID:  run.ID, Kind: string(run.Kind), Params: params,
 		MachineID: stringOrNil(run.MachineID), MachineName: run.MachineName, AgentID: stringOrNil(run.AgentID),
 		ServiceID: stringOrNil(run.ServiceID),
 		State:     string(run.State), Reason: run.Reason, Seq: run.Seq,
@@ -90,14 +88,19 @@ func actionRunToJSON(run action.Run) actionRunJSON {
 	}
 }
 
-// fixCommandOf rend la commande qui lèverait le refus d'une ancre dont l'ordre
-// porte la raison, calculée de ses paramètres ; vide pour tout autre run.
-func fixCommandOf(run action.Run) (command string, exact bool) {
+// runFixOf rend ce qui lèverait le refus dont l'ordre porte la raison : le
+// droit qui manque à l'agent de sa machine, ou la commande de l'ancre calculée
+// de ses paramètres ; nil pour tout autre run.
+func runFixOf(run action.Run) *fixJSON {
+	if right, ok := agentwire.RightOfReason(run.Reason); ok {
+		return rightFixJSON(refusal.Fix{Right: right, Machine: run.MachineID})
+	}
 	name, ok := agentwire.AnchorOfReason(run.Reason)
 	if !ok {
-		return "", false
+		return nil
 	}
-	return anchor.FixFor(name, agentwire.PresentedOf(run.Kind, json.RawMessage(run.Params)))
+	command, exact := anchor.FixFor(name, agentwire.PresentedOf(run.Kind, json.RawMessage(run.Params)))
+	return anchorFixJSON(run.MachineID, command, exact)
 }
 
 func runLineToJSON(line action.LogLine) runLineJSON {

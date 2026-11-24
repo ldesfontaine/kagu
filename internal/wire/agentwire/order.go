@@ -279,6 +279,13 @@ func RightMissing(right string) string {
 	return ReasonRightMissing + ":" + right
 }
 
+// RightOfReason rend le droit qu'une raison « right_missing:<droit> » nomme ;
+// ok est faux pour une autre raison ou un droit inconnu.
+func RightOfReason(reason string) (right string, ok bool) {
+	right, found := strings.CutPrefix(reason, ReasonRightMissing+":")
+	return right, found && slices.Contains(agentpolicy.CapabilityNames(), right)
+}
+
 // AnchorOfReason rend le type d'ancre qu'une raison « anchor_*:<type> » nomme.
 func AnchorOfReason(reason string) (string, bool) {
 	for _, prefix := range []string{ReasonAnchorMissing, ReasonAnchorUnreadable, ReasonAnchorOutside} {
@@ -294,8 +301,9 @@ func AnchorOfReason(reason string) (string, bool) {
 // fermée : une raison nue, ou « right_missing:<droit> » et
 // « anchor_*:<ancre> » avec un droit ou un type d'ancre connu.
 func IsReportedReason(reason string) bool {
-	if right, found := strings.CutPrefix(reason, ReasonRightMissing+":"); found {
-		return slices.Contains(agentpolicy.CapabilityNames(), right)
+	if strings.HasPrefix(reason, ReasonRightMissing+":") {
+		_, known := RightOfReason(reason)
+		return known
 	}
 	if _, found := AnchorOfReason(reason); found {
 		return true

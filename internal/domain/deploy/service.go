@@ -16,6 +16,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -126,7 +127,7 @@ func (s *Service) Plan(ctx context.Context, serviceID string) (Plan, error) {
 	right := target.Agent.Fit(needed, "")
 	plan := Plan{
 		Service: service, MachineName: target.Name, RootDir: root, Path: path.Join(root, service.ComposeProject),
-		Deployed: deployed, MachineOnline: target.Online, Right: right.State, RightReason: right.Reason, Compose: string(compose), DataDirs: dataDirs,
+		Deployed: deployed, MachineOnline: target.Online, NeededRight: needed, Right: right.State, RightReason: right.Reason, Compose: string(compose), DataDirs: dataDirs,
 		SharedWith: sharedWith, CanRollBack: target.Agent.CanRollBackService(),
 	}
 	if hasLast {
@@ -206,7 +207,7 @@ func (s *Service) Upgrade(ctx context.Context, unitID, version string) (action.R
 		return action.Run{}, ErrNotDeployed
 	}
 	if plan.Right == agentpolicy.FitMissing {
-		return action.Run{}, ErrRightMissing
+		return action.Run{}, refusal.Missing(ErrRightMissing, plan.NeededRight, plan.Service.MachineID)
 	}
 	if !plan.MachineOnline {
 		return action.Run{}, action.ErrMachineOffline
@@ -276,7 +277,7 @@ func (s *Service) send(ctx context.Context, serviceID string, env *string, redep
 		return action.Run{}, ErrProjectShared
 	}
 	if plan.Right == agentpolicy.FitMissing {
-		return action.Run{}, ErrRightMissing
+		return action.Run{}, refusal.Missing(ErrRightMissing, plan.NeededRight, plan.Service.MachineID)
 	}
 	if redeploy && !plan.Deployed {
 		return action.Run{}, ErrNotDeployed

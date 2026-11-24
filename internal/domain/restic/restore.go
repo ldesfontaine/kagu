@@ -85,10 +85,10 @@ func judgeRestore(source machine.Status, destination string) error {
 	case agentpolicy.FitUnavailable:
 		return ErrSourceRestoreUnavailable
 	default:
-		return ErrSourceRestoreRightMissing
+		return refusal.Missing(ErrSourceRestoreRightMissing, agentpolicy.CapabilityResticRestore, source.ID)
 	}
 	if !agentpolicy.CoversPath(source.Agent.Capabilities, agentpolicy.CapabilityFilesWrite, destination) {
-		return ErrRestoreOutsideRight
+		return refusal.Missing(ErrRestoreOutsideRight, agentpolicy.CapabilityFilesWrite, source.ID)
 	}
 	return nil
 }

@@ -122,7 +122,7 @@ func judgeTargetSetup(target machine.Status, setup TargetSetup) (TargetSetup, er
 		return TargetSetup{}, ErrPortInvalid
 	}
 	right := target.Agent.Fit(agentpolicy.CapabilityResticTarget, "")
-	if err := judgeTargetRight(right); err != nil {
+	if err := judgeTargetRight(right, target.ID); err != nil {
 		return TargetSetup{}, err
 	}
 	granted := targetDirOf(target.Agent)
@@ -159,10 +159,10 @@ func (s *Service) judgeFloor(ctx context.Context, machineID string, floor *agent
 }
 
 // judgeTargetRight : le droit restic.target, et rest-server présent.
-func judgeTargetRight(right agentpolicy.RightFit) error {
+func judgeTargetRight(right agentpolicy.RightFit, machineID string) error {
 	switch {
 	case right.State == agentpolicy.FitMissing:
-		return ErrTargetRightMissing
+		return refusal.Missing(ErrTargetRightMissing, agentpolicy.CapabilityResticTarget, machineID)
 	case right.State == agentpolicy.FitUnavailable && right.Reason == agentwire.ReasonRestServerMissing:
 		return ErrRestServerMissing
 	case right.State == agentpolicy.FitUnavailable:
@@ -210,7 +210,7 @@ func (s *Service) RemoveTarget(ctx context.Context, machineID string) error {
 
 // send envoie un ordre et traduit ses refus : le droit manquant en celui du
 // geste (rightRefusal), la machine hors ligne en celui du composant.
-func (s *Service) send(ctx context.Context, machineID string, kind agentwire.Kind, params json.RawMessage, rightRefusal error) (action.Run, error) {
+func (s *Service) send(ctx context.Context, machineID string, kind agentwire.Kind, params json.RawMessage, rightRefusal *refusal.Error) (action.Run, error) {
 	run, err := s.sender.Send(ctx, machineID, kind, params)
 	return translateSend(run, err, kind, rightRefusal)
 }
@@ -218,7 +218,7 @@ func (s *Service) send(ctx context.Context, machineID string, kind agentwire.Kin
 // sendSecret fait comme send avec un secret signé dans l'ordre. Le secret
 // part à l'agent de la machine et à lui seul : ni le run, ni l'audit, ni un
 // journal ne le gardent (action.SendWithSecret).
-func (s *Service) sendSecret(ctx context.Context, machineID string, kind agentwire.Kind, params json.RawMessage, secret any, rightRefusal error) (action.Run, error) {
+func (s *Service) sendSecret(ctx context.Context, machineID string, kind agentwire.Kind, params json.RawMessage, secret any, rightRefusal *refusal.Error) (action.Run, error) {
 	encoded, err := json.Marshal(secret)
 	if err != nil {
 		return action.Run{}, fmt.Errorf("encode %s secret", kind)
@@ -227,10 +227,23 @@ func (s *Service) sendSecret(ctx context.Context, machineID string, kind agentwi
 	return translateSend(run, err, kind, rightRefusal)
 }
 
-func translateSend(run action.Run, err error, kind agentwire.Kind, rightRefusal error) (action.Run, error) {
+// retold dit le refus d'envoi refused par la sentinelle du domaine, avec le
+// droit et la machine qu'il nomme ; sans eux (un agent absent), la sentinelle
+// seule.
+func retold(declared *refusal.Error, refused error) error {
+	fix, ok := refusal.FixOf(refused)
+	if !ok {
+		return declared
+	}
+	return refusal.Missing(declared, fix.Right, fix.Machine)
+}
+
+// translateSend rend le refus du domaine pour un envoi refusé : un droit qui
+// manque (ou un agent absent) se dit par rightRefusal.
+func translateSend(run action.Run, err error, kind agentwire.Kind, rightRefusal *refusal.Error) (action.Run, error) {
 	switch {
 	case errors.Is(err, action.ErrRightMissing), errors.Is(err, machine.ErrNoAgent):
-		return action.Run{}, rightRefusal
+		return action.Run{}, retold(rightRefusal, err)
 	case errors.Is(err, action.ErrMachineOffline):
 		return action.Run{}, ErrMachineOffline
 	case err != nil:

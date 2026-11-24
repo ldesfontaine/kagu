@@ -166,7 +166,7 @@ func (s *Service) prepareAgentPass(ctx context.Context, plan Plan, at time.Time)
 // producteur, puis en ligne. Tant que l'agent n'a rien rapporté, c'est lui qui jugera.
 func judgeSource(source machine.Status, producer string) error {
 	if source.Agent.Fit(agentpolicy.CapabilityBackupProduce, producer).State == agentpolicy.FitMissing {
-		return ErrSourceRightMissing
+		return refusal.Missing(ErrSourceRightMissing, agentpolicy.CapabilityBackupProduce, source.ID)
 	}
 	if !source.Online {
 		return ErrSourceOffline

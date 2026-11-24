@@ -48,6 +48,7 @@ type Plan struct {
 	// serveur l'affiche sans refuser le geste : le rapport date de
 	// l'ouverture du flux, et l'agent refuse, avec la raison, au moment de
 	// l'ordre.
+	NeededRight string
 	Right       agentpolicy.FitState
 	RightReason string
 	// Le compose.yml que le prochain geste écrira, et les unités dont il

@@ -20,7 +20,6 @@ import (
 	"filippo.io/age"
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
-	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
@@ -239,10 +238,11 @@ func FixFor(kindName string, presented []Presented) (command string, exact bool)
 	return TrustCommand("list", "", ""), false
 }
 
-// TrustCommand écrit la commande locale, telle qu'on la colle. Le binaire est
-// celui que l'installation recommandée pose.
+// TrustCommand écrit la commande locale, telle qu'on la colle, par la seule
+// écriture des lignes de l'agent : vide si elle enchaînerait une autre commande
+// (R-A3-15).
 func TrustCommand(verb, kind, value string) string {
-	return strings.TrimSpace(brand.AgentCurrentPath + " agent trust " + verb + " " + kind + " " + value)
+	return agentpolicy.AgentLine("trust", verb, kind, value)
 }
 
 // Judge juge un ordre contre les ancres, sur les valeurs qu'il présente : le

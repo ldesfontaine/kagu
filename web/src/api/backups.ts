@@ -1,5 +1,5 @@
 import { useResource, type Resource } from "../hooks/useResource";
-import { api } from "./client";
+import { api, type RefusalFix } from "./client";
 import { route } from "./routes";
 import type { ActionRun } from "./actions";
 
@@ -214,10 +214,9 @@ export interface BackupProtection {
   state: ProtectionState;
   // Un mot fermé, ou la clé d'un refus.
   reason: string;
-  // Une ancre de confiance locale a fait refuser l'ordre : la commande à lancer
-  // en root sur la machine source, et si elle pose la valeur de l'ordre.
-  fix_command?: string;
-  fix_exact?: boolean;
+  // Ce qui lève le refus que reason porte : un droit, ou une ancre de
+  // confiance locale de la machine source.
+  fix?: RefusalFix;
   last_at: string | null;
   // La dernière réussite, même quand le dernier essai a échoué.
   last_success_at: string | null;

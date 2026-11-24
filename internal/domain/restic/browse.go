@@ -161,12 +161,12 @@ func (s *Service) awaitBrowse(ctx context.Context, run action.Run, slot *browseS
 	for {
 		select {
 		case <-slot.done:
-			return browseOutcome(slot.result)
+			return browseOutcome(slot.result, slot.machineID)
 		case done := <-finished:
 			// Fini sans résultat à lire : refusé, expiré, non livré. Un succès
 			// laisse le résultat arriver.
 			if done.State != action.StateSucceeded {
-				return agentwire.ResticBrowseReport{}, browseRefusal(runReason(done.State, done.Reason))
+				return agentwire.ResticBrowseReport{}, browseRefusal(runReason(done.State, done.Reason), slot.machineID)
 			}
 		case <-waitCtx.Done():
 			return agentwire.ResticBrowseReport{}, ErrBrowseTimeout
@@ -174,9 +174,9 @@ func (s *Service) awaitBrowse(ctx context.Context, run action.Run, slot *browseS
 	}
 }
 
-func browseOutcome(result agentwire.ActionResult) (agentwire.ResticBrowseReport, error) {
+func browseOutcome(result agentwire.ActionResult, machineID string) (agentwire.ResticBrowseReport, error) {
 	if agentState(result.State) != StateSucceeded {
-		return agentwire.ResticBrowseReport{}, browseRefusal(agentReason(result.Reason))
+		return agentwire.ResticBrowseReport{}, browseRefusal(agentReason(result.Reason), machineID)
 	}
 	if result.Browse == nil {
 		return agentwire.ResticBrowseReport{}, ErrBrowseFailed
@@ -206,12 +206,14 @@ func withoutRefusedNames(report agentwire.ResticBrowseReport) agentwire.ResticBr
 	return report
 }
 
-func browseRefusal(reason string) error {
+// browseRefusal dit le refus de la cible machineID pour la raison de l'ordre.
+func browseRefusal(reason, machineID string) error {
 	switch reason {
 	case agentwire.ReasonRepoEmpty:
 		return ErrBrowseRepoEmpty
 	case agentwire.RightMissing(agentpolicy.CapabilityResticBrowse), agentwire.RightMissing(agentpolicy.CapabilityResticTarget):
-		return ErrTargetBrowseRightMissing
+		right, _ := agentwire.RightOfReason(reason)
+		return refusal.Missing(ErrTargetBrowseRightMissing, right, machineID)
 	case action.ReasonTimeout, action.ReasonUndelivered, agentwire.ReasonExpired:
 		return ErrBrowseTimeout
 	}
@@ -226,5 +228,5 @@ func judgeBrowseRight(target machine.Status) error {
 	case agentpolicy.FitUnavailable:
 		return ErrTargetBrowseUnavailable
 	}
-	return ErrTargetBrowseRightMissing
+	return refusal.Missing(ErrTargetBrowseRightMissing, agentpolicy.CapabilityResticBrowse, target.ID)
 }

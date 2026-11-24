@@ -23,34 +23,29 @@ test("une erreur ordinaire se dit en note, sans geste", () => {
   expect(markup).not.toContain("<a ");
 });
 
-test("un refus de droit porte son geste dès que l'écran dit la machine", () => {
-  const refused = new ApiError(409, "backup.right_missing");
-  const markup = render(refused, { machineID: "m7", path: "/srv/backups" });
+test("un refus de droit porte le geste que le serveur joint, sans table", () => {
+  const refused = new ApiError(409, "backup.right_missing", { error: "backup.right_missing", fix: { right: "backup.receive", machine: "m7", command: "sudo x agent grant backup.receive" } });
+  const markup = render(refused, { machineID: "m-autre", path: "/srv/backups" });
   expect(markup).toContain("backup.right_missing");
+  // La machine est celle du serveur, le chemin celui de l'écran.
   expect(markup).toContain('href="/machines/m7/reenroller?droit=backup.receive&amp;chemin=%2Fsrv%2Fbackups"');
   expect(markup).toContain("machine.reenroll_with(machine.capability_backup_receive)");
-  // Sans machine, le refus se dit, sans lien qui mènerait nulle part.
-  expect(render(refused)).not.toContain("<a ");
-});
-
-test("le droit que le refus ne nomme pas vient de l'écran", () => {
-  const refused = new ApiError(409, "action.right_missing");
-  expect(render(refused, { machineID: "m1" })).not.toContain("<a ");
-  expect(render(refused, { machineID: "m1", right: "files.write" })).toContain('href="/machines/m1/reenroller?droit=files.write"');
+  // Sans fix, la clé seule ne mène nulle part : le front ne la traduit pas en droit.
+  expect(render(new ApiError(409, "backup.right_missing"), { machineID: "m7" })).not.toContain("<a ");
 });
 
 test("sans valeur connue, la commande est « trust list » et un lien mène à la fiche, onglet Agent", () => {
-  const refused = new ApiError(409, "anchor.restic_target_cert_missing", { command: "/x agent trust list" });
+  const refused = new ApiError(409, "anchor.restic_target_cert_missing", { fix: { command: "sudo x agent trust list" } });
   const markup = render(refused, { machineID: "m3" });
-  expect(markup).toContain("/x agent trust list");
+  expect(markup).toContain("sudo x agent trust list");
   expect(markup).toContain('href="/machines/m3/agent"');
-  expect(render(new ApiError(409, "a", { command: "/x agent trust add a b", command_exact: true }), { machineID: "m3" })).not.toContain("<a ");
+  expect(render(new ApiError(409, "a", { fix: { command: "sudo x agent trust add a b", exact: true } }), { machineID: "m3" })).not.toContain("<a ");
 });
 
 test("un refus par ancre locale montre la commande à lancer en root sur la machine", () => {
-  const refused = new ApiError(409, "anchor.backup_guest_missing", { error: "anchor.backup_guest_missing", command: "/var/lib/opencloud-agent/bin/current agent trust add backup.guest 5012" });
+  const refused = new ApiError(409, "anchor.backup_guest_missing", { error: "anchor.backup_guest_missing", fix: { command: "sudo x agent trust add backup.guest 5012", exact: true } });
   const markup = render(refused);
   expect(markup).toContain("anchor.backup_guest_missing");
   expect(markup).toContain("anchor.run_command");
-  expect(markup).toContain("/var/lib/opencloud-agent/bin/current agent trust add backup.guest 5012");
+  expect(markup).toContain("sudo x agent trust add backup.guest 5012");
 });

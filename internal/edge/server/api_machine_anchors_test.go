@@ -10,6 +10,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
 	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Les ancres que l'agent dit à l'ouverture de son flux sont gardées et rendues
@@ -96,22 +97,26 @@ func TestMachine_SaysTheAnchorsItsAgentReports(t *testing.T) {
 func TestProtectionFix_ExactForAnArchivePlanListOtherwise(t *testing.T) {
 	const recipient = "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"
 	archive := restic.Protection{Origin: restic.OriginArchive, Reason: "anchor_missing:backup.guest"}
-	command, exact := protectionFix(archive, restic.Source{VMID: 5012}, recipient)
-	if !exact || !strings.HasSuffix(command, " agent trust add backup.guest 5012") {
-		t.Fatalf("%q %v", command, exact)
+	fix := protectionFix(archive, restic.Source{VMID: 5012}, recipient)
+	if fix == nil || !fix.Exact || !strings.HasSuffix(fix.Command, " agent trust add backup.guest 5012") {
+		t.Fatalf("%+v", fix)
 	}
 	archive.Reason = "anchor_outside:backup.recipient"
-	if command, exact = protectionFix(archive, restic.Source{VMID: 5012}, recipient); !exact || !strings.HasSuffix(command, " agent trust add backup.recipient "+recipient) {
-		t.Fatalf("%q %v", command, exact)
+	if fix = protectionFix(archive, restic.Source{VMID: 5012}, recipient); fix == nil || !fix.Exact || !strings.HasSuffix(fix.Command, " agent trust add backup.recipient "+recipient) {
+		t.Fatalf("%+v", fix)
 	}
-	if command, exact = protectionFix(archive, restic.Source{VMID: 5012}, ""); exact || !strings.HasSuffix(command, " agent trust list") {
-		t.Fatalf("no keyring: %q %v", command, exact)
+	if fix = protectionFix(archive, restic.Source{VMID: 5012}, ""); fix == nil || fix.Exact || !strings.HasSuffix(fix.Command, " agent trust list") {
+		t.Fatalf("no keyring: %+v", fix)
 	}
 	resticOrigin := restic.Protection{Origin: restic.OriginRestic, Reason: "anchor_missing:restic.target-cert"}
-	if command, exact = protectionFix(resticOrigin, restic.Source{VMID: 5012}, recipient); exact || !strings.HasSuffix(command, " agent trust list") {
-		t.Fatalf("restic: %q %v", command, exact)
+	if fix = protectionFix(resticOrigin, restic.Source{VMID: 5012}, recipient); fix == nil || fix.Exact || !strings.HasSuffix(fix.Command, " agent trust list") {
+		t.Fatalf("restic: %+v", fix)
 	}
-	if command, _ = protectionFix(restic.Protection{Reason: "timeout"}, restic.Source{}, recipient); command != "" {
-		t.Fatalf("another reason has no fix: %q", command)
+	missing := restic.Protection{Origin: restic.OriginRestic, Reason: "restic.source_right_missing", Fix: &refusal.Fix{Right: "restic.produce", Machine: "m-src"}}
+	if fix = protectionFix(missing, restic.Source{MachineID: "m-src"}, recipient); fix == nil || fix.Right != "restic.produce" || fix.Machine != "m-src" || !strings.HasSuffix(fix.Command, " agent grant restic.produce") {
+		t.Fatalf("right: %+v", fix)
+	}
+	if fix = protectionFix(restic.Protection{Reason: "timeout"}, restic.Source{}, recipient); fix != nil {
+		t.Fatalf("another reason has no fix: %+v", fix)
 	}
 }

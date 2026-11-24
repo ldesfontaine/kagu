@@ -34,7 +34,7 @@ func runAgentTrust(args []string, out io.Writer, openTerminal terminalOpener, eu
 	rest := flags.Args()
 	verb, kindName, value, ok := splitTrustArguments(rest)
 	if !ok {
-		return &refusal{message: text.Format("agent.trust_usage", brand.AgentCurrentPath, strings.Join(anchor.Names(), ", "))}
+		return &refusal{message: text.Format("agent.trust_usage", brand.Command, strings.Join(anchor.Names(), ", "))}
 	}
 	root, err := openStateDir(*stateDir)
 	if err != nil {
@@ -136,7 +136,7 @@ func explainTrustError(err error, kindName string, text lang.Catalog) error {
 	case errors.Is(err, agent.ErrTrustUnknownKind):
 		return &refusal{message: text.Format("agent.trust_unknown_kind", kindName, strings.Join(anchor.Names(), ", "))}
 	case errors.Is(err, agent.ErrTrustUnknownVerb):
-		return &refusal{message: text.Format("agent.trust_usage", brand.AgentCurrentPath, strings.Join(anchor.Names(), ", "))}
+		return &refusal{message: text.Format("agent.trust_usage", brand.Command, strings.Join(anchor.Names(), ", "))}
 	case errors.Is(err, agent.ErrNotEnrolled):
 		return &refusal{message: text.Get("agent.not_enrolled")}
 	case errors.As(err, &unsafe):

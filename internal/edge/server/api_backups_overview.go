@@ -94,11 +94,9 @@ type overviewProtectionJSON struct {
 	Parts []overviewPartResultJSON `json:"parts"`
 	// restic : la vérification du dépôt par sa cible ; null pour les autres.
 	Verify *overviewVerifyJSON `json:"verify"`
-	// Quand reason est un refus d'ancre de confiance locale : la commande à lancer
-	// en root sur la machine source, et si elle pose la valeur de l'ordre (faux :
-	// « trust list »). Vide sinon.
-	FixCommand string `json:"fix_command,omitempty"`
-	FixExact   bool   `json:"fix_exact,omitempty"`
+	// Ce qui lève le refus que reason porte : le droit qui manque (restic), ou
+	// la commande d'une ancre de confiance locale de la machine source.
+	Fix *fixJSON `json:"fix,omitempty"`
 }
 
 // La vérification du dépôt d'une sauvegarde restic : state est sent,
@@ -272,32 +270,36 @@ func overviewSourceToJSON(source restic.Source, recipient string) overviewSource
 	return out
 }
 
-// protectionFix rend la commande qui lève le refus d'ancre qu'une protection
-// porte comme raison. Le plan par archives a refusé un ordre backup.produce dont
-// les paramètres se refont : la VM de la source, la clé du trousseau. Les autres
-// origines (restic) n'ont pas la valeur : « trust list ».
-func protectionFix(protection restic.Protection, source restic.Source, recipient string) (command string, exact bool) {
+// protectionFix rend ce qui lève le refus qu'une protection porte comme
+// raison : le droit que la vue a rejugé, ou la commande d'une ancre. Le plan
+// par archives a refusé un ordre backup.produce dont les paramètres se
+// refont : la VM de la source, la clé du trousseau. Les autres origines
+// (restic) n'ont pas la valeur : « trust list ».
+func protectionFix(protection restic.Protection, source restic.Source, recipient string) *fixJSON {
+	if protection.Fix != nil {
+		return rightFixJSON(*protection.Fix)
+	}
 	name, ok := agentwire.AnchorOfReason(protection.Reason)
 	if !ok {
-		return "", false
+		return nil
 	}
-	if protection.Origin != restic.OriginArchive || source.VMID == 0 {
-		return anchor.FixFor(name, nil)
+	var presented []anchor.Presented
+	if protection.Origin == restic.OriginArchive && source.VMID != 0 {
+		params, err := json.Marshal(agentwire.BackupProduceParams{
+			Producer: agentpolicy.ProducerProxmoxVzdump, Target: strconv.Itoa(source.VMID), Recipient: recipient,
+		})
+		if err == nil {
+			presented = agentwire.PresentedOf(agentwire.KindBackupProduce, params)
+		}
 	}
-	params, err := json.Marshal(agentwire.BackupProduceParams{
-		Producer: agentpolicy.ProducerProxmoxVzdump, Target: strconv.Itoa(source.VMID), Recipient: recipient,
-	})
-	if err != nil {
-		return anchor.FixFor(name, nil)
-	}
-	return anchor.FixFor(name, agentwire.PresentedOf(agentwire.KindBackupProduce, params))
+	command, exact := anchor.FixFor(name, presented)
+	return anchorFixJSON(source.MachineID, command, exact)
 }
 
 func overviewProtectionToJSON(protection restic.Protection, source restic.Source, recipient string) overviewProtectionJSON {
-	fix, exact := protectionFix(protection, source, recipient)
 	retention := protection.Retention
 	out := overviewProtectionJSON{
-		FixCommand: fix, FixExact: exact,
+		Fix:    protectionFix(protection, source, recipient),
 		Origin: protection.Origin, ID: protection.ID, Name: protection.Name, Scope: protection.Scope,
 		TargetMachineID: protection.TargetMachineID, TargetMachineName: protection.TargetMachineName, Storage: protection.Storage,
 		ArchiveStorage: protection.ArchiveStorage, State: protection.State, Reason: protection.Reason, LastAt: httpx.TimeOrNil(protection.LastAt),

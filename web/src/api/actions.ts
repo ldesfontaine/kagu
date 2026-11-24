@@ -1,5 +1,5 @@
 import { useResource, type Resource } from "../hooks/useResource";
-import { api, segment } from "./client";
+import { api, segment, type RefusalFix } from "./client";
 import { route } from "./routes";
 
 // Les ordres envoyés aux agents (ping, mise à jour, sauvegarde, déploiement) et ce qu'ils
@@ -38,11 +38,8 @@ export interface ActionRun {
   not_after: string;
   finished_at: string | null;
   output: RunLine[];
-  // La commande à lancer en root sur la machine quand une ancre de confiance
-  // locale a fait refuser l'ordre ; absente sinon.
-  fix_command?: string;
-  // La commande pose la valeur de l'ordre ; absent : c'est « trust list ».
-  fix_exact?: boolean;
+  // Ce qui lève le refus de l'ordre par un droit ou une ancre ; absent sinon.
+  fix?: RefusalFix;
 }
 
 export interface ActionsResponse {

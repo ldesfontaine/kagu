@@ -516,7 +516,7 @@ func seedE2EAnchors(t *testing.T, ts *testServer) {
 	// serveur n'envoie pas l'ordre) et la ligne de l'historique garde la raison.
 	ts.backups.RunIfDue(context.Background())
 	waittest.Until(t, "la passe de compta refusée par les ancres", func() bool {
-		return strings.Contains(callAPI(ts.Server, http.MethodGet, "/api/backups/overview", nil).Body.String(), `"fix_command"`)
+		return strings.Contains(callAPI(ts.Server, http.MethodGet, "/api/backups/overview", nil).Body.String(), `"fix":`)
 	})
 }
 

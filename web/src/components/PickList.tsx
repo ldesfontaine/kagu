@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
-import { MissingRightButton } from "./MissingRight";
+import { LockedAction } from "./LockedAction";
 import "./PickList.scss";
 
 // Un choix parmi des objets riches (une VM, une cible) : une carte par objet,
@@ -52,7 +52,7 @@ function PickRow({ name, option, checked, onChange }: { name: string; option: Pi
       </label>
       <span className="pick-end">
         {unfit === null && option.end}
-        {unfit?.right !== undefined && <MissingRightButton machineID={unfit.right.machineID} right={unfit.right.name} path={unfit.right.path} short />}
+        {unfit?.right !== undefined && <LockedAction fix={{ right: unfit.right.name, machine: unfit.right.machineID }} path={unfit.right.path} short />}
         {unfit?.right === undefined && unfit?.link !== undefined && (
           <Button small to={unfit.link.to}>
             {unfit.link.label}

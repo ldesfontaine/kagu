@@ -11,6 +11,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -135,6 +136,8 @@ type Protection struct {
 	// Restic : la vérification du dépôt (restic.verify) ; nil pour les autres
 	// origines.
 	Verify *VerifyView
+	// Restic : ce qui lève le refus de droit que porte Reason ; nil sinon.
+	Fix *refusal.Fix
 }
 
 // VerifyView est la vérification du dépôt d'une sauvegarde restic : la
@@ -500,6 +503,7 @@ func resticProtections(inputs overviewInputs, now time.Time, used map[string]boo
 		used[candidate.ID] = true
 		link, hasLink := inputs.links[candidate.repo()]
 		protection := resticProtection(candidate, inputs.runs[candidate.ID], now)
+		protection.Fix = refusedRightFix(protection.Reason, candidate, inputs)
 		if hasLink && link.Retain.State != "" {
 			forget := link.Retain
 			protection.Retention.LastForget = &forget
@@ -528,6 +532,38 @@ func verifyViewOf(link Link, target machine.Status, linkSince, now time.Time) *V
 		Since:   linkSince,
 		IsStale: now.Sub(baseline) > VerifyStaleAfter,
 	}
+}
+
+// refusedRightFix : ce qui lève le refus de droit que la dernière tentative
+// porte comme raison, rejugé maintenant par les juges qui l'ont dit (la
+// source, puis le contenu Docker d'un service). nil quand la raison n'est pas
+// un de ces refus, ou que le droit est revenu depuis.
+func refusedRightFix(reason string, current Backup, inputs overviewInputs) *refusal.Fix {
+	source := inputs.machineMap[current.SourceMachineID]
+	judged := judgeSourceRights(source, current.Scope)
+	if judged == nil && current.Scope == agentwire.ResticScopeService {
+		judged = judgeDockerRight(source, overviewContent(current.ServiceID, inputs))
+	}
+	if key, _ := refusal.KeyOf(judged); key != reason {
+		return nil
+	}
+	fix, ok := refusal.FixOf(judged)
+	if !ok {
+		return nil
+	}
+	return &fix
+}
+
+// overviewContent : le contenu d'un service tel que la vue le dérive ; vide
+// pour un service qu'elle ne connaît plus.
+func overviewContent(serviceID string, inputs overviewInputs) ServiceContent {
+	for _, service := range inputs.services {
+		if service.ID == serviceID {
+			content, _ := deriveContent(service, inputs.docker[service.ID])
+			return content
+		}
+	}
+	return ServiceContent{}
 }
 
 func resticProtection(current Backup, runs []RunRecord, now time.Time) Protection {

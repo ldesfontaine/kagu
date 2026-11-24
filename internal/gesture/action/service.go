@@ -14,6 +14,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 	"github.com/ldesfontaine/kagu/internal/kit/release"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -278,7 +279,7 @@ func (s *Service) send(ctx context.Context, order ServiceOrder) (Run, error) {
 	// Le producteur de backup.produce n'est pas jugé ici : backup le juge
 	// avant d'envoyer (judgeSource), l'agent à la réception.
 	if !target.Agent.ReportedAt.IsZero() && !agentpolicy.HasCapability(target.Agent.Capabilities, spec.Right) {
-		return Run{}, ErrRightMissing
+		return Run{}, refusal.Missing(ErrRightMissing, spec.Right, machineID)
 	}
 	// Une ancre que l'agent a dit tenir et que l'ordre ne satisfait pas : il le
 	// refuserait, la commande qui la pose est dans le refus.

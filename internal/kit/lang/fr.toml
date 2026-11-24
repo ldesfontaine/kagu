@@ -860,6 +860,10 @@ notify_no = "Non"
 submit = "Déclarer la tâche"
 open = "Ouvrir l'assistant"
 
+[visual.locked]
+title = "Geste fermé"
+text = "Ce que le serveur joint au refus : pour un droit, le ré-enrôlement sur la machine qui doit le tenir ; pour une ancre, la commande à lancer en root."
+
 [visual.modal]
 title = "Fenêtre modale"
 open = "Ouvrir une fenêtre"
@@ -4059,8 +4063,8 @@ link_secret_lost = "Les mots de passe de ce lien ont été perdus avec la clé d
 
 [anchor]
 see_machine = "Voir ce que l'agent tient (fiche, onglet Agent)"
-cmd_list = "{agent_binary} agent trust list"
-cmd_add = "{agent_binary} agent trust add %s %s"
+cmd_list = "sudo {command} agent trust list"
+cmd_add = "sudo {command} agent trust add %s %s"
 title = "Ancres de confiance"
 subtitle = "Ce que l'administrateur de cette machine a posé lui-même. Aucun ordre de {product} ne peut les changer : sans ancre, l'agent refuse l'ordre concerné."
 not_reported = "Cet agent ne rapporte pas ses ancres : il date d'avant elles et ne les applique pas. Mettez-le à jour."

@@ -6,6 +6,7 @@ import type { AlertResponse, AlertsResponse, ChannelsResponse, MutesResponse } f
 import type { AuditForwarding, AuditResponse } from "./audit";
 import type { BackupDestination, BackupForget, BackupKeyring, BackupMachine, BackupMachineRight, BackupOverview, BackupPath, BackupPlan, BackupPartResult, BackupProtection, BackupRetention, BackupSource, BackupSourcePart, BackupTarget, BackupVerify, Backups, ResticRun, RetentionFloor } from "./backups";
 import type { AuthState } from "./auth";
+import type { RefusalFix } from "./client";
 import type { ContainerResponse, ContainersResponse } from "./containers";
 import type { Counts } from "./counts";
 import type { Firewall, FirewallCounts, FirewallDetail, FirewallFlowsResponse, FirewallInterfacesResponse, FirewallLeasesResponse, FirewallRulesResponse, FirewallsResponse, FlowEndpoint, FlowRule } from "./firewalls";
@@ -952,6 +953,7 @@ const audit = shape<AuditResponse>("AuditResponse", {
 
 const auditForwarding = shape<AuditForwarding>("AuditForwarding", { channels: value, failing: value });
 
+const refusalFix = shape<RefusalFix>("RefusalFix", { right: optional(value), machine: optional(value), command: optional(value), exact: optional(value) });
 const actionRun = shape<ActionRun>("ActionRun", {
   id: value,
   kind: value,
@@ -968,8 +970,7 @@ const actionRun = shape<ActionRun>("ActionRun", {
   not_after: value,
   finished_at: value,
   output: shape<RunLine>("RunLine", { at: value, stream: value, line: value }),
-  fix_command: optional(value),
-  fix_exact: optional(value),
+  fix: optional(refusalFix),
 });
 
 const actions = shape<ActionsResponse>("ActionsResponse", { runs: actionRun });
@@ -1048,8 +1049,7 @@ const backupProtection = shape<BackupProtection>("BackupProtection", {
   archive_storage: value,
   state: value,
   reason: value,
-  fix_command: optional(value),
-  fix_exact: optional(value),
+  fix: optional(refusalFix),
   last_at: value,
   last_success_at: value,
   next_at: value,
