@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"go/ast"
@@ -141,37 +140,36 @@ func TestAnchors_NothingElseDependsOnThem(t *testing.T) {
 	}
 }
 
-// Une ancre posée pendant que l'agent tourne vaut à l'ordre suivant, sans
-// redémarrage, et les écritures de l'agent (le rang des ordres) ne l'effacent
-// pas.
+// Une ancre posée par « agent trust » pendant que l'agent tourne vaut à
+// l'ordre suivant, sans redémarrage ; les écritures de l'agent (le rang des
+// ordres) ne la touchent pas, et la commande ne remet pas à zéro le rang.
 func TestAnchors_ATrustAddIsReadByTheRunningAgentAndSurvivesItsWrites(t *testing.T) {
-	b := newProduceRig(t)
-	b.countingProducer([]byte("x"))
-	b.trust(t, map[string][]string{anchor.BackupGuest: nil})
-	expectResult(t, b.run(t, 1, produceParams(b.identity)), agentwire.ActionRefused, "anchor_missing:backup.guest")
+	rig := newProduceRig(t)
+	rig.countingProducer([]byte("x"))
+	rig.trust(t, map[string][]string{anchor.BackupGuest: nil})
+	b := migrate(t, rig.orderBench)
+	expectResult(t, rig.run(t, 1, produceParams(rig.identity)), agentwire.ActionRefused, "anchor_missing:backup.guest")
 
-	result, err := Trust(TrustOptions{StateDir: b.stateDir, StatePath: b.stateDir.Name(), EUID: 0}, TrustAdd, anchor.BackupGuest, "5012")
+	change, err := Trust(b.opts, TrustRequest{Verb: TrustAdd, Kind: anchor.BackupGuest, Value: "5012"}, accept)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(result.Stored[anchor.BackupGuest], []string{"5012"}) {
-		t.Fatalf("stored %v", result.Stored)
+	if !slices.Equal(change.After.Anchors[anchor.BackupGuest], []string{"5012"}) {
+		t.Fatalf("stored %v", change.After.Anchors)
 	}
-	results := b.run(t, 2, produceParams(b.identity))
+	results := rig.run(t, 2, produceParams(rig.identity))
 	if final := results[len(results)-1]; final.State != agentwire.ActionSucceeded {
 		t.Fatalf("after the trust add: %+v", results)
 	}
-	saved, err := LoadIdentity(b.stateDir)
-	if err != nil || saved.LastOrderSeq != 2 || !slices.Equal(saved.Anchors[anchor.BackupGuest], []string{"5012"}) {
-		t.Fatalf("an order write must keep both the rank and the anchors: seq %d anchors %v (%v)", saved.LastOrderSeq, saved.Anchors, err)
-	}
-
-	// Et l'inverse : la commande ne remet pas à zéro le rang écrit par l'agent.
-	if _, err := Trust(TrustOptions{StateDir: b.stateDir, StatePath: b.stateDir.Name(), EUID: 0}, TrustRemove, anchor.BackupGuest, "5012"); err != nil {
+	if _, err := Trust(b.opts, TrustRequest{Verb: TrustRemove, Kind: anchor.BackupGuest, Value: "5012"}, accept); err != nil {
 		t.Fatal(err)
 	}
-	if saved, _ = LoadIdentity(b.stateDir); saved.LastOrderSeq != 2 || len(saved.ServerKey) == 0 {
-		t.Fatalf("trust remove rewrote the rank or the server key: %+v", saved)
+	saved, err := LoadIdentity(b.stateDir)
+	if err != nil || saved.LastOrderSeq != 2 || saved.Anchors != nil || saved.ServerKey != nil {
+		t.Fatalf("the rank is kept, nothing comes back to identity.json: %+v %v", saved, err)
+	}
+	if stored := (&policyBench{opts: b.opts}).stored(t); len(stored.Anchors[anchor.BackupGuest]) != 0 || len(stored.ServerKeys) != 1 {
+		t.Fatalf("policy after the remove: %+v", stored)
 	}
 }
 
@@ -229,13 +227,15 @@ func (b *orderBench) drain() {
 	b.results.take()
 }
 
-// Le versant statique : le code de l'agent n'a que trois endroits où le champ
-// Anchors reçoit une valeur (la lecture du disque, l'enrôlement, la copie sous
-// verrou), et une seule voie qui appelle UpdateIdentity, la commande locale.
-// Ajouter une écriture, c'est modifier ces listes, donc le dire en revue.
+// Le versant statique : le code de l'agent n'a que ces endroits où un champ
+// Anchors reçoit une valeur (la lecture du disque et de la politique,
+// l'enrôlement, la copie sous verrou, « agent trust », l'effacement de
+// « policy migrate »), et une seule voie qui appelle UpdateIdentity,
+// « policy migrate ». Ajouter une écriture, c'est modifier ces listes, donc
+// le dire en revue.
 func TestAnchors_OnlyTheLocalCommandWritesThem(t *testing.T) {
-	assignsAnchors := map[string]bool{"orders.go": true, "run.go": true, "identity.go": true, "trust.go": true}
-	callsUpdateIdentity := map[string]bool{"trust.go": true}
+	assignsAnchors := map[string]bool{"orders.go": true, "run.go": true, "identity.go": true, "trust.go": true, "policy.go": true, "migrate.go": true}
+	callsUpdateIdentity := map[string]bool{"migrate.go": true}
 	err := filepath.WalkDir(".", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil || entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return walkErr
@@ -408,17 +408,30 @@ func findEntry(t *testing.T, entries []map[string]any, message, runID string) ma
 
 // --- La commande locale ---
 
-func trustOptions(b *orderBench, euid int) TrustOptions {
-	return TrustOptions{StateDir: b.stateDir, StatePath: b.stateDir.Name(), EUID: euid}
+// trustBench est un banc passé à la politique, dont root change les ancres.
+func trustBench(t *testing.T) *migratedBench {
+	t.Helper()
+	return migrate(t, newOrderBenchWithRights(t, nil))
+}
+
+func (b *migratedBench) storedAnchors(t *testing.T) anchor.State {
+	t.Helper()
+	return anchor.FromFile((&policyBench{opts: b.opts}).stored(t).Anchors)
+}
+
+func trustAdd(value string) TrustRequest {
+	return TrustRequest{Verb: TrustAdd, Kind: anchor.BackupGuest, Value: value}
 }
 
 func TestTrust_RefusesAnythingButRoot(t *testing.T) {
-	b := newOrderBenchWithRights(t, nil)
+	b := trustBench(t)
 	for _, euid := range []int{1000, 1001, 65534} {
-		if _, err := Trust(trustOptions(b, euid), TrustAdd, anchor.BackupGuest, "101"); !errors.Is(err, ErrTrustNotRoot) {
+		options := b.opts
+		options.EUID = euid
+		if _, err := Trust(options, trustAdd("101"), accept); !errors.Is(err, ErrTrustNotRoot) {
 			t.Errorf("uid %d: %v", euid, err)
 		}
-		if _, err := Trust(trustOptions(b, euid), TrustList, "", ""); !errors.Is(err, ErrTrustNotRoot) {
+		if _, err := ReadPolicyAsRoot(options); !errors.Is(err, ErrTrustNotRoot) {
 			t.Errorf("uid %d list: %v", euid, err)
 		}
 	}
@@ -428,13 +441,13 @@ func TestTrust_RefusesAnythingButRoot(t *testing.T) {
 }
 
 func TestTrust_RefusesAStateFileWithTheWrongModes(t *testing.T) {
-	b := newOrderBenchWithRights(t, nil)
+	b := trustBench(t)
 	path := filepath.Join(b.stateDir.Name(), "identity.json")
 	if err := os.Chmod(path, 0o666); err != nil {
 		t.Fatal(err)
 	}
 	var unsafe *UnsafeStateError
-	if _, err := Trust(trustOptions(b, 0), TrustAdd, anchor.BackupGuest, "101"); !errors.As(err, &unsafe) {
+	if _, err := Trust(b.opts, trustAdd("101"), accept); !errors.As(err, &unsafe) {
 		t.Fatalf("a state file writable by others: %v", err)
 	}
 	if err := os.Chmod(path, 0o600); err != nil {
@@ -443,7 +456,7 @@ func TestTrust_RefusesAStateFileWithTheWrongModes(t *testing.T) {
 	if err := os.Chmod(b.stateDir.Name(), 0o770); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Trust(trustOptions(b, 0), TrustAdd, anchor.BackupGuest, "101"); !errors.As(err, &unsafe) {
+	if _, err := Trust(b.opts, trustAdd("101"), accept); !errors.As(err, &unsafe) {
 		t.Fatalf("a state dir writable by its group: %v", err)
 	}
 	_ = os.Chmod(b.stateDir.Name(), 0o700)
@@ -453,57 +466,56 @@ func TestTrust_RefusesAStateFileWithTheWrongModes(t *testing.T) {
 }
 
 func TestTrust_AddsListsAndRemovesWithTheRegistryBounds(t *testing.T) {
-	b := newOrderBenchWithRights(t, nil)
-	options := trustOptions(b, 0)
+	b := trustBench(t)
+	options := b.opts
 	var traces []string
 	options.Audit = func(message string) error { traces = append(traces, message); return nil }
 
-	if _, err := Trust(options, TrustAdd, "nothing.here", "1"); !errors.Is(err, ErrTrustUnknownKind) {
+	if _, err := Trust(options, TrustRequest{Verb: TrustAdd, Kind: "nothing.here", Value: "1"}, accept); !errors.Is(err, ErrTrustUnknownKind) {
 		t.Fatalf("unknown kind: %v", err)
 	}
-	if _, err := Trust(options, "frobnicate", anchor.BackupGuest, "1"); !errors.Is(err, ErrTrustUnknownVerb) {
+	if _, err := Trust(options, TrustRequest{Verb: "frobnicate", Kind: anchor.BackupGuest, Value: "1"}, accept); !errors.Is(err, ErrTrustUnknownVerb) {
 		t.Fatalf("unknown verb: %v", err)
 	}
-	if _, err := Trust(options, TrustAdd, anchor.BackupGuest, "0101"); !errors.Is(err, anchor.ErrUnreadable) {
+	if _, err := Trust(options, trustAdd("0101"), accept); !errors.Is(err, anchor.ErrUnreadable) {
 		t.Fatalf("bad value: %v", err)
 	}
 	for _, value := range []string{"101", "102", "101"} {
-		if _, err := Trust(options, TrustAdd, anchor.BackupGuest, value); err != nil {
+		if _, err := Trust(options, trustAdd(value), accept); err != nil {
 			t.Fatal(err)
 		}
 	}
-	listed, err := Trust(options, TrustList, "", "")
-	if err != nil || !slices.Equal(listed.Stored[anchor.BackupGuest], []string{"101", "102"}) {
-		t.Fatalf("listed %v %v", listed.Stored, err)
+	listed, err := ReadPolicyAsRoot(options)
+	if err != nil || !slices.Equal(listed.Applied.Anchors[anchor.BackupGuest], []string{"101", "102"}) {
+		t.Fatalf("listed %v %v", listed.Applied.Anchors, err)
 	}
-	if _, err := Trust(options, TrustRemove, anchor.BackupGuest, "103"); !errors.Is(err, anchor.ErrAbsent) {
+	if _, err := Trust(options, TrustRequest{Verb: TrustRemove, Kind: anchor.BackupGuest, Value: "103"}, accept); !errors.Is(err, anchor.ErrAbsent) {
 		t.Fatalf("remove absent: %v", err)
 	}
-	if _, err := Trust(options, TrustRemove, anchor.BackupGuest, "101"); err != nil {
+	if _, err := Trust(options, TrustRequest{Verb: TrustRemove, Kind: anchor.BackupGuest, Value: "101"}, accept); err != nil {
 		t.Fatal(err)
 	}
-	if len(traces) != 4 || !strings.Contains(traces[0], "trust add backup.guest 101") || !strings.Contains(traces[3], "trust remove backup.guest 101") {
+	// Ajouter une valeur déjà posée ne change rien : ni écriture ni trace.
+	if len(traces) != 3 || !strings.Contains(traces[0], "trust add backup.guest 101") || !strings.Contains(traces[2], "trust remove backup.guest 101") {
 		t.Fatalf("the journal of the system got %v", traces)
 	}
 	// L'échec de la trace n'annule pas le changement, il se rapporte.
 	options.Audit = func(string) error { return errors.New("no journal socket") }
-	result, err := Trust(options, TrustAdd, anchor.BackupGuest, "104")
-	if err != nil || result.AuditError == nil || !slices.Equal(result.Stored[anchor.BackupGuest], []string{"102", "104"}) {
+	result, err := Trust(options, trustAdd("104"), accept)
+	if err != nil || result.AuditError == nil || !slices.Equal(result.After.Anchors[anchor.BackupGuest], []string{"102", "104"}) {
 		t.Fatalf("audit failure: %+v %v", result, err)
 	}
 }
 
-// Le fichier réécrit par la commande reste à son propriétaire, en 0600, et
-// aucun temporaire n'en traîne.
-func TestTrust_KeepsTheFileOwnerAndModeAndLeavesNoTemporary(t *testing.T) {
+// identity.json réécrit par « policy migrate » reste à son propriétaire, en
+// 0600, et aucun temporaire n'en traîne.
+func TestMigratePolicy_KeepsTheIdentityOwnerAndModeAndLeavesNoTemporary(t *testing.T) {
 	b := newOrderBenchWithRights(t, nil)
 	before, err := os.Stat(filepath.Join(b.stateDir.Name(), "identity.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Trust(trustOptions(b, 0), TrustAdd, anchor.BackupGuest, "101"); err != nil {
-		t.Fatal(err)
-	}
+	migrate(t, b)
 	after, err := os.Stat(filepath.Join(b.stateDir.Name(), "identity.json"))
 	if err != nil || after.Mode().Perm() != 0o600 || ownerIDOf(after) != ownerIDOf(before) {
 		t.Fatalf("mode %v owner %d, was %d (%v)", after.Mode(), ownerIDOf(after), ownerIDOf(before), err)
@@ -527,21 +539,6 @@ func TestClient_ReportsItsAnchorsOnOpeningTheStream(t *testing.T) {
 	client.SetAnchors(anchor.FromFile(map[string][]string{anchor.BackupGuest: {"101", "102"}, anchor.BackupRecipient: {"bad"}}))
 	if client.anchors != "backup.recipient=!,backup.guest=101:102" {
 		t.Fatalf("anchors %q", client.anchors)
-	}
-}
-
-// Une identité qui porte une clé du serveur et une clé base64 reste lisible : la
-// pose d'une clé par un ordre ne touche que la clé.
-func TestAnchors_PinningTheServerKeyKeepsThem(t *testing.T) {
-	b := newOrderBenchWithRights(t, nil)
-	b.trust(t, map[string][]string{anchor.BackupGuest: {"101"}})
-	public, _, _ := ed25519.GenerateKey(rand.Reader)
-	body := longOrder(1, agentwire.KindServerKey, agentwire.ServerKeyParams{PublicKey: base64.StdEncoding.EncodeToString(public)})
-	b.runner.receive(b.signed(t, body))
-	b.drain()
-	stored, err := LoadIdentity(b.stateDir)
-	if err != nil || !slices.Equal(stored.ServerKey, public) || !slices.Equal(stored.Anchors[anchor.BackupGuest], []string{"101"}) {
-		t.Fatalf("server key %x anchors %v (%v)", stored.ServerKey, stored.Anchors, err)
 	}
 }
 

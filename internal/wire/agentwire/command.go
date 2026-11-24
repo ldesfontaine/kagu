@@ -33,10 +33,6 @@ const (
 	// Le retour arrière à la main : l'agent rebascule current sur previous,
 	// l'éprouve et se relance. Sans paramètre ; même droit que agent.update.
 	KindAgentRollback Kind = "agent.rollback"
-	// La rotation de la clé du serveur : signé par la clé que l'agent a
-	// épinglée, il lui livre la neuve (ServerKeyParams). Le serveur l'envoie
-	// de lui-même, à l'ouverture du flux d'un agent resté sur la précédente.
-	KindServerKey Kind = "agent.server_key"
 	// Écrit sous son chemin les fichiers d'un colis que l'agent télécharge.
 	KindBackupReceive Kind = "backup.receive"
 	// Garde les N sauvegardes les plus récentes du chemin, efface les autres.
@@ -68,12 +64,6 @@ const (
 	// restic.target.
 	KindResticRelay Kind = "restic_relay"
 )
-
-// ServerKeyParams sont les paramètres de agent.server_key : la clé publique
-// neuve, en base64. Ce n'est pas un secret.
-type ServerKeyParams struct {
-	PublicKey string `json:"public_key"`
-}
 
 // OrderKinds rend les genres d'ordres, signés et journalisés : ceux du
 // registre (registry.go), dans son ordre.

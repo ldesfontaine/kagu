@@ -1,6 +1,8 @@
 package agentwire
 
 import (
+	"strconv"
+
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/hostconn"
 	"github.com/ldesfontaine/kagu/internal/fact/probe"
@@ -91,6 +93,15 @@ const ProtocolVersion = "3"
 // agent qui la parle ne lit que l'enveloppe v1 et ne reçoit qu'agent.update,
 // pour se mettre à jour. Elle disparaît à la version suivante.
 const LegacyProtocolVersion = "2"
+
+// ProtocolBehind dit si un agent qui a annoncé ce protocole est plus ancien
+// que ce serveur ; un protocole inconnu (vide, illisible) l'est aussi : on ne
+// sait pas, donc on le compte en retard.
+func ProtocolBehind(protocol string) bool {
+	announced, err := strconv.Atoi(protocol)
+	current, _ := strconv.Atoi(ProtocolVersion)
+	return err != nil || announced < current
+}
 
 const (
 	// CodeProtocolUnsupported : l'agent ne parle pas la version du serveur.

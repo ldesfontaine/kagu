@@ -154,7 +154,8 @@ Les sous-commandes :
 | `opencloud auth status\|disable -config <chemin>` | L'état de l'authentification, ou la couper (mot de passe perdu) : l'interface revient à sa première configuration |
 | `opencloud secrets forget -config <chemin>` | Clé de chiffrement perdue : repart d'une clé neuve et oublie les secrets qu'elle chiffrait, voir [Clé perdue](#clé-perdue) |
 | `opencloud secrets rotate -config <chemin>` | Change la clé de chiffrement et rescelle chaque secret avec la neuve, serveur arrêté, voir [Faire tourner les clés](#faire-tourner-les-clés) |
-| `opencloud secrets rotate-server-key -config <chemin>` | Tire une clé neuve pour signer les ordres ; la précédente reste valable le temps que chaque agent reçoive la neuve |
+| `opencloud secrets server-key -config <chemin>` | Imprime l'empreinte (`SHA256:…`) de la clé qui signe les ordres, serveur en marche ou non : c'est elle qu'on compare à ce que `agent trust` imprime sur une machine |
+| `opencloud secrets rotate-server-key -config <chemin>` | Tire une clé neuve pour signer les ordres ; la précédente reste valable le temps que root la pose sur chaque machine. Refusée tant qu'une machine a un agent plus ancien que le serveur, voir [Faire tourner les clés](#faire-tourner-les-clés) |
 | `opencloud secrets finish-server-key [-force] -config <chemin>` | Retire la clé précédente une fois chaque agent passé à la neuve |
 | `opencloud export [-config <chemin>] [-o <fichier>] [-propose]` | Écrit l'annuaire en YAML (sortie standard, ou le fichier en 0600), avec `-propose` y ajoute ce que les conteneurs non déclarés laissent deviner, voir [Exporter l'annuaire](#exporter-lannuaire) |
 | `opencloud apply [-config <chemin>] [-prune] [-yes] [-dry-run] <fichier>` | Applique un fichier YAML à l'annuaire, après avoir montré le plan et demandé confirmation, voir [Appliquer un fichier](#appliquer-un-fichier) |
@@ -1221,10 +1222,22 @@ virgules, par exemple `-backup-guest 5012,5013` pour deux VM. Ils ne servent qu'
 premier lancement ; une valeur mal écrite arrête l'agent avant l'enrôlement, sans
 consommer le jeton.
 
-**Ensuite**, une seule commande, **en root** sur la machine : elle réécrit le
-fichier d'identité sans casser ses droits, note le changement au journal du
-système (`journalctl -t opencloud-agent`), et l'agent la prend en compte à
-l'ordre suivant, sans redémarrage.
+**Ensuite**, une seule commande, **en root** sur la machine : elle écrit la
+politique de l'agent (`/etc/opencloud-agent/policy.toml`) sans toucher à ses
+droits, note le changement au journal du système
+(`journalctl -t opencloud-agent`), et l'agent la prend en compte à l'ordre
+suivant, sans redémarrage. Sur une machine installée avant la politique, elle
+refuse sans rien écrire et donne la ligne à lancer d'abord, une fois :
+
+```sh
+sudo opencloud agent policy migrate
+```
+
+Elle recopie à l'identique les droits, les ancres et la clé du serveur
+d'`identity.json` dans la politique, puis les efface d'`identity.json`. Elle dit
+ce qu'elle recopie et demande `[o/N]` avant de rien créer (`-yes` sans terminal).
+Tant qu'elle n'est pas lancée, la fiche de la machine (onglet Agent) dit
+« Droits non protégés » et donne la même ligne.
 
 ```sh
 sudo opencloud agent trust list
@@ -1246,10 +1259,25 @@ copiez-la. Trois états se lisent sur la fiche de la machine, onglet Agent :
 **posées**, **aucune posée**, **illisibles** (le fichier porte une valeur qui ne se
 lit pas : `list` la montre, `remove` la retire).
 
+La même commande change la **clé du serveur** que l'agent accepte (voir
+[Faire tourner les clés](#faire-tourner-les-clés)) :
+
+| Ligne | Effet |
+| --- | --- |
+| `trust set server-key <clé>` | Remplace la clé acceptée : l'ancienne est refusée dès l'ordre suivant |
+| `trust add server-key <clé> -keep-old <durée>` | Accepte la neuve et garde l'ancienne `<durée>` (5m à 168h), puis l'ancienne tombe seule, même sans serveur. Sans `-keep-old`, refusé : la ligne `set` est proposée |
+
+`<clé>` est la clé publique en base64 que donne Kagu. Les deux impriment
+l'empreinte de l'ancienne et de la neuve : comparez la neuve à
+`opencloud secrets server-key` lancé sur la machine Kagu, jamais à un écran.
+`list` montre aussi l'empreinte des clés acceptées.
+
 Coût : chaque nouvelle VM à sauvegarder, chaque clé de trousseau changée et chaque
 cible dont le certificat est renouvelé demande ce geste de root avant que l'ordre
-passe. Un ré-enrôlement efface le fichier : la fenêtre « Ré-enrôler » redonne les
-ancres posées, la ligne les porte de nouveau.
+passe. Sur une machine d'avant la politique, un ré-enrôlement efface le
+fichier : la fenêtre « Ré-enrôler » redonne les ancres posées, la ligne les porte
+de nouveau. Sur une machine passée à la politique, il n'y touche pas : elles
+restent dans la politique, et les drapeaux de la ligne sont ignorés.
 
 L'agent juge le droit à chaque ouverture du flux, sans lancer `vzdump` : il
 répond « indisponible » (fiche de la machine, journal `rights not exercisable`)
@@ -1276,6 +1304,9 @@ puis se connecte. Le journal dit sous quel compte il tourne
 (`agent running as`, avec `opencloud-agent`). La
 réponse de l'enrôlement porte la **clé publique de Kagu** : l'agent
 l'épingle dans `identity.json` et n'exécutera que les ordres qu'elle signe.
+`sudo opencloud agent policy migrate` la passe ensuite, avec les droits et les
+ancres, dans la politique, à root ([Les ancres de
+confiance](#les-ancres-de-confiance)).
 Le journal la nomme (`"server_key":"SHA256:…"`) : c'est l'empreinte que
 `GET /api/agents/server-key` rend, et que la fiche de la machine compare. Quand le
 journal dit `"msg":"connected"`, arrêtez-le (Ctrl-C) : le service prend le
@@ -2100,7 +2131,7 @@ déploiement.
 | --- | --- | --- |
 | Serveur, `state_dir` | `opencloud.db` (avec `-wal` et `-shm` tant qu'il tourne) | Tout : machines, historique, sondes, tâches, alertes, page de statut, réglages de l'interface (langue, seuils des alertes, rappel des alertes de danger, relais d'e-mails mot de passe compris, fin de support), jetons d'API et authentification, et le journal d'audit (Journal : qui a fait quoi, un an), que les canaux « Recevoir le journal » (Paramètres → Notifications → Canaux) reçoivent aussi : cochez-en un, une base effacée n'efface plus la trace. `opencloud admin` s'y inscrit sous l'uid du pair de la socket (`uid:0`), `opencloud secrets forget` sous le compte qui la lance |
 | Serveur, `state_dir` | `secret.key` | La clé des secrets de la base : sans elle, la base garde ses données mais perd le mot de passe du relais, l'URL et le secret des canaux, les URL de ping, les jetons des hôtes Proxmox, les mots de passe des dépôts restic (voir [Clé perdue](#clé-perdue)) |
-| Serveur, `state_dir` | `server.key` | La clé qui signe les ordres aux agents, tirée au premier démarrage : chaque agent a épinglé sa moitié publique. Sans elle, `serve` en tire une neuve et **chaque agent refuse les ordres** (`bad_signature`) jusqu'à son ré-enrôlement ; l'observation continue. Qui l'a commande toutes les machines : même soin que `secret.key` |
+| Serveur, `state_dir` | `server.key` | La clé qui signe les ordres aux agents, tirée au premier démarrage : chaque agent accepte sa moitié publique. Sans elle, `serve` en tire une neuve et **chaque agent refuse les ordres** (`bad_signature`) jusqu'à ce que root y colle `trust set server-key` ([Faire tourner les clés](#faire-tourner-les-clés)) ; l'observation continue. Qui l'a commande toutes les machines : même soin que `secret.key` |
 | Serveur | `/etc/opencloud/config.toml` | La configuration |
 | Chaque machine | `/var/lib/opencloud-agent/identity.json` | Sa clé : il faudra ré-enrôler |
 | La machine Kagu, si mcp-maison y est | `/srv/workspace/mcp-maison/` : `.env`, `data/mcp/` | Le `.env` (jeton d'API, secret de l'application chez l'IdP), les droits, la base OAuth et le journal de mcp-maison : on les refait, mais chaque personne se reconnecte |
@@ -2456,25 +2487,37 @@ les agents :
 ```sh
 runuser -u opencloud -- opencloud secrets rotate-server-key -config /etc/opencloud/config.toml
 systemctl restart opencloud
-# Attendre que chaque agent se soit reconnecté, puis :
+# Sur chaque machine, en root, la ligne que la commande a donnée :
+sudo opencloud agent trust set server-key <clé publique base64>
+# Quand chaque agent accepte la neuve :
 runuser -u opencloud -- opencloud secrets finish-server-key -config /etc/opencloud/config.toml
 systemctl restart opencloud
 ```
 
-La première tire une clé neuve et garde la précédente dans `server.key`.
-Après le redémarrage, les deux sont valables : à l'ouverture de son flux,
-chaque agent resté sur la précédente reçoit la neuve par l'ordre
-`agent.server_key`, signé par la précédente, et l'épingle ; la fiche de la
-machine (carte « Ordres ») le montre, le journal d'audit le garde. La
-seconde retire la précédente ; elle **refuse** tant qu'une machine dont
-l'agent est actif l'a encore épinglée, et la nomme : attendez qu'elle se
-reconnecte. `-force` passe outre, et ces machines sont à ré-enrôler. Une
-seule rotation à la fois. Sauvegardez la clé neuve.
+La première **refuse** tant qu'une machine enrôlée a un agent plus ancien que
+le serveur, ou ne s'est pas reconnectée depuis la mise à jour du serveur
+(son protocole n'est pas connu) : elle les nomme, rien ne change, et aucune
+option ne passe outre. Mettez ces agents à jour, laissez-les se reconnecter,
+puis relancez. Ensuite, elle tire une clé neuve, garde la précédente dans
+`server.key` et imprime la ligne `trust set` à coller. Après le redémarrage, les deux sont
+valables : Kagu signe chaque ordre avec la clé que l'agent dit accepter.
+**Aucun ordre ne livre la neuve** : root la pose sur chaque machine. La ligne
+imprime l'empreinte de la neuve : comparez-la à
+`opencloud secrets server-key` lancé sur la machine Kagu, jamais à un écran.
+La fiche d'une machine restée sur la précédente (carte « Ordres ») donne la
+même ligne à copier. Sur une machine sans politique, la ligne refuse sans
+rien écrire et donne `policy migrate` à lancer d'abord.
+La dernière retire la précédente ; elle **refuse** tant qu'une machine dont
+l'agent est actif l'accepte encore, la nomme et redonne la ligne `trust set`.
+`-force` passe outre : ces machines refusent alors chaque ordre jusqu'à la
+ligne. Une seule rotation à la fois. Sauvegardez la clé neuve.
 
-**Une clé du serveur volée** ne se remplace pas ainsi : la neuve est livrée
-sous la signature de l'ancienne, donc qui tient l'ancienne pourrait livrer
-la sienne. Arrêtez le serveur, supprimez `server.key` (il en tire une neuve
-au démarrage), puis ré-enrôlez chaque machine.
+**Une clé du serveur volée** se remplace sans ré-enrôler : arrêtez le
+serveur, supprimez `server.key` (il en tire une neuve au démarrage), puis
+collez `trust set server-key <neuve>` sur chaque machine. La neuve ne passe
+jamais par la signature de l'ancienne : qui tient l'ancienne ne peut pas
+livrer la sienne. Entre-temps, chaque machine refuse les ordres
+(`bad_signature`) ; l'observation continue.
 
 **La clé d'un agent** (dans son `identity.json`) tourne en le ré-enrôlant :
 Machines → la machine → **Ré-enrôler**. La machine garde son historique.
@@ -2671,7 +2714,8 @@ Les messages sont ceux que le binaire écrit, tels quels.
 | Agent : « Certificat refusé : ce n'est pas celui dont l'empreinte a été épinglée… » | Le certificat de Kagu a changé, ou quelqu'un s'interpose | Vérifier l'empreinte, puis ré-enrôler avec la nouvelle |
 | Agent : « Kagu ne parle pas la version du protocole de cet agent… » ; la machine reste hors ligne | Agent et serveur de deux protocoles différents (un seul des deux mis à jour) | Installer sur la machine le même binaire que sur la machine Kagu, puis `systemctl restart opencloud-agent` |
 | `secrets rotate` : « un serveur tourne sur ce state_dir » | La rotation de `secret.key` demande le serveur arrêté | `systemctl stop opencloud`, relancer la commande, redémarrer |
-| `secrets finish-server-key` : « ces machines ont encore la clé précédente » | Leur agent ne s'est pas reconnecté depuis la rotation | Attendre leur connexion (redémarrer l'agent au besoin), ou `-force` et les ré-enrôler |
+| `secrets rotate-server-key` : « rotation refusée : ces machines ont un agent plus ancien que ce serveur » | Un agent est à un protocole plus ancien, ou ne s'est pas reconnecté depuis la mise à jour du serveur (protocole inconnu) | Mettre à jour l'agent de chaque machine nommée, attendre sa reconnexion, relancer ; aucune option ne passe outre |
+| `secrets finish-server-key` : « ces machines ont encore la clé précédente » | Root n'y a pas collé la ligne `trust set server-key` depuis la rotation | Coller sur chaque machine la ligne que le refus donne, ou `-force` puis la coller |
 | Agent : `tls: failed to verify certificate` | Certificat auto-signé sans `-pin` | `-pin`, ou un certificat reconnu |
 | « L'agent n'a pas le droit de lire la socket Docker de cette machine. » (`docker_denied`) | Le compte de l'agent n'est pas dans le groupe `docker`, ou y a été mis après le démarrage de l'agent : un groupe se lit au démarrage du processus | `usermod -aG docker opencloud-agent` puis `systemctl restart opencloud-agent`. Le groupe `docker` équivaut à root ([ce que cela donne](#le-groupe-docker-équivaut-à-root)) ; sinon, [garder l'agent en root](#garder-lagent-en-root) |
 | Agent : `WARN rights not exercisable` au journal, un droit « indisponible » sur la fiche de la machine, un ordre « Refusé » avec la même raison | Un droit coché que le compte de l'agent ne peut pas exercer : `docker_denied` (socket fermée au compte, ligne ci-dessus), `docker_missing` (pas de Docker, ou pas de `/usr/bin/docker`), `path_denied` (le dossier du droit, ou celui qui le contient, n'appartient pas au compte : la préparation ne l'a pas créé, ou une machine passée sous le compte n'a pas eu son `chown`), `path_unwritable` (l'unité ne l'ouvre pas : `ReadWritePaths=`), `not_self_updatable` (`bin/` n'appartient pas au compte) ; pour `backup.produce`, `sudo_missing` (pas de `sudo`), `producer_missing` (le script de root, ou `/usr/bin/vzdump`, manque) et `sudo_denied` (la règle `sudoers` manque, ou l'unité n'a pas son drop-in `produce.conf`) ; pour `restic.docker`, `docker_denied`, `docker_missing` (socket Docker et binaire `docker`) et `restic_missing` ; pour `restic.target`, `restic.produce`, `restic.verify`, `restic.browse` et `restic.restore`, `rest_server_missing` (la cible seule) et `restic_missing` (le binaire n'est ni dans le PATH de l'agent ni au chemin déclaré par `-rest-server` ou `-restic` : l'agent ne télécharge rien) | `path_denied` : `chown -h opencloud-agent:opencloud-agent <dossier>` ([Passer un agent installé en root sous son compte](#passer-un-agent-installé-en-root-sous-son-compte) dit lesquels), puis `systemctl restart opencloud-agent` ; `path_unwritable` : le drop-in `droits.conf` ; `not_self_updatable` : `chown -hR opencloud-agent:opencloud-agent /var/lib/opencloud-agent` ; `sudo_missing` : `apt install sudo` ; `producer_missing` et `sudo_denied` : rejouer la préparation de la page du jeton (les six lignes de [`backup.produce` équivaut à root](#backupproduce-équivaut-à-root)), puis `systemctl restart opencloud-agent`, car le drop-in ne se lit qu'au démarrage de l'unité ; `rest_server_missing`, `restic_missing` : installer le binaire (paquet de la distribution ou version publiée, somme vérifiée par l'opérateur), puis `systemctl restart opencloud-agent` |

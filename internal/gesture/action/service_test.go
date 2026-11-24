@@ -3,8 +3,6 @@ package action_test
 import (
 	"context"
 	"crypto/ed25519"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"testing"
@@ -294,10 +292,11 @@ func TestRecord_JournalsARefusalByTheAgent(t *testing.T) {
 	}
 }
 
-// Pendant une rotation, un agent resté sur la clé précédente reçoit la neuve
-// par un ordre que la précédente signe ; une fois qu'il l'a prise, ses
-// ordres sont signés par la neuve et rien ne lui est plus livré.
-func TestRekey_DeliversTheNewKeySignedByThePinnedOne(t *testing.T) {
+// Pendant une rotation, aucun ordre ne livre la neuve (R-A3-9) : le serveur
+// n'écrit même plus agent.server_key. Un agent resté sur la clé précédente
+// reçoit ses ordres signés par elle ; une fois que root a collé « trust set »
+// et qu'il redit la neuve, par la neuve.
+func TestRotation_SignsWithTheKeyTheAgentAccepts(t *testing.T) {
 	b := newBench(t)
 	ctx := operator()
 	old := action.GenerateKey()
@@ -306,41 +305,24 @@ func TestRekey_DeliversTheNewKeySignedByThePinnedOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.service.SetKey(rotated)
-	if err := b.service.Rekey(ctx, machineID); err != nil || len(b.pusher.sent) != 0 {
-		t.Fatalf("an agent that said nothing: %v %+v", err, b.pusher.sent)
+	if _, err := b.service.Send(ctx, machineID, agentwire.Kind("agent.server_key"), nil); !errors.Is(err, action.ErrUnknownKind) || len(b.pusher.sent) != 0 {
+		t.Fatalf("agent.server_key was written: %v %+v", err, b.pusher.sent)
 	}
 	host, err := b.db.GetMachine(ctx, machineID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.db.RecordServerKey(ctx, host.Agent.ID, old.Fingerprint()); err != nil {
-		t.Fatal(err)
-	}
-	if err := b.service.Rekey(ctx, machineID); err != nil || len(b.pusher.sent) != 1 {
-		t.Fatalf("rekey: %v %+v", err, b.pusher.sent)
-	}
-	order := b.pusher.sent[0].Order
-	if b.pusher.sent[0].Kind != agentwire.KindServerKey || order.Key != old.Fingerprint() ||
-		!ed25519.Verify(old.PublicKey(), agentwire.OrderSigningBytes(agentwire.OrderVersion, order.Body), order.Signature) {
-		t.Fatalf("the order is not signed by the pinned key: %+v", order)
-	}
-	var body agentwire.OrderBody
-	var params agentwire.ServerKeyParams
-	if json.Unmarshal(order.Body, &body) != nil || json.Unmarshal(body.Params, &params) != nil ||
-		params.PublicKey != base64.StdEncoding.EncodeToString(rotated.PublicKey()) {
-		t.Fatalf("the order does not carry the new key: %s", order.Body)
-	}
-	report := agentwire.ActionReport{Results: []agentwire.ActionResult{{RunID: body.RunID, State: agentwire.ActionSucceeded}}}
-	if err := b.service.Record(context.Background(), machineID, report); err != nil {
-		t.Fatal(err)
-	}
-	if host, _ := b.db.GetMachine(ctx, machineID); host.Agent.ServerKeyFingerprint != rotated.Fingerprint() {
-		t.Fatalf("the agent's key was not noted: %q", host.Agent.ServerKeyFingerprint)
-	}
-	if err := b.service.Rekey(ctx, machineID); err != nil || len(b.pusher.sent) != 1 {
-		t.Fatalf("delivered twice: %v %d", err, len(b.pusher.sent))
-	}
-	if _, err := b.service.Ping(ctx, machineID); err != nil || b.pusher.sent[1].Order.Key != rotated.Fingerprint() {
-		t.Fatalf("the next order is not signed by the new key: %v", err)
+	for _, accepted := range []*action.Key{old, rotated} {
+		if err := b.db.RecordServerKey(ctx, host.Agent.ID, accepted.Fingerprint()); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := b.service.Ping(ctx, machineID); err != nil {
+			t.Fatal(err)
+		}
+		order := b.pusher.sent[len(b.pusher.sent)-1].Order
+		if order.Key != accepted.Fingerprint() ||
+			!ed25519.Verify(accepted.PublicKey(), agentwire.OrderSigningBytes(agentwire.OrderVersion, order.Body), order.Signature) {
+			t.Fatalf("the order is not signed by the key the agent accepts (%s): %+v", accepted.Fingerprint(), order)
+		}
 	}
 }

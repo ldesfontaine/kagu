@@ -6,23 +6,29 @@ import (
 	"fmt"
 	"io"
 	"log/syslog"
-	"os"
+	"slices"
 	"strings"
 
 	"github.com/ldesfontaine/kagu/internal/edge/agent"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
-// opencloud agent trust list | add <type> <valeur> | remove <type> <valeur> :
-// les ancres de confiance locales de l'agent (internal/fact/anchor). Seule voie qui
-// les change après l'installation ; réservée à root. Le message d'un
-// changement est écrit au journal du système (journald, via /dev/log).
-func runAgentTrust(args []string, out io.Writer, openTerminal terminalOpener, euid int) error {
+// opencloud agent trust list | add <type> <valeur> | remove <type> <valeur>
+// | set server-key <clé> | add server-key <clé> -keep-old <durée> : les ancres
+// de confiance locales de l'agent (internal/fact/anchor) et la clé du serveur
+// qu'il accepte, dans sa politique. Seule voie qui les change après
+// l'installation ; réservée à root. Ce qui change est dit, puis demandé
+// [o/N] (R-A3-15) ; le message du changement est écrit au journal du système
+// (journald, via /dev/log).
+func runAgentTrust(args []string, command policyCommand) error {
 	flags := flag.NewFlagSet("agent trust", flag.ContinueOnError)
 	stateDir := flags.String("state", defaultAgentStateDir, "répertoire d'état de l'agent")
 	yes := flags.Bool("yes", false, "confirme sans poser la question (obligatoire sans terminal)")
+	keepOld := flags.Duration("keep-old", 0, "add server-key : garde l'ancienne clé acceptée cette durée (5m à 168h)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -31,11 +37,19 @@ func runAgentTrust(args []string, out io.Writer, openTerminal terminalOpener, eu
 		return err
 	}
 	text := catalogs.For(lang.Default)
-	rest := flags.Args()
-	verb, kindName, value, ok := splitTrustArguments(rest)
-	if !ok {
-		return &refusal{message: text.Format("agent.trust_usage", brand.Command, strings.Join(anchor.Names(), ", "))}
+	request, ok := splitTrustArguments(flags.Args())
+	// Les drapeaux se donnent aussi après les mots : « add server-key <clé>
+	// -keep-old 1h ».
+	if ok && request.Verb != agent.TrustList {
+		if err := flags.Parse(flags.Args()[3:]); err != nil {
+			return err
+		}
+		ok = flags.NArg() == 0
 	}
+	if !ok {
+		return &refusal{message: trustUsage(text)}
+	}
+	request.KeepOld = *keepOld
 	root, err := openStateDir(*stateDir)
 	if err != nil {
 		return explainStateDirError(err, *stateDir, agent.CurrentAccount(), text)
@@ -45,98 +59,103 @@ func runAgentTrust(args []string, out io.Writer, openTerminal terminalOpener, eu
 	if identity, loadErr := agent.LoadIdentity(root); loadErr == nil && identity.Language != "" {
 		text = catalogs.For(identity.Language)
 	}
-	if verb != agent.TrustList {
-		// Un compte sans privilège est refusé sans qu'on lui pose la question.
-		if err := agent.RequireTrustRoot(euid); err != nil {
-			return explainTrustError(err, kindName, text)
-		}
-		if err := confirmTrustChange(out, openTerminal, *yes, text, verb, kindName, value); err != nil {
-			return err
-		}
+	// Un compte sans privilège est refusé sans qu'on lui pose la question.
+	if err := agent.RequireTrustRoot(command.euid); err != nil {
+		return explainTrustError(err, request, text)
 	}
-	result, err := agent.Trust(agent.TrustOptions{
-		StateDir: root, StatePath: *stateDir, EUID: euid, Audit: auditToSystemJournal,
-	}, verb, kindName, value)
+	place, err := command.place(root)
 	if err != nil {
-		return explainTrustError(err, kindName, text)
+		return err
 	}
-	printTrust(out, text, verb, kindName, value, result)
+	opts := agent.PolicyOptions{StateDir: root, StatePath: *stateDir, Place: place, EUID: command.euid, Audit: auditToSystemJournal}
+	if request.Verb == agent.TrustList {
+		report, err := agent.ReadPolicyAsRoot(opts)
+		if err != nil {
+			return explainTrustError(err, request, text)
+		}
+		printTrustList(command.out, text, report.Applied)
+		return nil
+	}
+	confirm := func(change agent.PolicyChange) error {
+		printPolicyChange(command.out, text, change)
+		return confirmChange(command.out, command.openTerminal, *yes, text)
+	}
+	change, err := agent.Trust(opts, request, confirm)
+	if err != nil {
+		return explainTrustError(err, request, text)
+	}
+	printPolicyDone(command.out, text, change)
 	return nil
 }
 
-// confirmTrustChange dit ce qu'« add » ou « remove » va changer, puis demande
-// l'accord avant que quoi que ce soit s'écrive.
-func confirmTrustChange(out io.Writer, openTerminal terminalOpener, yes bool, text lang.Catalog, verb, kindName, value string) error {
-	kind, known := anchor.Lookup(kindName)
-	if !known {
-		return explainTrustError(agent.ErrTrustUnknownKind, kindName, text)
-	}
-	key := "agent.trust_change_add"
-	if verb == agent.TrustRemove {
-		key = "agent.trust_change_remove"
-	}
-	fmt.Fprintln(out, text.Format(key, kindName, value))
-	if kind.Name == anchor.ResticTargetCert && kind.Valid(value) {
-		fmt.Fprintln(out, text.Format("agent.trust_change_fingerprint", shortFingerprint(value)))
-	}
-	return confirmChange(out, openTerminal, yes, text)
+func trustUsage(text lang.Catalog) string {
+	return text.Format("agent.trust_usage", brand.Command, strings.Join(anchor.Names(), ", "))
 }
 
-// shortFingerprint garde les seize premiers caractères d'une empreinte
-// hexadécimale : de quoi la comparer à l'œil, pas de quoi la reconnaître seule.
-func shortFingerprint(fingerprint string) string {
-	return fingerprint[:16]
-}
-
-// splitTrustArguments lit « list », ou « add|remove <type> <valeur> ».
-func splitTrustArguments(arguments []string) (verb, kindName, value string, ok bool) {
+// splitTrustArguments lit « list », ou « add|remove|set <type> <valeur> »
+// suivi de drapeaux.
+func splitTrustArguments(arguments []string) (agent.TrustRequest, bool) {
 	switch {
 	case len(arguments) == 1 && arguments[0] == agent.TrustList:
-		return agent.TrustList, "", "", true
-	case len(arguments) == 3 && (arguments[0] == agent.TrustAdd || arguments[0] == agent.TrustRemove):
-		return arguments[0], arguments[1], arguments[2], true
+		return agent.TrustRequest{Verb: agent.TrustList}, true
+	case len(arguments) >= 3 && slices.Contains([]string{agent.TrustAdd, agent.TrustRemove, agent.TrustSet}, arguments[0]):
+		return agent.TrustRequest{Verb: arguments[0], Kind: arguments[1], Value: arguments[2]}, true
 	}
-	return "", "", "", false
+	return agent.TrustRequest{}, false
 }
 
-func printTrust(out io.Writer, text lang.Catalog, verb, kindName, value string, result agent.TrustResult) {
-	switch verb {
-	case agent.TrustList:
-		printAnchors(out, text, result)
-	case agent.TrustAdd:
-		fmt.Fprintln(out, text.Format("agent.trust_done_add", kindName, value))
-	case agent.TrustRemove:
-		fmt.Fprintln(out, text.Format("agent.trust_done_remove", kindName, value))
+// printTrustList écrit les clés du serveur acceptées, puis les ancres.
+func printTrustList(out io.Writer, text lang.Catalog, applied agent.AppliedPolicy) {
+	if len(applied.ServerKeys) == 0 {
+		fmt.Fprintf(out, "%s\t%s\n", agentpolicy.TrustServerKey, text.Get("agent.trust_list_none"))
 	}
-	if result.AuditError != nil {
-		fmt.Fprintln(os.Stderr, text.Format("agent.trust_audit_failed", result.AuditError.Error()))
+	for _, key := range applied.ServerKeys {
+		fmt.Fprintf(out, "%s\t%s\n", agentpolicy.TrustServerKey, agentwire.KeyFingerprint(key))
 	}
+	printAnchors(out, text, anchor.FromFile(applied.Anchors))
 }
 
 // printAnchors écrit un type par ligne, dans l'ordre du registre : ses valeurs,
 // « aucune » ou « illisible ». Les deux derniers états se distinguent.
-func printAnchors(out io.Writer, text lang.Catalog, result agent.TrustResult) {
+func printAnchors(out io.Writer, text lang.Catalog, state anchor.State) {
 	for _, kind := range anchor.Kinds() {
 		switch {
-		case result.State.Unreadable[kind.Name]:
+		case state.Unreadable[kind.Name]:
 			fmt.Fprintf(out, "%s\t%s\n", kind.Name, text.Get("agent.trust_list_unreadable"))
-		case len(result.State.Values[kind.Name]) == 0:
+		case len(state.Values[kind.Name]) == 0:
 			fmt.Fprintf(out, "%s\t%s\n", kind.Name, text.Get("agent.trust_list_none"))
 		default:
-			fmt.Fprintf(out, "%s\t%s\n", kind.Name, strings.Join(result.State.Values[kind.Name], " "))
+			fmt.Fprintf(out, "%s\t%s\n", kind.Name, strings.Join(state.Values[kind.Name], " "))
 		}
 	}
 }
 
-func explainTrustError(err error, kindName string, text lang.Catalog) error {
+func explainTrustError(err error, request agent.TrustRequest, text lang.Catalog) error {
+	kindName := request.Kind
 	var unsafe *agent.UnsafeStateError
 	switch {
 	case errors.Is(err, agent.ErrTrustNotRoot):
 		return &refusal{message: text.Get("agent.trust_root_only")}
 	case errors.Is(err, agent.ErrTrustUnknownKind):
 		return &refusal{message: text.Format("agent.trust_unknown_kind", kindName, strings.Join(anchor.Names(), ", "))}
-	case errors.Is(err, agent.ErrTrustUnknownVerb):
-		return &refusal{message: text.Format("agent.trust_usage", brand.Command, strings.Join(anchor.Names(), ", "))}
+	case errors.Is(err, agent.ErrTrustUnknownVerb), errors.Is(err, agent.ErrKeepOldServerKeyOnly):
+		return &refusal{message: trustUsage(text)}
+	case errors.Is(err, agent.ErrKeepOldRequired):
+		return &refusal{message: text.Format("agent.trust_keep_old_required", agentpolicy.AgentLine("trust", agent.TrustSet, agentpolicy.TrustServerKey, request.Value))}
+	case errors.Is(err, agentpolicy.ErrDurationOutOfBounds):
+		return &refusal{message: text.Get("agent.trust_keep_old_bounds")}
+	case errors.Is(err, agentpolicy.ErrServerKeyInvalid):
+		return &refusal{message: text.Get("agent.trust_server_key_invalid")}
+	case errors.Is(err, agentpolicy.ErrNoServerKeyToKeep):
+		return &refusal{message: text.Get("agent.trust_no_server_key_to_keep")}
+	case errors.Is(err, agentpolicy.ErrServerKeyAlreadyAccepted):
+		return &refusal{message: text.Get("agent.trust_server_key_already")}
+	case errors.Is(err, agent.ErrNotMigrated):
+		return &refusal{message: text.Format("agent.policy_not_migrated", agentpolicy.MigrateLine())}
+	case errors.Is(err, agent.ErrAgentTooOld):
+		return &refusal{message: text.Get("agent.policy_agent_too_old")}
+	case errors.Is(err, agentpolicy.ErrUnreadable):
+		return &refusal{message: text.Format("agent.policy_unreadable", err.Error())}
 	case errors.Is(err, agent.ErrNotEnrolled):
 		return &refusal{message: text.Get("agent.not_enrolled")}
 	case errors.As(err, &unsafe):

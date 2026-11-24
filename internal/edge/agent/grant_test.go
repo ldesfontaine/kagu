@@ -76,6 +76,9 @@ func TestR_A3_1_TheAgentAccountCannotWriteThePolicy(t *testing.T) {
 	if err := os.Remove(b.opts.Place.Dir); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := MigratePolicy(b.opts, accept); err != nil {
+		t.Fatal(err)
+	}
 	b.grant(t, "probe.lan")
 	info, err := os.Lstat(filepath.Join(b.opts.Place.Dir, policyFile))
 	if err != nil {
@@ -171,10 +174,10 @@ func TestR_DROIT_1_OnlyRootWritesThePolicy(t *testing.T) {
 	}
 }
 
-// La première politique recopie les droits d'identity.json, et la question
-// les dit tous : un droit que le compte de l'agent aurait glissé dans son
-// identité se voit avant d'être écrit.
-func TestGrantRights_TheFirstPolicyShowsEveryCopiedRight(t *testing.T) {
+// La première politique d'un dossier sans fichier part d'observe seul : un
+// droit que le compte de l'agent aurait glissé dans son identité n'y entre
+// pas (R-A3-16). La question le dit première.
+func TestGrantRights_TheFirstPolicyStartsFromObserveOnly(t *testing.T) {
 	b := newPolicyBench(t, "docker.deploy")
 	var shown PolicyChange
 	change, err := GrantRights(b.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityProbeLAN}}, func(change PolicyChange) error {
@@ -184,18 +187,18 @@ func TestGrantRights_TheFirstPolicyShowsEveryCopiedRight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !shown.First || len(shown.Removed) != 0 || len(shown.Added) != 3 {
+	if !shown.First || len(shown.Removed) != 0 || len(shown.Added) != 1 || shown.Added[0] != "probe.lan" {
 		t.Fatalf("shown %+v", shown)
 	}
-	if change.After.MachineID != "m-grant" || agentpolicy.FormatCapabilities(b.stored(t).Rights) != "observe,probe.lan,docker.deploy" {
+	if change.After.MachineID != "m-grant" || agentpolicy.FormatCapabilities(b.stored(t).Rights) != "observe,probe.lan" {
 		t.Fatalf("stored %+v", b.stored(t))
 	}
 	// La suivante ne montre que ce qu'elle change.
-	revoked, err := RevokeRights(b.opts, []string{agentpolicy.CapabilityDockerDeploy}, func(change PolicyChange) error {
+	revoked, err := RevokeRights(b.opts, []string{agentpolicy.CapabilityProbeLAN}, func(change PolicyChange) error {
 		shown = change
 		return nil
 	})
-	if err != nil || shown.First || len(shown.Added) != 0 || len(shown.Removed) != 1 || shown.Removed[0] != "docker.deploy" || !revoked.Changed() {
+	if err != nil || shown.First || len(shown.Added) != 0 || len(shown.Removed) != 1 || shown.Removed[0] != "probe.lan" || !revoked.Changed() {
 		t.Fatalf("revoke %+v %v", shown, err)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
@@ -70,9 +71,12 @@ type actionsResponse struct {
 type serverKeyJSON struct {
 	PublicKey   string `json:"public_key"`
 	Fingerprint string `json:"fingerprint"`
-	// La clé précédente, le temps d'une rotation : un agent qui l'a épinglée
-	// reçoit la neuve à l'ouverture de son flux. null hors rotation.
+	// La clé précédente, le temps d'une rotation : un agent qui l'accepte
+	// encore la garde jusqu'à ce que root colle TrustLine. null hors rotation.
 	PreviousFingerprint *string `json:"previous_fingerprint"`
+	// La ligne que root colle sur une machine qui accepte une autre clé :
+	// « trust set », qui remplace (R-A3-14) ; vide si elle ne s'écrit pas.
+	TrustLine string `json:"trust_line"`
 }
 
 func actionRunToJSON(run action.Run) actionRunJSON {
@@ -287,5 +291,6 @@ func (s *Server) getServerKey(w http.ResponseWriter, r *http.Request) {
 	s.writeAPI(w, http.StatusOK, serverKeyJSON{
 		PublicKey: base64.StdEncoding.EncodeToString(public), Fingerprint: fingerprint,
 		PreviousFingerprint: stringOrNil(s.actions.PreviousServerKey()),
+		TrustLine:           agentpolicy.ServerKeyLine(public),
 	})
 }

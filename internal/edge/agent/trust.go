@@ -5,21 +5,24 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 )
 
 // « agent trust » : la seule voie qui change les ancres de confiance locales
-// d'un agent enrôlé. Réservée à root, elle écrit le fichier d'identité de
-// l'agent avec les mêmes gardes que l'agent applique à son état (CheckStateDir),
-// sous le verrou que l'agent prend lui aussi, et le fichier reste à son compte.
-// L'agent en marche relit ses ancres avant chaque ordre : pas de redémarrage.
+// d'un agent enrôlé et la clé du serveur qu'il accepte. Réservée à root, elle
+// écrit la politique comme « agent grant » (grant.go) : sous son verrou, après
+// accord, avec une trace. L'agent en marche relit la politique avant chaque
+// ordre : pas de redémarrage.
 
 // Les verbes de la commande.
 const (
 	TrustList   = "list"
 	TrustAdd    = "add"
+	TrustSet    = "set"
 	TrustRemove = "remove"
 )
 
@@ -29,29 +32,25 @@ var (
 	ErrTrustNotRoot = errors.New("agent trust is reserved to root")
 	// ErrTrustUnknownKind : le type n'est pas dans le registre.
 	ErrTrustUnknownKind = errors.New("unknown anchor kind")
-	// ErrTrustUnknownVerb : ni list, ni add, ni remove.
+	// ErrTrustUnknownVerb : ni list, ni add, ni remove, ni set ; ou set sur
+	// une ancre, remove sur la clé du serveur.
 	ErrTrustUnknownVerb = errors.New("unknown trust verb")
+	// ErrKeepOldRequired : « add server-key » sans --keep-old. Garder deux
+	// clés sans échéance laisserait une clé volée signer après la rotation
+	// (N-M2) : « set » remplace.
+	ErrKeepOldRequired = errors.New("add server-key needs --keep-old: use set to replace the key")
+	// ErrKeepOldServerKeyOnly : --keep-old ne vaut que pour add server-key.
+	ErrKeepOldServerKeyOnly = errors.New("--keep-old only applies to add server-key")
 )
 
-// TrustOptions est ce que la commande touche : l'état de l'agent, qui la lance,
-// et où elle écrit sa trace.
-type TrustOptions struct {
-	StateDir  *os.Root
-	StatePath string
-	// EUID est celui du processus ; un test y met le sien.
-	EUID int
-	// Audit reçoit la phrase du changement pour le journal du système (journald) ;
-	// nil : pas de trace. Son échec ne défait pas le changement : il est rendu
-	// dans TrustResult.
-	Audit func(message string) error
-}
-
-// TrustResult est ce que la commande rend : les ancres du fichier après le
-// verbe, et l'échec de la trace si elle a échoué.
-type TrustResult struct {
-	Stored     map[string][]string
-	State      anchor.State
-	AuditError error
+// TrustRequest est un geste de la commande : le verbe, le type (une ancre ou
+// agentpolicy.TrustServerKey), la valeur et, pour add server-key, combien de
+// temps l'ancienne clé reste acceptée.
+type TrustRequest struct {
+	Verb    string
+	Kind    string
+	Value   string
+	KeepOld time.Duration
 }
 
 // RequireTrustRoot refuse tout compte qui n'est pas root : la commande le
@@ -63,42 +62,66 @@ func RequireTrustRoot(euid int) error {
 	return nil
 }
 
-// Trust joue un verbe. kindName et value sont ignorés par list.
-func Trust(opts TrustOptions, verb, kindName, value string) (TrustResult, error) {
+// Trust joue un geste sur la politique : add ou remove d'une ancre, set ou
+// add --keep-old de la clé du serveur. La liste se lit par ReadPolicyAsRoot.
+func Trust(opts PolicyOptions, request TrustRequest, confirm func(PolicyChange) error) (PolicyChange, error) {
 	if err := RequireTrustRoot(opts.EUID); err != nil {
-		return TrustResult{}, err
+		return PolicyChange{}, err
 	}
-	owner, err := checkStateAsRoot(opts.StateDir, opts.StatePath)
+	change, err := trustChange(request, opts.clock)
 	if err != nil {
-		return TrustResult{}, err
+		return PolicyChange{}, err
 	}
-	if verb == TrustList {
-		identity, err := LoadIdentity(opts.StateDir)
-		if err != nil {
-			return TrustResult{}, err
-		}
-		return TrustResult{Stored: identity.Anchors, State: identity.AnchorState()}, nil
+	verb := "trust " + request.Verb + " " + request.Kind + " " + request.Value
+	return changePolicy(opts, verb, change, confirm)
+}
+
+// trustChange rend ce que le geste fait à la politique, ou le refus d'un
+// geste mal formé, avant toute lecture.
+func trustChange(request TrustRequest, clock func() agentpolicy.Clock) (func(agentpolicy.Document) (agentpolicy.Document, error), error) {
+	if request.Kind == agentpolicy.TrustServerKey {
+		return serverKeyChange(request, clock)
 	}
-	if verb != TrustAdd && verb != TrustRemove {
-		return TrustResult{}, ErrTrustUnknownVerb
+	if request.KeepOld != 0 {
+		return nil, ErrKeepOldServerKeyOnly
 	}
-	kind, known := anchor.Lookup(kindName)
+	if request.Verb != TrustAdd && request.Verb != TrustRemove {
+		return nil, ErrTrustUnknownVerb
+	}
+	kind, known := anchor.Lookup(request.Kind)
 	if !known {
-		return TrustResult{}, ErrTrustUnknownKind
+		return nil, ErrTrustUnknownKind
 	}
-	identity, err := UpdateIdentity(opts.StateDir, &owner, func(identity *Identity) error {
-		changed, err := changeAnchors(identity.Anchors, verb, kind, value)
-		identity.Anchors = changed
-		return err
-	})
+	return func(document agentpolicy.Document) (agentpolicy.Document, error) {
+		changed, err := changeAnchors(document.Anchors, request.Verb, kind, request.Value)
+		document.Anchors = changed
+		return document, err
+	}, nil
+}
+
+// serverKeyChange : set remplace la clé acceptée ; add la remplace aussi et
+// garde l'ancienne jusqu'à l'échéance de --keep-old, sans lequel il est
+// refusé (R-A3-14, N-M2).
+func serverKeyChange(request TrustRequest, clock func() agentpolicy.Clock) (func(agentpolicy.Document) (agentpolicy.Document, error), error) {
+	if request.Verb != TrustSet && request.Verb != TrustAdd {
+		return nil, ErrTrustUnknownVerb
+	}
+	if request.Verb == TrustAdd && request.KeepOld == 0 {
+		return nil, ErrKeepOldRequired
+	}
+	if request.Verb == TrustSet && request.KeepOld != 0 {
+		return nil, ErrKeepOldServerKeyOnly
+	}
+	key, err := agentpolicy.ParseServerKey(request.Value)
 	if err != nil {
-		return TrustResult{}, err
+		return nil, err
 	}
-	result := TrustResult{Stored: identity.Anchors, State: identity.AnchorState()}
-	if opts.Audit != nil {
-		result.AuditError = opts.Audit(fmt.Sprintf("trust %s %s %s (uid %d)", verb, kind.Name, value, opts.EUID))
-	}
-	return result, nil
+	return func(document agentpolicy.Document) (agentpolicy.Document, error) {
+		if request.Verb == TrustSet {
+			return document.SetServerKey(key), nil
+		}
+		return document.KeepServerKey(key, request.KeepOld, clock())
+	}, nil
 }
 
 func changeAnchors(stored map[string][]string, verb string, kind anchor.Kind, value string) (map[string][]string, error) {

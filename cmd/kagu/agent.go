@@ -46,11 +46,15 @@ func (r *refusal) Error() string {
 // l'entrée standard et s'enrôle ; les suivants relisent l'identité et se
 // connectent.
 func runAgent(args []string) error {
+	asRoot := policyCommand{out: os.Stdout, openTerminal: openControllingTerminal, euid: os.Geteuid(), place: agent.SystemPolicyPlace}
 	if len(args) > 0 && args[0] == "trust" {
-		return runAgentTrust(args[1:], os.Stdout, openControllingTerminal, os.Geteuid())
+		return runAgentTrust(args[1:], asRoot)
+	}
+	if len(args) > 0 && args[0] == "policy" {
+		return runAgentPolicyMigrate(args[1:], asRoot)
 	}
 	if len(args) > 0 && (args[0] == policyRights || args[0] == policyGrant || args[0] == policyRevoke) {
-		return runAgentPolicy(args[0], args[1:], policyCommand{out: os.Stdout, openTerminal: openControllingTerminal, euid: os.Geteuid(), place: agent.SystemPolicyPlace})
+		return runAgentPolicy(args[0], args[1:], asRoot)
 	}
 	flags := flag.NewFlagSet("agent", flag.ContinueOnError)
 	server := flags.String("server", "", "adresse de "+brand.ProductName+", premier lancement seulement")

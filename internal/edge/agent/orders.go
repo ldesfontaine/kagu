@@ -2,8 +2,6 @@ package agent
 
 import (
 	"context"
-	"crypto/ed25519"
-	"encoding/base64"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -12,8 +10,8 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
-	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
+	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 	"github.com/ldesfontaine/kagu/internal/wire/judge"
 )
@@ -24,11 +22,11 @@ import (
 // un redémarrage ne rouvre pas la porte d'un rejeu.
 //
 // Un ordre passe (judge.Judge, puis orderRunner.judge) si, dans cet ordre :
-// l'agent a une clé du serveur ; la signature est de cette clé ; le corps se
-// lit strictement et porte la version de l'enveloppe (agentwire.OrderVersion) ;
-// il vise cette machine et cet agent ; il n'est pas périmé ; son rang dépasse
-// le dernier exécuté ; son genre est au registre (agentwire.Spec) ; le
-// fichier de l'agent porte le droit qu'il exige (Spec.Right) ; ses paramètres
+// la politique accepte une clé du serveur ; la signature est de l'une
+// d'elles ; le corps se lit strictement et porte la version de l'enveloppe
+// (agentwire.OrderVersion) ; il vise cette machine et cet agent ; il n'est pas
+// périmé ; son rang dépasse le dernier exécuté ; son genre est au registre
+// (agentwire.Spec) ; la politique porte le droit qu'il exige (Spec.Right) ; ses paramètres
 // et son secret se lisent strictement dans leur type ; les valeurs décodées
 // qu'il présente sont dans les ancres de confiance locales. Sinon il est
 // refusé, et le refus est rapporté. Les commandes d'observation ne passent
@@ -42,6 +40,9 @@ type orderRunner struct {
 	// journal écrit les lignes locales des ordres (journal.go).
 	journal *orderJournal
 	now     func() time.Time
+	// monotonic lit le démarrage et le temps écoulé depuis : une clé gardée
+	// échoit aussi par eux (agentpolicy.Lapsed). Les tests l'avancent.
+	monotonic func() (boot string, uptime time.Duration)
 	// Les ordres longs, que le juge accepte puis confie à worker ; fetch
 	// leur donne les colis du serveur.
 	worker *orderWorker
@@ -86,7 +87,7 @@ func newOrderRunner(stateDir *os.Root, identity Identity, place PolicyPlace, ver
 		dockerSocket = dockerapi.DefaultSocket
 	}
 	runner := &orderRunner{
-		stateDir: stateDir, identity: identity, version: version, results: results, logger: logger, now: time.Now,
+		stateDir: stateDir, identity: identity, version: version, results: results, logger: logger, now: time.Now, monotonic: hostinfo.MonotonicClock,
 		worker: newOrderWorker(), fetch: &fetcher{}, updater: updater, docker: newDockerTools(checks, stateDir, dockerSocket, logger), checks: checks,
 		produce: newProduceTools(stateDir), proxmox: newProxmoxTools(stateDir), restic: newResticTools(stateDir, logger),
 	}
@@ -154,7 +155,7 @@ func (r *orderRunner) judge(signed agentwire.SignedOrder) (judgedOrder, string) 
 		return judgedOrder{}, verdict.Reason
 	}
 	body := verdict.Body
-	r.journal.remember(body.RunID, factsOf(signed.Body, policy.ServerKey))
+	r.journal.remember(body.RunID, factsOf(signed.Body, verdict.SigningKey))
 	order := judgedOrder{RunID: body.RunID, Seq: body.Seq, Order: verdict.Order}
 	switch {
 	case verdict.Reason == agentwire.ReasonWrongMachine:
@@ -174,30 +175,36 @@ func (r *orderRunner) judge(signed agentwire.SignedOrder) (judgedOrder, string) 
 	return order, ""
 }
 
-// policy rend ce que l'agent applique : la politique relue (les droits, la
-// machine qu'elle nomme), la clé épinglée et les ancres d'identity.json,
-// relues elles aussi, pour qu'un « agent grant » ou un « agent trust » vaille
-// dès l'ordre suivant. Appelé sous le verrou de l'agent.
+// policy rend ce que l'agent applique : la politique relue (la machine
+// qu'elle nomme, les clés du serveur, les droits, les ancres), pour qu'un
+// « agent grant » ou un « agent trust » vaille dès l'ordre suivant, et
+// qu'une clé gardée échue tombe. Appelé sous le verrou de l'agent.
 func (r *orderRunner) policy() agentpolicy.Policy {
-	applied, _ := r.reloadPolicy()
+	applied := r.reloadPolicy()
 	machineID := r.identity.MachineID
 	if applied.MachineID != "" {
 		machineID = applied.MachineID
 	}
-	return agentpolicy.Policy{MachineID: machineID, ServerKey: r.identity.ServerKey, Rights: applied.Rights, Anchors: r.identity.Anchors}
+	return agentpolicy.Policy{MachineID: machineID, ServerKeys: applied.ServerKeys, Rights: applied.Rights, Anchors: applied.Anchors}
 }
 
-// reloadPolicy relit les ancres et la politique, garde ce que l'agent
-// applique désormais et rend aussi les ancres. Quand ce qu'il rapporte au
-// serveur a changé, il le dit au journal et le signale (policyChanged) : le
-// flux se rouvre pour le rapporter. Appelé sous le verrou de l'agent.
-func (r *orderRunner) reloadPolicy() (AppliedPolicy, anchor.State) {
-	anchors := r.reloadAnchors()
-	applied, err := readPolicy(r.policyPlace, r.identity)
-	applied.anchors = anchors.Format()
+// clock lit l'horloge de la machine : l'heure et l'horloge monotone.
+func (r *orderRunner) clock() agentpolicy.Clock {
+	boot, uptime := r.monotonic()
+	return agentpolicy.Clock{Now: r.now(), Boot: boot, Uptime: uptime}
+}
+
+// reloadPolicy relit la politique (et, sur une machine d'avant elle, les
+// ancres d'identity.json) et garde ce que l'agent applique désormais. Quand
+// ce qu'il rapporte au serveur a changé, il le dit au journal et le signale
+// (policyChanged) : le flux se rouvre pour le rapporter. Appelé sous le
+// verrou de l'agent.
+func (r *orderRunner) reloadPolicy() AppliedPolicy {
+	r.reloadAnchors()
+	applied, err := readPolicy(r.policyPlace, r.identity, r.clock())
 	previous := r.applied.Swap(&applied)
 	if previous != nil && previous.report() == applied.report() {
-		return applied, anchors
+		return applied
 	}
 	if err != nil {
 		r.logger.Warn("agent policy refused, only observe applies", "error", err)
@@ -209,29 +216,28 @@ func (r *orderRunner) reloadPolicy() (AppliedPolicy, anchor.State) {
 		default:
 		}
 	}
-	return applied, anchors
+	return applied
 }
 
-// reloadAnchors relit les ancres du fichier d'identité et rend ce que l'agent
-// en applique. Un fichier qui ne se lit pas garde les ancres connues : ce que
-// l'agent a appliqué jusque-là ne s'élargit jamais sur une erreur de lecture.
-// Appelé sous le verrou de l'agent.
-func (r *orderRunner) reloadAnchors() anchor.State {
+// reloadAnchors relit les ancres du fichier d'identité, que lit une machine
+// d'avant la politique. Un fichier qui ne se lit pas garde les ancres
+// connues : ce que l'agent a appliqué jusque-là ne s'élargit jamais sur une
+// erreur de lecture. Appelé sous le verrou de l'agent.
+func (r *orderRunner) reloadAnchors() {
 	// Sans dossier d'état (les bancs de la boucle du flux), l'identité en mémoire fait foi.
 	if r.stateDir == nil {
-		return r.identity.AnchorState()
+		return
 	}
 	if stored, err := LoadIdentity(r.stateDir); err == nil {
 		r.identity.Anchors = stored.Anchors
 	} else {
 		r.logger.Warn("reload anchors", "error", err)
 	}
-	return r.identity.AnchorState()
 }
 
-// currentPolicy relit la politique et les ancres, pour l'ouverture du flux et
-// pour la relecture sans ordre (watchPolicy).
-func (r *orderRunner) currentPolicy() (AppliedPolicy, anchor.State) {
+// currentPolicy relit la politique, pour l'ouverture du flux et pour la
+// relecture sans ordre (watchPolicy).
+func (r *orderRunner) currentPolicy() AppliedPolicy {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.reloadPolicy()
@@ -273,7 +279,7 @@ func (r *orderRunner) watchPolicy(ctx context.Context, hangups <-chan os.Signal,
 func (r *orderRunner) keepSeq(seq int64) bool {
 	updated := r.identity
 	updated.LastOrderSeq = seq
-	saved, err := saveKeepingAnchors(r.stateDir, updated)
+	saved, err := saveKeepingRootFields(r.stateDir, updated)
 	if err != nil {
 		r.logger.Error("keep order seq", "seq", seq, "error", err)
 		return false
@@ -293,7 +299,6 @@ type executor func(r *orderRunner, order judgedOrder) (agentwire.ActionResult, f
 // ne l'écrit.
 var executors = map[agentwire.Kind]executor{
 	agentwire.KindAgentPing:             immediate((*orderRunner).ping),
-	agentwire.KindServerKey:             immediate((*orderRunner).pinServerKey),
 	agentwire.KindBackupReceive:         (*orderRunner).acceptBackupReceive,
 	agentwire.KindBackupPrune:           (*orderRunner).acceptBackupPrune,
 	agentwire.KindBackupProduce:         (*orderRunner).acceptBackupProduce,
@@ -498,42 +503,6 @@ func (r *orderRunner) finishProduce(order judgedOrder, output []agentwire.Output
 		result.State = agentwire.ActionRefused
 	}
 	r.results.push(result)
-}
-
-// pinServerKey remplace la clé du serveur épinglée par celle que l'ordre
-// livre. L'ordre a été signé par la clé épinglée jusqu'ici : c'est elle qui
-// passe la main. Les ordres suivants sont vérifiés avec la neuve.
-func (r *orderRunner) pinServerKey(order judgedOrder) agentwire.ActionResult {
-	params, ok := order.Params.(agentwire.ServerKeyParams)
-	if !ok {
-		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
-	}
-	key, err := base64.StdEncoding.DecodeString(params.PublicKey)
-	if err != nil || len(key) != ed25519.PublicKeySize {
-		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
-	}
-	updated := r.identity
-	updated.ServerKey = key
-	saved, err := saveKeepingAnchors(r.stateDir, updated)
-	if err != nil {
-		r.logger.Error("pin server key", "run_id", order.RunID, "error", err)
-		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonStateUnwritable}
-	}
-	r.identity = saved
-	fingerprint := agentwire.KeyFingerprint(key)
-	r.logger.Info("server key pinned", "run_id", order.RunID, "server_key", fingerprint)
-	return agentwire.ActionResult{
-		RunID: order.RunID, State: agentwire.ActionSucceeded,
-		Output: []agentwire.OutputLine{{Stream: "stdout", Line: "pinned " + fingerprint}},
-	}
-}
-
-// serverKey rend la clé du serveur épinglée en ce moment : l'ouverture du
-// flux la redit, et une rotation l'a peut-être changée depuis le démarrage.
-func (r *orderRunner) serverKey() []byte {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.identity.ServerKey
 }
 
 // refuse dit le refus d'un ordre : au journal local, avec ce qu'on en sait

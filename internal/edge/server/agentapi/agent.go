@@ -190,6 +190,11 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	if err := h.machines.NoteServerKey(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderServerKey)); err != nil {
 		h.logger.Warn("note server key", "machine_id", authenticated.ID, "error", err)
 	}
+	// Le protocole que l'agent parle, gardé en base : une rotation de la clé
+	// du serveur se refuse tant qu'un agent est plus ancien (#588).
+	if err := h.machines.NoteProtocol(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderProtocol)); err != nil {
+		h.logger.Warn("note protocol", "machine_id", authenticated.ID, "error", err)
+	}
 	// La racine des services que l'agent a dans son fichier : le plan d'un
 	// déploiement la montre.
 	if err := h.machines.NoteRootDir(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderAgentRoot)); err != nil {
@@ -241,14 +246,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// file que la boucle ci-dessous va lire.
 	h.probes.Assign(r.Context(), authenticated.ID)
 	h.updates.Assign(r.Context(), authenticated.ID)
-	// Pendant une rotation de la clé du serveur, un agent resté sur la
-	// précédente reçoit la neuve, par un ordre que la précédente signe. C'est
-	// serve qui le décide : une règle, au journal.
 	if h.actions != nil {
-		rekeyCtx := audit.WithActor(r.Context(), audit.Rule("server_key_rotation"))
-		if err := h.actions.Rekey(rekeyCtx, authenticated.ID); err != nil {
-			h.logger.Warn("rekey agent", "machine_id", authenticated.ID, "error", err)
-		}
 		// Un agent qui revient avec la version qu'un ordre agent.update visait
 		// a fini de se mettre à jour : c'est ce retour, et non l'agent qui
 		// s'arrête, qui ferme l'ordre.

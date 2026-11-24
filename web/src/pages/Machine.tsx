@@ -13,6 +13,7 @@ import { AgentGate } from "../components/AgentGate";
 import { Button } from "../components/Button";
 import { Card, CardBody, CardHeader, Empty, EmptyCard, KeyValue, Note } from "../components/Card";
 import { CertificateList } from "../components/Certificate";
+import { TokenBox } from "../components/Copy";
 import { DeleteMachineDialog } from "../components/DeleteMachineDialog";
 import { Failure } from "../components/Failure";
 import { MachineHead, Tabs } from "../components/MachineHead";
@@ -220,7 +221,8 @@ function AgentCard({ machineID, agent, reportRejected, updateLast, withoutSudo, 
 
 // D'où l'agent tient ses droits, tel qu'il le rapporte : sa politique (son
 // empreinte, à comparer avec « agent rights » sur la machine), identity.json
-// faute de politique, ou une politique refusée. Rien pour un agent d'avant.
+// faute de politique (droits non protégés, et la ligne « policy migrate » que
+// le serveur rend), ou une politique refusée. Rien pour un agent d'avant.
 function PolicySource({ agent }: { agent: Agent }) {
   const t = useT();
   if (agent.policy_source === "refused") {
@@ -230,7 +232,12 @@ function PolicySource({ agent }: { agent: Agent }) {
     return <KeyValue label={t("machine.agent_policy")} value={agent.policy_digest} mono />;
   }
   if (agent.policy_source === "identity") {
-    return <p className="secondary">{t("machine.agent_policy_identity")}</p>;
+    return (
+      <Note tone="warn">
+        <p>{t("rights.unprotected")}</p>
+        {agent.migrate_line !== "" && <TokenBox value={agent.migrate_line} />}
+      </Note>
+    );
   }
   return null;
 }

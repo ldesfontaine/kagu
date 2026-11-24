@@ -16,8 +16,7 @@ func TestJournalFields_NeverNameASecretOrAContent(t *testing.T) {
 		spec, _ := SpecOf(kind)
 		for _, field := range spec.Journal {
 			for _, word := range forbidden {
-				// public_key est la clé publique de l'agent.server_key : publique.
-				if strings.Contains(field, word) && field != "public_key" {
+				if strings.Contains(field, word) {
 					t.Errorf("%s: field %q looks like a secret or a content", kind, field)
 				}
 			}

@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/ldesfontaine/kagu/internal/edge/agent"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
+	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	kitrefusal "github.com/ldesfontaine/kagu/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // opencloud agent rights | grant <droit>[=valeur]… | revoke <droit>… : la
@@ -108,7 +112,8 @@ func changeRights(verb string, opts agent.PolicyOptions, names []string, confirm
 	return agent.GrantRights(opts, granted, confirm)
 }
 
-// printPolicyChange dit, avant la question, chaque droit posé et retiré.
+// printPolicyChange dit, avant la question, chaque droit, chaque ancre et
+// chaque clé du serveur posés et retirés (R-A3-15).
 func printPolicyChange(out io.Writer, text lang.Catalog, change agent.PolicyChange) {
 	if change.First {
 		fmt.Fprintln(out, text.Get("agent.policy_first"))
@@ -119,6 +124,61 @@ func printPolicyChange(out io.Writer, text lang.Catalog, change agent.PolicyChan
 	}
 	for _, right := range change.Removed {
 		fmt.Fprintf(out, "  - %s\n", right)
+	}
+	printAnchorChanges(out, change.Before.Anchors, change.After.Anchors)
+	printServerKeyChanges(out, text, change.Before.ServerKeys, change.After.ServerKeys)
+}
+
+// printAnchorChanges dit chaque ancre posée et retirée, type par type ; une
+// empreinte de certificat se dit aussi en court, pour la comparer à l'œil.
+func printAnchorChanges(out io.Writer, before, after map[string][]string) {
+	for _, kind := range anchor.Kinds() {
+		for _, value := range after[kind.Name] {
+			if !slices.Contains(before[kind.Name], value) {
+				fmt.Fprintf(out, "  + %s %s%s\n", kind.Name, value, shortFingerprintOf(kind, value))
+			}
+		}
+		for _, value := range before[kind.Name] {
+			if !slices.Contains(after[kind.Name], value) {
+				fmt.Fprintf(out, "  - %s %s%s\n", kind.Name, value, shortFingerprintOf(kind, value))
+			}
+		}
+	}
+}
+
+func shortFingerprintOf(kind anchor.Kind, value string) string {
+	if kind.Name != anchor.ResticTargetCert || !kind.Valid(value) {
+		return ""
+	}
+	return " (" + value[:16] + ")"
+}
+
+// printServerKeyChanges dit l'empreinte de chaque clé du serveur retirée,
+// posée ou gardée avec son échéance, puis renvoie à la machine du serveur
+// pour comparer l'empreinte de la neuve : jamais à l'écran, qu'un serveur
+// compromis écrit (R-A3-15).
+func printServerKeyChanges(out io.Writer, text lang.Catalog, before, after []agentpolicy.ServerKey) {
+	held := func(keys []agentpolicy.ServerKey, key []byte) bool {
+		return slices.ContainsFunc(keys, func(other agentpolicy.ServerKey) bool { return slices.Equal(other.Key, key) })
+	}
+	for _, key := range before {
+		if !held(after, key.Key) {
+			fmt.Fprintln(out, text.Format("agent.trust_server_key_removed", agentwire.KeyFingerprint(key.Key)))
+		}
+	}
+	var added []string
+	for _, key := range after {
+		fingerprint := agentwire.KeyFingerprint(key.Key)
+		switch {
+		case !held(before, key.Key):
+			added = append(added, fingerprint)
+			fmt.Fprintln(out, text.Format("agent.trust_server_key_added", fingerprint))
+		case !key.Until.IsZero():
+			fmt.Fprintln(out, text.Format("agent.trust_server_key_kept", fingerprint, key.Until.Local().Format(time.DateTime)))
+		}
+	}
+	for _, fingerprint := range added {
+		fmt.Fprintln(out, text.Format("agent.trust_server_key_compare", fingerprint))
 	}
 }
 
@@ -140,7 +200,7 @@ func printPolicyReport(out io.Writer, text lang.Catalog, place agent.PolicyPlace
 	case agentpolicy.SourcePolicy:
 		fmt.Fprintln(out, text.Format("agent.policy_source_policy", place.Dir+"/"+brand.AgentPolicyFile, applied.Digest))
 	case agentpolicy.SourceIdentity:
-		fmt.Fprintln(out, text.Format("agent.policy_source_identity", brand.Command))
+		fmt.Fprintln(out, text.Format("agent.policy_source_identity", agentpolicy.MigrateLine()))
 	case agentpolicy.SourceRefused:
 		fmt.Fprintln(out, text.Format("agent.policy_source_refused", report.Refused.Error()))
 	}
@@ -156,6 +216,8 @@ func explainPolicyError(err error, text lang.Catalog) error {
 		return &refusal{message: text.Get("agent.policy_root_only")}
 	case errors.Is(err, agent.ErrAgentTooOld):
 		return &refusal{message: text.Get("agent.policy_agent_too_old")}
+	case errors.Is(err, agent.ErrNotMigrated):
+		return &refusal{message: text.Format("agent.policy_not_migrated", agentpolicy.MigrateLine())}
 	case errors.Is(err, agent.ErrNotEnrolled):
 		return &refusal{message: text.Get("agent.not_enrolled")}
 	case errors.Is(err, agentpolicy.ErrRevokeObserve):

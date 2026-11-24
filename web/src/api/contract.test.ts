@@ -137,6 +137,7 @@ const machine = shape<Machine>("Machine", {
     }),
     policy_source: value,
     policy_digest: value,
+    migrate_line: value,
     fit: dictionaryOf(shape<RightFit>("RightFit", { state: value, reason: value })),
   }),
   lifecycle: optional(lifecycle),

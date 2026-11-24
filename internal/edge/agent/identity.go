@@ -42,9 +42,9 @@ type Identity struct {
 	// Les droits cochés par l'opérateur, écrits par la ligne d'installation
 	// (-rights), un par entrée (« observe », « files.write=/srv/a:/srv/b »).
 	// Absents chez un agent d'avant les droits : observe seul. Appliqués tant
-	// que la machine n'a pas de politique (policy.go, source identity) ; le
-	// premier « agent grant » les recopie dans la politique, qui fait foi
-	// ensuite.
+	// que la machine n'a pas de dossier de politique (policy.go, source
+	// identity) ; « agent policy migrate » les recopie dans la politique et
+	// les efface d'ici, comme les ancres et la clé du serveur.
 	Rights []string `json:"rights,omitempty"`
 	// La version du fichier de la politique que le binaire de l'agent sait
 	// lire, écrite par lui au démarrage : « agent grant » refuse d'écrire une
@@ -54,9 +54,10 @@ type Identity struct {
 	// L'agent que le serveur a inscrit à l'enrôlement : un ordre pour un
 	// autre agent de la même machine (avant un ré-enrôlement) est refusé.
 	AgentID string `json:"agent_id,omitempty"`
-	// La clé publique du serveur, épinglée à l'enrôlement : seul ce qu'elle
-	// signe est exécuté. Vide chez un agent qui ne l'a jamais reçue : il
-	// refuse tout ordre, et le ré-enrôlement la pose.
+	// La clé publique du serveur, épinglée à l'enrôlement : sur une machine
+	// d'avant la politique, seul ce qu'elle signe est exécuté. Vide chez un
+	// agent qui ne l'a jamais reçue : il refuse tout ordre, et le
+	// ré-enrôlement la pose. Aucun ordre ne la change (R-A3-9).
 	ServerKey []byte `json:"server_key,omitempty"`
 	// Le rang du dernier ordre exécuté : un rang qui ne le dépasse pas est
 	// un rejeu. Écrit avant d'exécuter, pour qu'un redémarrage ne rouvre
@@ -66,10 +67,11 @@ type Identity struct {
 	// (-root-dir). Vide chez un agent d'avant le déploiement : la racine par
 	// défaut. Redite au serveur à chaque ouverture du flux.
 	RootDir string `json:"root_dir,omitempty"`
-	// Les ancres de confiance locales (internal/fact/anchor) : par type, les valeurs
-	// que l'administrateur de la machine a posées au premier lancement ou par
-	// « agent trust ». Aucun ordre ne les écrit. Rapportées au serveur à chaque
-	// ouverture du flux, relues du disque avant chaque ordre.
+	// Les ancres de confiance locales (internal/fact/anchor) : par type, les
+	// valeurs que l'administrateur de la machine a posées au premier
+	// lancement. Aucun ordre ne les écrit. Sur une machine d'avant la
+	// politique, rapportées au serveur à chaque ouverture du flux, relues du
+	// disque avant chaque ordre ; « agent trust » écrit la politique.
 	Anchors map[string][]string `json:"anchors,omitempty"`
 	// L'état est mal gardé (CheckStateDir) : seuls les droits d'observer
 	// s'appliquent, ceux du fichier restent sur le disque. Non exporté, donc
@@ -106,6 +108,13 @@ func (id Identity) Capabilities() []agentpolicy.Capability {
 		return observeOnly()
 	}
 	return capabilities
+}
+
+// legacy rend ce que l'identité porte de la politique d'une machine
+// installée avant elle : la machine, les droits, les ancres et la clé du
+// serveur.
+func (id Identity) legacy() agentpolicy.Legacy {
+	return agentpolicy.Legacy{MachineID: id.MachineID, Rights: id.Capabilities(), Anchors: id.Anchors, ServerKey: id.ServerKey}
 }
 
 // observeOnly est ce qui reste quand rien d'autre ne se lit sûrement.
@@ -176,25 +185,26 @@ func SaveIdentity(stateDir *os.Root, identity Identity) error {
 	return nil
 }
 
-// saveKeepingAnchors écrit l'identité que l'agent porte en mémoire, sous le
-// verrou, sans effacer les ancres que « agent trust » a posées depuis : les
-// ancres du disque l'emportent, et l'identité écrite les porte. Un fichier
-// absent (un test) s'écrit tel quel.
-func saveKeepingAnchors(stateDir *os.Root, identity Identity) (Identity, error) {
+// saveKeepingRootFields écrit l'identité que l'agent porte en mémoire, sous
+// le verrou, sans rien rendre de ce que root y a changé depuis : les ancres,
+// les droits et la clé du serveur du disque l'emportent (« agent policy
+// migrate » les efface), et l'identité écrite les porte. Un fichier absent
+// (un test) s'écrit tel quel.
+func saveKeepingRootFields(stateDir *os.Root, identity Identity) (Identity, error) {
 	unlock, err := lockFile(stateDir, identityLockFile, nil)
 	if err != nil {
 		return Identity{}, err
 	}
 	defer unlock()
 	if stored, err := LoadIdentity(stateDir); err == nil {
-		identity.Anchors = stored.Anchors
+		identity.Anchors, identity.Rights, identity.ServerKey = stored.Anchors, stored.Rights, stored.ServerKey
 	}
 	return identity, SaveIdentity(stateDir, identity)
 }
 
 // UpdateIdentity relit l'identité du disque, y applique change et la réécrit,
-// sous le verrou du fichier : l'agent (le rang d'un ordre, la clé du serveur)
-// et « agent trust » (les ancres) ne s'écrasent jamais l'un l'autre. Rend
+// sous le verrou du fichier : l'agent (le rang d'un ordre) et « agent policy
+// migrate » (ce qu'il efface) ne s'écrasent jamais l'un l'autre. Rend
 // l'identité écrite. Quand owner n'est pas nil, le fichier lui est donné.
 func UpdateIdentity(stateDir *os.Root, owner *fsx.Owner, change func(*Identity) error) (Identity, error) {
 	unlock, err := lockFile(stateDir, identityLockFile, owner)

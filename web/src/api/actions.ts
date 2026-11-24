@@ -53,9 +53,12 @@ export interface ActionsResponse {
 export interface ServerKey {
   public_key: string;
   fingerprint: string;
-  // La clé précédente, le temps d'une rotation : un agent resté dessus
-  // reçoit la neuve à l'ouverture de son flux. null hors rotation.
+  // La clé précédente, le temps d'une rotation : un agent resté dessus la
+  // garde jusqu'à ce que root colle trust_line. null hors rotation.
   previous_fingerprint: string | null;
+  // La ligne « trust set » que root colle sur une machine qui accepte une
+  // autre clé, rendue par le serveur.
+  trust_line: string;
 }
 
 // Les derniers ordres d'une machine, ce que sa fiche montre.

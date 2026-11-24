@@ -3,6 +3,7 @@ package agent
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -80,12 +82,18 @@ func newBench(t *testing.T) *bench {
 	probes.SetCommander(handler)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	agentRoot, err := os.OpenRoot(t.TempDir())
+	// 0700 explicite : t.TempDir suit le umask, et l'état de l'agent n'est sûr
+	// que fermé aux autres comptes (CheckStateDir, que root rejuge).
+	agentDir := t.TempDir()
+	if err := os.Chmod(agentDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	agentRoot, err := os.OpenRoot(agentDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { agentRoot.Close() })
-	return &bench{url: server.URL, machines: machines, actions: actions, serverKey: serverKey, db: db, resources: resources, probes: probes, sshKeys: sshKeys, roles: roles, stateDir: agentRoot, policy: testPolicyPlace(t), logger: logger}
+	return &bench{url: server.URL, machines: machines, actions: actions, serverKey: serverKey, db: db, resources: resources, probes: probes, sshKeys: sshKeys, roles: roles, stateDir: agentRoot, policy: legacyPolicyPlace(t), logger: logger}
 }
 
 // Une borne large : elle ne sert qu'à ne pas bloquer la CI si le code est
@@ -395,14 +403,16 @@ func TestRun_PinsTheServerKeyAndAnswersASignedPing(t *testing.T) {
 	<-done
 }
 
-// La rotation de la clé du serveur, de bout en bout : l'agent a épinglé
-// l'ancienne ; le serveur redémarre avec une neuve devant elle ; à la
-// reconnexion, l'agent reçoit la neuve sous la signature de l'ancienne,
-// l'épingle, et les ordres suivants, signés par la neuve, passent.
+// Une rotation de la clé du serveur, de bout en bout : aucun ordre ne livre
+// la neuve (R-A3-9), l'agent resté sur la précédente exécute encore ce
+// qu'elle signe. root passe la machine à la politique, puis colle « trust
+// set » : l'agent relit la politique, rouvre son flux, redit la neuve, et ses
+// ordres sont signés par elle.
 func TestRun_FollowsARotationOfTheServerKey(t *testing.T) {
 	b := newBench(t)
 	token, _, _ := b.machines.CreateToken(context.Background(), "vps-nantes-3", machine.RoleGeneric, nil)
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, b.options(token)) }()
 	online := b.waitFor(t, "vps-nantes-3", func(s machine.Status) bool { return s.Online && s.Agent.ServerKeyFingerprint != "" })
@@ -415,15 +425,36 @@ func TestRun_FollowsARotationOfTheServerKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.actions.SetKey(rotated)
+	hangups := make(chan os.Signal, 1)
+	running := b.options("")
+	running.Hangups = hangups
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
-	go func() { done <- Run(ctx, b.options("")) }()
-	b.waitFor(t, "vps-nantes-3", func(s machine.Status) bool { return s.Agent.ServerKeyFingerprint == rotated.Fingerprint() })
-	identity, err := LoadIdentity(b.stateDir)
-	if err != nil || identity.ServerKeyFingerprint() != rotated.Fingerprint() {
-		t.Fatalf("the agent did not pin the new key: %v", err)
+	go func() { done <- Run(ctx, running) }()
+	b.waitFor(t, "vps-nantes-3", func(s machine.Status) bool { return s.Online })
+	operator := audit.WithActor(context.Background(), audit.Operator("lucas"))
+	sent, err := b.actions.Ping(operator, online.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	sent, err := b.actions.Ping(audit.WithActor(context.Background(), audit.Operator("lucas")), online.ID)
+	b.waitForRun(t, sent.ID, action.StateSucceeded)
+	if status, _ := b.machines.Get(context.Background(), online.ID); status.Agent.ServerKeyFingerprint != b.serverKey.Fingerprint() {
+		t.Fatalf("the agent left the previous key without root: %s", status.Agent.ServerKeyFingerprint)
+	}
+
+	root := PolicyOptions{StateDir: b.stateDir, StatePath: b.stateDir.Name(), Place: b.policy, EUID: 0}
+	if _, err := MigratePolicy(root, accept); err != nil {
+		t.Fatal(err)
+	}
+	request := TrustRequest{Verb: TrustSet, Kind: agentpolicy.TrustServerKey, Value: base64.StdEncoding.EncodeToString(rotated.PublicKey())}
+	if _, err := Trust(root, request, accept); err != nil {
+		t.Fatal(err)
+	}
+	hangups <- syscall.SIGHUP
+	b.waitFor(t, "vps-nantes-3", func(s machine.Status) bool {
+		return s.Online && s.Agent.ServerKeyFingerprint == rotated.Fingerprint() && s.Agent.PolicySource == agentpolicy.SourcePolicy
+	})
+	sent, err = b.actions.Ping(operator, online.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

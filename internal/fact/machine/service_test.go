@@ -191,6 +191,17 @@ func (f *fakeStore) RecordServerKey(_ context.Context, agentID, fingerprint stri
 	return ErrNotFound
 }
 
+func (f *fakeStore) RecordProtocol(_ context.Context, agentID, protocol string) error {
+	for id, m := range f.machines {
+		if m.Agent.ID == agentID {
+			m.Agent.Protocol = protocol
+			f.machines[id] = m
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
 func (f *fakeStore) RecordConnection(_ context.Context, c Connection) error {
 	m := f.machines[c.MachineID]
 	m.Address, m.Agent.Version, m.Agent.LastSeenAt, m.LastSeenAt = c.Address, c.Version, c.At, c.At

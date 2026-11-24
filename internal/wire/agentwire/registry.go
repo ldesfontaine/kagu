@@ -124,13 +124,12 @@ func newSpec(kind Kind, right string, decode func([]byte) (any, error), options 
 
 // registry est la liste des genres d'ordres, dans l'ordre où ils s'affichent.
 // Les observations (logs, logs_stop, probes, image_checks, restic_relay) n'y
-// sont pas : elles ne sont pas signées. agent.server_key y reste, droit
-// observe, tant que la rotation de clé l'envoie (A3).
+// sont pas : elles ne sont pas signées. agent.server_key n'y est plus : la clé
+// du serveur ne change que par « agent trust », en root (R-A3-9).
 var registry = []Spec{
 	DefineWithoutParams(KindAgentPing, agentpolicy.CapabilityObserve),
 	Define[AgentUpdateParams](KindAgentUpdate, agentpolicy.CapabilityAgentUpdate, Journal("version", "parcel")),
 	DefineWithoutParams(KindAgentRollback, agentpolicy.CapabilityAgentUpdate),
-	Define[ServerKeyParams](KindServerKey, agentpolicy.CapabilityObserve, Journal("public_key")),
 	Define[BackupReceiveParams](KindBackupReceive, agentpolicy.CapabilityBackupReceive, Journal("parcel", "path")),
 	Define[BackupPruneParams](KindBackupPrune, agentpolicy.CapabilityBackupReceive, Journal("path", "prefix", "keep")),
 	Define[BackupProduceParams](KindBackupProduce, agentpolicy.CapabilityBackupProduce,

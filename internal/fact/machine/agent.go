@@ -54,6 +54,9 @@ type Agent struct {
 	// vides tant qu'il n'a rien dit (un agent d'avant la politique).
 	PolicySource string
 	PolicyDigest string
+	// Le protocole que l'agent a annoncé à sa dernière ouverture du flux
+	// (« 3 ») ; vide tant qu'il n'est pas revenu depuis qu'on le garde.
+	Protocol string
 }
 
 // CanRollBack dit si l'agent revient seul à sa version d'avant quand une

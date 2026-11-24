@@ -38,7 +38,7 @@ func newJudgeBench(t *testing.T, rights string) judgeBench {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return judgeBench{policy: agentpolicy.Policy{MachineID: judgeMachineID, ServerKey: public, Rights: capabilities}, private: private}
+	return judgeBench{policy: agentpolicy.Policy{MachineID: judgeMachineID, ServerKeys: [][]byte{public}, Rights: capabilities}, private: private}
 }
 
 // ping rend un ordre agent.ping valide, à retoucher par le test.
@@ -127,9 +127,33 @@ func TestJudge_EachCheckRefusesWithItsReason(t *testing.T) {
 // Sans clé du serveur dans la politique, rien ne passe.
 func TestJudge_WithoutAServerKeyNothingPasses(t *testing.T) {
 	b := newJudgeBench(t, "")
-	b.policy.ServerKey = nil
+	b.policy.ServerKeys = nil
 	if verdict := Judge(sign(t, ping(), b.private), b.policy, judgeNow); verdict.Reason != agentwire.ReasonServerKeyMissing || verdict.Read {
 		t.Fatalf("verdict %+v", verdict)
+	}
+}
+
+// Pendant un --keep-old, la politique porte deux clés : chacune signe, et le
+// verdict nomme celle qui a signé ; une clé hors de la politique ne signe pas.
+func TestJudge_EitherKeyOfThePolicySigns(t *testing.T) {
+	keptPublic, kept, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, stranger, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := newJudgeBench(t, "")
+	b.policy.ServerKeys = append(b.policy.ServerKeys, keptPublic)
+	for _, signer := range []ed25519.PrivateKey{b.private, kept} {
+		verdict := Judge(sign(t, ping(), signer), b.policy, judgeNow)
+		if verdict.Reason != "" || !signer.Public().(ed25519.PublicKey).Equal(ed25519.PublicKey(verdict.SigningKey)) {
+			t.Fatalf("verdict %+v", verdict)
+		}
+	}
+	if verdict := Judge(sign(t, ping(), stranger), b.policy, judgeNow); verdict.Reason != agentwire.ReasonBadSignature || verdict.SigningKey != nil {
+		t.Fatalf("a stranger signed: %+v", verdict)
 	}
 }
 

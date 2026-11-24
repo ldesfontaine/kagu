@@ -119,6 +119,9 @@ export interface Agent {
   // Vide pour un agent d'avant.
   policy_source: "" | "policy" | "identity" | "refused";
   policy_digest: string;
+  // Source identity : la ligne qui recopie les droits dans la politique
+  // (policy migrate), rendue par le serveur ; vide sinon.
+  migrate_line: string;
   // Par droit connu, le verdict du serveur : l'écran l'affiche sans le
   // recalculer.
   fit: Record<string, RightFit>;

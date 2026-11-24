@@ -30,6 +30,7 @@ type MachineService interface {
 	Authenticate(ctx context.Context, proof machine.Proof) (machine.Machine, error)
 	NoteSystem(ctx context.Context, machineID, system string) error
 	NoteServerKey(ctx context.Context, agentID, fingerprint string) error
+	NoteProtocol(ctx context.Context, agentID, protocol string) error
 	NoteRootDir(ctx context.Context, agentID, root string) error
 	NoteRollbackVersion(ctx context.Context, agentID, reported string) error
 	NoteServiceRollbackVersion(ctx context.Context, agentID, reported string) error
@@ -72,12 +73,10 @@ type UpdateService interface {
 }
 
 // Ce que l'agent attend du composant action : la clé publique du serveur,
-// livrée à l'enrôlement, l'écriture de ce que l'agent a fait des ordres, et
-// la clé neuve livrée à l'ouverture du flux pendant une rotation.
+// livrée à l'enrôlement, et l'écriture de ce que l'agent a fait des ordres.
 type ActionService interface {
 	ServerKey() (public []byte, fingerprint string, err error)
 	Record(ctx context.Context, machineID string, report agentwire.ActionReport) error
-	Rekey(ctx context.Context, machineID string) error
 	// OpenParcel ouvre un fichier d'un colis pour la machine qui le demande ;
 	// action.ErrParcelNotFound sinon.
 	OpenParcel(machineID, parcelID, name string) (*os.File, int64, error)
