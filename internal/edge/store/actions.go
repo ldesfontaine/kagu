@@ -34,10 +34,10 @@ func (db *DB) InsertRun(ctx context.Context, run action.Run) (action.Run, error)
 		}
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO action_runs (id, action, params, machine_id, machine_name, agent_id, service_id, state,
-				not_after, seq, requested_by, requested_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				not_after, seq, requested_by, requested_by_label, requested_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			run.ID, string(run.Kind), paramsText(run.Params), run.MachineID, run.MachineName, run.AgentID,
-			nullableString(run.ServiceID), string(run.State), run.NotAfter.Unix(), run.Seq, run.RequestedBy, run.RequestedAt.Unix())
+			nullableString(run.ServiceID), string(run.State), run.NotAfter.Unix(), run.Seq, run.RequestedBy, run.RequestedByLabel, run.RequestedAt.Unix())
 		if err != nil {
 			return fmt.Errorf("insert run: %w", err)
 		}
@@ -277,7 +277,7 @@ func (db *DB) GetActionRun(ctx context.Context, id string) (action.Run, error) {
 
 // runColumns : ce que scanActionRun lit d'un run, dans son ordre.
 const runColumns = `id, action, params, COALESCE(machine_id, ''), machine_name, COALESCE(agent_id, ''),
-	COALESCE(service_id, ''), state, refusal_reason, not_after, seq, requested_by, requested_at, finished_at`
+	COALESCE(service_id, ''), state, refusal_reason, not_after, seq, requested_by, requested_by_label, requested_at, finished_at`
 
 // LastServiceRun rend le dernier ordre d'un de ces genres qui vise ce
 // service, quel que soit son état ; faux s'il n'y en a aucun.
@@ -326,7 +326,7 @@ func scanActionRun(row scanner) (action.Run, error) {
 	var notAfter, requestedAt int64
 	var finishedAt sql.NullInt64
 	err := row.Scan(&run.ID, &kind, &params, &run.MachineID, &run.MachineName, &run.AgentID, &run.ServiceID, &state,
-		&run.Reason, &notAfter, &run.Seq, &run.RequestedBy, &requestedAt, &finishedAt)
+		&run.Reason, &notAfter, &run.Seq, &run.RequestedBy, &run.RequestedByLabel, &requestedAt, &finishedAt)
 	if err != nil {
 		return action.Run{}, err
 	}

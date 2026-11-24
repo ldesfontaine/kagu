@@ -39,13 +39,17 @@ type actionRunJSON struct {
 	State     string  `json:"state"`
 	// Pourquoi l'ordre n'a pas abouti : la raison de l'agent, ou
 	// « undelivered » ; vide sinon.
-	Reason      string        `json:"reason"`
-	Seq         int64         `json:"seq"`
-	RequestedBy string        `json:"requested_by"`
-	RequestedAt time.Time     `json:"requested_at"`
-	NotAfter    time.Time     `json:"not_after"`
-	FinishedAt  *time.Time    `json:"finished_at"`
-	Output      []runLineJSON `json:"output"`
+	Reason string `json:"reason"`
+	Seq    int64  `json:"seq"`
+	// L'acteur enregistré et signé (la session d'un opérateur) ; l'écran
+	// montre requested_by_label, le compte ou le nom du jeton, vide pour un
+	// acteur qui n'en a pas.
+	RequestedBy      string        `json:"requested_by"`
+	RequestedByLabel string        `json:"requested_by_label"`
+	RequestedAt      time.Time     `json:"requested_at"`
+	NotAfter         time.Time     `json:"not_after"`
+	FinishedAt       *time.Time    `json:"finished_at"`
+	Output           []runLineJSON `json:"output"`
 	// Ce qui lève le refus de l'ordre par un droit (right_missing:<droit>) ou
 	// une ancre (anchor_*:<type>) ; absent sinon.
 	Fix *fixJSON `json:"fix,omitempty"`
@@ -82,7 +86,7 @@ func actionRunToJSON(run action.Run) actionRunJSON {
 		MachineID: stringOrNil(run.MachineID), MachineName: run.MachineName, AgentID: stringOrNil(run.AgentID),
 		ServiceID: stringOrNil(run.ServiceID),
 		State:     string(run.State), Reason: run.Reason, Seq: run.Seq,
-		RequestedBy: run.RequestedBy, RequestedAt: run.RequestedAt.UTC(), NotAfter: run.NotAfter.UTC(),
+		RequestedBy: run.RequestedBy, RequestedByLabel: run.RequestedByLabel, RequestedAt: run.RequestedAt.UTC(), NotAfter: run.NotAfter.UTC(),
 		FinishedAt: httpx.TimeOrNil(run.FinishedAt),
 		Output:     httpx.ConvertAll(run.Output, runLineToJSON),
 	}

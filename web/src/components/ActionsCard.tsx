@@ -4,6 +4,7 @@ import { useAction } from "../hooks/useAction";
 import { useNow } from "../hooks/useNow";
 import { useT, type Translate } from "../i18n/context";
 import { anchorLabelKey, anchorOfReason } from "../lib/anchors";
+import { shownActorName } from "../lib/audit";
 import { capabilityLabelKey } from "../lib/machines";
 import { reenrollPath } from "../lib/rights";
 import type { Tone } from "../lib/tone";
@@ -142,7 +143,7 @@ function RunRow({ run, now }: { run: ActionRun; now: number }) {
         {run.reason === "server_key_missing" && run.machine_id !== null && <ReenrollButton machineID={run.machine_id} />}
         {output !== "" && <pre className="secondary">{output}</pre>}
       </td>
-      <td className="wide-only">{run.requested_by}</td>
+      <td className="wide-only">{shownActorName(run.requested_by, run.requested_by_label)}</td>
     </tr>
   );
 }

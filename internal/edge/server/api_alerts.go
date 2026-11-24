@@ -139,10 +139,12 @@ type muteJSON struct {
 	EndsAt   time.Time  `json:"ends_at"`
 	Active   bool       `json:"active"`
 	// Qui l'a posée, comme le journal d'audit le dit ; vide pour une
-	// fenêtre recopiée d'un silence ou d'une maintenance.
-	CreatedByKind string    `json:"created_by_kind"`
-	CreatedByName string    `json:"created_by_name"`
-	CreatedAt     time.Time `json:"created_at"`
+	// fenêtre recopiée d'un silence ou d'une maintenance. Le libellé est le
+	// compte d'une session, le nom d'un jeton : l'écran le montre.
+	CreatedByKind  string    `json:"created_by_kind"`
+	CreatedByName  string    `json:"created_by_name"`
+	CreatedByLabel string    `json:"created_by_label"`
+	CreatedAt      time.Time `json:"created_at"`
 	// Annoncé, le silence paraît en public comme une maintenance, sous ce
 	// titre.
 	Announce    bool   `json:"announce"`
@@ -212,7 +214,7 @@ func muteToJSON(mute alert.Mute, now time.Time) muteJSON {
 		ID: mute.ID, Kind: string(mute.Kind),
 		Target: objectJSON{Kind: string(mute.Target.Kind), ID: mute.Target.ID, Name: mute.Target.Name},
 		Reason: mute.Reason, StartsAt: mute.StartsAt.UTC(), EndsAt: mute.EndsAt.UTC(),
-		Active: mute.IsActive(now), CreatedByKind: string(mute.CreatedBy.Kind), CreatedByName: mute.CreatedBy.Name, CreatedAt: mute.CreatedAt.UTC(),
+		Active: mute.IsActive(now), CreatedByKind: string(mute.CreatedBy.Kind), CreatedByName: mute.CreatedBy.Name, CreatedByLabel: mute.CreatedBy.Label, CreatedAt: mute.CreatedAt.UTC(),
 		Announce: mute.Announce, PublicTitle: mute.PublicTitle,
 	}
 }

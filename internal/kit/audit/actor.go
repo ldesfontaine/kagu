@@ -69,6 +69,13 @@ func API(tokenID, tokenName, onBehalfOf string) Actor {
 	return Actor{Kind: ActorAPI, Name: tokenID, Label: tokenName, OnBehalfOf: onBehalfOf}
 }
 
+// WrittenLabel est le libellé tel qu'il s'écrit pour toujours : dans le
+// journal, et recopié avec un ordre ou un silence pour que l'écran nomme le
+// compte, jamais la session.
+func (a Actor) WrittenLabel() string {
+	return cleanLabel(a.Label)
+}
+
 // cleanLabel rend un libellé affichable : sans caractère de contrôle, coupé.
 func cleanLabel(text string) string {
 	text = strings.Map(func(r rune) rune {

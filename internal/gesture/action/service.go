@@ -316,11 +316,12 @@ func (s *Service) newRun(ctx context.Context, target machine.Status, kind agentw
 		return Run{}, fmt.Errorf("generate run id: %w", err)
 	}
 	now := s.now()
+	requester := audit.ActorFrom(ctx)
 	return Run{
 		ID: id, Kind: kind, Params: params,
 		MachineID: target.ID, MachineName: target.Name, AgentID: target.Agent.ID,
 		State: StateQueued, NotAfter: now.Add(OrderLifetime),
-		RequestedBy: requesterOf(audit.ActorFrom(ctx)), RequestedAt: now,
+		RequestedBy: requesterOf(requester), RequestedByLabel: requester.WrittenLabel(), RequestedAt: now,
 	}, nil
 }
 

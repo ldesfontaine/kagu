@@ -38,11 +38,17 @@ interface ActorParts {
 }
 
 export function actorParts(event: Pick<AuditEvent, "actor_kind" | "actor_name" | "actor_label" | "details">): ActorParts {
-  // Le nom du jeton d'alors, sinon l'identifiant : une ligne d'avant la 017
-  // se lit comme avant.
-  const name = event.actor_label !== null && event.actor_label !== "" ? event.actor_label : event.actor_name;
+  const name = shownActorName(event.actor_name, event.actor_label);
   const forWhom = event.actor_kind === "api" ? (event.details.on_behalf_of ?? "") : null;
   return { kind: event.actor_kind, name, forWhom };
+}
+
+// shownActorName : le nom que l'écran montre pour un acteur. Le libellé
+// recopié au geste (le compte d'une session, le nom d'un jeton d'alors),
+// jamais l'identifiant de la session ; sans libellé (une ligne d'avant la
+// 017 ou la 049, une règle, la commande), l'identifiant, comme avant.
+export function shownActorName(name: string, label: string | null): string {
+  return label !== null && label !== "" ? label : name;
 }
 
 // actorLabel : le genre, puis le nom quand il y en a un, puis pour qui un
