@@ -14,6 +14,7 @@ import { CardGrid, EntityCard } from "../components/EntityCard";
 import { Checkbox, Checks, Field, Input } from "../components/Field";
 import { Icon } from "../components/Icon";
 import { LockedAction } from "../components/LockedAction";
+import { RootCommand } from "../components/RootCommand";
 import { Modal, ModalCancel } from "../components/Modal";
 import type { MenuAction } from "../components/MoreMenu";
 import { PageHead } from "../components/PageHead";
@@ -347,6 +348,7 @@ export function VisualSystem() {
                   <LockedAction fix={{ right: "docker.deploy", machine: "demo" }} />
                   <LockedAction fix={{ right: "files.write", machine: "demo" }} path="/srv/restore" short />
                   <LockedAction fix={{ command: t("anchor.cmd_list"), machine: "demo" }} />
+                  <RootCommand command={t("anchor.cmd_list")} short />
                 </div>
               </CardBody>
             </Card>

@@ -166,7 +166,7 @@ function backupStaleText(t: Translate, alert: Alert, now: number): AlertText {
   };
 }
 
-// La cible sans le droit a un autre geste : la ré-enrôler.
+// La cible sans le droit a un autre geste : la ligne grant, en root sur elle.
 function restoreTestStaleText(t: Translate, alert: Alert, now: number): AlertText {
   const age = ageSince(t, alert, now);
   const machine = alert.machine_name !== "" ? alert.machine_name : t("alert.no_machine");

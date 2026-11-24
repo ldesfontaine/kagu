@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -70,9 +72,13 @@ type fakeChild struct {
 	exit    chan Exit
 	stopped chan struct{}
 	once    sync.Once
+	// hangups compte les SIGHUP relayés.
+	hangups atomic.Int32
 }
 
 func (c *fakeChild) Wait() Exit { return <-c.exit }
+
+func (c *fakeChild) Hangup() { c.hangups.Add(1) }
 
 func (c *fakeChild) Stop() {
 	c.once.Do(func() { close(c.stopped) })
@@ -268,6 +274,23 @@ func TestGuard_AStopRequestStopsTheChildAndExitsCleanly(t *testing.T) {
 	case <-b.child(0).stopped:
 	default:
 		t.Fatal("the child was not stopped")
+	}
+}
+
+// R-A3-4 : SIGHUP, que systemd adresse au lanceur, est relayé à l'agent, qui
+// relit sa politique ; le lanceur continue de le surveiller.
+func TestGuard_RelaysAHangupToTheAgentAndKeepsWatching(t *testing.T) {
+	b := newBench(t)
+	hangups := make(chan os.Signal, 1)
+	b.guard.Hangups = hangups
+	ctx, cancel := context.WithCancel(context.Background())
+	done := b.runInBackground(ctx)
+	waittest.Until(t, "the child started", func() bool { return b.child(0) != nil })
+	hangups <- syscall.SIGHUP
+	waittest.Until(t, "the hangup to reach the agent", func() bool { return b.child(0).hangups.Load() == 1 })
+	cancel()
+	if code := receive(t, done); code != 0 {
+		t.Fatalf("code %d", code)
 	}
 }
 

@@ -2,12 +2,12 @@ package agent
 
 import (
 	"context"
-	"net"
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/kit/testkit"
 	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
@@ -17,21 +17,7 @@ import (
 // narrowed relance l'agent sur un état jugé mal gardé : il n'a plus qu'observe.
 func probeOnLoopback(t *testing.T, rights string, narrowed bool) probe.Probe {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = listener.Close() })
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			_ = conn.Close()
-		}
-	}()
-
+	target := testkit.AcceptingLoopback(t)
 	b := newBench(t)
 	granted, err := agentpolicy.ParseCapabilities(rights)
 	if err != nil {
@@ -52,7 +38,7 @@ func probeOnLoopback(t *testing.T, rights string, narrowed bool) probe.Probe {
 	b.waitFor(t, "vps-lan-1", func(s machine.Status) bool { return !s.Online })
 
 	created, err := b.probes.Create(context.Background(), probe.Definition{
-		Name: "service local", Kind: probe.KindTCP, Target: listener.Addr().String(), MachineID: enrolled.ID,
+		Name: "service local", Kind: probe.KindTCP, Target: target, MachineID: enrolled.ID,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -68,10 +54,17 @@ func probeOnLoopback(t *testing.T, rights string, narrowed bool) probe.Probe {
 		<-done
 	}()
 	go func() { done <- Run(ctx, restarted) }()
+	return b.waitForProbe(t, created.ID, nil)
+}
+
+// waitForProbe attend que la sonde ait rapporté un essai, et, quand want est
+// dit, un essai qui lui convient.
+func (b *bench) waitForProbe(t *testing.T, id string, want func(probe.Probe) bool) probe.Probe {
+	t.Helper()
 	var checked probe.Probe
 	waittest.Until(t, "the probe to report a result", func() bool {
-		found, err := b.db.GetProbe(context.Background(), created.ID)
-		if err != nil || found.LastCheckedAt.IsZero() {
+		found, err := b.db.GetProbe(context.Background(), id)
+		if err != nil || found.LastCheckedAt.IsZero() || (want != nil && !want(found)) {
 			return false
 		}
 		checked = found

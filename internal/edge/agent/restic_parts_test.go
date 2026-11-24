@@ -329,16 +329,16 @@ func TestResticBackup_UnreadableInventoryFailsTheDockerPartsOnly(t *testing.T) {
 func TestJudgeRights_ResticDockerNeedsDockerAndRestic(t *testing.T) {
 	identity := Identity{Rights: []string{"observe", "restic.produce", "restic.docker"}}
 	checks := allowAll()
-	if unavailable := judgeRights(context.Background(), identity, checks); len(unavailable) != 0 {
+	if unavailable := judgeRights(context.Background(), identity.Capabilities(), identity.Root(), checks); len(unavailable) != 0 {
 		t.Fatalf("unavailable %v", unavailable)
 	}
 	checks.docker = func(context.Context) string { return agentwire.ReasonDockerMissing }
-	if unavailable := judgeRights(context.Background(), identity, checks); unavailable[agentpolicy.CapabilityResticDocker] != agentwire.ReasonDockerMissing {
+	if unavailable := judgeRights(context.Background(), identity.Capabilities(), identity.Root(), checks); unavailable[agentpolicy.CapabilityResticDocker] != agentwire.ReasonDockerMissing {
 		t.Fatalf("unavailable %v", unavailable)
 	}
 	checks = allowAll()
 	checks.findRestic = func() (string, error) { return "", errors.New("not found") }
-	if unavailable := judgeRights(context.Background(), identity, checks); unavailable[agentpolicy.CapabilityResticDocker] != agentwire.ReasonResticMissing {
+	if unavailable := judgeRights(context.Background(), identity.Capabilities(), identity.Root(), checks); unavailable[agentpolicy.CapabilityResticDocker] != agentwire.ReasonResticMissing {
 		t.Fatalf("unavailable %v", unavailable)
 	}
 }

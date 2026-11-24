@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useNavigate, useParams, useSearchParams } from "react-router";
+import { Navigate, useNavigate, useParams } from "react-router";
 
 import { reenrollMachine, useMachines, type Machine } from "../../api/machines";
 import { Button } from "../../components/Button";
@@ -13,17 +13,16 @@ import { useRightNames, useT } from "../../i18n/context";
 import { anchorFieldsOf, anchorsOf, emptyAnchorFields } from "../../lib/anchors";
 import { capabilitiesOf, isRightsModified, rightsFormOf, tokenPageState, type RightsValues, type TokenPageState } from "../../lib/machines";
 import { detectedProxmox } from "../../lib/proxmox";
-import { wantedRightOf, withWantedRight } from "../../lib/rights";
 import { EnrollFlow } from "./EnrollFlow";
 
 const noRights: RightsValues = { rights: [], backupPath: "", writePaths: "", resticPath: "", anchors: emptyAnchorFields };
 
 // « Ré-enrôler » : la fenêtre de la fiche d'une machine, à l'adresse
-// /machines/:id/reenroller. Ré-enrôler est aussi la seule façon de changer les
-// droits d'un agent (décision 10) : 1. les droits, cochés comme le jeton de
-// l'agent courant les demandait ; 2. les étapes à coller ; 3. l'attente du
-// nouvel agent, qui remplace l'ancien (EnrollFlow). Un refus de droit y mène
-// avec ?droit=<nom>[&chemin=<dossier>] : ce droit est coché d'avance.
+// /machines/:id/reenroller : un nouvel agent, avec une nouvelle clé, remplace
+// l'ancien. 1. les droits, cochés comme le jeton de l'agent courant les
+// demandait ; 2. les étapes à coller ; 3. l'attente du nouvel agent
+// (EnrollFlow). Un droit qui manque ne mène plus ici : il se pose en root sur
+// la machine (agent grant).
 export function ReenrollMachine() {
   const { id = "" } = useParams();
   const machines = useMachines();
@@ -39,10 +38,8 @@ function ReenrollDialog({ machine }: { machine: Machine }) {
   const rightNames = useRightNames();
   const navigate = useNavigate();
   const requested = machine.agent?.requested ?? [];
-  const [search] = useSearchParams();
-  const wanted = wantedRightOf(rightNames, search);
   const heldAnchors = anchorFieldsOf(machine.agent?.anchors);
-  const form = useForm(noRights, { source: requested, fill: (source) => withWantedRight(rightsFormOf(source, heldAnchors), wanted) });
+  const form = useForm(noRights, { source: requested, fill: (source) => rightsFormOf(source, heldAnchors) });
   const { values } = form;
   const action = useAction();
   const [token, setToken] = useState<TokenPageState | null>(null);
@@ -71,7 +68,7 @@ function ReenrollDialog({ machine }: { machine: Machine }) {
     <Modal
       title={title}
       onClose={close}
-      dirty={form.isFilled && isRightsModified(values, withWantedRight(rightsFormOf(requested, heldAnchors), wanted))}
+      dirty={form.isFilled && isRightsModified(values, rightsFormOf(requested, heldAnchors))}
       wide
       actions={
         <>

@@ -192,6 +192,8 @@ var copiedTestHelpers = map[string]string{
 	"openRoot":           "testkit.EmptyRoot",
 	"openEmptyRoot":      "testkit.EmptyRoot",
 	"emptyStateDir":      "testkit.EmptyRoot",
+	"listenLoopback":     "testkit.AcceptingLoopback",
+	"listenOnLoopback":   "testkit.AcceptingLoopback",
 }
 
 // copiedHelpers relève les fonctions libres (sans receveur) qui recopient

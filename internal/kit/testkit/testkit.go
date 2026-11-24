@@ -32,6 +32,28 @@ func ClosedPort(t testing.TB) int {
 	return port
 }
 
+// AcceptingLoopback ouvre un écouteur TCP sur la boucle locale, qui accepte
+// et referme chaque connexion, et rend son adresse : la cible d'une sonde vers
+// le réseau local qui n'a rien à servir. Fermé en fin de test.
+func AcceptingLoopback(t testing.TB) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+	return listener.Addr().String()
+}
+
 // SHA256Hex rend l'empreinte SHA-256 du contenu, en hexadécimal.
 func SHA256Hex(content []byte) string {
 	sum := sha256.Sum256(content)

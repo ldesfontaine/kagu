@@ -104,7 +104,7 @@ test("page Sauvegardes : la dernière passe d'un plan refusée par une ancre dit
   await expect(card).toContainText(label("backup.status_protection_refused"));
   // La phrase ne dit pas que seul l'agent refuse : le serveur n'envoie pas l'ordre qu'il sait refusé.
   await expect(card).toContainText(/Ordre refusé : aucune ancre « Clé de chiffrement de confiance »/);
-  const fix = card.locator(".anchor-fix");
+  const fix = card.locator(".root-command");
   await expect(fix).toContainText(label("anchor.run_command"));
   await expect(fix.locator(".token-box code")).toContainText(/agent trust add backup\.recipient age1[a-z0-9]+/);
   await fix.getByRole("button", { name: label("machine.copy") }).click();

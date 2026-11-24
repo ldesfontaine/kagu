@@ -42,6 +42,19 @@ type sessionResponse struct {
 	// Les droits qui se cochent à l'enrôlement, dans l'ordre où ils
 	// s'affichent : la liste fermée d'agentpolicy, que le front ne recopie pas.
 	Rights []string `json:"rights"`
+	// Par droit, la ligne qui le pose en root sur une machine
+	// (agentpolicy.GrantLine) : un écran qui sait le droit d'un geste fermé
+	// la montre sans l'écrire. Un droit borné l'a sans valeur.
+	GrantLines map[string]string `json:"grant_lines"`
+}
+
+// grantLines écrit la ligne grant de chaque droit qui se pose.
+func grantLines() map[string]string {
+	lines := make(map[string]string, len(agentpolicy.CapabilityNames()))
+	for _, right := range agentpolicy.CapabilityNames() {
+		lines[right] = agentpolicy.GrantLine(right, "")
+	}
+	return lines
 }
 
 type sessionRole struct {
@@ -161,7 +174,8 @@ func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 				Capabilities: httpx.ConvertAll(machine.RolePreset(offered), func(right agentpolicy.Capability) string { return right.Name }),
 			}
 		}),
-		Rights: agentpolicy.CapabilityNames(),
+		Rights:     agentpolicy.CapabilityNames(),
+		GrantLines: grantLines(),
 	})
 }
 

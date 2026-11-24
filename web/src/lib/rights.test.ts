@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import { ApiError } from "../api/client";
 import type { Agent, Capability, Machine, RightFit } from "../api/machines";
 import sessionGolden from "../../../internal/edge/server/testdata/session.golden.json";
-import { fixOfRefusal, heldRights, lacksSudo, reenrollPath, unfitFor, wantedRightOf, withWantedRight } from "./rights";
+import { fixOfRefusal, heldRights, lacksSudo, machineAgentPath, reenrollPath, unfitFor, wantedRightOf } from "./rights";
 
 const t = (key: string, ...args: (string | number)[]) => [key, ...args].join("|");
 
@@ -23,34 +23,27 @@ function agentWith(requested: string[], reported: { name: string; unavailable?: 
     capabilities_differ: false,
     server_key_fingerprint: "",
     run_as: null,
-    rollback_capable: true, anchors: { reported: false, kinds: [] },
+    rollback_capable: true, anchors: { reported: false, kinds: [] }, policy_source: "", policy_digest: "",
     fit,
   } satisfies Agent;
 }
 
-test("reenrollPath : la fenêtre de la machine, avec le droit et le chemin à cocher d'avance", () => {
+test("reenrollPath : la fenêtre de la machine, sans droit voulu (T03-03)", () => {
   expect(reenrollPath("m1")).toBe("/machines/m1/reenroller");
-  expect(reenrollPath("m1", { name: "agent.update" })).toBe("/machines/m1/reenroller?droit=agent.update");
-  expect(reenrollPath("m1", { name: "backup.receive", path: "/srv/backups" })).toBe("/machines/m1/reenroller?droit=backup.receive&chemin=%2Fsrv%2Fbackups");
 });
 
-test("wantedRightOf : seul un droit de la liste fermée, hors observe, se coche", () => {
+test("machineAgentPath : l'onglet Agent, avec le droit voulu et le chemin qu'il doit couvrir", () => {
+  expect(machineAgentPath("m1")).toBe("/machines/m1/agent");
+  expect(machineAgentPath("m1", { name: "agent.update" })).toBe("/machines/m1/agent?droit=agent.update");
+  expect(machineAgentPath("m1", { name: "backup.receive", path: "/srv/backups" })).toBe("/machines/m1/agent?droit=backup.receive&chemin=%2Fsrv%2Fbackups");
+});
+
+test("wantedRightOf : seul un droit de la liste fermée, hors observe, se demande", () => {
   expect(wantedRightOf(rightNames, new URLSearchParams("droit=docker.deploy"))).toEqual({ name: "docker.deploy", path: "" });
   expect(wantedRightOf(rightNames, new URLSearchParams("droit=backup.receive&chemin=/srv/b"))).toEqual({ name: "backup.receive", path: "/srv/b" });
   expect(wantedRightOf(rightNames, new URLSearchParams("droit=observe"))).toBeNull();
   expect(wantedRightOf(rightNames, new URLSearchParams("droit=rm -rf"))).toBeNull();
   expect(wantedRightOf(rightNames, new URLSearchParams(""))).toBeNull();
-});
-
-test("withWantedRight : coche le droit sans doublon et ajoute son chemin à ceux qui y sont", () => {
-  const values = { rights: ["probe.lan", "backup.receive"], backupPath: "/srv/a", writePaths: "", resticPath: "", anchors: {} };
-  expect(withWantedRight(values, null)).toBe(values);
-  expect(withWantedRight(values, { name: "agent.update", path: "" }).rights).toEqual(["probe.lan", "backup.receive", "agent.update"]);
-  expect(withWantedRight(values, { name: "backup.receive", path: "/srv/b" })).toEqual({ rights: ["probe.lan", "backup.receive"], backupPath: "/srv/a, /srv/b", writePaths: "", resticPath: "", anchors: {} });
-  expect(withWantedRight(values, { name: "backup.receive", path: "/srv/a" }).backupPath).toBe("/srv/a");
-  expect(withWantedRight({ rights: [], backupPath: "", writePaths: "", resticPath: "", anchors: {} }, { name: "files.write", path: "/srv/w" })).toEqual({ rights: ["files.write"], backupPath: "", writePaths: "/srv/w", resticPath: "", anchors: {} });
-  // Un seul dossier pour une cible restic : le voulu remplace l'ancien.
-  expect(withWantedRight({ rights: [], backupPath: "", writePaths: "", resticPath: "/srv/old", anchors: {} }, { name: "restic.target", path: "/srv/restic" }).resticPath).toBe("/srv/restic");
 });
 
 test("fixOfRefusal : ce que le serveur joint au refus, sans table", () => {
@@ -77,7 +70,7 @@ test("unfitFor : une machine convient, ou dit pourquoi pas et où aller, selon l
 
   const noRight = unfitFor(t, fit, "docker.deploy");
   expect(noRight?.reason).toBe("machine.fit_right_missing|machine.capability_docker_deploy");
-  expect(noRight?.link).toEqual({ to: "/machines/m1/reenroller?droit=docker.deploy", label: "machine.reenroll_with_right" });
+  expect(noRight?.link).toEqual({ to: "/machines/m1/agent?droit=docker.deploy", label: "machine.grant_right" });
 
   const noAgent = unfitFor(t, { id: "m2", agent: null }, "backup.receive");
   expect(noAgent?.reason).toBe("machine.fit_no_agent");

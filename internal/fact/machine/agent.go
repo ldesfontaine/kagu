@@ -49,6 +49,11 @@ type Agent struct {
 	// tant qu'il n'a rien dit (un agent d'avant les ancres, qui ne les applique
 	// pas).
 	Anchors anchor.State
+	// D'où l'agent dit tenir ses droits (agentpolicy.SourcePolicy,
+	// SourceIdentity, SourceRefused) et l'empreinte du fichier de sa politique ;
+	// vides tant qu'il n'a rien dit (un agent d'avant la politique).
+	PolicySource string
+	PolicyDigest string
 }
 
 // CanRollBack dit si l'agent revient seul à sa version d'avant quand une
@@ -95,9 +100,14 @@ func (a Agent) Fit(right, value string) agentpolicy.RightFit {
 }
 
 // CapabilitiesDiffer dit si le fichier de l'agent ne dit pas ce que le jeton
-// demandait. Rien à comparer tant que l'un des deux manque.
+// demandait. Rien à comparer tant que l'un des deux manque, ni quand les droits
+// viennent d'ailleurs que d'identity.json : root les a changés par la
+// politique, ou la politique est refusée (la fiche le dit à part).
 func (a Agent) CapabilitiesDiffer() bool {
 	if len(a.Requested) == 0 || a.ReportedAt.IsZero() {
+		return false
+	}
+	if a.PolicySource != "" && a.PolicySource != agentpolicy.SourceIdentity {
 		return false
 	}
 	return !agentpolicy.SameCapabilities(a.Requested, a.Capabilities)

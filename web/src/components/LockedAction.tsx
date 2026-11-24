@@ -1,29 +1,39 @@
 import type { RefusalFix } from "../api/client";
-import { useT } from "../i18n/context";
-import { capabilityLabelKey } from "../lib/machines";
-import { reenrollPath } from "../lib/rights";
-import { AnchorFix } from "./AnchorFix";
-import { Button } from "./Button";
+import { useGrantLine, useT } from "../i18n/context";
+import { machineAgentPath } from "../lib/rights";
+import { RootCommand } from "./RootCommand";
 
 // Ce qui rouvre un geste fermé, tel que le serveur le joint au refus (fix) :
-// pour un droit, « Ré-enrôler avec ce droit », sur la machine dont l'agent
-// doit le tenir (la ligne grant le remplacera, T03-03) ; pour une ancre, la
-// commande à lancer en root sur la machine. Rien n'est recalculé ici.
-// path : le chemin que le droit devra couvrir, que seul l'écran connaît.
-// short : dans une carte ou une ligne étroite, le droit en entier dans
-// l'infobulle et pour les lecteurs d'écran.
+// pour un droit, la ligne grant à lancer en root sur la machine dont l'agent
+// doit le tenir ; pour une ancre, la commande trust. Rien n'est écrit ici :
+// la ligne vient du refus, sinon de la session (un écran qui sait le droit
+// d'un geste fermé construit son fix lui-même).
+// path : le chemin que le droit devra couvrir, que seul l'écran connaît ; il
+// se dit à côté de la ligne, jamais dedans.
+// short : dans une carte ou une ligne étroite, la ligne seule, tronquée.
 export function LockedAction({ fix, path, short = false }: { fix: RefusalFix; path?: string | undefined; short?: boolean }) {
   const t = useT();
   if (fix.right !== undefined && fix.machine !== undefined) {
-    const full = t("machine.reenroll_with", t(capabilityLabelKey(fix.right)));
-    return (
-      <Button small icon="refresh" to={reenrollPath(fix.machine, { name: fix.right, path })} {...(short ? { title: full, "aria-label": full } : {})}>
-        {short ? t("machine.reenroll_with_right") : full}
-      </Button>
-    );
+    return <GrantLine right={fix.right} command={fix.command} path={path} short={short} />;
   }
   if (fix.command !== undefined) {
-    return <AnchorFix command={fix.command} exact={fix.exact === true} machineID={fix.machine} />;
+    // exact : la commande pose la valeur de l'ordre ; sinon c'est « trust
+    // list », et la fiche dit ce que l'agent tient.
+    const link = fix.exact !== true && fix.machine !== undefined && fix.machine !== "" ? { to: machineAgentPath(fix.machine), label: t("anchor.see_machine") } : undefined;
+    return <RootCommand command={fix.command} link={link} />;
   }
   return null;
+}
+
+// La ligne grant d'un droit : celle du refus, sinon celle de la session ;
+// rien si le serveur n'en donne pas (ligne refusée).
+function GrantLine({ right, command, path, short }: { right: string; command: string | undefined; path: string | undefined; short: boolean }) {
+  const t = useT();
+  const sessionLine = useGrantLine(right);
+  const line = command !== undefined && command !== "" ? command : sessionLine;
+  if (line === "") {
+    return null;
+  }
+  const notes = path !== undefined && path !== "" ? [t("machine.grant_path", path), t("machine.grant_shows_change")] : [t("machine.grant_shows_change")];
+  return <RootCommand command={line} notes={notes} short={short} />;
 }

@@ -27,7 +27,7 @@ func (r *orderRunner) useResticBinaries(resticBinary, restServerBinary string) {
 // est une cible déjà préparée.
 func (r *orderRunner) startRestic(ctx context.Context) {
 	r.mu.Lock()
-	dir, isTarget := resticTargetDir(r.identity.Capabilities())
+	dir, isTarget := resticTargetDir(r.rights())
 	checks := r.checks
 	r.mu.Unlock()
 	if isTarget {
@@ -57,7 +57,7 @@ func (r *orderRunner) resticTargetSetup(order judgedOrder) agentwire.ActionResul
 		}
 		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionFailed, Reason: agentwire.ReasonBadOrder}
 	}
-	dir, _ := resticTargetDir(r.identity.Capabilities())
+	dir, _ := resticTargetDir(r.rights())
 	output, err := r.restic.target.setup(params, dir, r.checks)
 	return r.finishRestic(order, output, err)
 }
@@ -121,7 +121,7 @@ func (r *orderRunner) finishRestic(order judgedOrder, output []agentwire.OutputL
 // vérifications sont lus ici, sous le verrou.
 func (r *orderRunner) acceptResticBackup(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
 	checks := r.checks
-	job, refused := readResticBackup(order, r.identity.Capabilities(), r.identity.Root(), checks)
+	job, refused := readResticBackup(order, r.rights(), r.identity.Root(), checks)
 	if refused == nil && !r.restic.source.isProvisioned(job.params.Target) {
 		refused = &agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.ReasonResticNotProvisioned}
 	}
@@ -145,7 +145,7 @@ func (r *orderRunner) acceptResticBackup(order judgedOrder) (agentwire.ActionRes
 func (r *orderRunner) serveRelay(ctx context.Context, request agentwire.ResticRelayRequest) {
 	server := relayLink{fetch: r.fetch}
 	r.mu.Lock()
-	isTarget := agentpolicy.HasCapability(r.identity.Capabilities(), agentpolicy.CapabilityResticTarget)
+	isTarget := agentpolicy.HasCapability(r.rights(), agentpolicy.CapabilityResticTarget)
 	r.mu.Unlock()
 	if !isTarget {
 		r.logger.Warn("restic relay refused", "repo", request.Repo, "reason", agentwire.RightMissing(agentpolicy.CapabilityResticTarget))
@@ -159,7 +159,7 @@ func (r *orderRunner) serveRelay(ctx context.Context, request agentwire.ResticRe
 // aucun des deux droits.
 func (r *orderRunner) resticReport(ctx context.Context) (agentwire.ResticReport, bool) {
 	r.mu.Lock()
-	capabilities, checks := r.identity.Capabilities(), r.checks
+	capabilities, checks := r.rights(), r.checks
 	r.mu.Unlock()
 	var report agentwire.ResticReport
 	if dir, isTarget := resticTargetDir(capabilities); isTarget {

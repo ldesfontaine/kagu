@@ -9,6 +9,7 @@ import { AgentUpdate } from "./AgentUpdate";
 // Sans serveur, la traduction rend la clé et ses arguments : le test lit ce que la fiche demande.
 vi.mock("../i18n/context", () => ({
   useT: () => (key: string, ...args: (string | number)[]) => (args.length === 0 ? key : `${key}(${args.join("|")})`),
+  useGrantLine: (right: string) => `sudo x agent grant ${right}`,
   useI18n: () => ({ language: "fr" }),
 }));
 
@@ -45,7 +46,7 @@ function agent(over: Partial<Agent> = {}): Agent {
     capabilities_differ: false,
     server_key_fingerprint: "",
     run_as: null,
-    rollback_capable: true, anchors: { reported: false, kinds: [] },
+    rollback_capable: true, anchors: { reported: false, kinds: [] }, policy_source: "", policy_digest: "",
     fit: {},
     ...over,
   };
@@ -119,12 +120,12 @@ test("sans sudo (un hôte Proxmox), le bloc de migration se propose en root, ave
   expect(sudo).not.toContain("machine.agent_migration_root_hint");
 });
 
-test("un droit qui manque porte son geste : Ré-enrôler avec « Mettre à jour l'agent »", () => {
+test("un droit qui manque porte son geste : la ligne grant de « agent.update »", () => {
   offer = { current: "v0.0.2", target: "v0.0.3", arch: "amd64", available: false, reason: "right_missing" };
   const markup = render();
   expect(markup).toContain("machine.agent_update_reason_right_missing");
-  expect(markup).toContain('href="/machines/m1/reenroller?droit=agent.update"');
-  expect(markup).toContain("machine.reenroll_with(machine.capability_agent_update)");
+  expect(markup).toContain("sudo x agent grant agent.update");
+  expect(markup).not.toContain("reenroller");
   // La phrase seule ne se répète pas en ligne grise : un seul endroit la dit.
   expect(markup.split("machine.agent_update_reason_right_missing").length).toBe(2);
 });

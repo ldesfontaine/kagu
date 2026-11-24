@@ -27,7 +27,7 @@ import {
   type GuestGesture,
 } from "../lib/proxmox";
 import { capabilityLabelKey } from "../lib/machines";
-import { reenrollPath } from "../lib/rights";
+import { machineAgentPath } from "../lib/rights";
 import { hintText } from "../lib/credential";
 import { ago, formatWhen } from "../lib/time";
 import { formatBytes, formatDecimal, meterTone } from "../lib/units";
@@ -267,10 +267,10 @@ function GuestCard({ machine, guest, among, runs }: { machine: Machine; guest: P
     ...(gesture.blocked !== null && { hint: gestureBlockText(t, gesture.blocked, machine.agent) }),
     onSelect: () => choose(gesture),
   }));
-  // Un droit qui manque se donne d'ici : ré-enrôler l'agent, droits pré-cochés.
+  // Un droit qui manque mène à l'onglet Agent, qui montre la ligne qui le pose.
   const missing = gestures.find((gesture) => gesture.blocked?.kind === "right_missing")?.blocked;
   if (missing?.kind === "right_missing") {
-    actions.push({ label: t("machine.reenroll_with", t(capabilityLabelKey(missing.right))), to: reenrollPath(machine.id, { name: missing.right }) });
+    actions.push({ label: t("machine.grant_right_named", t(capabilityLabelKey(missing.right))), to: machineAgentPath(machine.id, { name: missing.right }) });
   }
   const panelOpen = chosen !== null || sent !== null || sending.error !== null;
   const backup = { at: guest.last_backup_at, bytes: guest.last_backup_bytes, unknown: guest.backup_unknown };

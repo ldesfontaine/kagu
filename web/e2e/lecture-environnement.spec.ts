@@ -74,27 +74,13 @@ test("Fiche d'un service : le lien lu dans l'environnement se lit avec sa source
   expect(findings.unknown()).toEqual([]);
 });
 
-test("Droit manquant : la carte Liens le dit et le bouton ouvre « Ré-enrôler » déjà coché, jusqu'au jeton", async ({ page, findings }) => {
+test("Droit manquant : la carte Liens le dit et porte la ligne grant du serveur", async ({ page, findings }) => {
   findings.where = "/services/annuaire/notes (droit manquant)";
   await openService(page, "notes");
   const note = page.locator(".note", { hasText: label("link.environment_off") });
   await expect(note).toBeVisible();
-  await note.getByRole("link", { name: label("machine.reenroll_with").replace("%s", label("machine.capability_observe_env")) }).click();
-  await expect(page).toHaveURL(/\/machines\/[^/]+\/reenroller\?droit=observe\.env/);
-
-  const dialog = page.locator("dialog[open]");
-  await expect(dialog.getByRole("checkbox", { name: label("machine.capability_observe_env") })).toBeChecked();
-  await expect(dialog.getByRole("checkbox", { name: label("machine.capability_observe") })).toBeChecked();
-  await expect(dialog.getByText(label("machine.capability_observe_env_note"))).toBeVisible();
-
-  // Créer le jeton : la première étape est d'arrêter l'agent en place ; la ligne porte le droit.
-  await dialog.getByRole("button", { name: label("machine.rights_submit") }).click();
-  const items = dialog.locator(".checklist-item");
-  await expect(items.first()).toContainText(label("machine.install_stop_title"));
-  await expect(dialog.locator(".token-box", { hasText: "observe.env" })).toHaveCount(1);
-  await dialog.getByRole("button", { name: label("wizard.next") }).click();
-  await dialog.locator(".modal-foot").getByRole("button", { name: label("modal.close") }).click();
-  await expect(dialog).toHaveCount(0);
+  await expect(note.locator(".token-box", { hasText: "agent grant observe.env" })).toBeVisible();
+  await expect(note.getByRole("link", { name: /reenroller/ })).toHaveCount(0);
   expect(findings.unknown()).toEqual([]);
 });
 

@@ -114,7 +114,6 @@ const absentFromShowcase: string[] = [
   "components/AgentAnchors.tsx : AgentAnchors",
   "components/AgentGate.tsx : AgentGate",
   "components/AgentUpdate.tsx : AgentUpdate",
-  "components/AnchorFix.tsx : AnchorFix",
   "components/Card.tsx : EmptyCard",
   "components/Card.tsx : Note",
   "components/CategoryPill.tsx : CategoryPill",

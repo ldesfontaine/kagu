@@ -642,18 +642,18 @@ func TestJudgeRights_ProxmoxRightsFollowTheTokenFile(t *testing.T) {
 		return reason
 	}
 	identity := rig.runner.identity
-	if got := judgeRights(context.Background(), identity, checks); len(got) != 0 {
+	if got := judgeRights(context.Background(), identity.Capabilities(), identity.Root(), checks); len(got) != 0 {
 		t.Fatalf("a good token is not unavailable: %v", got)
 	}
 	rig.writeToken(t, pveTestTokenID, pveTestSecret, rig.pve.fingerprint(), 0o644)
-	got := judgeRights(context.Background(), identity, checks)
+	got := judgeRights(context.Background(), identity.Capabilities(), identity.Root(), checks)
 	if got["proxmox.power"] != agentwire.ReasonProxmoxTokenUnsafe || got["proxmox.snapshot"] != agentwire.ReasonProxmoxTokenUnsafe {
 		t.Fatalf("unsafe: %v", got)
 	}
 	if err := os.Remove(filepath.Join(rig.stateDir.Name(), brand.AgentProxmoxFile)); err != nil {
 		t.Fatal(err)
 	}
-	got = judgeRights(context.Background(), identity, checks)
+	got = judgeRights(context.Background(), identity.Capabilities(), identity.Root(), checks)
 	if got["proxmox.power"] != agentwire.ReasonProxmoxTokenMissing {
 		t.Fatalf("missing: %v", got)
 	}

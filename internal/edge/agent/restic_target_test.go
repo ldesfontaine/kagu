@@ -401,7 +401,7 @@ func TestResticTarget_MissingRestServerIsReportedNotDownloaded(t *testing.T) {
 	if report.State != agentwire.ResticTargetError || report.Reason != agentwire.ResticErrorBinaryMissing {
 		t.Fatalf("report %+v", report)
 	}
-	unavailable := judgeRights(context.Background(), b.runner.identity, b.runner.checks)
+	unavailable := judgeRights(context.Background(), b.runner.rights(), b.runner.identity.Root(), b.runner.checks)
 	if unavailable[agentpolicy.CapabilityResticTarget] != agentwire.ReasonRestServerMissing {
 		t.Fatalf("unavailable %v", unavailable)
 	}

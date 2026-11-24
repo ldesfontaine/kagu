@@ -102,6 +102,9 @@ func (w *Watcher) inventory(ctx context.Context) ([]container.Observed, map[stri
 	if err != nil {
 		return nil, nil, err
 	}
+	// Le droit se demande une fois par passage : tout l'inventaire est lu avec
+	// ou sans l'environnement.
+	readEnvironment := w.opts.ReadEnvironment()
 	inventory := make([]container.Observed, 0, len(list))
 	environments := make([]dockerapi.EnvHosts, 0, len(list))
 	mounts := map[string][]string{}
@@ -118,20 +121,21 @@ func (w *Watcher) inventory(ctx context.Context) ([]container.Observed, map[stri
 		}
 		observed := toContainer(inspected)
 		inventory = append(inventory, observed)
-		environments = append(environments, w.readEnvironment(ctx, inspected.ID))
+		environments = append(environments, w.readEnvironment(ctx, inspected.ID, readEnvironment))
 		for _, name := range mountedVolumes(inspected) {
 			mounts[name] = append(mounts[name], observed.Name)
 		}
 	}
-	w.resolveEnvironments(inventory, environments)
+	w.resolveEnvironments(inventory, environments, readEnvironment)
 	return inventory, mounts, nil
 }
 
 // readEnvironment lit l'environnement d'un conteneur, et seulement avec le
-// droit observe.env : sans lui, l'appel n'est même pas fait. Un échec se dit
-// au journal sans rien de l'environnement, et laisse le conteneur sans lien.
-func (w *Watcher) readEnvironment(ctx context.Context, id string) dockerapi.EnvHosts {
-	if !w.opts.ReadEnvironment {
+// droit observe.env (allowed) : sans lui, l'appel n'est même pas fait. Un
+// échec se dit au journal sans rien de l'environnement, et laisse le
+// conteneur sans lien.
+func (w *Watcher) readEnvironment(ctx context.Context, id string, allowed bool) dockerapi.EnvHosts {
+	if !allowed {
 		return dockerapi.EnvHosts{}
 	}
 	hosts, err := w.client.InspectEnvironment(ctx, id)
@@ -144,8 +148,8 @@ func (w *Watcher) readEnvironment(ctx context.Context, id string) dockerapi.EnvH
 // resolveEnvironments pose sur chaque conteneur les instances que son
 // environnement désigne. Les hôtes candidats sont oubliés ici : seules les
 // cibles trouvées dans l'inventaire sortent.
-func (w *Watcher) resolveEnvironments(inventory []container.Observed, environments []dockerapi.EnvHosts) {
-	if !w.opts.ReadEnvironment {
+func (w *Watcher) resolveEnvironments(inventory []container.Observed, environments []dockerapi.EnvHosts, allowed bool) {
+	if !allowed {
 		return
 	}
 	for index := range inventory {

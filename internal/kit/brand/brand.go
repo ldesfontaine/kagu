@@ -77,6 +77,11 @@ const (
 	// L'identité de l'agent, dans son état : ce que le premier lancement écrit,
 	// et que l'opérateur supprime pour ré-enrôler.
 	AgentIdentityFile = "identity.json"
+	// La politique de l'agent (fiche A3) : ce que root lui permet. Un dossier
+	// à root (0755) hors de son état, que son compte ne peut ni créer ni
+	// effacer ; le fichier à root, lisible du groupe de l'agent (0640).
+	AgentPolicyDir  = "/etc/" + ID + "-agent"
+	AgentPolicyFile = "policy.toml"
 	// Le jeton Proxmox local de l'agent (proxmox.power, proxmox.snapshot), dans
 	// son état : posé par l'opérateur sur l'hôte, à l'agent seul, 0600. Il ne
 	// voyage jamais, le serveur ne le garde pas.

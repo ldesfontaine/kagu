@@ -120,15 +120,8 @@ test("la cible sans restic.verify : la carte le dit, le geste ré-enrôle avec c
   await calendrier.getByRole("button", { name: filled("entity.more", "calendrier") }).click();
   await page.getByRole("menu").getByRole("menuitem", { name: label("backup.verify_now") }).click();
   await expect(calendrier).toContainText(label("restic.target_verify_right_missing"));
-  const gestures = calendrier.getByRole("link", { name: filled("machine.reenroll_with", label("machine.capability_restic_verify")) });
-  await expect(gestures).toHaveCount(2);
-  await gestures.first().click();
-  await expect(page).toHaveURL(/\/machines\/[^/]+\/reenroller\?droit=restic\.verify/);
-  const dialog = page.locator("dialog[open]");
-  await expect(dialog.getByRole("checkbox", { name: label("machine.capability_restic_verify") })).toBeChecked();
-  await expect(dialog).toContainText(label("machine.capability_restic_verify_note").split("{product}")[0]?.slice(0, 40) ?? "");
-  await dialog.getByRole("button", { name: label("modal.close") }).first().click();
-  await expect(dialog).toHaveCount(0);
+  // Le geste est la ligne grant du serveur, sur la carte et dans la note du refus.
+  await expect(calendrier.locator(".token-box", { hasText: "agent grant restic.verify" })).toHaveCount(2);
   expect(findings.unknown()).toEqual([]);
 });
 

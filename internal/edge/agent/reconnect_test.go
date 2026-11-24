@@ -133,7 +133,7 @@ func startAgentWith(t *testing.T, ctx context.Context, server *fakeServer, logs 
 	opts := Options{SignalInterval: 30 * time.Millisecond, Logger: slog.New(slog.NewTextHandler(logs, nil))}
 	actions := newActionResults()
 	// Le juge des ordres sans dossier d'état : ces tests n'en envoient aucun.
-	orders := newOrderRunner(nil, identity, "v0.0.1", "", actions, opts.Logger)
+	orders := newOrderRunner(nil, identity, noPolicy, "v0.0.1", "", actions, opts.Logger)
 	allowTheAccount(orders)
 	if configure != nil {
 		configure(client, orders)

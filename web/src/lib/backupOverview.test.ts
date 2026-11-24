@@ -318,7 +318,7 @@ describe("l'assistant", () => {
   it("ne propose comme nouvelle cible qu'une machine qui a le droit et ne l'est pas déjà", () => {
     expect(targetSetupUnfit(t, machines[3], "nas")).toBeNull();
     expect(targetSetupUnfit(t, machines[2], "pi")?.reason).toBe("backup.unfit_already_target");
-    expect(targetSetupUnfit(t, machines[4], "vps")?.link.to).toBe("/machines/vps/reenroller?droit=restic.target");
+    expect(targetSetupUnfit(t, machines[4], "vps")?.link.to).toBe("/machines/vps/agent?droit=restic.target");
   });
 });
 

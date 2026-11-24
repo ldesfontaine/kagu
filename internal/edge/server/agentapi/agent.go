@@ -210,6 +210,11 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	if err := h.machines.NoteAnchors(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderAgentAnchors)); err != nil {
 		h.logger.Warn("note anchors", "machine_id", authenticated.ID, "error", err)
 	}
+	// D'où viennent ses droits et l'empreinte de sa politique : la fiche dit
+	// une politique refusée, où seul observe s'applique.
+	if err := h.machines.NotePolicy(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderAgentPolicySource), r.Header.Get(agentwire.HeaderAgentPolicyDigest)); err != nil {
+		h.logger.Warn("note policy", "machine_id", authenticated.ID, "error", err)
+	}
 	// Les droits que l'agent lit dans son fichier : stockés tels qu'il les
 	// dit, comparés à ce que son jeton demandait ; l'agent les applique, le
 	// serveur s'en sert pour ne pas envoyer un ordre qu'il sait refusé. Avec

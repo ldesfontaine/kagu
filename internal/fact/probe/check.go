@@ -33,12 +33,16 @@ var errTooManyRedirects = errors.New("too many redirects")
 type Checker struct {
 	// roots à nil vaut le magasin du système, que crypto/x509 lit ainsi.
 	roots *x509.CertPool
-	// allowPrivate : le droit probe.lan de l'agent. Sans lui, la sonde ne
-	// compose pas vers le réseau local (egress.Private), à aucun saut.
-	allowPrivate bool
+	// allowPrivate dit si l'agent a le droit probe.lan, demandé à chaque
+	// sonde : le droit suit la politique sans redémarrage. Sans lui, la sonde
+	// ne compose pas vers le réseau local (egress.Private), à aucun saut.
+	allowPrivate func() bool
+	// lanOpen est la réponse d'allowPrivate pour la sonde en cours, demandée
+	// une fois (Check) : tous ses sauts suivent la même réponse.
+	lanOpen bool
 }
 
-func NewChecker(roots *x509.CertPool, allowPrivate bool) Checker {
+func NewChecker(roots *x509.CertPool, allowPrivate func() bool) Checker {
 	return Checker{roots: roots, allowPrivate: allowPrivate}
 }
 
@@ -46,6 +50,7 @@ func NewChecker(roots *x509.CertPool, allowPrivate bool) Checker {
 // le réseau d'openCloud : l'agent l'appelle chez lui, sur la machine qui
 // sonde.
 func (c Checker) Check(ctx context.Context, task Task, now time.Time) Result {
+	c.lanOpen = c.allowPrivate()
 	if task.Kind == KindTCP {
 		return c.checkTCP(ctx, task, now)
 	}
@@ -68,7 +73,7 @@ func (c Checker) checkTCP(ctx context.Context, task Task, now time.Time) Result 
 
 	started := time.Now()
 	if !task.TLS {
-		conn, err := egress.DialWith(ctx, "tcp", address.String(), timeout, c.allowPrivate)
+		conn, err := egress.DialWith(ctx, "tcp", address.String(), timeout, c.lanOpen)
 		result.DurationMs = time.Since(started).Milliseconds()
 		if err != nil {
 			result.Outcome, result.Reason = OutcomeDown, reasonFor(err)
@@ -78,7 +83,7 @@ func (c Checker) checkTCP(ctx context.Context, task Task, now time.Time) Result 
 		result.Outcome = OutcomeUp
 		return result
 	}
-	state, err := inspectTLS(ctx, address, timeout, c.allowPrivate)
+	state, err := inspectTLS(ctx, address, timeout, c.lanOpen)
 	result.DurationMs = time.Since(started).Milliseconds()
 	if err != nil {
 		result.Outcome, result.Reason = OutcomeDown, reasonFor(err)
@@ -182,7 +187,7 @@ func (c Checker) degradedOrDown(ctx context.Context, result Result, address Addr
 		result.Outcome, result.Reason = OutcomeDown, reasonFor(err)
 		return result
 	}
-	state, dialErr := inspectTLS(ctx, address, timeout, c.allowPrivate)
+	state, dialErr := inspectTLS(ctx, address, timeout, c.lanOpen)
 	if dialErr != nil {
 		result.Outcome, result.Reason = OutcomeDown, reason
 		return result
@@ -199,7 +204,7 @@ func (c Checker) degradedOrDown(ctx context.Context, result Result, address Addr
 func (c Checker) newClient(task Task, timeout time.Duration) *http.Client {
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			return egress.DialWith(ctx, network, address, timeout, c.allowPrivate)
+			return egress.DialWith(ctx, network, address, timeout, c.lanOpen)
 		},
 		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: c.roots},
 		ResponseHeaderTimeout: timeout,

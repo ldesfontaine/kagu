@@ -10,28 +10,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ldesfontaine/kagu/internal/kit/testkit"
 )
 
-// listenLoopback ouvre un écouteur TCP sur la boucle locale pour les sondes
-// qui visent « le réseau local » sans rien servir.
-func listenLoopback(t *testing.T) string {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = listener.Close() })
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			_ = conn.Close()
-		}
-	}()
-	return listener.Addr().String()
-}
+// lanOpen et lanClosed sont le droit probe.lan, posé ou non.
+func lanOpen() bool   { return true }
+func lanClosed() bool { return false }
 
 func tcpTask(target string) Task {
 	return Task{ID: "p1", Kind: KindTCP, Target: target, IntervalSeconds: 60, TimeoutSeconds: 2}
@@ -43,14 +28,14 @@ func TestCheck_LANRefusedWithoutTheRight(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	defer server.Close()
 
-	closed := NewChecker(nil, false).Check(t.Context(), httpTask(server.URL), checkNow)
+	closed := NewChecker(nil, lanClosed).Check(t.Context(), httpTask(server.URL), checkNow)
 	if closed.Outcome != OutcomeDown || closed.Reason != ReasonLAN {
 		t.Fatalf("sans le droit: %+v", closed)
 	}
 	if closed.Code != nil {
 		t.Fatalf("la sonde ne doit rien avoir reçu: %v", *closed.Code)
 	}
-	open := NewChecker(nil, true).Check(t.Context(), httpTask(server.URL), checkNow)
+	open := NewChecker(nil, lanOpen).Check(t.Context(), httpTask(server.URL), checkNow)
 	if open.Outcome != OutcomeUp {
 		t.Fatalf("avec le droit: %+v", open)
 	}
@@ -61,7 +46,7 @@ func TestCheck_LANRefusedWithoutTheRight(t *testing.T) {
 // IPv4 écrite en IPv6, l'adresse non spécifiée.
 func TestCheck_LANRefusedForEveryLocalForm(t *testing.T) {
 	hosts := []string{"127.0.0.1", "[::1]", "10.0.0.5", "172.16.3.4", "192.168.1.20", "100.64.0.1", "100.127.255.254", "[fd00::1]", "[::ffff:10.0.0.1]", "[::ffff:127.0.0.1]", "0.0.0.0", "[::]"}
-	checker := NewChecker(nil, false)
+	checker := NewChecker(nil, lanClosed)
 	for _, host := range hosts {
 		for _, task := range []Task{httpTask("http://" + host + ":8080/"), tcpTask(host + ":8080"), {ID: "p1", Kind: KindTCP, Target: host + ":8443", TLS: true, TimeoutSeconds: 2}} {
 			result := checker.Check(t.Context(), task, checkNow)
@@ -74,25 +59,25 @@ func TestCheck_LANRefusedForEveryLocalForm(t *testing.T) {
 
 // Un nom qui résout vers la boucle locale est jugé sur ce qu'il résout.
 func TestCheck_LANRefusedForANameThatResolvesLocally(t *testing.T) {
-	address := listenLoopback(t)
+	address := testkit.AcceptingLoopback(t)
 	_, port, _ := net.SplitHostPort(address)
 	name := net.JoinHostPort("localhost", port)
 
-	if result := NewChecker(nil, false).Check(t.Context(), tcpTask(name), checkNow); result.Reason != ReasonLAN {
+	if result := NewChecker(nil, lanClosed).Check(t.Context(), tcpTask(name), checkNow); result.Reason != ReasonLAN {
 		t.Fatalf("sans le droit: %+v", result)
 	}
-	if result := NewChecker(nil, true).Check(t.Context(), tcpTask(name), checkNow); result.Outcome != OutcomeUp {
+	if result := NewChecker(nil, lanOpen).Check(t.Context(), tcpTask(name), checkNow); result.Outcome != OutcomeUp {
 		t.Fatalf("avec le droit: %+v", result)
 	}
-	if result := NewChecker(nil, false).Check(t.Context(), httpTask("http://"+name+"/"), checkNow); result.Reason != ReasonLAN {
+	if result := NewChecker(nil, lanClosed).Check(t.Context(), httpTask("http://"+name+"/"), checkNow); result.Reason != ReasonLAN {
 		t.Fatalf("HTTP sans le droit: %+v", result)
 	}
 }
 
 // TCP, TCP avec poignée de main TLS et HTTPS passent tous par la même garde.
 func TestCheck_LANRefusedOnTCPAndTLS(t *testing.T) {
-	address := listenLoopback(t)
-	closed, open := NewChecker(nil, false), NewChecker(nil, true)
+	address := testkit.AcceptingLoopback(t)
+	closed, open := NewChecker(nil, lanClosed), NewChecker(nil, lanOpen)
 
 	if result := closed.Check(t.Context(), tcpTask(address), checkNow); result.Outcome != OutcomeDown || result.Reason != ReasonLAN {
 		t.Fatalf("TCP sans le droit: %+v", result)
@@ -132,10 +117,10 @@ func TestCheck_LANRefusedWhenFollowingRedirects(t *testing.T) {
 	task := httpTask(server.URL)
 	task.FollowRedirects = true
 
-	if result := NewChecker(nil, false).Check(t.Context(), task, checkNow); result.Outcome != OutcomeDown || result.Reason != ReasonLAN {
+	if result := NewChecker(nil, lanClosed).Check(t.Context(), task, checkNow); result.Outcome != OutcomeDown || result.Reason != ReasonLAN {
 		t.Fatalf("sans le droit: %+v", result)
 	}
-	if result := NewChecker(nil, true).Check(t.Context(), task, checkNow); result.Outcome != OutcomeUp {
+	if result := NewChecker(nil, lanOpen).Check(t.Context(), task, checkNow); result.Outcome != OutcomeUp {
 		t.Fatalf("avec le droit: %+v", result)
 	}
 }
@@ -144,7 +129,7 @@ func TestCheck_LANRefusedWhenFollowingRedirects(t *testing.T) {
 // n'ouvre pas les métadonnées d'hébergeur.
 func TestCheck_LinkLocalStaysRefusedWithTheRight(t *testing.T) {
 	for _, allowPrivate := range []bool{false, true} {
-		result := NewChecker(nil, allowPrivate).Check(t.Context(), tcpTask("169.254.169.254:80"), checkNow)
+		result := NewChecker(nil, func() bool { return allowPrivate }).Check(t.Context(), tcpTask("169.254.169.254:80"), checkNow)
 		if result.Outcome != OutcomeDown || result.Reason != ReasonAddress {
 			t.Errorf("allowPrivate=%v: %+v", allowPrivate, result)
 		}
@@ -155,7 +140,7 @@ func TestCheck_LinkLocalStaysRefusedWithTheRight(t *testing.T) {
 // fois par assignation ; un identifiant vide ou trop long n'en produit pas.
 func TestRunner_AssignReportsWhatItRefuses(t *testing.T) {
 	sink := newSink()
-	runner := NewRunner(sink, NewChecker(nil, true), slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	runner := NewRunner(sink, NewChecker(nil, lanOpen), slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	tasks := []Task{
 		{ID: "weird", Kind: "ftp", Target: "ftp://a.fr/"},
 		{ID: "", Kind: "ftp", Target: "ftp://a.fr/"},
@@ -188,7 +173,7 @@ func TestRunner_AssignReportsWhatItRefuses(t *testing.T) {
 // ne fait que MaxProbesPerMachine essais.
 func TestRunner_AssignRefusalsAreBounded(t *testing.T) {
 	sink := newSink()
-	runner := NewRunner(sink, NewChecker(nil, true), slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	runner := NewRunner(sink, NewChecker(nil, lanOpen), slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
 	good := validTask("good")
 	bad := validTask("good")
 	bad.Method = "DELETE"
@@ -221,7 +206,7 @@ func TestRunner_AssignRefusalsAreBounded(t *testing.T) {
 func TestCheck_ClientTakesNoProxyAndRedialsEachHop(t *testing.T) {
 	t.Setenv("HTTP_PROXY", "http://192.0.2.1:3128")
 	t.Setenv("HTTPS_PROXY", "http://192.0.2.1:3128")
-	transport, ok := NewChecker(nil, false).newClient(httpTask("http://a.fr/"), time.Second).Transport.(*http.Transport)
+	transport, ok := NewChecker(nil, lanClosed).newClient(httpTask("http://a.fr/"), time.Second).Transport.(*http.Transport)
 	if !ok || transport.Proxy != nil || !transport.DisableKeepAlives || transport.DialTLSContext != nil || transport.DialContext == nil {
 		t.Fatalf("transport %+v", transport)
 	}

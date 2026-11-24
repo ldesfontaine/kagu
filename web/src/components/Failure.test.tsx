@@ -7,6 +7,7 @@ import { Failure } from "./Failure";
 
 vi.mock("../i18n/context", () => ({
   useT: () => (key: string, ...args: (string | number)[]) => (args.length === 0 ? key : `${key}(${args.join("|")})`),
+  useGrantLine: (right: string) => `sudo x agent grant ${right}`,
 }));
 
 function render(error: ApiError | string | null, gesture?: Parameters<typeof Failure>[0]["gesture"]): string {
@@ -27,9 +28,9 @@ test("un refus de droit porte le geste que le serveur joint, sans table", () => 
   const refused = new ApiError(409, "backup.right_missing", { error: "backup.right_missing", fix: { right: "backup.receive", machine: "m7", command: "sudo x agent grant backup.receive" } });
   const markup = render(refused, { machineID: "m-autre", path: "/srv/backups" });
   expect(markup).toContain("backup.right_missing");
-  // La machine est celle du serveur, le chemin celui de l'écran.
-  expect(markup).toContain('href="/machines/m7/reenroller?droit=backup.receive&amp;chemin=%2Fsrv%2Fbackups"');
-  expect(markup).toContain("machine.reenroll_with(machine.capability_backup_receive)");
+  // La ligne est celle du serveur ; le chemin, celui de l'écran, se dit à côté.
+  expect(markup).toContain("sudo x agent grant backup.receive<");
+  expect(markup).toContain("machine.grant_path(/srv/backups)");
   // Sans fix, la clé seule ne mène nulle part : le front ne la traduit pas en droit.
   expect(render(new ApiError(409, "backup.right_missing"), { machineID: "m7" })).not.toContain("<a ");
 });

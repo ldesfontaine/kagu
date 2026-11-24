@@ -123,14 +123,12 @@ test("binaire manquant : la cible et la source nommées, les commandes à copier
   expect(findings.unknown()).toEqual([]);
 });
 
-test("un droit manquant se dit en geste : « Ré-enrôler avec ce droit », coché d'avance", async ({ page, findings }) => {
+test("un droit manquant se dit en geste : sa ligne grant", async ({ page, findings }) => {
   findings.where = "/sauvegardes › droit manquant";
   await openBackups(page);
   const missing = card(page, "nextcloud");
   await expect(missing).toContainText(filled("backup.unfit_right_missing", "vps-paris-1", "restic.produce"));
-  await missing.getByRole("link", { name: filled("machine.reenroll_with", label("machine.capability_restic_produce")) }).click();
-  await expect(page).toHaveURL(/\/machines\/[^/]+\/reenroller\?droit=restic\.produce/);
-  await expect(page.locator("dialog[open]").getByRole("checkbox", { name: label("machine.capability_restic_produce") })).toBeChecked();
+  await expect(missing.locator(".token-box", { hasText: "agent grant restic.produce" })).toBeVisible();
   expect(findings.unknown()).toEqual([]);
 });
 
@@ -205,7 +203,7 @@ test("assistant : sauvegarder un service, de bout en bout", async ({ page, findi
 
   // Quoi : la recherche garde photos ; un service sans droit est grisé, avec
   // son geste ; grimoire aussi, faute de restic sur atelier, avec ses commandes.
-  await expect(dialog.locator(".pick-row-off", { hasText: "nextcloud" })).toContainText(label("machine.reenroll_with_right"));
+  await expect(dialog.locator(".pick-row-off", { hasText: "nextcloud" }).locator(".token-box")).toContainText("agent grant restic.produce");
   await expect(dialog.locator(".pick-row-off", { hasText: "grimoire" })).toContainText(filled("backup.unfit_restic_missing", "atelier"));
   await installBlock(dialog, "restic", "atelier").getByRole("button", { name: label("machine.copy") }).click();
   await dialog.getByRole("searchbox", { name: label("backup.restic_search_label") }).fill("pho");
@@ -256,7 +254,7 @@ test("assistant : sauvegarder une VM entière, de bout en bout, puis y accéder"
   // L'hôte pve-nord n'a pas backup.produce : ses VM sont grisées, avec le geste.
   const grayed = dialog.locator(".pick-row-off", { hasText: "mail" });
   await expect(grayed).toContainText(filled("backup.unfit_right_missing", "pve-nord", "backup.produce"));
-  await expect(grayed.getByRole("link", { name: filled("machine.reenroll_with", label("machine.capability_backup_produce")) })).toBeVisible();
+  await expect(grayed.locator(".token-box", { hasText: "agent grant backup.produce" })).toBeVisible();
   await dialog.getByRole("radio", { name: /^web/ }).check();
   await dialog.getByRole("button", { name: label("wizard.next") }).click();
   await dialog.getByRole("button", { name: label("wizard.next") }).click();

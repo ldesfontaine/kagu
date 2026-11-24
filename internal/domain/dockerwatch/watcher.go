@@ -43,9 +43,10 @@ type Options struct {
 	SampleInterval    time.Duration
 	InventoryInterval time.Duration
 	ProbeInterval     time.Duration
-	// ReadEnvironment : l'agent a le droit observe.env. Faux, l'environnement
-	// des conteneurs n'est pas lu (environment.go).
-	ReadEnvironment bool
+	// ReadEnvironment dit si l'agent a le droit observe.env, demandé à chaque
+	// inventaire : le droit suit la politique sans redémarrage. nil ou faux,
+	// l'environnement des conteneurs n'est pas lu (environment.go).
+	ReadEnvironment func() bool
 }
 
 // Watcher est le veilleur ; un par machine.
@@ -85,6 +86,9 @@ func New(client *dockerapi.Client, sink Sink, opts Options) *Watcher {
 	}
 	if opts.ProbeInterval <= 0 {
 		opts.ProbeInterval = DefaultProbeInterval
+	}
+	if opts.ReadEnvironment == nil {
+		opts.ReadEnvironment = func() bool { return false }
 	}
 	return &Watcher{client: client, sink: sink, logger: opts.Logger, opts: opts, previous: make(map[string]cpuCounters), stopRequests: make(map[string]time.Time), known: make(map[string]bool), firstInventory: make(chan struct{})}
 }

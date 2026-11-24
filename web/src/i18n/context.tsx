@@ -22,6 +22,8 @@ interface I18n {
   roles: SessionRole[];
   // Les droits qui se cochent à l'enrôlement, dans leur ordre.
   rights: readonly string[];
+  // Par droit, la ligne grant que le serveur écrit.
+  grantLines: Readonly<Record<string, string>>;
   t: Translate;
   setLanguage: (code: string) => Promise<void>;
   // Relit la session : après un réglage de seuil, les jauges suivent sans
@@ -81,6 +83,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       verbRoutes: new Set(session.verbs.map((verb) => verb.route)),
       roles: session.roles,
       rights: session.rights,
+      grantLines: session.grant_lines,
       t,
       setLanguage,
       reloadSession: load,
@@ -133,6 +136,12 @@ export function useRoles(): SessionRole[] {
 // Les droits qui se cochent à l'enrôlement, dans l'ordre du serveur.
 export function useRightNames(): readonly string[] {
   return useI18n().rights;
+}
+
+// La ligne qui pose un droit en root sur une machine, telle que le serveur
+// l'écrit ; vide s'il n'en donne pas.
+export function useGrantLine(right: string): string {
+  return useI18n().grantLines[right] ?? "";
 }
 
 // Dit si une écriture est aussi un verbe d'API que les jetons peuvent porter.

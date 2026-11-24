@@ -18,7 +18,8 @@ import (
 const machineSelect = `SELECT m.id, m.name, m.hostname, m.address, m.os, m.arch, m.created_at, m.update_last, m.role,
 		m.kind, m.kind_override, m.host_override,
 		a.id, a.public_key, a.version, a.root_dir, a.enrolled_at, a.last_seen_at, a.revoked_at,
-		a.server_key_fingerprint, a.run_as_uid, a.run_as_name, t.requested_capabilities, a.rollback_version, a.anchors, a.service_rollback_version
+		a.server_key_fingerprint, a.run_as_uid, a.run_as_name, t.requested_capabilities, a.rollback_version, a.anchors, a.service_rollback_version,
+		a.policy_source, a.policy_digest
 	FROM machines m
 	LEFT JOIN agents a ON a.id = (
 		SELECT id FROM agents WHERE machine_id = m.id
@@ -181,6 +182,17 @@ func (db *DB) RecordAnchors(ctx context.Context, agentID, anchors string) error 
 	result, err := db.sql.ExecContext(ctx, `UPDATE agents SET anchors = ? WHERE id = ?`, stored, agentID)
 	if err != nil {
 		return fmt.Errorf("record anchors: %w", err)
+	}
+	return notFoundIfNoRow(result, machine.ErrNotFound)
+}
+
+// RecordPolicy note d'où l'agent dit tenir ses droits et l'empreinte de sa
+// politique, à l'ouverture du flux ; un texte vide s'écrit NULL.
+func (db *DB) RecordPolicy(ctx context.Context, agentID, source, digest string) error {
+	result, err := db.sql.ExecContext(ctx, `UPDATE agents SET policy_source = ?, policy_digest = ? WHERE id = ?`,
+		nullableString(source), nullableString(digest), agentID)
+	if err != nil {
+		return fmt.Errorf("record policy: %w", err)
 	}
 	return notFoundIfNoRow(result, machine.ErrNotFound)
 }
@@ -487,9 +499,10 @@ func scanMachine(row scanner) (machine.Machine, error) {
 	var publicKey []byte
 	var enrolledAt, lastSeenAt, revokedAt, runAsUID sql.NullInt64
 	var rollbackVersion, serviceRollbackVersion sql.NullInt64
-	var anchors sql.NullString
+	var anchors, policySource, policyDigest sql.NullString
 	err := row.Scan(&m.ID, &m.Name, &m.Hostname, &m.Address, &m.OS, &m.Arch, &createdAt, &m.UpdateLast, &role, &kind, &kindOverride, &hostOverride,
-		&agentID, &publicKey, &version, &rootDir, &enrolledAt, &lastSeenAt, &revokedAt, &serverKey, &runAsUID, &runAsName, &requested, &rollbackVersion, &anchors, &serviceRollbackVersion)
+		&agentID, &publicKey, &version, &rootDir, &enrolledAt, &lastSeenAt, &revokedAt, &serverKey, &runAsUID, &runAsName, &requested, &rollbackVersion, &anchors, &serviceRollbackVersion,
+		&policySource, &policyDigest)
 	if err != nil {
 		return machine.Machine{}, err
 	}
@@ -505,6 +518,7 @@ func scanMachine(row scanner) (machine.Machine, error) {
 		EnrolledAt: time.Unix(enrolledAt.Int64, 0),
 		LastSeenAt: timeOrZero(lastSeenAt), RevokedAt: timeOrZero(revokedAt),
 		RollbackVersion: int(rollbackVersion.Int64), ServiceRollbackVersion: int(serviceRollbackVersion.Int64),
+		PolicySource: policySource.String, PolicyDigest: policyDigest.String,
 	}
 	if runAsUID.Valid {
 		m.Agent.RunAs = &machine.Account{UID: runAsUID.Int64, Name: runAsName.String}

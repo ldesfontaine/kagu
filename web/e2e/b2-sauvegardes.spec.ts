@@ -72,17 +72,13 @@ test("la tâche Proxmox nuit-pi est observée, à remplacer : le bouton ouvre l'
   expect(findings.unknown()).toEqual([]);
 });
 
-test("un service avec une base sur une machine sans restic.docker : le droit se dit en geste, coché d'avance", async ({ page, findings }) => {
+test("un service avec une base sur une machine sans restic.docker : le droit se dit en geste, sa ligne grant", async ({ page, findings }) => {
   findings.where = "/sauvegardes › restic.docker manquant";
   await openBackups(page);
   const carnet = card(page, "carnet");
   await expect(carnet.locator(".backup-parts")).toContainText("carnet-db-1");
   await expect(carnet).toContainText(filled("backup.unfit_right_missing", "pve-nord", "restic.docker"));
-  await carnet.getByRole("link", { name: filled("machine.reenroll_with", label("machine.capability_restic_docker")) }).click();
-  await expect(page).toHaveURL(/\/machines\/[^/]+\/reenroller\?droit=restic\.docker/);
-  const dialog = page.locator("dialog[open]");
-  await expect(dialog.getByRole("checkbox", { name: label("machine.capability_restic_docker") })).toBeChecked();
-  await expect(dialog).toContainText(label("machine.capability_restic_docker_note"));
+  await expect(carnet.locator(".token-box", { hasText: "agent grant restic.docker" })).toBeVisible();
   expect(findings.unknown()).toEqual([]);
 });
 

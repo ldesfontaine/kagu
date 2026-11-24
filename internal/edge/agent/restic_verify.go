@@ -47,7 +47,7 @@ type resticVerifyJob struct {
 // restic présent, dépôt libre), puis l'accepte : la vérification est le
 // travail du worker.
 func (r *orderRunner) acceptResticVerify(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
-	dir, isTarget := resticTargetDir(r.identity.Capabilities())
+	dir, isTarget := resticTargetDir(r.rights())
 	if !isTarget {
 		// Le dépôt est sous le dossier du droit restic.target : sans lui, aucun
 		// dépôt à vérifier.

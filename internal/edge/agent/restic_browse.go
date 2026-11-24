@@ -39,7 +39,7 @@ type resticBrowseJob struct {
 // restic présent), puis l'accepte : la lecture est le travail du worker. Un
 // dépôt occupé par une rétention ou une vérification n'empêche pas de lire.
 func (r *orderRunner) acceptResticBrowse(order judgedOrder) (agentwire.ActionResult, func(ctx context.Context)) {
-	dir, isTarget := resticTargetDir(r.identity.Capabilities())
+	dir, isTarget := resticTargetDir(r.rights())
 	if !isTarget {
 		r.journal.notAccepted(order, agentwire.RightMissing(agentpolicy.CapabilityResticTarget))
 		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: agentwire.RightMissing(agentpolicy.CapabilityResticTarget)}, nil

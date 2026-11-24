@@ -106,6 +106,17 @@ func (f *fakeStore) RecordServiceRollbackVersion(_ context.Context, agentID stri
 	return ErrNotFound
 }
 
+func (f *fakeStore) RecordPolicy(_ context.Context, agentID, source, digest string) error {
+	for id, m := range f.machines {
+		if m.Agent.ID == agentID {
+			m.Agent.PolicySource, m.Agent.PolicyDigest = source, digest
+			f.machines[id] = m
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
 func (f *fakeStore) RecordAnchors(_ context.Context, agentID, anchors string) error {
 	for id, m := range f.machines {
 		if m.Agent.ID == agentID {

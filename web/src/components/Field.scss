@@ -236,6 +236,23 @@
   }
 }
 
+// Dans une carte étroite : une ligne, tronquée, entière dans l'infobulle.
+.token-box-short {
+  display: inline-flex;
+  max-width: 100%;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  vertical-align: middle;
+
+  code {
+    max-width: 28ch;
+    overflow: hidden;
+    overflow-wrap: normal;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
 .copy-list {
   display: flex;
   flex-direction: column;

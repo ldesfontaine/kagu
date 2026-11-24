@@ -49,6 +49,9 @@ func runAgent(args []string) error {
 	if len(args) > 0 && args[0] == "trust" {
 		return runAgentTrust(args[1:], os.Stdout, openControllingTerminal, os.Geteuid())
 	}
+	if len(args) > 0 && (args[0] == policyRights || args[0] == policyGrant || args[0] == policyRevoke) {
+		return runAgentPolicy(args[0], args[1:], policyCommand{out: os.Stdout, openTerminal: openControllingTerminal, euid: os.Geteuid(), place: agent.SystemPolicyPlace})
+	}
 	flags := flag.NewFlagSet("agent", flag.ContinueOnError)
 	server := flags.String("server", "", "adresse de "+brand.ProductName+", premier lancement seulement")
 	// -token n'existe que pour être refusé avec une phrase claire, plutôt que
@@ -133,6 +136,10 @@ func runAgent(args []string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// SIGHUP fait relire la politique (R-A3-4) ; le lanceur le relaie.
+	hangups := make(chan os.Signal, 1)
+	signal.Notify(hangups, syscall.SIGHUP)
+	defer signal.Stop(hangups)
 	logger.Info("agent starting", "version", version.String(), "state_dir", *stateDir)
 	// Sans clé de version embarquée, l'agent refuse agent.update : il ne
 	// saurait rien vérifier.
@@ -152,6 +159,7 @@ func runAgent(args []string) error {
 		DockerSocket: *dockerSocket,
 		Roots:        roots,
 		Logger:       logger,
+		Hangups:      hangups,
 
 		ResticBinary:     *resticBinary,
 		RestServerBinary: *restServerBinary,
