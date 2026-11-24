@@ -52,6 +52,7 @@ var categoryOfKind = map[Kind]Category{
 	KindAgentRolledBack:      CategoryUpdates,
 	KindServiceRolledBack:    CategoryUpdates,
 	KindTOTPLocked:           CategoryAccess,
+	KindClockUnsynced:        CategoryMachines,
 }
 
 // CategoryOf rend la catégorie d'un type d'alerte ; un type inconnu n'en a

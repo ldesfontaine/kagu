@@ -42,6 +42,9 @@ type authResponse struct {
 	// En native, présent et vrai quand le code à six chiffres est actif, dit
 	// par GET /api/auth à qui a une session : la redemande le demande aussi.
 	TOTP bool `json:"totp,omitempty"`
+	// L'heure du serveur, celle qui juge le code à six chiffres, dite par
+	// GET /api/auth seulement : l'écran du code la montre (E02-21).
+	ServerTime time.Time `json:"server_time,omitzero"`
 }
 
 // La première configuration révoque tous les jetons d'API : la réponse dit
@@ -139,6 +142,7 @@ func (s *Server) getAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	response := s.authJSON(state, viewerOf(r))
 	response.ForwardInsecure = state.Mode == auth.ModeForward && s.forwardSecretRequired()
+	response.ServerTime = s.auth.Now().UTC()
 	if state.Mode == auth.ModeNative && response.SignedIn {
 		response.TOTP, err = s.auth.TOTPActive(r.Context())
 		if err != nil {

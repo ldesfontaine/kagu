@@ -34,6 +34,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/gesture/apitoken"
 	"github.com/ldesfontaine/kagu/internal/gesture/verbrequest"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/clocksync"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/mail"
 	"github.com/ldesfontaine/kagu/internal/kit/release"
@@ -71,6 +72,7 @@ type components struct {
 	updates      *update.Service
 	statusPage   *status.Service
 	alerts       *alert.Engine
+	clockWatch   *alert.ClockWatch
 	notifier     *alert.Notifier
 	apiTokens    *apitoken.Service
 	verbRequests *verbrequest.Service
@@ -119,6 +121,8 @@ func buildComponents(cfg config.Config, stateDir *os.Root, db *store.DB, logger 
 	}
 	alerts := alert.New(db, logger)
 	alerts.SetReminderDelay(preferences.CurrentDangerReminder)
+	// L'horloge de la machine : non synchronisée trop longtemps, elle alerte.
+	clockWatch := alert.NewClockWatch(alerts, clocksync.Synced)
 	notifier := alert.NewNotifier(db, catalogs, preferences.CurrentLanguage, logger)
 	notifier.SetPublicURL(cfg.PublicURL)
 	notifier.SetMail(preferences.CurrentMailRelay, mail.NewSender(alert.MailTimeout))
@@ -228,7 +232,7 @@ func buildComponents(cfg config.Config, stateDir *os.Root, db *store.DB, logger 
 		db: db, logger: logger, preferences: preferences,
 		machines: machines, heartbeats: heartbeats, resources: resources, containers: containers,
 		probes: probes, declared: declared, updates: updates, statusPage: statusPage,
-		alerts: alerts, notifier: notifier, apiTokens: apiTokens, verbRequests: verbRequests, operator: operator,
+		alerts: alerts, clockWatch: clockWatch, notifier: notifier, apiTokens: apiTokens, verbRequests: verbRequests, operator: operator,
 		support: support, manifests: manifests, actions: actions, sshKeys: sshKeys, systemd: systemd, links: links, hostConns: hostConns, roles: roles, proxmox: hypervisors, firewalls: firewalls, backups: backups, restic: resticBackups, relay: relay, deployer: deployer,
 	}, nil
 }

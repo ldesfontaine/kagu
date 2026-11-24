@@ -67,6 +67,19 @@ describe("describeAlert", () => {
     expect(objectPath(locked.object, "")).toBeNull();
     expect(mutePathOf(locked)).toContain("target_kind=&target_id=");
   });
+  it("E02-21 : dit depuis quand l'horloge du serveur n'est plus synchronisée, sans lien ni silence ciblé", () => {
+    const clock = alert({
+      kind: "clock_unsynced",
+      severity: "attention",
+      object: { kind: "server", id: "clock", name: "Kagu" },
+      machine_id: "",
+      machine_name: "",
+      details: { since: "2026-09-22T09:40:00Z" },
+    });
+    expect(describeAlert(t, clock, now, disks).cause).toBe("alert.cause_clock_unsynced time.minutes 20");
+    expect(objectPath(clock.object, "")).toBeNull();
+    expect(mutePathOf(clock)).toContain("target_kind=&target_id=");
+  });
   it("cite le seuil noté par la dernière lecture plutôt que celui de la session", () => {
     const text = describeAlert(t, alert({ details: { mount_point: "/data", percent: 72, threshold: 70 } }), now, disks);
     expect(text.cause).toBe("alert.cause_disk_full /data vps-lyon-2 70");

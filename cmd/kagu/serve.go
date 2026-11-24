@@ -168,10 +168,10 @@ func runServe(args []string) error {
 
 	logInterfaceAccess(ctx, logger, parts.operator, cfg.Listen)
 	warnIfForwardUnproven(ctx, logger, parts.operator, cfg.TrustedPrefixes(), forwardSecret != "")
-	// Seize boucles de fond : les échéances, le rollup et la purge des
+	// Dix-huit boucles de fond : les échéances, le rollup et la purge des
 	// mesures, la purge des conteneurs, le rollup et la purge des sondes, la
 	// purge des constats d'images, la page de statut, les machines perdues,
-	// le moteur des alertes, le notifieur, la purge des jetons d'API, l'échéance des demandes de verbe, la fin
+	// le moteur des alertes, l'horloge de la machine, le notifieur, la purge des jetons d'API, l'échéance des demandes de verbe, la fin
 	// de support, l'expiration et la purge des ordres, la sauvegarde de la
 	// base, la nuit de restic, le relevé des hôtes Proxmox, le relevé des pare-feu. Elles finissent avant
 	// que la base ne se ferme.
@@ -184,6 +184,7 @@ func runServe(args []string) error {
 	runLoop(&loops, func() { parts.statusPage.Watch(ctx) })
 	runLoop(&loops, func() { parts.machines.Watch(ctx) })
 	runLoop(&loops, func() { parts.alerts.Watch(ctx) })
+	runLoop(&loops, func() { parts.clockWatch.Watch(ctx) })
 	runLoop(&loops, func() { parts.notifier.Run(ctx) })
 	runLoop(&loops, func() { parts.apiTokens.Watch(ctx) })
 	runLoop(&loops, func() { parts.verbRequests.Watch(ctx) })

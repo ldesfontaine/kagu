@@ -107,6 +107,13 @@ func TOTPStep(at time.Time) int64 {
 	return at.Unix() / int64(TOTPPeriod/time.Second)
 }
 
+// Now est l'heure du serveur, celle à laquelle un code se juge : l'écran du
+// code la montre, l'opérateur la compare à son téléphone. Un écart ne se dit
+// jamais à partir d'un code : ce serait un oracle (E02-21).
+func (s *Service) Now() time.Time {
+	return s.now()
+}
+
 // matchTOTPStep rend le pas dont le code est celui saisi, parmi le pas de now
 // et ses voisins, s'il vient après lastStep. Les trois codes sont comparés en
 // temps constant, chacun jusqu'au bout : la durée ne dit pas lequel a failli.

@@ -7,6 +7,7 @@ import { TokenBox } from "../../components/Copy";
 import { Failure } from "../../components/Failure";
 import { Field, Input } from "../../components/Field";
 import { useAction } from "../../hooks/useAction";
+import { useServerTime } from "../../hooks/useServerTime";
 import { useT } from "../../i18n/context";
 
 // Poser le code à six chiffres : le carré à scanner et sa clé copiable, puis
@@ -20,6 +21,7 @@ export function AccessTOTPEnrolment({ onEnabled, onLater }: { onEnabled: () => v
   const [proposal, setProposal] = useState<TOTPProposal | null>(null);
   const [loadError, setLoadError] = useState<ApiError | null>(null);
   const [code, setCode] = useState("");
+  const serverTime = useServerTime();
 
   useEffect(() => {
     proposeTOTP().then(setProposal, (failure: unknown) => setLoadError(failureOf(failure)));
@@ -49,7 +51,7 @@ export function AccessTOTPEnrolment({ onEnabled, onLater }: { onEnabled: () => v
           </Field>
         </>
       )}
-      <Field label={t("auth.totp_code_label")} htmlFor="totp-code">
+      <Field label={t("auth.totp_code_label")} htmlFor="totp-code" help={serverTime}>
         <Input id="totp-code" type="text" mono value={code} onChange={(event) => setCode(event.target.value)} inputMode="numeric" maxLength={6} autoComplete="one-time-code" required />
       </Field>
       <Failure error={loadError ?? action.error} />
