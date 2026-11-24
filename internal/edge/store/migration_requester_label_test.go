@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// La 047 recopie dans un ordre et un silence d'avant le libellé de leur
+// La 049 recopie dans un ordre et un silence d'avant le libellé de leur
 // ligne d'audit (le compte d'une session), à condition qu'elle nomme le même
 // acteur ; l'acteur enregistré ne bouge pas.
-func TestMigration047_OldRowsTakeTheAccountFromTheirAuditLine(t *testing.T) {
+func TestMigration049_OldRowsTakeTheAccountFromTheirAuditLine(t *testing.T) {
 	ctx := context.Background()
 	db := openEmpty(t)
 	names, err := migrationFiles()
@@ -16,7 +16,7 @@ func TestMigration047_OldRowsTakeTheAccountFromTheirAuditLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range names {
-		if version := migrationVersion(name); version < 47 {
+		if version := migrationVersion(name); version < 49 {
 			if err := db.apply(ctx, name, version); err != nil {
 				t.Fatal(err)
 			}
@@ -32,7 +32,7 @@ func TestMigration047_OldRowsTakeTheAccountFromTheirAuditLine(t *testing.T) {
 	exec(t, db, audit, "a0a0a0a0a0a0a0a0", "action.order", "action", "run-other-actor")
 	exec(t, db, audit, "5e55105e55105e55", "mute.create", "mute", "7")
 
-	if err := db.apply(ctx, "047_requester_label.sql", 47); err != nil {
+	if err := db.apply(ctx, "049_requester_label.sql", 49); err != nil {
 		t.Fatal(err)
 	}
 

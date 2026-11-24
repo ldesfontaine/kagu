@@ -46,7 +46,7 @@ export function actorParts(event: Pick<AuditEvent, "actor_kind" | "actor_name" |
 // shownActorName : le nom que l'écran montre pour un acteur. Le libellé
 // recopié au geste (le compte d'une session, le nom d'un jeton d'alors),
 // jamais l'identifiant de la session ; sans libellé (une ligne d'avant la
-// 017 ou la 047, une règle, la commande), l'identifiant, comme avant.
+// 017 ou la 049, une règle, la commande), l'identifiant, comme avant.
 export function shownActorName(name: string, label: string | null): string {
   return label !== null && label !== "" ? label : name;
 }
