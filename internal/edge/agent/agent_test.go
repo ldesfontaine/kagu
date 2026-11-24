@@ -82,7 +82,13 @@ func newBench(t *testing.T) *bench {
 	probes.SetCommander(handler)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	agentRoot, err := os.OpenRoot(t.TempDir())
+	// 0700 explicite : t.TempDir suit le umask, et l'état de l'agent n'est sûr
+	// que fermé aux autres comptes (CheckStateDir, que root rejuge).
+	agentDir := t.TempDir()
+	if err := os.Chmod(agentDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	agentRoot, err := os.OpenRoot(agentDir)
 	if err != nil {
 		t.Fatal(err)
 	}
