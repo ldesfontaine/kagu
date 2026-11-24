@@ -277,7 +277,40 @@ func agentAccountOf(stateDir *os.Root) (hostAccount, error) {
 }
 
 // HostSystem est le système de la machine, celui que « agent grant » touche.
-type HostSystem struct{}
+// judgeDir juge chaque dossier traversé pour créer un dossier ou un drop-in ;
+// nil : rootOnlyDir, la garde de production. Un test y met la sienne pour
+// tourner hors root.
+type HostSystem struct {
+	judgeDir dirJudge
+}
+
+// dirJudge juge un dossier ouvert, sur son descripteur : nil s'il est sûr.
+type dirJudge func(path string, stat *syscall.Stat_t) error
+
+// rootOnlyDir : un dossier que root seul peut changer, à root et sans
+// écriture pour le groupe ni pour les autres. Sinon, le compte de l'agent
+// pourrait y poser un lien (/tmp, un 0775).
+func rootOnlyDir(path string, stat *syscall.Stat_t) error {
+	return judgeOwnedDir(path, stat, 0)
+}
+
+// judgeOwnedDir est rootOnlyDir pour un propriétaire donné.
+func judgeOwnedDir(path string, stat *syscall.Stat_t, owner uint32) error {
+	if stat.Uid != owner {
+		return fmt.Errorf("%s does not belong to root (uid %d)", path, stat.Uid)
+	}
+	if stat.Mode&0o022 != 0 {
+		return fmt.Errorf("%s is writable by its group or others (mode %04o)", path, stat.Mode&0o7777)
+	}
+	return nil
+}
+
+func (h HostSystem) judge() dirJudge {
+	if h.judgeDir == nil {
+		return rootOnlyDir
+	}
+	return h.judgeDir
+}
 
 func (HostSystem) GroupExists(group string) (bool, error) {
 	_, err := user.LookupGroup(group)
@@ -316,20 +349,20 @@ func (HostSystem) Run(name string, args ...string) error {
 	return nil
 }
 
-// MakeFolder : chaque parent qui existe doit être un dossier à root, pas un
-// lien ; ceux qui manquent, root les crée en 0755. Le dossier lui-même
-// s'ouvre sans suivre de lien, puis se donne par son descripteur.
-func (HostSystem) MakeFolder(path string, mode fs.FileMode, owner fsx.Owner) error {
-	if err := checkRootParents(filepath.Dir(path)); err != nil {
+// MakeFolder : les parents s'ouvrent depuis « / », un par un, jugés
+// (openTrustedDir) ; le dossier se crée sous le dernier, s'ouvre sans suivre
+// de lien, puis se donne par son descripteur.
+func (h HostSystem) MakeFolder(path string, mode fs.FileMode, owner fsx.Owner) error {
+	parent, err := openTrustedDir(filepath.Dir(path), h.judge())
+	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 -- des parents à root, 0755 voulu : le compte de l'agent les traverse.
-		return err
+	defer syscall.Close(parent)
+	name := filepath.Base(path)
+	if err := syscall.Mkdirat(parent, name, uint32(mode.Perm())); err != nil && !errors.Is(err, syscall.EEXIST) {
+		return fmt.Errorf("create %s: %w", path, err)
 	}
-	if err := os.Mkdir(path, mode); err != nil && !errors.Is(err, fs.ErrExist) {
-		return err
-	}
-	descriptor, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	descriptor, err := syscall.Openat(parent, name, trustedDirFlags, 0)
 	if err != nil {
 		return fmt.Errorf("open %s without following a link: %w", path, err)
 	}
@@ -340,25 +373,57 @@ func (HostSystem) MakeFolder(path string, mode fs.FileMode, owner fsx.Owner) err
 	return syscall.Fchmod(descriptor, uint32(mode.Perm()))
 }
 
-// checkRootParents juge dir et ceux au-dessus qui existent.
-func checkRootParents(dir string) error {
-	for current := dir; ; current = filepath.Dir(current) {
-		info, err := os.Lstat(current)
-		switch {
-		case errors.Is(err, fs.ErrNotExist):
-		case err != nil:
-			return err
-		case info.Mode()&fs.ModeSymlink != 0 || !info.IsDir():
-			return fmt.Errorf("%s is not a plain directory", current)
-		default:
-			if raw, ok := info.Sys().(*syscall.Stat_t); !ok || raw.Uid != 0 {
-				return fmt.Errorf("%s does not belong to root", current)
+// trustedDirFlags : un dossier, jamais un lien, à chaque niveau.
+const trustedDirFlags = syscall.O_RDONLY | syscall.O_DIRECTORY | syscall.O_NOFOLLOW | syscall.O_CLOEXEC
+
+// openTrustedDir ouvre dir depuis « / », composant par composant, chacun
+// relatif au descripteur du précédent et sans suivre de lien : jamais un
+// chemin que le noyau résout en entier. Ce qui manque se crée à root en
+// 0755. Chaque dossier ouvert, « / » compris, est jugé sur son descripteur
+// (judge) : un dossier changé entre deux composants est soit déjà ouvert
+// (le changement ne le touche pas), soit refusé. Rend le descripteur de dir.
+func openTrustedDir(dir string, judge dirJudge) (int, error) {
+	if !filepath.IsAbs(dir) || filepath.Clean(dir) != dir {
+		return -1, fmt.Errorf("%s is not an absolute clean path", dir)
+	}
+	descriptor, err := syscall.Open("/", trustedDirFlags, 0)
+	if err != nil {
+		return -1, err
+	}
+	current := "/"
+	for _, name := range append([]string{""}, strings.Split(strings.TrimPrefix(dir, "/"), "/")...) {
+		if name != "" {
+			current = filepath.Join(current, name)
+			next, err := openOrCreateDir(descriptor, name, current)
+			_ = syscall.Close(descriptor)
+			if err != nil {
+				return -1, err
 			}
+			descriptor = next
 		}
-		if current == filepath.Dir(current) {
-			return nil
+		var stat syscall.Stat_t
+		if err := syscall.Fstat(descriptor, &stat); err != nil {
+			_ = syscall.Close(descriptor)
+			return -1, err
+		}
+		if err := judge(current, &stat); err != nil {
+			_ = syscall.Close(descriptor)
+			return -1, err
 		}
 	}
+	return descriptor, nil
+}
+
+// openOrCreateDir ouvre name sous parent, le crée à root en 0755 s'il manque.
+func openOrCreateDir(parent int, name, path string) (int, error) {
+	if err := syscall.Mkdirat(parent, name, 0o755); err != nil && !errors.Is(err, syscall.EEXIST) {
+		return -1, fmt.Errorf("create %s: %w", path, err)
+	}
+	descriptor, err := syscall.Openat(parent, name, trustedDirFlags, 0)
+	if err != nil {
+		return -1, fmt.Errorf("%s is a link or not a directory: %w", path, err)
+	}
+	return descriptor, nil
 }
 
 func (HostSystem) DropIns() ([]string, error) {
@@ -382,18 +447,15 @@ func (HostSystem) ReadDropIn(name string) ([]byte, error) {
 	return dir.ReadFile(name)
 }
 
-// WriteDropIn crée le dossier des drop-ins à root s'il manque ; un dossier
-// qui serait un lien ne s'ouvre pas.
-func (HostSystem) WriteDropIn(name string, content []byte) error {
-	if err := checkRootParents(filepath.Dir(machine.UnitDropInDir)); err != nil {
+// WriteDropIn crée le dossier des drop-ins à root s'il manque, par le même
+// parcours jugé que MakeFolder, lui compris : à root, fermé au groupe et aux
+// autres, personne d'autre que root ne le change ensuite.
+func (h HostSystem) WriteDropIn(name string, content []byte) error {
+	descriptor, err := openTrustedDir(machine.UnitDropInDir, h.judge())
+	if err != nil {
 		return err
 	}
-	if err := os.Mkdir(machine.UnitDropInDir, 0o755); err != nil && !errors.Is(err, fs.ErrExist) { // #nosec G301 -- le dossier des drop-ins de systemd, à root, 0755 comme /etc/systemd/system.
-		return err
-	}
-	if err := checkRootParents(machine.UnitDropInDir); err != nil {
-		return err
-	}
+	_ = syscall.Close(descriptor)
 	dir, err := os.OpenRoot(machine.UnitDropInDir)
 	if err != nil {
 		return err
