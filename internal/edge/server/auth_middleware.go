@@ -44,6 +44,13 @@ const (
 	authAttemptRate  = 1.0 / 6
 	authAttemptBurst = 10
 	authIdle         = 30 * time.Minute
+	// Toutes les adresses ensemble : chaque tentative coûte ~100 ms de
+	// bcrypt, 120 par minute en prennent un cinquième d'un cœur. Une rafale
+	// d'adresses inventées (ou un X-Forwarded-For qui les distingue) ne
+	// passe pas ce débit. Le coût : tant qu'elle le sature, une connexion
+	// légitime reçoit 429 (Retry-After) ; la boucle locale n'est jamais
+	// comptée ici, root garde l'accès de secours.
+	DefaultAuthGlobalPerMinute = 120
 )
 
 // Ce que le serveur attend du composant auth.

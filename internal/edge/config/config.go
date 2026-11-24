@@ -18,6 +18,8 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/ldesfontaine/kagu/internal/edge/server"
+	"github.com/ldesfontaine/kagu/internal/edge/server/ping"
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
@@ -76,6 +78,10 @@ type Config struct {
 	TOTPLockMinutes         int `toml:"totp_lock_minutes" validate:"min=1,max=1440"`
 	PasswordFailuresPerHour int `toml:"password_failures_per_hour" validate:"min=1,max=100000"`
 	PasswordPaceSeconds     int `toml:"password_pace_seconds" validate:"min=1,max=3600"`
+	// Les limites globales des compteurs que l'anonyme remplit : tentatives
+	// de connexion et pings par minute, toutes adresses ensemble.
+	AuthGlobalPerMinute int `toml:"auth_global_per_minute" validate:"min=1,max=1000000"`
+	PingGlobalPerMinute int `toml:"ping_global_per_minute" validate:"min=1,max=1000000"`
 }
 
 func Default() Config {
@@ -89,6 +95,8 @@ func Default() Config {
 		TOTPLockMinutes:         int(auth.DefaultTOTPLock / time.Minute),
 		PasswordFailuresPerHour: auth.DefaultPasswordFailuresPerHour,
 		PasswordPaceSeconds:     int(auth.DefaultPasswordPace / time.Second),
+		AuthGlobalPerMinute:     server.DefaultAuthGlobalPerMinute,
+		PingGlobalPerMinute:     ping.DefaultGlobalPerMinute,
 	}
 }
 

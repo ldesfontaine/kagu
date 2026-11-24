@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -556,6 +557,11 @@ type Options struct {
 	// ConnectionsPerSource est la borne par client derrière un mandataire de
 	// confiance (limits.go) ; zéro : aucune, pour les tests.
 	ConnectionsPerSource int
+	// AuthGlobalPerMinute borne les tentatives de connexion de toutes les
+	// adresses ensemble, boucle locale exceptée ; 0 vaut DefaultAuthGlobalPerMinute.
+	AuthGlobalPerMinute int
+	// PingGlobalPerMinute : la même borne pour /ping ; 0 vaut ping.DefaultGlobalPerMinute.
+	PingGlobalPerMinute int
 	// Clock remplace l'horloge, pour les tests ; nil = time.Now.
 	Clock func() time.Time
 }
@@ -575,39 +581,42 @@ func New(opts Options) (*Server, error) {
 		return nil, fmt.Errorf("register woff2 type: %w", err)
 	}
 	server := &Server{
-		logger:         opts.Logger,
-		version:        opts.Version,
-		commit:         opts.Commit,
-		catalogs:       catalogs,
-		reader:         opts.Reader,
-		settings:       opts.Settings,
-		machines:       opts.Machines,
-		heartbeats:     opts.Heartbeats,
-		resources:      opts.Resources,
-		containers:     opts.Containers,
-		probes:         opts.Probes,
-		directory:      opts.Directory,
-		manifest:       opts.Manifest,
-		updates:        opts.Updates,
-		lifecycle:      opts.Lifecycle,
-		status:         opts.Status,
-		alerts:         opts.Alerts,
-		notifier:       opts.Notifier,
-		apiTokens:      opts.APITokens,
-		verbRequests:   opts.VerbRequests,
-		mcpURL:         opts.MCPURL,
-		auth:           opts.Auth,
-		actions:        opts.Actions,
-		sshKeys:        opts.SSHKeys,
-		systemd:        opts.Systemd,
-		links:          opts.Links,
-		proxmox:        opts.Proxmox,
-		firewalls:      opts.Firewalls,
-		backups:        opts.Backups,
-		restic:         opts.Restic,
-		deploy:         opts.Deploy,
-		live:           opts.Live,
-		authLimit:      ratelimit.NewBySource(authAttemptRate, authAttemptBurst, authIdle),
+		logger:       opts.Logger,
+		version:      opts.Version,
+		commit:       opts.Commit,
+		catalogs:     catalogs,
+		reader:       opts.Reader,
+		settings:     opts.Settings,
+		machines:     opts.Machines,
+		heartbeats:   opts.Heartbeats,
+		resources:    opts.Resources,
+		containers:   opts.Containers,
+		probes:       opts.Probes,
+		directory:    opts.Directory,
+		manifest:     opts.Manifest,
+		updates:      opts.Updates,
+		lifecycle:    opts.Lifecycle,
+		status:       opts.Status,
+		alerts:       opts.Alerts,
+		notifier:     opts.Notifier,
+		apiTokens:    opts.APITokens,
+		verbRequests: opts.VerbRequests,
+		mcpURL:       opts.MCPURL,
+		auth:         opts.Auth,
+		actions:      opts.Actions,
+		sshKeys:      opts.SSHKeys,
+		systemd:      opts.Systemd,
+		links:        opts.Links,
+		proxmox:      opts.Proxmox,
+		firewalls:    opts.Firewalls,
+		backups:      opts.Backups,
+		restic:       opts.Restic,
+		deploy:       opts.Deploy,
+		live:         opts.Live,
+		authLimit: ratelimit.NewBySourceWithGlobal(authAttemptRate, authAttemptBurst, authIdle, ratelimit.GlobalLimit{
+			PerMinute: cmp.Or(opts.AuthGlobalPerMinute, DefaultAuthGlobalPerMinute),
+			Exempt:    isLoopbackAddress,
+		}),
 		verbLimit:      ratelimit.New(apiVerbRate, apiVerbBurst, apiVerbIdle),
 		verbDenyLimit:  ratelimit.New(apiVerbDenyRate, apiVerbDenyBurst, apiVerbIdle),
 		eventTabs:      ratelimit.NewSlots(maxEventSubscribers),
@@ -643,10 +652,11 @@ func New(opts Options) (*Server, error) {
 		Clock:           opts.Clock,
 	})
 	server.pings = pingapi.New(pingapi.Options{
-		Logger:        opts.Logger,
-		Heartbeats:    opts.Heartbeats,
-		ClientAddress: server.clientAddress,
-		Clock:         opts.Clock,
+		Logger:          opts.Logger,
+		Heartbeats:      opts.Heartbeats,
+		ClientAddress:   server.clientAddress,
+		GlobalPerMinute: opts.PingGlobalPerMinute,
+		Clock:           opts.Clock,
 	})
 	server.public = public.New(public.Options{
 		Logger:        opts.Logger,

@@ -1,6 +1,7 @@
 package ping
 
 import (
+	"cmp"
 	"context"
 	"log/slog"
 	"net/http"
@@ -23,6 +24,9 @@ type Options struct {
 	// ClientAddress rend l'adresse du client telle que le serveur la résout,
 	// mandataires de confiance compris : la règle vit à la racine.
 	ClientAddress func(r *http.Request) string
+	// GlobalPerMinute borne les pings de toutes les sources ensemble ; 0 vaut
+	// DefaultGlobalPerMinute.
+	GlobalPerMinute int
 	// Clock remplace l'horloge du limiteur, pour les tests ; nil = time.Now.
 	Clock func() time.Time
 }
@@ -36,12 +40,15 @@ type Handler struct {
 }
 
 func New(opts Options) *Handler {
+	globalPerMinute := cmp.Or(opts.GlobalPerMinute, DefaultGlobalPerMinute)
 	handler := &Handler{
 		logger:        opts.Logger,
 		heartbeats:    opts.Heartbeats,
 		clientAddress: opts.ClientAddress,
-		sourceLimit:   ratelimit.NewBySource(pingPerSourceRate, pingPerSourceBurst, pingIdle),
-		tokenLimit:    ratelimit.NewCapped(pingPerTokenRate, pingPerTokenBurst, pingIdle, maxPingTokenBuckets),
+		sourceLimit: ratelimit.NewBySourceWithGlobal(
+			pingPerSourceRate, pingPerSourceBurst, pingIdle, ratelimit.GlobalLimit{PerMinute: globalPerMinute},
+		),
+		tokenLimit: ratelimit.NewCapped(pingPerTokenRate, pingPerTokenBurst, pingIdle, maxPingTokenBuckets),
 	}
 	if opts.Clock != nil {
 		handler.sourceLimit.SetClock(opts.Clock)
