@@ -25,28 +25,12 @@ func noteReportRefusal(ctx context.Context, q execer, machineID, field string, r
 	return nil
 }
 
+// attachReportRefusals pose sur chaque machine les champs refusés de son agent,
+// par nom.
 func attachReportRefusals(ctx context.Context, q querier, machines []machine.Machine) error {
-	rows, err := q.QueryContext(ctx, `SELECT machine_id, field FROM machine_report_refusals ORDER BY machine_id, field`)
-	if err != nil {
-		return fmt.Errorf("list report refusals: %w", err)
-	}
-	type owned struct{ machineID, field string }
-	entries, err := collect(rows, func(row scanner) (owned, error) {
-		var entry owned
-		err := row.Scan(&entry.machineID, &entry.field)
-		return entry, err
-	})
-	if err != nil {
-		return fmt.Errorf("scan report refusals: %w", err)
-	}
-	for _, entry := range entries {
-		for index := range machines {
-			if machines[index].ID == entry.machineID {
-				machines[index].ReportRejected = append(machines[index].ReportRejected, entry.field)
-			}
-		}
-	}
-	return nil
+	return attachToMachines(ctx, q, machines, "report refusals",
+		`SELECT machine_id, field FROM machine_report_refusals ORDER BY machine_id, field`,
+		func(m *machine.Machine, field string) { m.ReportRejected = append(m.ReportRejected, field) })
 }
 
 // rejudgeReportedFields est l'étape Go de la 050 : une base d'avant garde ce

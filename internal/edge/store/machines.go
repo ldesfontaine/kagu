@@ -69,6 +69,34 @@ func (db *DB) GetMachine(ctx context.Context, id string) (machine.Machine, error
 	return machines[0], nil
 }
 
+// attachToMachines lit en une requête les couples (machine_id, valeur) de
+// toute la liste et confie chaque valeur à attach, sur sa machine. Ce que le
+// store pose ainsi après machineSelect (MAC, refus) y passe ; what nomme la
+// lecture dans les erreurs.
+func attachToMachines(ctx context.Context, q querier, machines []machine.Machine, what, query string, attach func(m *machine.Machine, value string)) error {
+	rows, err := q.QueryContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("list %s: %w", what, err)
+	}
+	type owned struct{ machineID, value string }
+	entries, err := collect(rows, func(row scanner) (owned, error) {
+		var entry owned
+		err := row.Scan(&entry.machineID, &entry.value)
+		return entry, err
+	})
+	if err != nil {
+		return fmt.Errorf("scan %s: %w", what, err)
+	}
+	for _, entry := range entries {
+		for index := range machines {
+			if machines[index].ID == entry.machineID {
+				attach(&machines[index], entry.value)
+			}
+		}
+	}
+	return nil
+}
+
 // MachineExists dit si la machine est connue : une sonde ou une tâche qui
 // la vise doit le savoir avant que la clé étrangère ne la refuse en erreur
 // brute.
