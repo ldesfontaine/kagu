@@ -458,13 +458,35 @@ func sessionFrom(ctx context.Context) (auth.Session, bool) {
 // Le refus d'une installation sans compte : le front montre l'écran de
 // première configuration. Hors /api, le texte dit d'ouvrir l'interface.
 func (s *Server) writeSetupRequired(w http.ResponseWriter, r *http.Request) {
+	s.writeInterfaceRefusal(w, r, http.StatusUnauthorized, codeSetupRequired)
+}
+
+// writeInterfaceRefusal répond un refus de l'interface : la clé en JSON sous
+// /api, son texte dans la langue du navigateur ailleurs.
+func (s *Server) writeInterfaceRefusal(w http.ResponseWriter, r *http.Request, status int, code string) {
 	if strings.HasPrefix(r.URL.Path, "/api/") {
-		s.writeAPIError(w, http.StatusUnauthorized, codeSetupRequired)
+		s.writeAPIError(w, status, code)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	catalog := s.catalogs.For(browserLanguage(r))
-	http.Error(w, catalog.Get(codeSetupRequired), http.StatusUnauthorized)
+	http.Error(w, catalog.Get(code), status)
+}
+
+// refuseUnproxiedPeer tient R-CNX-5 à la requête : l'interface de l'opérateur
+// n'est servie qu'à la boucle locale et aux mandataires de trusted_proxies,
+// par qui passe l'HTTPS. Un voisin qui contourne le mandataire parlerait en
+// clair : refusé avant toute lecture du corps, mot de passe compris. Sur un
+// listen de boucle locale, tout pair passe : il est sur la machine.
+func (s *Server) refuseUnproxiedPeer(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.operatorFromAnyPeer || isLoopbackAddress(httpx.PeerHost(r)) || s.trustsPeer(r) {
+			next(w, r)
+			return
+		}
+		s.logger.Debug("interface refused to a peer that is neither loopback nor a trusted proxy", "peer", httpx.PeerHost(r), "path", r.URL.Path)
+		s.writeInterfaceRefusal(w, r, http.StatusForbidden, codeHTTPSRequired)
+	}
 }
 
 // forwardedIdentityKey porte, dans le contexte de la requête, l'identité

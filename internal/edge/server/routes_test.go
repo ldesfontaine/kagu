@@ -390,6 +390,9 @@ func newFirstSetupServer(t *testing.T) *testServer {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Le banc joue l'opérateur depuis 192.0.2.1, sans mandataire : la garde
+	// du pair (R-CNX-5) se teste à part, en la remettant.
+	server.operatorFromAnyPeer = true
 	// Le serveur commande les agents par leurs flux, comme dans serve.
 	containers.SetCommander(server)
 	probes.SetCommander(server)
