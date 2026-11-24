@@ -225,6 +225,8 @@ func runServe(args []string) error {
 	options.ResponseWriteTimeout = cfg.WriteTimeout()
 	options.RequestReadTimeout = cfg.WriteTimeout()
 	options.ConnectionsPerSource = cfg.MaxConnectionsPerSource
+	options.AuthGlobalPerMinute = cfg.AuthGlobalPerMinute
+	options.PingGlobalPerMinute = cfg.PingGlobalPerMinute
 	server, err := server.New(options)
 	if err != nil {
 		return err

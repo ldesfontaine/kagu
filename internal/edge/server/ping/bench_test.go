@@ -30,12 +30,18 @@ type bench struct {
 
 func newBench(t *testing.T) *bench {
 	t.Helper()
+	return newBenchWithGlobal(t, 0)
+}
+
+// newBenchWithGlobal règle la limite globale ; 0, celle par défaut.
+func newBenchWithGlobal(t *testing.T, globalPerMinute int) *bench {
+	t.Helper()
 	db := storetest.Open(t)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	clock := servertest.Now
 	heartbeats := heartbeat.New(db, logger)
 	heartbeats.SetClock(clock)
-	handler := New(Options{Logger: logger, Heartbeats: heartbeats, ClientAddress: httpx.PeerHost, Clock: clock})
+	handler := New(Options{Logger: logger, Heartbeats: heartbeats, ClientAddress: httpx.PeerHost, GlobalPerMinute: globalPerMinute, Clock: clock})
 	mux := http.NewServeMux()
 	handler.Routes(func(method, pattern string, route http.HandlerFunc) {
 		mux.HandleFunc(method+" "+pattern, route)

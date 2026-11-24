@@ -89,6 +89,13 @@ trusted_proxies = ["127.0.0.1/32", "::1/128"]
 # password_failures_per_hour = 20
 # password_pace_seconds = 30
 
+# Limites globales, toutes adresses confondues (par minute) : tentatives de
+# connexion (la boucle locale n'y compte jamais) et pings. Elles bornent ce
+# qu'une rafale d'adresses inventées peut obtenir. Atteintes, les requêtes
+# reçoivent 429 jusqu'au retour du crédit. Valeurs par défaut :
+# auth_global_per_minute = 120
+# ping_global_per_minute = 6000
+
 # Niveau du journal (JSON sur stderr) : debug, info, warn, error.
 # Vide (défaut) : info. En debug, chaque requête HTTP fait une ligne.
 log_level = "info"

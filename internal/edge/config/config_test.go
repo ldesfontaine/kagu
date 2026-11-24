@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/edge/server"
+	"github.com/ldesfontaine/kagu/internal/edge/server/ping"
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
 )
 
@@ -324,6 +326,30 @@ func TestParse_ListenTakesABracketedIPv6(t *testing.T) {
 	for _, listen := range []string{"8080", "[::1]", "[::1]:99999", "[::1]:port", "127.0.0.1:0x50", "::1:8080"} {
 		if _, _, err := Parse([]byte("listen = \"" + listen + "\"\n")); err == nil {
 			t.Errorf("%s accepted", listen)
+		}
+	}
+}
+
+func TestParse_GlobalLimits_DefaultCustomAndBad(t *testing.T) {
+	cfg, _, err := Parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AuthGlobalPerMinute != server.DefaultAuthGlobalPerMinute || cfg.PingGlobalPerMinute != ping.DefaultGlobalPerMinute {
+		t.Fatalf("defaults: auth %d, ping %d", cfg.AuthGlobalPerMinute, cfg.PingGlobalPerMinute)
+	}
+	cfg, _, err = Parse([]byte("auth_global_per_minute = 30\nping_global_per_minute = 900\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AuthGlobalPerMinute != 30 || cfg.PingGlobalPerMinute != 900 {
+		t.Fatalf("custom: auth %d, ping %d", cfg.AuthGlobalPerMinute, cfg.PingGlobalPerMinute)
+	}
+	for _, line := range []string{
+		"auth_global_per_minute = 0", "ping_global_per_minute = 0", "auth_global_per_minute = 1000001",
+	} {
+		if _, _, err := Parse([]byte(line + "\n")); err == nil {
+			t.Errorf("%q was accepted", line)
 		}
 	}
 }

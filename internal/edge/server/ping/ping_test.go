@@ -255,3 +255,40 @@ func TestPing_RecordedSource_StaysTheFullAddress(t *testing.T) {
 		t.Fatalf("pings %+v", pings)
 	}
 }
+
+// E02-19 : une rafale de sources inventées qui remplit la table ne fait pas
+// refuser le vrai jeton d'une tâche, d'une source neuve.
+func TestE02_19_ARealTokenPassesAfterAFullTableOfInventedSources(t *testing.T) {
+	server := newBench(t)
+	job := server.createJob(t, "job")
+	for i := range ratelimit.MaxSources {
+		peer := fmt.Sprintf("10.%d.%d.%d:4000", i>>16, (i>>8)&255, i&255)
+		if got := server.sendFrom(peer, "/ping/hb_unknown"); got != http.StatusNotFound {
+			t.Fatalf("invented source %d: status %d", i, got)
+		}
+	}
+	if size := server.handler.sourceLimit.Size(); size != ratelimit.MaxSources {
+		t.Fatalf("the table holds %d sources, want it full at %d", size, ratelimit.MaxSources)
+	}
+	if got := server.send(http.MethodGet, "/ping/"+job.Token, "", "203.0.113.200:4000"); got.Code != http.StatusOK {
+		t.Fatalf("the real token from a new source: status %d, want 200", got.Code)
+	}
+	if size := server.handler.sourceLimit.Size(); size > ratelimit.MaxSources {
+		t.Fatalf("the table holds %d sources, cap %d", size, ratelimit.MaxSources)
+	}
+}
+
+// Au-delà de la limite globale, 429 pour toute source, vraie ou inventée.
+func TestE02_19_APingBurstPastTheGlobalLimitIsRefusedForEverySource(t *testing.T) {
+	server := newBenchWithGlobal(t, 50)
+	job := server.createJob(t, "job")
+	for i := range 50 {
+		if got := server.sendFrom(fmt.Sprintf("10.0.%d.1:4000", i), "/ping/hb_unknown"); got != http.StatusNotFound {
+			t.Fatalf("ping %d under the global limit: status %d", i, got)
+		}
+	}
+	got := server.send(http.MethodGet, "/ping/"+job.Token, "", "203.0.113.200:4000")
+	if got.Code != http.StatusTooManyRequests || got.Header().Get("Retry-After") == "" {
+		t.Fatalf("past the global limit: status %d, headers %v", got.Code, got.Header())
+	}
+}

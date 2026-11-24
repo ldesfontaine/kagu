@@ -27,6 +27,15 @@ const (
 	// en clair, dont le format n'a jamais été garanti. Au-delà, le jeton ne
 	// peut pas exister : il est refusé sans rien retenir.
 	maxPingTokenLength = 256
+	// Tous les pings de toutes les sources : une table pleine d'adresses
+	// inventées oublie les plus anciennes, et c'est cette borne qui empêche
+	// une rafale d'y regagner du crédit sans fin. Un ping coûte une lecture
+	// indexée, 100 par seconde se tiennent ; une tâche réelle en fait
+	// quelques-uns par jour, et 6 000 d'un coup couvrent des milliers de
+	// tâches lancées à la même minute. Le coût : une rafale qui la sature
+	// fait refuser (429) aussi les vrais pings, jusqu'à ce que le crédit
+	// revienne (une minute pour tout rendre) ; la tâche réessaie.
+	DefaultGlobalPerMinute = 6000
 	// Un seau par jeton reconnu : le plafond dépasse le nombre de moniteurs
 	// d'une machine Kagu.
 	maxPingTokenBuckets = 4096

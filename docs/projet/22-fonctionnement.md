@@ -95,7 +95,7 @@ Trait double : chiffré. Trait simple : en clair, mais sans quitter la machine.
 | Agent | Traefik → Kagu | En clair, boucle locale | `X-Forwarded-*` cru seulement depuis `trusted_proxies`. `X-Forwarded-For` se lit de la droite : la source est la dernière entrée qui n'est pas un mandataire de confiance, ce que le client écrit à gauche ne compte pas |
 | Agent en dev | machine → `http://127.0.0.1` | Aucun, et c'est accepté : rien ne sort de la machine | Idem |
 | Agent sur un LAN | machine → `http://192.168.…` | **Refusé** par l'agent, sauf `-allow-plain` | Réservé à un réseau déjà chiffré, WireGuard par exemple |
-| Ping | tâche → Traefik → `/ping/{jeton}` | TLS de Traefik | Personne : le jeton dans l'URL est le secret. Qui l'a peut faire passer une tâche pour faite. Débit borné par source, puis par jeton **reconnu** : un jeton inconnu est lu en base, jamais compté, il ne laisse aucun seau. Chaque limiteur par adresse (pings, échecs de connexion, page publique, relais) garde au plus `ratelimit.MaxSources` clés ; plein, il balaie les seaux oubliés, puis refuse toute adresse nouvelle (les adresses déjà là continuent). **Le coût** : tant qu'un anonyme tient la table pleine d'adresses inventées, une source nouvelle et légitime est refusée (`429`) |
+| Ping | tâche → Traefik → `/ping/{jeton}` | TLS de Traefik | Personne : le jeton dans l'URL est le secret. Qui l'a peut faire passer une tâche pour faite. Débit borné par source, puis par jeton **reconnu** : un jeton inconnu est lu en base, jamais compté, il ne laisse aucun seau. Chaque limiteur par adresse (pings, échecs de connexion, page publique, relais) garde au plus `ratelimit.MaxSources` clés (« Limiteurs par adresse ») ; le seau par jeton reconnu, lui, refuse une clé nouvelle au plafond |
 | Statut | visiteur → Traefik → `/statut/<slug>`, `/statut/<slug>/api/…` | TLS de Traefik | Personne, par conception : la page est publique. Elle ne dit que le nom de ses composants et ce que l'opérateur a écrit ; jamais un identifiant d'objet, un nom de machine, de conteneur ou de sonde, une cible, un port, ni rien d'une autre page. Des tests le prouvent sur la réponse réelle |
 | Registre | agent → le registre de l'image | TLS, sauf vers la boucle locale (un registre sur `localhost:5000`, comme Docker le fait) | L'agent s'authentifie par un jeton anonyme, ou signé des identifiants en clair du `config.json` de Docker de la machine ; le registre ne prouve rien de plus que son certificat. Rien ne sort qu'un nom de dépôt et un tag ; l'agent ne tire jamais une image. Aucune redirection suivie |
 | Agent IA | client MCP → Traefik → mcp-maison | TLS de Traefik | OAuth de mcp-maison, délégué à l'IdP OIDC de l'opérateur (Authelia, Authentik, Keycloak, GitLab) : Kagu n'y voit rien et n'y prouve rien |
@@ -5117,6 +5117,35 @@ un même /64 partage donc un seul budget. La clé se calcule dans
 lue, il ne peut pas oublier le /64. Les seaux oubliés depuis 10 min (30 min
 pour l'authentification) sont balayés au passage d'une requête, au plus
 toutes les 5 min, sans goroutine.
+
+**Table pleine (`MaxSources` = 4 096 adresses).** Le limiteur balaie d'abord,
+puis **oublie l'adresse vue il y a le plus longtemps** et compte la nouvelle :
+une source neuve n'est jamais refusée pour cette seule raison (coût O(1) par
+requête, mémoire bornée). Une rafale de 4 096 adresses inventées sur `/ping`
+ne fait donc plus refuser le vrai jeton d'une tâche (essai E02-19).
+**Le coût** : une rafale assez large fait oublier ses propres adresses et en
+retrouve un seau plein ; c'est la limite globale qui borne ce crédit.
+
+**Limite globale** (toutes adresses confondues, par minute, rafale d'autant),
+pour les deux compteurs que l'anonyme remplit. Chaque compteur a son
+limiteur, sa table et sa limite, sans rien de commun :
+
+| Compteur | Appels de `NewBySourceWithGlobal` | Défaut | Réglage | Pourquoi cette valeur |
+| --- | --- | --- | --- | --- |
+| Connexion : échecs de l'interface, changement de mot de passe, jetons d'API inconnus | `authLimit` (`server.go`) | 120 | `auth_global_per_minute` | ~100 ms de bcrypt par tentative : 120 par minute prennent un cinquième d'un cœur |
+| Pings | `ping.New` (`ping/handler.go`) | 6 000 | `ping_global_per_minute` | une lecture indexée par ping : 100 par seconde se tiennent ; une rafale de 6 000 couvre des milliers de tâches lancées à la même minute |
+
+Les autres limiteurs par adresse (relais, page de statut et son direct,
+journal des refus, enrôlement des agents) ont l'oubli, sans limite globale :
+leur table est la leur, ils ne prennent rien aux deux compteurs ci-dessus.
+Un refus de la source ne coûte rien à la limite globale ; la **boucle locale
+n'est jamais comptée dans celle de la connexion** : root garde l'accès de
+secours pendant une attaque (derrière un mandataire hors `trusted_proxies`,
+toutes les requêtes semblent venir de la boucle locale et y échappent).
+**Ce que voit un opérateur légitime** quand une rafale sature la limite
+globale de la connexion : `429` avec `Retry-After` sur la page de connexion,
+jusqu'au retour du crédit (120 par minute au plus) ; il se connecte par la
+boucle locale en attendant. Pour les pings, une tâche reçoit `429` et réessaie.
 
 L'API : `GET /api/auth` (mode, identifiant — en `forward`, l'identité de
 la requête —, en-tête en `forward`, `forward_insecure` quand le mode
