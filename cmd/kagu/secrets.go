@@ -38,7 +38,8 @@ const secretsUsage = `Usage : {command} secrets <sous-commande> [-config chemin]
   rotate-server-key   tire une clé neuve pour signer les ordres ; la
                       précédente reste valable le temps que root la pose
                       sur chaque machine (agent trust set server-key).
-                      Prend effet au redémarrage
+                      Refusée tant qu'un agent est plus ancien que le
+                      serveur. Prend effet au redémarrage
   finish-server-key   retire la clé précédente une fois chaque agent passé
                       à la neuve (option -force : sans attendre les agents
                       restés dessus, qui seront à ré-enrôler)

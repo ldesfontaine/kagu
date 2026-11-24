@@ -364,6 +364,10 @@ func TestAgentStream_StoresTheReportedRightsThenRefusesTheRevokedAgent(t *testin
 	if status.Agent.ServerKeyFingerprint != fingerprint {
 		t.Fatalf("pinned key %q, want %q", status.Agent.ServerKeyFingerprint, fingerprint)
 	}
+	// Le protocole annoncé est gardé en base (#588).
+	if status.Agent.Protocol != agentwire.ProtocolVersion {
+		t.Fatalf("reported protocol %q", status.Agent.Protocol)
+	}
 	if status.Agent.RootDir != "/srv/workspace" {
 		t.Fatalf("reported root %q", status.Agent.RootDir)
 	}

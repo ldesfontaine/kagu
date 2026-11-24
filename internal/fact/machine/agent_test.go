@@ -379,3 +379,24 @@ func TestCapabilitiesDiffer_OnlyForRightsFromTheIdentity(t *testing.T) {
 		}
 	}
 }
+
+// Le protocole annoncé se garde tel quel s'il est un numéro court ; le reste
+// s'écrit vide, ce que la rotation compte en retard.
+func TestNoteProtocol_KeepsOnlyAShortNumber(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	cleartext, _, err := h.service.CreateToken(ctx, "vps-paris-1", RoleGeneric, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrolled := h.enrollWith(t, cleartext)
+	for reported, want := range map[string]string{"3": "3", "2": "2", "": "", "03": "", "1000": "", "3;": "", "trois": ""} {
+		if err := h.service.NoteProtocol(ctx, enrolled.Agent.ID, reported); err != nil {
+			t.Fatal(err)
+		}
+		if status, _ := h.service.Get(ctx, enrolled.ID); status.Agent.Protocol != want {
+			got := status.Agent.Protocol
+			t.Errorf("%q: kept %q, want %q", reported, got, want)
+		}
+	}
+}

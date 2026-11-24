@@ -190,6 +190,11 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	if err := h.machines.NoteServerKey(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderServerKey)); err != nil {
 		h.logger.Warn("note server key", "machine_id", authenticated.ID, "error", err)
 	}
+	// Le protocole que l'agent parle, gardé en base : une rotation de la clé
+	// du serveur se refuse tant qu'un agent est plus ancien (#588).
+	if err := h.machines.NoteProtocol(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderProtocol)); err != nil {
+		h.logger.Warn("note protocol", "machine_id", authenticated.ID, "error", err)
+	}
 	// La racine des services que l'agent a dans son fichier : le plan d'un
 	// déploiement la montre.
 	if err := h.machines.NoteRootDir(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderAgentRoot)); err != nil {

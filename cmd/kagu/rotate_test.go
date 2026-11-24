@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ldesfontaine/kagu/internal/edge/store"
 	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
@@ -125,6 +126,9 @@ func TestSecretsServerKey_RotatesThenFinishesOnceTheAgentsFollowed(t *testing.T)
 	if err := db.RecordServerKey(ctx, host.Agent.ID, old.Fingerprint()); err != nil {
 		t.Fatal(err)
 	}
+	if err := db.RecordProtocol(ctx, host.Agent.ID, agentwire.ProtocolVersion); err != nil {
+		t.Fatal(err)
+	}
 
 	var out bytes.Buffer
 	if err := secretsCommand([]string{"rotate-server-key", "-config", configPath}, &out); err != nil {
@@ -163,6 +167,64 @@ func TestSecretsServerKey_RotatesThenFinishesOnceTheAgentsFollowed(t *testing.T)
 	}
 	if err := secretsCommand([]string{"finish-server-key", "-config", configPath}, &bytes.Buffer{}); !errors.As(err, &refused) || !strings.Contains(refused.message, "rien à finir") {
 		t.Fatalf("finishing twice: %v", err)
+	}
+}
+
+// Décision de Lucas (#588) : la rotation de la clé du serveur est refusée tant
+// qu'une machine enrôlée a un agent plus ancien que le serveur, ou dont le
+// protocole n'est pas connu (pas revenu depuis qu'on le garde) ; le refus nomme
+// ces machines et server.key ne change pas. Une machine révoquée ne compte
+// pas ; toutes au protocole courant, la rotation passe.
+func TestDecision588_RotationIsRefusedWhileAnAgentIsBehind(t *testing.T) {
+	configPath, stateDir := writeConfig(t)
+	root, db := openState(t, stateDir)
+	ctx := context.Background()
+	if _, _, err := action.LoadOrCreateKey(root); err != nil {
+		t.Fatal(err)
+	}
+	before, err := root.ReadFile(brand.ServerKeyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	machines := machine.New(db, machine.NewSessions(), slog.New(slog.DiscardHandler))
+	old := storetest.EnrollMachine(t, machines, "11111111-2222-4333-8444-555555555555", "vps-paris-1")
+	current := storetest.EnrollMachine(t, machines, "22222222-3333-4444-8555-666666666666", "vps-lyon-2")
+	silent := storetest.EnrollMachine(t, machines, "33333333-4444-4555-8666-777777777777", "vps-nice-3")
+	if err := machines.NoteProtocol(ctx, old.Agent.ID, agentwire.LegacyProtocolVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err := machines.NoteProtocol(ctx, current.Agent.ID, agentwire.ProtocolVersion); err != nil {
+		t.Fatal(err)
+	}
+
+	var refused *refusal
+	err = secretsCommand([]string{"rotate-server-key", "-config", configPath}, &bytes.Buffer{})
+	if !errors.As(err, &refused) || !strings.Contains(refused.message, "vps-paris-1 (protocole 2)") ||
+		!strings.Contains(refused.message, "vps-nice-3 (protocole inconnu") || strings.Contains(refused.message, "vps-lyon-2") ||
+		!strings.Contains(refused.message, "Mettez-les à jour d'abord") {
+		t.Fatalf("an agent behind: %v", err)
+	}
+	if after, _ := root.ReadFile(brand.ServerKeyFile); string(after) != string(before) {
+		t.Fatal("a refused rotation changed server.key")
+	}
+
+	if err := machines.NoteProtocol(ctx, old.Agent.ID, agentwire.ProtocolVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err := machines.NoteProtocol(ctx, silent.Agent.ID, "garbage"); err != nil {
+		t.Fatal(err)
+	}
+	if err := secretsCommand([]string{"rotate-server-key", "-config", configPath}, &bytes.Buffer{}); !errors.As(err, &refused) || !strings.Contains(refused.message, "vps-nice-3") || strings.Contains(refused.message, "vps-paris-1") {
+		t.Fatalf("an unreadable protocol counts as behind: %v", err)
+	}
+	if _, err := db.RevokeAgent(ctx, silent.ID, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := secretsCommand([]string{"rotate-server-key", "-config", configPath}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("every agent current: %v", err)
+	}
+	if rotated, err := action.LoadKey(root); err != nil || rotated.PreviousFingerprint() == "" {
+		t.Fatalf("the rotation did not happen: %v", err)
 	}
 }
 

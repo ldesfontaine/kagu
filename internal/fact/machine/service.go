@@ -47,6 +47,8 @@ type Store interface {
 	// (ReportField…), ou l'efface quand refused est faux.
 	NoteReportRefusal(ctx context.Context, machineID, field string, refused bool) error
 	RecordServerKey(ctx context.Context, agentID, fingerprint string) error
+	// RecordProtocol garde le protocole annoncé par l'agent ; vide : NULL.
+	RecordProtocol(ctx context.Context, agentID, protocol string) error
 	RecordRootDir(ctx context.Context, agentID, root string) error
 	RecordRollbackVersion(ctx context.Context, agentID string, version int) error
 	RecordServiceRollbackVersion(ctx context.Context, agentID string, version int) error
@@ -589,6 +591,30 @@ func (s *Service) NoteServerKey(ctx context.Context, agentID, fingerprint string
 		fingerprint = ""
 	}
 	return s.store.RecordServerKey(ctx, agentID, fingerprint)
+}
+
+// NoteProtocol garde le protocole que l'agent annonce à chaque ouverture du
+// flux : « secrets rotate-server-key » le lit pour refuser une rotation qu'un
+// agent plus ancien ne suivrait pas. Ce qui n'est pas un numéro court
+// s'écrit vide, compté en retard.
+func (s *Service) NoteProtocol(ctx context.Context, agentID, protocol string) error {
+	if !isProtocolNumber(protocol) {
+		protocol = ""
+	}
+	return s.store.RecordProtocol(ctx, agentID, protocol)
+}
+
+// isProtocolNumber : un à trois chiffres, sans zéro en tête.
+func isProtocolNumber(text string) bool {
+	if len(text) == 0 || len(text) > 3 || text[0] == '0' {
+		return false
+	}
+	for _, r := range text {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // NoteRootDir garde la racine des services que l'agent dit avoir dans son

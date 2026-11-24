@@ -155,7 +155,7 @@ Les sous-commandes :
 | `opencloud secrets forget -config <chemin>` | Clé de chiffrement perdue : repart d'une clé neuve et oublie les secrets qu'elle chiffrait, voir [Clé perdue](#clé-perdue) |
 | `opencloud secrets rotate -config <chemin>` | Change la clé de chiffrement et rescelle chaque secret avec la neuve, serveur arrêté, voir [Faire tourner les clés](#faire-tourner-les-clés) |
 | `opencloud secrets server-key -config <chemin>` | Imprime l'empreinte (`SHA256:…`) de la clé qui signe les ordres, serveur en marche ou non : c'est elle qu'on compare à ce que `agent trust` imprime sur une machine |
-| `opencloud secrets rotate-server-key -config <chemin>` | Tire une clé neuve pour signer les ordres ; la précédente reste valable le temps que root la pose sur chaque machine, voir [Faire tourner les clés](#faire-tourner-les-clés) |
+| `opencloud secrets rotate-server-key -config <chemin>` | Tire une clé neuve pour signer les ordres ; la précédente reste valable le temps que root la pose sur chaque machine. Refusée tant qu'une machine a un agent plus ancien que le serveur, voir [Faire tourner les clés](#faire-tourner-les-clés) |
 | `opencloud secrets finish-server-key [-force] -config <chemin>` | Retire la clé précédente une fois chaque agent passé à la neuve |
 | `opencloud export [-config <chemin>] [-o <fichier>] [-propose]` | Écrit l'annuaire en YAML (sortie standard, ou le fichier en 0600), avec `-propose` y ajoute ce que les conteneurs non déclarés laissent deviner, voir [Exporter l'annuaire](#exporter-lannuaire) |
 | `opencloud apply [-config <chemin>] [-prune] [-yes] [-dry-run] <fichier>` | Applique un fichier YAML à l'annuaire, après avoir montré le plan et demandé confirmation, voir [Appliquer un fichier](#appliquer-un-fichier) |
@@ -2494,8 +2494,12 @@ runuser -u opencloud -- opencloud secrets finish-server-key -config /etc/openclo
 systemctl restart opencloud
 ```
 
-La première tire une clé neuve, garde la précédente dans `server.key` et
-imprime la ligne `trust set` à coller. Après le redémarrage, les deux sont
+La première **refuse** tant qu'une machine enrôlée a un agent plus ancien que
+le serveur, ou ne s'est pas reconnectée depuis la mise à jour du serveur
+(son protocole n'est pas connu) : elle les nomme, rien ne change, et aucune
+option ne passe outre. Mettez ces agents à jour, laissez-les se reconnecter,
+puis relancez. Ensuite, elle tire une clé neuve, garde la précédente dans
+`server.key` et imprime la ligne `trust set` à coller. Après le redémarrage, les deux sont
 valables : Kagu signe chaque ordre avec la clé que l'agent dit accepter.
 **Aucun ordre ne livre la neuve** : root la pose sur chaque machine. La ligne
 imprime l'empreinte de la neuve : comparez-la à
@@ -2710,6 +2714,7 @@ Les messages sont ceux que le binaire écrit, tels quels.
 | Agent : « Certificat refusé : ce n'est pas celui dont l'empreinte a été épinglée… » | Le certificat de Kagu a changé, ou quelqu'un s'interpose | Vérifier l'empreinte, puis ré-enrôler avec la nouvelle |
 | Agent : « Kagu ne parle pas la version du protocole de cet agent… » ; la machine reste hors ligne | Agent et serveur de deux protocoles différents (un seul des deux mis à jour) | Installer sur la machine le même binaire que sur la machine Kagu, puis `systemctl restart opencloud-agent` |
 | `secrets rotate` : « un serveur tourne sur ce state_dir » | La rotation de `secret.key` demande le serveur arrêté | `systemctl stop opencloud`, relancer la commande, redémarrer |
+| `secrets rotate-server-key` : « rotation refusée : ces machines ont un agent plus ancien que ce serveur » | Un agent est à un protocole plus ancien, ou ne s'est pas reconnecté depuis la mise à jour du serveur (protocole inconnu) | Mettre à jour l'agent de chaque machine nommée, attendre sa reconnexion, relancer ; aucune option ne passe outre |
 | `secrets finish-server-key` : « ces machines ont encore la clé précédente » | Root n'y a pas collé la ligne `trust set server-key` depuis la rotation | Coller sur chaque machine la ligne que le refus donne, ou `-force` puis la coller |
 | Agent : `tls: failed to verify certificate` | Certificat auto-signé sans `-pin` | `-pin`, ou un certificat reconnu |
 | « L'agent n'a pas le droit de lire la socket Docker de cette machine. » (`docker_denied`) | Le compte de l'agent n'est pas dans le groupe `docker`, ou y a été mis après le démarrage de l'agent : un groupe se lit au démarrage du processus | `usermod -aG docker opencloud-agent` puis `systemctl restart opencloud-agent`. Le groupe `docker` équivaut à root ([ce que cela donne](#le-groupe-docker-équivaut-à-root)) ; sinon, [garder l'agent en root](#garder-lagent-en-root) |

@@ -18,6 +18,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/seal"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // rotateSecrets change la clé de chiffrement sans rien perdre :
@@ -99,6 +100,9 @@ func rotateServerKey(ctx context.Context, stateDir *os.Root, db *store.DB, out i
 	if err != nil {
 		return err
 	}
+	if err := refuseAgentsBehind(ctx, db); err != nil {
+		return err
+	}
 	rotated, err := key.Rotated()
 	if errors.Is(err, action.ErrRotationPending) {
 		return &refusal{message: fmt.Sprintf("une rotation est déjà en cours (clé précédente %s) : finissez-la avec `%s secrets finish-server-key`", key.PreviousFingerprint(), brand.Command)}
@@ -177,6 +181,35 @@ func loadServerKey(stateDir *os.Root) (*action.Key, error) {
 		return nil, &refusal{message: fmt.Sprintf("%s illisible (%v) : restaurez la clé sauvegardée avec la base", brand.ServerKeyFile, err)}
 	}
 	return key, err
+}
+
+// refuseAgentsBehind refuse la rotation tant qu'une machine enrôlée a un agent
+// plus ancien que ce serveur (agentwire.ProtocolBehind), ou n'a pas dit son
+// protocole depuis qu'on le garde : un tel agent perdrait le serveur avec la
+// clé (décision de Lucas, #588). Aucune option ne passe outre.
+func refuseAgentsBehind(ctx context.Context, db *store.DB) error {
+	machines, err := db.ListMachines(ctx)
+	if err != nil {
+		return err
+	}
+	var behind []string
+	for _, host := range machines {
+		agent := host.Agent
+		if !agent.Exists() || !agent.RevokedAt.IsZero() || !agentwire.ProtocolBehind(agent.Protocol) {
+			continue
+		}
+		if agent.Protocol == "" {
+			behind = append(behind, host.Name+" (protocole inconnu : pas reconnectée depuis la mise à jour du serveur)")
+		} else {
+			behind = append(behind, host.Name+" (protocole "+agent.Protocol+")")
+		}
+	}
+	if len(behind) == 0 {
+		return nil
+	}
+	return &refusal{message: fmt.Sprintf("rotation refusée : ces machines ont un agent plus ancien que ce serveur (protocole %s) : %s. "+
+		"Mettez-les à jour d'abord (une machine qui ne s'est pas reconnectée compte en retard) ; rien n'a été changé",
+		agentwire.ProtocolVersion, strings.Join(behind, ", "))}
 }
 
 // machinesOnServerKey nomme les machines dont l'agent actif a épinglé cette

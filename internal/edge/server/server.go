@@ -83,6 +83,7 @@ type MachineService interface {
 	Connect(ctx context.Context, authenticated machine.Machine, address, agentVersion, capabilities, account, unavailable, protocol string) (*machine.Session, error)
 	NoteSystem(ctx context.Context, machineID, system string) error
 	NoteServerKey(ctx context.Context, agentID, fingerprint string) error
+	NoteProtocol(ctx context.Context, agentID, protocol string) error
 	NoteRootDir(ctx context.Context, agentID, root string) error
 	NoteRollbackVersion(ctx context.Context, agentID, reported string) error
 	NoteServiceRollbackVersion(ctx context.Context, agentID, reported string) error

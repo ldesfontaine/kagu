@@ -119,3 +119,15 @@ func TestUnavailableReasons_AreRefusalReasons(t *testing.T) {
 		}
 	}
 }
+
+// #588 : un agent plus ancien que le serveur, ou dont le protocole est
+// inconnu, est en retard ; le protocole courant, ou un plus récent, ne l'est pas.
+func TestProtocolBehind_CountsTheUnknownAsBehind(t *testing.T) {
+	for protocol, want := range map[string]bool{
+		ProtocolVersion: false, "4": false, LegacyProtocolVersion: true, "1": true, "": true, "x": true,
+	} {
+		if got := ProtocolBehind(protocol); got != want {
+			t.Errorf("%q: %v, want %v", protocol, got, want)
+		}
+	}
+}
