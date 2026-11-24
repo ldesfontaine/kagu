@@ -73,6 +73,17 @@ func (f *fakeStore) RecordSystem(_ context.Context, id, system string) error {
 	return nil
 }
 
+func (f *fakeStore) NoteReportRefusal(_ context.Context, machineID, field string, refused bool) error {
+	m := f.machines[machineID]
+	m.ReportRejected = slices.DeleteFunc(m.ReportRejected, func(noted string) bool { return noted == field })
+	if refused {
+		m.ReportRejected = append(m.ReportRejected, field)
+		slices.Sort(m.ReportRejected)
+	}
+	f.machines[machineID] = m
+	return nil
+}
+
 func (f *fakeStore) RecordRollbackVersion(_ context.Context, agentID string, version int) error {
 	for id, m := range f.machines {
 		if m.Agent.ID == agentID {

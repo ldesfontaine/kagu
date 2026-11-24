@@ -43,6 +43,10 @@ type Machine struct {
 	HostOverride string
 	// Les adresses MAC des cartes que l'agent a rapportées, en minuscules.
 	MACs []string
+	// Les champs que son agent a dits et que le serveur a refusés
+	// (ReportField…, par nom) : la valeur refusée n'est jamais gardée.
+	// Un champ redit valable, ou un ré-enrôlement, efface son refus.
+	ReportRejected []string
 	// L'agent courant : l'actif, sinon le dernier révoqué ; vide sans agent.
 	Agent Agent
 }
@@ -51,9 +55,6 @@ type Machine struct {
 type Status struct {
 	Machine
 	Online bool
-	// Les champs que son agent a dits à l'ouverture du flux et que le serveur a
-	// refusés (ReportField…) : la valeur gardée est celle d'avant.
-	ReportRejected []string
 }
 
 // Token est un jeton d'enrôlement tel que la base le connaît : sans son clair.

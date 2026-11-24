@@ -43,6 +43,9 @@ type Store interface {
 	TouchAgent(ctx context.Context, agentID string, at time.Time) error
 	RecordConnection(ctx context.Context, connection Connection) error
 	RecordSystem(ctx context.Context, id, system string) error
+	// NoteReportRefusal garde le refus d'un champ que l'agent a dit
+	// (ReportField…), ou l'efface quand refused est faux.
+	NoteReportRefusal(ctx context.Context, machineID, field string, refused bool) error
 	RecordServerKey(ctx context.Context, agentID, fingerprint string) error
 	RecordRootDir(ctx context.Context, agentID, root string) error
 	RecordRollbackVersion(ctx context.Context, agentID string, version int) error
@@ -117,7 +120,6 @@ type Service struct {
 	store    Store
 	sessions *Sessions
 	presence Presence
-	refusals reportRefusals
 	nonces   *nonces
 	watcher  Watcher
 	alerter  Alerter
@@ -191,7 +193,7 @@ func (s *Service) Get(ctx context.Context, id string) (Status, error) {
 // Une machine est en ligne selon la présence installée : le flux ouvert de
 // son agent, ou son dernier signal. La machine openCloud comme les autres.
 func (s *Service) status(machine Machine) Status {
-	return Status{Machine: machine, Online: s.presence.IsOnline(machine, s.now()), ReportRejected: s.refusals.of(machine.ID)}
+	return Status{Machine: machine, Online: s.presence.IsOnline(machine, s.now())}
 }
 
 // Count renvoie le nombre de machines et celles en ligne. Une machine
@@ -315,7 +317,6 @@ func (s *Service) Remove(ctx context.Context, id string, options RemoveOptions) 
 		return err
 	}
 	s.sessions.Close(id)
-	s.refusals.forget(id)
 	s.logger.Info("machine removed", "machine_id", id, "name", machine.Name)
 	s.auditor.Record(ctx, machineEvent(audit.MachineDelete, machine))
 	if s.alerter != nil {
@@ -383,7 +384,8 @@ func (s *Service) Enroll(ctx context.Context, request Enrollment) (Machine, erro
 		return Machine{}, ErrBadKey
 	}
 	// Avant le jeton : un champ refusé ne brûle pas la ligne de l'opérateur.
-	if !isEnrollmentFieldsValid(request) {
+	said := Reported{Hostname: request.Hostname, System: request.OS, Arch: request.Arch, Version: request.AgentVersion}
+	if RefusedFields(said) != nil {
 		return Machine{}, ErrBadField
 	}
 	agentID, err := NewAgentID()
@@ -410,12 +412,6 @@ func (s *Service) Enroll(ctx context.Context, request Enrollment) (Machine, erro
 	s.auditor.Record(ctx, agentEvent(audit.AgentEnroll, machine))
 	s.changed(machine.ID)
 	return machine, nil
-}
-
-// isEnrollmentFieldsValid : un nom d'hôte vide est un agent qui ne le dit pas.
-func isEnrollmentFieldsValid(request Enrollment) bool {
-	return (request.Hostname == "" || IsHostname(request.Hostname)) && isReportedText(request.OS) &&
-		isReportedText(request.Arch) && isReportedText(request.AgentVersion)
 }
 
 // archive garde la machine et coupe son agent : il est refusé à sa prochaine
@@ -492,9 +488,13 @@ func (s *Service) Authenticate(ctx context.Context, proof Proof) (Machine, error
 func (s *Service) Connect(ctx context.Context, authenticated Machine, address, agentVersion, capabilities, account, unavailable, protocol string) (*Session, error) {
 	machineID := authenticated.ID
 	now := s.now()
+	version, err := s.acceptedVersion(ctx, authenticated, agentVersion)
+	if err != nil {
+		return nil, err
+	}
 	connection := Connection{
 		MachineID: machineID, AgentID: authenticated.Agent.ID,
-		Address: address, Version: s.acceptedVersion(authenticated, agentVersion), At: now,
+		Address: address, Version: version, At: now,
 	}
 	if capabilities != "" {
 		reported, err := agentpolicy.ParseCapabilities(capabilities)
@@ -527,14 +527,21 @@ func (s *Service) Connect(ctx context.Context, authenticated Machine, address, a
 
 // acceptedVersion rend la version que l'agent dit, ou celle d'avant si le texte
 // est refusé : le refus est noté, le flux s'ouvre quand même.
-func (s *Service) acceptedVersion(authenticated Machine, said string) string {
+func (s *Service) acceptedVersion(ctx context.Context, authenticated Machine, said string) (string, error) {
+	// Un agent qui ne dit rien n'annonce pas de valeur valable : un refus gardé
+	// le reste.
+	if said == "" {
+		return said, nil
+	}
 	refused := !isReportedText(said)
-	s.refusals.note(authenticated.ID, ReportFieldVersion, refused)
+	if err := s.noteRefusal(ctx, authenticated.ID, ReportFieldVersion, refused); err != nil {
+		return "", err
+	}
 	if refused {
 		s.logger.Warn("agent version refused", "machine_id", authenticated.ID)
-		return authenticated.Agent.Version
+		return authenticated.Agent.Version, nil
 	}
-	return said
+	return said, nil
 }
 
 // refuseIfRevoked ferme la session qui vient de s'ouvrir si son agent n'est
@@ -787,9 +794,14 @@ const MaxSystemLength = 120
 // ne ressemble pas à un nom de système n'est pas gardé : on reste sur ce
 // que l'enrôlement a noté ; le refus d'un texte dit mais mauvais est noté.
 func (s *Service) NoteSystem(ctx context.Context, machineID, system string) error {
-	refused := system != "" && !IsSystemName(system)
-	s.refusals.note(machineID, ReportFieldSystem, refused)
-	if system == "" || refused {
+	if system == "" {
+		return nil
+	}
+	refused := !IsSystemName(system)
+	if err := s.noteRefusal(ctx, machineID, ReportFieldSystem, refused); err != nil {
+		return err
+	}
+	if refused {
 		return nil
 	}
 	return s.store.RecordSystem(ctx, machineID, system)

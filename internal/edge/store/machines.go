@@ -41,6 +41,9 @@ func (db *DB) ListMachines(ctx context.Context) ([]machine.Machine, error) {
 	if err := attachMACs(ctx, db.sql, machines); err != nil {
 		return nil, err
 	}
+	if err := attachReportRefusals(ctx, db.sql, machines); err != nil {
+		return nil, err
+	}
 	return machines, nil
 }
 
@@ -58,6 +61,9 @@ func (db *DB) GetMachine(ctx context.Context, id string) (machine.Machine, error
 		return machine.Machine{}, err
 	}
 	if err := attachMACs(ctx, db.sql, machines); err != nil {
+		return machine.Machine{}, err
+	}
+	if err := attachReportRefusals(ctx, db.sql, machines); err != nil {
 		return machine.Machine{}, err
 	}
 	return machines[0], nil
@@ -372,6 +378,11 @@ func reenroll(ctx context.Context, tx *sql.Tx, m machine.Machine, now time.Time)
 	}
 	if err := notFoundIfNoRow(result, machine.ErrNotFound); err != nil {
 		return err
+	}
+	// Tout ce que l'agent dit de lui vient d'être redit et jugé : les refus
+	// d'avant ne décrivent plus rien.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM machine_report_refusals WHERE machine_id = ?`, m.ID); err != nil {
+		return fmt.Errorf("clear report refusals: %w", err)
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE agents SET revoked_at = ? WHERE machine_id = ? AND revoked_at IS NULL`, now.Unix(), m.ID)
 	if err != nil {
