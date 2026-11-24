@@ -52,7 +52,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
 
@@ -130,7 +130,7 @@ jobs:
       # Sans cache : celui de build sort d'un runner où npm a tourné, et go
       # fait confiance à GOCACHE et à GOMODCACHE sans les revérifier. Modules
       # téléchargés à neuf, contrôlés par go.sum.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
           cache: false
