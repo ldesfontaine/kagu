@@ -7,6 +7,7 @@ import { Field, Input } from "../components/Field";
 import { FormActions, FormBody } from "../components/FormBody";
 import { useAction } from "../hooks/useAction";
 import { useForm } from "../hooks/useForm";
+import { useServerTime } from "../hooks/useServerTime";
 import { useT } from "../i18n/context";
 import { asksTOTP, loginFailure } from "../lib/auth";
 import { AccessPage } from "./AccessPage";
@@ -16,11 +17,14 @@ import { AccessPage } from "./AccessPage";
 // et un second écran le saisit (R-A2-6). Le serveur pose le cookie de la
 // session avec sa réponse ; la porte relit alors l'accès et ouvre
 // l'interface. Le refus ne dit jamais lequel du nom ou du mot de passe est faux.
+// L'écran du code dit l'heure du serveur : un téléphone qui ne dit pas la
+// même explique un code refusé, sans que le refus en dise rien.
 export function Login({ onSignedIn }: { onSignedIn: () => void }) {
   const t = useT();
   const action = useAction();
   const { values, change } = useForm({ username: "", password: "", code: "" });
   const [codeScreen, setCodeScreen] = useState(false);
+  const serverTime = useServerTime();
 
   const signIn = () => {
     action.run(
@@ -53,7 +57,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
           }
         >
           {codeScreen ? (
-            <Field label={t("auth.totp_code_label")} htmlFor="auth-code" help={t("auth.login_code_intro")}>
+            <Field label={t("auth.totp_code_label")} htmlFor="auth-code" help={serverTime === undefined ? t("auth.login_code_intro") : `${t("auth.login_code_intro")} ${serverTime}`}>
               <Input
                 id="auth-code"
                 type="text"

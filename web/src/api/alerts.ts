@@ -28,7 +28,8 @@ export type AlertKind =
   | "source_unprotected"
   | "target_full"
   | "target_unreachable"
-  | "totp_locked";
+  | "totp_locked"
+  | "clock_unsynced";
 
 // Le catalogue fermé, dans l'ordre des écrans.
 export const alertKinds: readonly AlertKind[] = [
@@ -54,6 +55,7 @@ export const alertKinds: readonly AlertKind[] = [
   "target_full",
   "target_unreachable",
   "totp_locked",
+  "clock_unsynced",
 ];
 
 export type AlertSeverity = "attention" | "danger";
@@ -62,8 +64,9 @@ export type AlertSeverity = "attention" | "danger";
 export type AlertCategory = "machines" | "services" | "jobs" | "probes" | "backups" | "updates" | "access";
 type AlertStatus = "open" | "resolved";
 // Un service déclaré : l'objet d'une montée de version revenue en arrière ;
-// le compte de l'opérateur : celui d'un code suspendu.
-export type AlertObjectKind = "machine" | "container" | "heartbeat" | "probe" | "volume" | "backup" | "service" | "account";
+// le compte de l'opérateur : celui d'un code suspendu ; la machine Kagu
+// elle-même (server) : celui de son horloge non synchronisée.
+export type AlertObjectKind = "machine" | "container" | "heartbeat" | "probe" | "volume" | "backup" | "service" | "account" | "server";
 
 export interface AlertObject {
   kind: AlertObjectKind;

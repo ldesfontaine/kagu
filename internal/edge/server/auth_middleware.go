@@ -73,6 +73,7 @@ type AuthService interface {
 	ResetPassword(ctx context.Context, password string) (int, error)
 	SetMode(ctx context.Context, change auth.ModeChange) (auth.State, int, error)
 	CloseAllSessions(ctx context.Context) (int, error)
+	Now() time.Time
 	TOTPActive(ctx context.Context) (bool, error)
 	ProposeTOTP(ctx context.Context, state auth.State) (auth.TOTPProposal, error)
 	EnableTOTP(ctx context.Context, expected auth.State, secret, code string) error

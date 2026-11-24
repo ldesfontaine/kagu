@@ -122,6 +122,8 @@ export function describeAlert(t: Translate, alert: Alert, now: number, threshold
       return lines(t, alert.kind, [], [object, machine]);
     case "target_full":
       return lines(t, alert.kind, [], [object, Math.floor((details.bytes ?? 0) / 2 ** 20), details.count ?? 0]);
+    case "clock_unsynced":
+      return lines(t, alert.kind, [], [formatDuration(t, details.since ? since(details.since, now) : 0)]);
     case "totp_locked":
       return lines(t, alert.kind, [], [details.until ? formatWhen(details.until, now) : "", details.target ?? ""]);
     case "target_unreachable":
@@ -335,6 +337,7 @@ export function objectPath(object: AlertObject, machineID: string): string | nul
     case "service":
       return `/services/annuaire/${object.id}`;
     case "account":
+    case "server":
       return null;
   }
 }
@@ -509,7 +512,7 @@ function muteTargetOf(alert: Pick<Alert, "kind" | "object" | "machine_id" | "mac
     case "service":
       return { kind: alert.kind, targetKind: "service", targetID: alert.object.id, targetName: "" };
   }
-  if (alert.object.kind === "account") {
+  if (alert.object.kind === "account" || alert.object.kind === "server") {
     return { kind: alert.kind, targetKind: "", targetID: "", targetName: "" };
   }
   return { kind: alert.kind, targetKind: alert.object.kind, targetID: alert.object.id, targetName: alert.object.name };

@@ -16,7 +16,7 @@ export function Field({
 }: {
   label: string;
   htmlFor?: string;
-  help?: string;
+  help?: string | undefined;
   tip?: string;
   children: ReactNode;
 }) {

@@ -75,6 +75,10 @@ const (
 	// Le code à six chiffres du compte est suspendu après trop de codes faux
 	// d'affilée (R-A2-16) : tout code, le juste aussi, est refusé jusqu'à l'heure dite.
 	KindTOTPLocked Kind = "totp_locked"
+	// L'horloge de la machine Kagu n'est plus synchronisée depuis
+	// ClockUnsyncedDelay : elle dérive, les codes à six chiffres et les
+	// agents finiront refusés.
+	KindClockUnsynced Kind = "clock_unsynced"
 )
 
 // Kinds liste le catalogue, dans l'ordre des écrans.
@@ -84,7 +88,7 @@ func Kinds() []Kind {
 		KindJobLate, KindJobFailed, KindProbeDown, KindProbePasswordRemoved,
 		KindCertExpiring, KindCertExpired, KindCertUntrusted, KindDiskFull, KindCPUHigh, KindMemoryHigh, KindAgentRolledBack, KindServiceRolledBack,
 		KindBackupStale, KindRestoreTestStale, KindSourceUnprotected, KindTargetFull, KindTargetUnreachable,
-		KindTOTPLocked,
+		KindTOTPLocked, KindClockUnsynced,
 	}
 }
 
@@ -126,10 +130,13 @@ const (
 	// Le compte de l'opérateur : l'objet de l'alerte d'un code suspendu. Il
 	// n'a pas de clé étrangère, l'alerte ne devient jamais orpheline.
 	ObjectAccount ObjectKind = "account"
+	// La machine Kagu elle-même : l'objet de l'alerte de son horloge. Comme le
+	// compte, elle n'a pas de clé étrangère.
+	ObjectServer ObjectKind = "server"
 )
 
 func ObjectKinds() []ObjectKind {
-	return []ObjectKind{ObjectMachine, ObjectContainer, ObjectHeartbeat, ObjectProbe, ObjectVolume, ObjectBackup, ObjectService, ObjectAccount}
+	return []ObjectKind{ObjectMachine, ObjectContainer, ObjectHeartbeat, ObjectProbe, ObjectVolume, ObjectBackup, ObjectService, ObjectAccount, ObjectServer}
 }
 
 func isObjectKind(kind ObjectKind) bool {

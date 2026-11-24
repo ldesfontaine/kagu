@@ -205,7 +205,7 @@ autre : chacun a sa règle d'import.
 
 | Famille | Paquets |
 | --- | --- |
-| `kit` | `audit`, `brand`, `credential`, `deletion`, `dockerapi`, `egress`, `fsx`, `goldentest`, `hostinfo`, `ident`, `lang`, `live`, `mail` (+ `smtptest`), `mcpcheck`, `module`, `proxysecret`, `ratelimit`, `refusal`, `registry`, `release` (+ `releasetest`), `rollback`, `sampler`, `seal`, `testkit`, `tlsinspect`, `trust`, `version`, `wait` (+ `waittest`) |
+| `kit` | `audit`, `brand`, `clocksync`, `credential`, `deletion`, `dockerapi`, `egress`, `fsx`, `goldentest`, `hostinfo`, `ident`, `lang`, `live`, `mail` (+ `smtptest`), `mcpcheck`, `module`, `proxysecret`, `ratelimit`, `refusal`, `registry`, `release` (+ `releasetest`), `rollback`, `sampler`, `seal`, `testkit`, `tlsinspect`, `trust`, `version`, `wait` (+ `waittest`) |
 | `fact` | `machine`, `anchor`, `auth`, `container`, `firewall` (+ `opnsense`, `opnsense/opnsensetest`), `hostconn`, `lifecycle`, `link`, `policy`, `probe`, `resource`, `role`, `sshkeys`, `systemdunits`, `update` |
 | `wire` | `agentwire` |
 | `gesture` | `action`, `apitoken`, `verb`, `verbrequest` |

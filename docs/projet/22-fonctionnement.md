@@ -4565,7 +4565,7 @@ liste vit dans `internal/domain/alert`.
 
    | Catégorie | Types d'alerte |
    | --- | --- |
-   | `machines` | `machine_lost`, `disk_full`, `cpu_high`, `memory_high` |
+   | `machines` | `machine_lost`, `disk_full`, `cpu_high`, `memory_high`, `clock_unsynced` |
    | `services` | `service_down`, `service_unhealthy`, `service_restart` |
    | `jobs` | `job_late`, `job_failed` |
    | `probes` | `probe_down`, `probe_password_removed`, `cert_expiring`, `cert_expired`, `cert_untrusted` |
@@ -4588,6 +4588,7 @@ liste vit dans `internal/domain/alert`.
 | Certificat non vérifié | `probe` | agrafe « révoqué », nom qui ne correspond pas, ou chaîne refusée d'un certificat pas encore expiré | chaîne et nom valides | attention |
 | Disque presque plein | `resource`, par volume, à chaque lecture | **85 %** par défaut ; aggravée à **95 %**. Réglable, globalement et par machine | sous le seuil d'attention **moins 5 points** (80 % par défaut), ou volume disparu | attention → danger |
 | Processeur très chargé | `resource`, à chaque lecture | la **moyenne** des lectures de la fenêtre (**15 min** par défaut) atteint **95 %** ; aggravée à **99 %**. Réglable, globalement et par machine | la moyenne repasse sous le seuil d'attention **moins 5 points** (90 %) | attention → danger |
+| Horloge du serveur non synchronisée | `serve` (`alert.ClockWatch`), au démarrage puis chaque minute | l'horloge de la machine Kagu n'est pas synchronisée depuis **15 min** (`ClockUnsyncedDelay`) ; objet « serveur » (`server`), sans machine ni lien ; l'alerte dit depuis quand et quoi faire (`timedatectl status`, `timedatectl set-ntp true`, ou chrony) | une lecture synchronisée | attention |
 | Code à six chiffres suspendu | `auth`, au code faux qui atteint le seuil (5 d'affilée par défaut) | la suspension commence ; un nouvel échec pendant elle ne rouvre rien ; l'alerte nomme la source du dernier code faux et l'heure de la fin | `admin unlock`, un code juste ou le retrait du code (pas l'échéance seule) | danger |
 | Mémoire presque pleine | `resource`, à chaque lecture | la moyenne de la fenêtre (**15 min**) atteint **90 %** ; aggravée à **95 %**. Réglable, globalement et par machine | idem, sous 85 % par défaut | attention → danger |
 | Agent revenu à la version précédente | `action`, au rapport de l'agent | la mise à jour n'a pas été confirmée à temps (`timeout`) ou a planté (`crash`) : l'agent est revenu seul à la précédente ; la remise en état qui échoue à son tour (`failed`) | une mise à jour ou un retour arrière confirmé sur cette machine | attention, danger si la remise en état a échoué |
@@ -4850,6 +4851,30 @@ plus (R-A2-1) : un en-tête `Authorization: Basic` n'est lu par aucun mode.
     renvoie nom, mot de passe et code. Faux, échu ou déjà servi,
     `401 auth.totp_wrong` (jamais lequel). Le mot de passe se juge avant le
     code : un code juste avec un mot de passe faux ne dit rien.
+  - **L'heure du serveur** (E02-21) : `GET /api/auth` rend `server_time`,
+    l'heure de l'horloge qui juge le code, lue sans session. L'écran du code
+    (connexion, activation) la montre en heure et minute, dans le fuseau du
+    navigateur, et la fait avancer : l'opérateur la compare à son téléphone.
+    Le jugement ne change pas, et un code faux reçoit la même réponse quel que
+    soit l'écart : dire « ce code aurait été juste à 5 min près » serait un
+    oracle qui multiplie les chances de deviner. Une horloge qui dérive se
+    voit à l'alerte « Horloge du serveur non synchronisée » (paragraphe
+    suivant : l'horloge de la machine Kagu).
+  - **L'horloge de la machine Kagu** (`internal/kit/clocksync`,
+    `internal/domain/alert/source_clock.go`). `serve` lit l'état que le noyau
+    tient (`adjtimex`, en lecture seule, sans droit) au démarrage puis chaque
+    minute : synchronisée tant que l'erreur maximale reste sous 16 s, le seuil
+    que `timedatectl` lit aussi. Aucun appel à un serveur de temps : Kagu ne
+    mesure pas l'écart, il voit que plus rien ne corrige l'horloge. Non
+    synchronisée depuis 15 min, l'alerte `clock_unsynced` s'ouvre ; elle se
+    ferme à la première lecture synchronisée. Le délai couvre la
+    synchronisation d'un démarrage (une à deux minutes) ; une horloge libre ne
+    dérive pas de 30 s en 15 min. Le début de la perte vit en mémoire : un
+    redémarrage de `serve` relance le délai, une alerte ouverte reste ouverte.
+    **Ce que ça coûte** : le noyau ne passe en « non synchronisé » que quand
+    l'erreur maximale atteint 16 s, soit environ neuf heures après l'arrêt du
+    démon de synchronisation ; une horloge déjà fausse mais tenue pour
+    synchronisée (un démon qui suit une mauvaise source) n'alerte pas.
   - Les échecs comptés par compte : voir le paragraphe suivant.
 
   **Les échecs comptés par compte** (R-A2-16, W-M4,

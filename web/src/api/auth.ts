@@ -35,6 +35,9 @@ export interface AuthState {
   // En native connecté, présent et vrai quand le code à six chiffres est
   // actif : la redemande le demande aussi.
   totp?: boolean;
+  // L'heure du serveur, celle qui juge le code à six chiffres, dite par
+  // GET /api/auth seulement : l'écran du code la montre.
+  server_time?: string;
 }
 
 // Un compte et son mot de passe, ou l'en-tête d'un mandataire ; dans les deux
@@ -47,6 +50,12 @@ const authPath = "/api/auth";
 
 export function useAuth(): Resource<AuthState> {
   return useResource<AuthState>(authPath);
+}
+
+// L'heure du serveur, lue à l'ouverture de l'écran du code : relue, et non
+// prise de l'accès lu au chargement, elle date de la lecture.
+export async function readServerTime(): Promise<string | undefined> {
+  return (await api.get<AuthState>(authPath)).server_time;
 }
 
 // Crée le compte de la première configuration. En native, la réponse pose
