@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -80,7 +81,19 @@ var (
 	// ErrPinMismatch : le certificat présenté n'est pas celui épinglé ; il a
 	// changé, ou quelqu'un se fait passer pour openCloud.
 	ErrPinMismatch = errors.New("certificate does not match the pin")
+	// ErrSocketNotAbsolute : -server unix: ne vise qu'un chemin absolu ; un
+	// chemin relatif dépendrait du dossier où l'agent est lancé.
+	ErrSocketNotAbsolute = errors.New("unix socket path must be absolute")
 )
+
+// unixScheme désigne un serveur de cette machine joint par sa socket Unix :
+// le canal local de l'agent de la machine Kagu (R-B1-7). L'identité garde
+// l'adresse telle quelle.
+const unixScheme = "unix:"
+
+// unixBaseURL ne sert qu'à former l'URL des requêtes : par la socket, le
+// seul pair est le serveur qui l'écoute.
+const unixBaseURL = "http://localhost"
 
 // Client parle à un serveur openCloud ; il ne sait rien de la boucle.
 type Client struct {
@@ -165,11 +178,14 @@ func (c *Client) SetRightsUntil(until map[string]time.Time) {
 
 // NewClient refuse http:// vers autre chose que la boucle locale, sauf si
 // allowPlain le dit : un tunnel WireGuard ou un LAN de confiance, en
-// connaissance de cause.
+// connaissance de cause. unix:<chemin absolu> passe par la socket locale.
 func NewClient(server, pin, version string, allowPlain bool) (*Client, error) {
+	if socket, ok := strings.CutPrefix(server, unixScheme); ok {
+		return newSocketClient(socket, version)
+	}
 	server = strings.TrimRight(server, "/")
 	if !strings.HasPrefix(server, "http://") && !strings.HasPrefix(server, "https://") {
-		return nil, fmt.Errorf("server url must start with http:// or https://")
+		return nil, fmt.Errorf("server url must start with http:// or https://, or be unix:<absolute path>")
 	}
 	if strings.HasPrefix(server, "http://") && !allowPlain && !isLoopback(server) {
 		return nil, ErrPlainRefused
@@ -182,6 +198,25 @@ func NewClient(server, pin, version string, allowPlain bool) (*Client, error) {
 		}
 		transport.TLSClientConfig = tlsConfig
 	}
+	return newClientOver(server, transport, version), nil
+}
+
+// newSocketClient parle au serveur par la socket Unix de cette machine, et
+// par elle seule : ni mandataire, ni réseau. Ni TLS ni empreinte, la socket
+// ne sort pas de la machine.
+func newSocketClient(socket, version string) (*Client, error) {
+	if !filepath.IsAbs(socket) {
+		return nil, ErrSocketNotAbsolute
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	transport.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", socket)
+	}
+	return newClientOver(unixBaseURL, transport, version), nil
+}
+
+func newClientOver(server string, transport *http.Transport, version string) *Client {
 	// Une redirection n'est pas suivie : elle se lit comme une réponse, donc
 	// un refus. Le serveur n'en fait jamais vers l'agent ; un mandataire qui
 	// en fait enverrait le jeton ou la preuve ailleurs.
@@ -189,7 +224,7 @@ func NewClient(server, pin, version string, allowPlain bool) (*Client, error) {
 		Transport:     transport,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	return &Client{server: server, http: httpClient, version: version, system: hostinfo.OSName()}, nil
+	return &Client{server: server, http: httpClient, version: version, system: hostinfo.OSName()}
 }
 
 // newRequest prépare une requête vers le serveur, avec la version du

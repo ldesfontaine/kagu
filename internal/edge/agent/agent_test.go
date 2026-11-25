@@ -40,6 +40,7 @@ import (
 // Un vrai serveur openCloud sur un port éphémère, et un vrai agent contre lui.
 type bench struct {
 	url       string
+	handler   http.Handler
 	machines  *machine.Service
 	actions   *action.Service
 	serverKey *action.Key
@@ -93,7 +94,7 @@ func newBench(t *testing.T) *bench {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { agentRoot.Close() })
-	return &bench{url: server.URL, machines: machines, actions: actions, serverKey: serverKey, db: db, resources: resources, probes: probes, sshKeys: sshKeys, roles: roles, stateDir: agentRoot, policy: legacyPolicyPlace(t), logger: logger}
+	return &bench{url: server.URL, handler: handler, machines: machines, actions: actions, serverKey: serverKey, db: db, resources: resources, probes: probes, sshKeys: sshKeys, roles: roles, stateDir: agentRoot, policy: legacyPolicyPlace(t), logger: logger}
 }
 
 // Une borne large : elle ne sert qu'à ne pas bloquer la CI si le code est

@@ -44,7 +44,7 @@ func (r *refusal) Error() string {
 
 // opencloud agent : le premier lancement porte -server, reçoit le jeton sur
 // l'entrée standard et s'enrôle ; les suivants relisent l'identité et se
-// connectent.
+// connectent. -enroll-only s'arrête à l'identité, écrite ou déjà là.
 func runAgent(args []string) error {
 	asRoot := policyCommand{out: os.Stdout, openTerminal: openControllingTerminal, euid: os.Geteuid(), place: agent.SystemPolicyPlace}
 	if len(args) > 0 && args[0] == "trust" {
@@ -56,8 +56,13 @@ func runAgent(args []string) error {
 	if len(args) > 0 && (args[0] == policyRights || args[0] == policyGrant || args[0] == policyRevoke) {
 		return runAgentPolicy(args[0], args[1:], asRoot)
 	}
+	catalogs, err := lang.Load()
+	if err != nil {
+		return err
+	}
 	flags := flag.NewFlagSet("agent", flag.ContinueOnError)
 	server := flags.String("server", "", "adresse de "+brand.ProductName+", premier lancement seulement")
+	enrollOnly := flags.Bool("enroll-only", false, catalogs.For(lang.Default).Get("agent.enroll_only_help"))
 	// -token n'existe que pour être refusé avec une phrase claire, plutôt que
 	// l'erreur générique d'un drapeau inconnu.
 	flags.String("token", "", "refusé : le jeton se lit sur l'entrée standard")
@@ -91,10 +96,6 @@ func runAgent(args []string) error {
 	code, ok := lang.Parse(*language)
 	if !ok {
 		return fmt.Errorf("unknown language %q", *language)
-	}
-	catalogs, err := lang.Load()
-	if err != nil {
-		return err
 	}
 	// Dans la ligne de commande, le jeton serait lisible de tous les comptes
 	// de la machine par /proc : le premier qui le copie prend l'identité.
@@ -153,6 +154,7 @@ func runAgent(args []string) error {
 		UnsafeState:  unsafeState,
 		Server:       *server,
 		Token:        enrollmentToken,
+		EnrollOnly:   *enrollOnly,
 		Pin:          *pin,
 		AllowPlain:   *allowPlain,
 		Language:     code,

@@ -106,6 +106,7 @@ func TestRunAgent_RefusesTheTokenFlag(t *testing.T) {
 	for _, args := range [][]string{
 		{"-server", "https://opencloud.example.org", "-token", "oc_fromflag"},
 		{"-token=", "-server", "https://opencloud.example.org"},
+		{"-enroll-only", "-server", "unix:/run/opencloud/agent.sock", "-token", "oc_fromflag"},
 	} {
 		err := runAgent(append(args, "-state", stateDir))
 		var refused *refusal
