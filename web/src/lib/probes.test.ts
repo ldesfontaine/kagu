@@ -98,6 +98,7 @@ const httpProbe: Probe = {
   last_reason: "",
   certificate: null,
   created_at: "2026-10-01T10:00:00Z",
+  fix: null,
 };
 
 describe("probeFormOf et probeRequestOf", () => {

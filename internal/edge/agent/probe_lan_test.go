@@ -74,7 +74,8 @@ func (b *bench) waitForProbe(t *testing.T, id string, want func(probe.Probe) boo
 }
 
 // Le réseau local ne s'ouvre aux sondes que par probe.lan : sans lui, la
-// sonde vers la boucle locale tombe avec sa raison ; avec lui, elle répond.
+// sonde vers la boucle locale est suspendue avec sa raison ; avec lui, elle
+// répond.
 // Un agent enrôlé avant le droit (observe seul) est dans le premier cas, et
 // un état mal gardé (observe seul aussi) ferme le réseau local même quand le
 // fichier porte le droit.
@@ -86,10 +87,10 @@ func TestRun_ProbesFollowTheLANRight(t *testing.T) {
 		status   probe.Status
 		reason   probe.Reason
 	}{
-		{"agent enrolled before the right", "observe", false, probe.StatusDown, probe.ReasonLAN},
-		{"another right is not this one", "observe,agent.update", false, probe.StatusDown, probe.ReasonLAN},
+		{"agent enrolled before the right", "observe", false, probe.StatusSuspended, probe.ReasonLAN},
+		{"another right is not this one", "observe,agent.update", false, probe.StatusSuspended, probe.ReasonLAN},
 		{"with probe.lan", "observe,probe.lan", false, probe.StatusUp, probe.ReasonNone},
-		{"right on disk but state unsafe", "observe,probe.lan", true, probe.StatusDown, probe.ReasonLAN},
+		{"right on disk but state unsafe", "observe,probe.lan", true, probe.StatusSuspended, probe.ReasonLAN},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

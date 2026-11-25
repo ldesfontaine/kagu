@@ -1,5 +1,5 @@
 import { useResource, type Resource } from "../hooks/useResource";
-import { api, segment } from "./client";
+import { api, segment, type RefusalFix } from "./client";
 import { route } from "./routes";
 import type { DeletionPlan } from "./deletion";
 
@@ -8,7 +8,7 @@ import type { DeletionPlan } from "./deletion";
 // l'identifiant vient du serveur. Sujet du direct : « probes », que
 // topicsOf devine du chemin.
 
-export type ProbeStatus = "new" | "up" | "degraded" | "down" | "paused";
+export type ProbeStatus = "new" | "up" | "degraded" | "down" | "paused" | "suspended";
 type ProbeOutcome = "up" | "degraded" | "down";
 export type ProbeKind = "http" | "tcp";
 
@@ -61,6 +61,9 @@ export interface Probe {
   last_reason: string;
   certificate: Certificate | null;
   created_at: string;
+  // Suspendue : le droit qui manque à l'agent et la ligne qui le pose ;
+  // null sinon.
+  fix: RefusalFix | null;
 }
 
 // Un jour agrégé, en heure UTC : des comptes, jamais un pourcentage.

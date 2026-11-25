@@ -28,6 +28,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/hostconn"
 	"github.com/ldesfontaine/kagu/internal/fact/link"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/fact/probe"
 	"github.com/ldesfontaine/kagu/internal/fact/resource"
 	"github.com/ldesfontaine/kagu/internal/fact/systemdunits"
 	"github.com/ldesfontaine/kagu/internal/fact/update"
@@ -99,6 +100,7 @@ func seedE2E(t *testing.T, ts *testServer) {
 	seedE2EThresholds(t, ts)
 	seedE2EServiceRollback(t, ts)
 	seedE2ERights(t, ts)
+	seedE2ESuspendedProbe(t, ts)
 }
 
 // seedE2EVirtualized fait rapporter « machine virtuelle » aux deux machines,
@@ -547,6 +549,22 @@ func seedE2ERights(t *testing.T, ts *testServer) {
 		t.Fatal(err)
 	}
 	go e2eIgnoreOrders(session)
+}
+
+// seedE2ESuspendedProbe donne à pve-nord, qui n'a pas probe.lan, une sonde
+// vers son réseau local : son agent l'a essayée et refusée, elle est
+// suspendue (essai E03-09).
+func seedE2ESuspendedProbe(t *testing.T, ts *testServer) {
+	t.Helper()
+	ctx := context.Background()
+	created, err := ts.probes.Create(ctx, probe.Definition{Name: "partage nas", Kind: probe.KindTCP, Target: "192.168.1.20:445", MachineID: e2eNorthID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused := probe.Result{ProbeID: created.ID, CheckedAt: testNow.Add(-30 * time.Second), Outcome: probe.OutcomeDown, DurationMs: 1, Reason: probe.ReasonLAN}
+	if err := ts.probes.Record(ctx, e2eNorthID, probe.Report{Results: []probe.Result{refused}}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // seedE2ERestic remplit la page Sauvegardes : une cible restic en marche, une

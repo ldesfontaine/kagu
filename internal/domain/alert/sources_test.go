@@ -708,3 +708,59 @@ func TestService_StopRequestedWithANonZeroCode_OpensNothing(t *testing.T) {
 		}
 	})
 }
+
+// E03-09 : retirer probe.lan suspend la sonde sans rien ouvrir, même avec un
+// seuil d'un échec ; ce qu'elle portait (son certificat douteux) se résout et
+// la revue des certificats ne le rouvre pas. Le droit revenu, la sonde reprend et alerte de
+// nouveau sur la cible, comme toute sonde.
+func TestE03_09_ASuspendedProbeOpensNoAlert(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	probes, created := f.prober(t)
+	definition := created.Definition()
+	definition.FailureThreshold = 1
+	if _, err := probes.Update(ctx, created.ID, definition); err != nil {
+		t.Fatal(err)
+	}
+	record := func(result probe.Result) {
+		f.advance(time.Minute)
+		result.CheckedAt = f.clock
+		if err := probes.Record(ctx, machine.LocalID, probe.Report{Results: []probe.Result{result}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	untrusted := &probe.Certificate{Subject: "cloud.exemple.fr", Issuer: "openCloud dev", NotBefore: f.clock.Add(-30 * 24 * time.Hour), NotAfter: f.clock.Add(12 * 24 * time.Hour), Fingerprint: strings.Repeat("e", 64), HostnameMatch: true}
+	record(f.result(created.ID, probe.OutcomeUp, untrusted))
+	if f.kinds(t) != "cert_untrusted:attention,cert_expiring:attention" {
+		t.Fatalf("kinds %q", f.kinds(t))
+	}
+	for range 3 {
+		record(probe.Result{ProbeID: created.ID, Outcome: probe.OutcomeDown, Reason: probe.ReasonLAN})
+	}
+	if err := probes.ReviewCertificates(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if f.kinds(t) != "" {
+		t.Fatalf("a suspended probe keeps open: %q", f.kinds(t))
+	}
+	for _, found := range f.open(t, "") {
+		if found.Kind == alert.KindProbeDown {
+			t.Fatalf("a suspended probe opened %s", found.Kind)
+		}
+	}
+	found, err := f.db.GetProbe(ctx, created.ID)
+	if err != nil || found.Status != probe.StatusSuspended {
+		t.Fatalf("status %s, want %s (%v)", found.Status, probe.StatusSuspended, err)
+	}
+
+	// Le droit revenu, la sonde parle de nouveau de la cible et de son
+	// certificat, toujours en base.
+	record(f.result(created.ID, probe.OutcomeDown, nil))
+	if f.kinds(t) != "probe_down:danger,cert_untrusted:attention,cert_expiring:attention" {
+		t.Fatalf("the right came back on a fallen target: %q", f.kinds(t))
+	}
+	record(probe.Result{ProbeID: created.ID, Outcome: probe.OutcomeDown, Reason: probe.ReasonLAN})
+	if f.kinds(t) != "" {
+		t.Fatalf("the suspension resolves what the probe carried: %q", f.kinds(t))
+	}
+}

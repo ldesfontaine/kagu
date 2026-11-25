@@ -107,6 +107,7 @@ const lifecycle = shape<NonNullable<Machine["lifecycle"]>>("Lifecycle", {
 
 const capability = shape<Capability>("Capability", { name: value, paths: value });
 const reportedCapability = shape<ReportedCapability>("ReportedCapability", { name: value, paths: value, unavailable: value, until: value });
+const refusalFix = shape<RefusalFix>("RefusalFix", { right: optional(value), machine: optional(value), command: optional(value), exact: optional(value) });
 
 const machine = shape<Machine>("Machine", {
   id: value,
@@ -502,6 +503,7 @@ const probe = shape<ProbeJSON>("Probe", {
     ocsp: value,
   }),
   created_at: value,
+  fix: refusalFix,
 });
 
 const probeDay = shape<ProbeDayJSON>("ProbeDay", { day: value, total: value, success: value, degraded: value, duration_ms: value });
@@ -976,7 +978,6 @@ const audit = shape<AuditResponse>("AuditResponse", {
 
 const auditForwarding = shape<AuditForwarding>("AuditForwarding", { channels: value, failing: value });
 
-const refusalFix = shape<RefusalFix>("RefusalFix", { right: optional(value), machine: optional(value), command: optional(value), exact: optional(value) });
 const actionRun = shape<ActionRun>("ActionRun", {
   id: value,
   kind: value,

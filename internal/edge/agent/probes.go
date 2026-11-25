@@ -12,17 +12,30 @@ import (
 const maxBufferedResults = probe.MaxResultsPerReport
 
 // results garde ce que les sondes ont donné entre deux signaux, dans
-// l'ordre ; plein, il oublie le plus ancien.
+// l'ordre ; plein, il oublie le plus ancien. refused note le droit qu'un
+// essai n'a pas eu (probe.lan) parmi les droits en attente : la ligne
+// constante « grant --pending » le pose (R-DROIT-8, essai E03-09).
 type results struct {
 	mu      sync.Mutex
 	pending []probe.Result
+	refused func(right string)
 }
 
-// Deliver fait de results un probe.Sink.
+// Deliver fait de results un probe.Sink. Chaque essai refusé faute de droit
+// se note : l'entrée vaut 24 h après le dernier refus, et la sonde suspendue
+// continue d'essayer.
 func (r *results) Deliver(report probe.Report) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.pending = appendBounded(r.pending, report.Results, maxBufferedResults)
+	r.mu.Unlock()
+	if r.refused == nil {
+		return
+	}
+	for _, result := range report.Results {
+		if right, missing := result.Reason.MissingRight(); missing {
+			r.refused(right)
+		}
+	}
 }
 
 // take vide le tampon ; nil s'il n'y a rien à dire.

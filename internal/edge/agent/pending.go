@@ -93,6 +93,14 @@ func (r *orderRunner) notePendingRight(order judgedOrder, reason string) {
 	}
 }
 
+// noteRefusedRight note un droit que l'agent a refusé hors d'un ordre : une
+// sonde du réseau local sans probe.lan. Pris sous le verrou de l'agent.
+func (r *orderRunner) noteRefusedRight(name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.notePendingRight(judgedOrder{}, agentwire.RightMissing(name))
+}
+
 // missingValueOf rend la valeur du droit refusé quand elle se lit sans le
 // serveur : un producteur de la liste fermée (agentpolicy.Producers). Un
 // chemin ne s'y note jamais : root le choisit lui-même.

@@ -444,7 +444,7 @@ L'onglet Agent ne montre plus de droits : il y renvoie.
 | Droit | Portée | Ce qu'il permet |
 | --- | --- | --- |
 | `observe` | — | Mesurer la machine, lire son Docker, lancer ses sondes : les commandes d'observation, et l'ordre `agent.ping`, qui ne change rien. Toujours là, la case est cochée et grisée |
-| `probe.lan` | — | Que les sondes de l'agent composent vers **le réseau local** (boucle locale, adresses privées, partagée `100.64.0.0/10`, « Comment une cible est sondée »). **Coché par défaut** à l'émission d'un jeton (formulaire) et pour l'agent de la machine Kagu, décochable. Premier droit qu'**aucun ordre n'exige** (aucun `Spec.Right` ne le nomme) : c'est une borne de l'observation, appliquée par l'agent à ses propres sondes. Un agent enrôlé avant ne l'a pas : ses sondes du réseau local tombent « Hors ligne » jusqu'à ce que root le pose (`agent grant probe.lan` ; on ne coche rien à la place de l'opérateur). Demandé à la politique **à chaque sonde** : le poser ou le retirer vaut sans redémarrage (R-A3-4) |
+| `probe.lan` | — | Que les sondes de l'agent composent vers **le réseau local** (boucle locale, adresses privées, partagée `100.64.0.0/10`, « Comment une cible est sondée »). **Coché par défaut** à l'émission d'un jeton (formulaire) et pour l'agent de la machine Kagu, décochable. Premier droit qu'**aucun ordre n'exige** (aucun `Spec.Right` ne le nomme) : c'est une borne de l'observation, appliquée par l'agent à ses propres sondes. Un agent enrôlé avant ne l'a pas : ses sondes du réseau local sont **suspendues** (« Suspendue — droit retiré », sans alerte) jusqu'à ce que root le pose (`agent grant --pending` ; on ne coche rien à la place de l'opérateur). Demandé à la politique **à chaque sonde** : le poser ou le retirer vaut sans redémarrage (R-A3-4) |
 | `observe.env` | — | Que l'agent **lise l'environnement des conteneurs Docker** et en tire les liens entre instances de la machine (« Les liens de l'environnement »). **Refusé par défaut** : décoché dans le formulaire, absent des préréglages de rôle, absent de la ligne de la machine Kagu ; il se coche **machine par machine**, sous « Avancé : droits de l'agent », avec sa note. Comme `probe.lan`, aucun ordre ne l'exige : c'est une borne de l'observation, demandée à la politique **à chaque inventaire** du veilleur Docker (R-A3-4). Un agent enrôlé avant ne l'a pas : la carte **Liens** de la fiche d'un service dit que l'environnement n'est pas lu et porte la ligne `grant` du droit |
 | `agent.update` | — | Les ordres `agent.update` (mettre à jour l'agent depuis le serveur) et `agent.rollback` (revenir à la version précédente) (« Comment un agent se met à jour »). Un agent qui n'a pas le droit refuse l'ordre ; celui qui l'a le vérifie lui-même avant de changer de binaire, et ne le fait que sous le lanceur stable |
 | `restic.target` | Un dossier | Recevoir des sauvegardes restic : l'agent lance et surveille `rest-server` en écriture seule sur ce dossier (« Comment restic sauvegarde »). **Refusé par défaut**, coché par machine |
@@ -710,8 +710,12 @@ binaire plus ancien le perd en réécrivant son identité).
 **Les droits en attente** (R-A3-15, `internal/edge/agent/pending.go`).
 L'agent note dans `pending-rights.json` (son état, `0600`, écrit d'un coup)
 chaque droit qu'il refuse `right_missing` : au jugement d'un ordre (le juge,
-puis les exécuteurs : `backup.produce`, `restic.docker`, `restic.target`…) et
-au relais restic sans `restic.target`. Seul un ordre dont la signature est
+puis les exécuteurs : `backup.produce`, `restic.docker`, `restic.target`…),
+au relais restic sans `restic.target`, et à chaque essai d'une sonde vers le
+réseau local sans `probe.lan` (motif `lan`, essai E03-09). **Coût** : une
+sonde suspendue réécrit le fichier à chaque essai (une écriture par
+intervalle, 30 s au plus serré) ; c'est ce qui garde son entrée vivante tant
+que le droit manque. Seul un ordre dont la signature est
 vérifiée arrive au jugement du droit : un ordre forgé, pour un autre agent,
 rejoué ou périmé n'écrit rien. La valeur ne se note que si elle se lit hors du
 serveur : un producteur de la liste fermée (`backup.produce=proxmox-vzdump`) ;
@@ -4183,7 +4187,9 @@ propose la première machine de la liste.
    la poignée de main TLS (y compris la poignée de main nue d'une chaîne
    refusée). Sans lui, chaque adresse résolue du réseau local est sautée ; s'il
    ne reste rien, l'essai est « Hors ligne » avec le motif `lan` : un nom DNS
-   qui résout vers une adresse privée est refusé comme cette adresse. Le
+   qui résout vers une adresse privée est refusé comme cette adresse. Un tel
+   essai **suspend** la sonde (point 9) et l'agent note `probe.lan` dans ses
+   droits en attente (« Les droits en attente »). Le
    serveur, lui, garde le réseau local ouvert pour ce qu'il compose
    (alertes, e-mail, registres : un ntfy du réseau local est l'usage voulu).
 5. Une sonde HTTP envoie un GET, HEAD ou POST — jamais une méthode qui
@@ -4206,12 +4212,23 @@ propose la première machine de la liste.
    ne porte plus est ignorée, ses essais avec. Un essai déjà en base,
    rejoué, tombe sur la même clé et ne compte pas deux fois.
 9. L'état ne bascule **qu'au seuil atteint** : trois échecs de suite par
-   défaut pour passer Hors ligne, deux succès pour revenir. Trois
+   défaut pour passer Hors ligne, deux succès pour revenir. Quatre
    exceptions : le premier essai fixe l'état tout de suite, parce qu'une
    sonde qui répond n'a pas à rester « Nouveau » ; Dégradé et En ligne
    sont deux nuances d'un même succès et passent de l'une à l'autre sans
    seuil ; une sonde en pause ne bouge pas, même si un essai parti avant
-   la pause arrive après.
+   la pause arrive après ; un essai que l'agent n'a pas eu le droit de faire
+   (motif `lan`, `probe.Reason.MissingRight`) la **suspend** tout de suite
+   (`suspended`, « Suspendue — droit retiré », migration `058`), quel que
+   soit son état. Un retrait voulu par root n'est pas une panne : aucune
+   alerte (ni panne ni certificat : `probe.Status.SaysNothingOfTarget`),
+   rien à traiter, la page de statut ne la compte pas, et son certificat sort
+   des comptes. Le serveur continue de la confier à l'agent : le premier essai
+   sans ce motif (le droit est revenu) fixe l'état tout de suite, comme un
+   premier essai. La sonde n'est jamais effacée (TU-15). Sa fiche dit le droit
+   qui manque, sa machine et la ligne constante `grant --pending` (`fix` de
+   `GET /api/probes/{id}`, `rightFixJSON`). Les essais suspendus restent dans
+   l'histoire : l'uptime les compte comme des échecs.
 10. Toutes les 5 min, le rollup réécrit chaque jour UTC **entièrement**
     couvert par le brut, en une instruction par jour. Le jour que la
     rétention entame n'est pas rejoué : il a déjà été agrégé quand il
@@ -4404,8 +4421,8 @@ C'est pourquoi un certificat refusé laisse l'uptime intact. Et une chaîne
 refusée **parce que** le certificat est expiré ne se compte pas deux fois :
 « Expiré » le dit déjà.
 
-Une sonde en pause ne compte pas : elle ne regarde plus, et ce qu'elle a vu
-ne dit plus rien de la cible.
+Une sonde en pause ou suspendue ne compte pas : elle ne regarde plus, ou
+n'en a plus le droit, et ce qu'elle a vu ne dit plus rien de la cible.
 
 ## Comment une page de statut est publiée
 
@@ -4534,7 +4551,7 @@ chemin inconnu.
 | --- | --- | --- |
 | Sonde | hors ligne | panne |
 | Sonde | dégradée, ou en ligne avec un certificat à renouveler ou expiré | dégradé |
-| Sonde | nouvelle, en pause | ne compte pas |
+| Sonde | nouvelle, en pause, suspendue | ne compte pas |
 | Tâche | en retard, en échec | dégradé |
 | Tâche | nouvelle, en pause | ne compte pas |
 | Service déclaré | une de ses unités conteneur est arrêtée, défaillante, morte, en pause, disparue, ou sans conteneur vivant | panne |

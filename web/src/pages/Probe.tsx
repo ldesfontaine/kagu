@@ -84,9 +84,9 @@ function ProbeView({ response, reload }: { response: ProbeResponse; reload: () =
           {probe.status === "paused" && <Note tone="warn">{t("probe.paused_text")}</Note>}
           {probe.status !== "paused" && !probe.machine_online && <Note tone="warn">{t("probe.machine_offline")}</Note>}
           {probe.status === "degraded" && <Note tone="warn">{t("probe.degraded_text")}</Note>}
-          {probe.last_reason === "lan" && (
-            <MissingRight machineID={probe.machine_id} right="probe.lan">
-              {t("probe.reason_lan")}
+          {probe.fix?.right !== undefined && (
+            <MissingRight machineID={probe.machine_id} right={probe.fix.right} command={probe.fix.command}>
+              {t("probe.suspended_text")}
             </MissingRight>
           )}
         </CardBody>
