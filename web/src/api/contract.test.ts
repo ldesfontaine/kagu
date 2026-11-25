@@ -13,7 +13,7 @@ import type { Firewall, FirewallCounts, FirewallDetail, FirewallFlowsResponse, F
 import type { DeletionCount, DeletionPlan } from "./deletion";
 import type { DeclaredServiceDetail, DeclaredServicesResponse, DeployPlan, GapsResponse, ProjectsResponse, ProposalResponse, ServiceUpdate } from "./directory";
 import type { JobResponse, JobsResponse } from "./jobs";
-import type { Account, Agent, AgentAnchors, AnchorKind, Capability, Machine, MachineHost, MachineRole, MachinesResponse, ReportedCapability, RightFit } from "./machines";
+import type { Account, Agent, AgentAnchors, AgentRights, AnchorKind, Capability, GroupRight, Machine, MachineHost, MachineRole, MachinesResponse, ReportedCapability, RightFit, RightsGroup, SetLine } from "./machines";
 import type { MachineStorage, PhysicalDisk, StoragePool } from "./storage";
 import type { AppliesResponse, Apply } from "./manifest";
 import type { MCPCheck } from "./mcpCheck";
@@ -138,6 +138,21 @@ const machine = shape<Machine>("Machine", {
     policy_source: value,
     policy_digest: value,
     migrate_line: value,
+    rights: shape<AgentRights>("AgentRights", {
+      set: value,
+      set_lines: shape<SetLine>("SetLine", { set: value, line: value }),
+      root_here: value,
+      groups: shape<RightsGroup>("RightsGroup", {
+        name: value,
+        state: value,
+        until: value,
+        worth_root: value,
+        host_terminal: value,
+        rights: shape<GroupRight>("GroupRight", { name: value, paths: value, state: value, until: value }),
+        grant_line: value,
+        revoke_line: value,
+      }),
+    }),
     fit: dictionaryOf(shape<RightFit>("RightFit", { state: value, reason: value })),
   }),
   lifecycle: optional(lifecycle),

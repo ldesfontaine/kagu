@@ -25,7 +25,7 @@ test("un fix de droit montre la ligne grant que le serveur a jointe", () => {
   const markup = render({ right: "docker.deploy", machine: "m1", command: "sudo y agent grant docker.deploy" });
   expect(markup).toContain("sudo y agent grant docker.deploy");
   expect(markup).toContain("anchor.run_command");
-  expect(markup).toContain("machine.grant_shows_change");
+  expect(markup).toContain("rights.paste_shows_change");
   expect(markup).not.toContain("reenroller");
 });
 
@@ -43,7 +43,7 @@ test("short : la ligne seule, tronquée, entière dans l'infobulle", () => {
     </MemoryRouter>,
   );
   expect(markup).toContain("token-box-short");
-  expect(markup).toContain('title="anchor.run_command sudo x agent grant restic.verify machine.grant_shows_change"');
+  expect(markup).toContain('title="anchor.run_command sudo x agent grant restic.verify rights.paste_shows_change"');
   expect(markup).not.toContain("<p");
 });
 

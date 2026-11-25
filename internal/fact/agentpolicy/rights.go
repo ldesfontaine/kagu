@@ -93,10 +93,12 @@ const (
 // elle, la durée que « grant » lui donne quand rien n'est dit (zéro : sans
 // échéance), la phrase de son risque, une clé des catalogues que « grant »
 // imprime avant la question (R-A3-12), et ce qu'il demande au système
-// (R-A3-8) : le groupe docker, ou la porte root (A5).
+// (R-A3-8) : le groupe docker, ou la porte root (A5). opens : le droit que
+// la ligne grant d'un groupe pas permis pose, un par groupe.
 type knownRight struct {
 	name        string
 	group       Group
+	opens       bool
 	readable    readable
 	value       valueGrammar
 	bare        string
@@ -146,11 +148,11 @@ const manageRisk = "rights.manage_risk"
 // forme de sa valeur et ce qu'il demande au système (fiche A3, §5, « Ce que
 // grant fait aussi »).
 var knownRights = []knownRight{
-	{name: CapabilityObserve, group: GroupSee},
+	{name: CapabilityObserve, group: GroupSee, opens: true},
 	{name: CapabilityProbeLAN, group: GroupSee},
 	{name: CapabilityObserveEnv, group: GroupSee},
 	{name: CapabilityAgentUpdate, group: GroupDeploy},
-	{name: CapabilityDockerDeploy, group: GroupDeploy, risk: manageRisk, dockerGroup: true},
+	{name: CapabilityDockerDeploy, group: GroupDeploy, opens: true, risk: manageRisk, dockerGroup: true},
 	{name: CapabilityDockerUpdate, group: GroupDeploy, risk: manageRisk, dockerGroup: true},
 	{name: CapabilityBackupReceive, group: GroupBackup, value: valueOnePath},
 	{name: CapabilityBackupProduce, group: GroupBackup, value: valueProducers, rootGate: true},
@@ -158,16 +160,16 @@ var knownRights = []knownRight{
 	{name: CapabilityProxmoxPower, group: GroupDeploy},
 	{name: CapabilityProxmoxSnapshot, group: GroupDeploy},
 	{name: CapabilityResticTarget, group: GroupBackup, value: valueOnePath},
-	{name: CapabilityResticProduce, group: GroupBackup},
+	{name: CapabilityResticProduce, group: GroupBackup, opens: true},
 	{name: CapabilityResticDocker, group: GroupBackup, risk: manageRisk, dockerGroup: true},
 	{name: CapabilityResticVerify, group: GroupBackup},
 	{name: CapabilityResticBrowse, group: GroupBackup},
 	{name: CapabilityResticRestore, group: GroupBackup},
-	{name: CapabilityTerminalContainer, group: GroupEnter, readable: readInPolicy, risk: manageRisk, dockerGroup: true},
+	{name: CapabilityTerminalContainer, group: GroupEnter, opens: true, readable: readInPolicy, risk: manageRisk, dockerGroup: true},
 	{name: CapabilityTerminalHost, group: GroupEnter, readable: readInPolicy, value: valueAccount, bare: "root", term: hostTerminalTerm,
 		risk: "rights.host_terminal_risk", rootGate: true},
 	{name: CapabilityServiceFree, group: GroupDeploy, readable: readInPolicy, risk: manageRisk, dockerGroup: true},
-	{name: CapabilityNetworkPrivate, group: GroupNetwork, readable: readInPolicy, value: valuePeers, bare: "1", rootGate: true},
+	{name: CapabilityNetworkPrivate, group: GroupNetwork, opens: true, readable: readInPolicy, value: valuePeers, bare: "1", rootGate: true},
 }
 
 // knownRightOf rend le droit de ce nom ; faux pour un nom inconnu.

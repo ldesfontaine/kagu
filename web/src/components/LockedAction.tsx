@@ -34,6 +34,6 @@ function GrantLine({ right, command, path, short }: { right: string; command: st
   if (line === "") {
     return null;
   }
-  const notes = path !== undefined && path !== "" ? [t("machine.grant_path", path), t("machine.grant_shows_change")] : [t("machine.grant_shows_change")];
+  const notes = path !== undefined && path !== "" ? [t("machine.grant_path", path), t("rights.paste_shows_change")] : [t("rights.paste_shows_change")];
   return <RootCommand command={line} notes={notes} short={short} />;
 }

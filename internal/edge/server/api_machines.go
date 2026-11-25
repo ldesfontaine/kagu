@@ -108,6 +108,91 @@ type agentJSON struct {
 	// Par droit connu, le verdict d'agentpolicy.Fit : l'écran l'affiche sans
 	// le recalculer.
 	Fit map[string]fitJSON `json:"fit"`
+	// L'onglet Droits ; null tant que l'agent n'a pas rapporté ses droits, et
+	// pour un agent révoqué.
+	Rights *rightsJSON `json:"rights"`
+}
+
+// Les droits d'un agent tels que l'onglet Droits les montre (R-A3-13) : le
+// jeu, cinq groupes, jamais une liste à plat ; chaque verdict vient
+// d'agentpolicy et chaque ligne de ses fonctions (R-DROIT-3).
+type rightsJSON struct {
+	// Le jeu que les droits posent ; vide : personnalisé.
+	Set string `json:"set"`
+	// Les lignes --set des autres jeux (des trois quand le jeu est
+	// personnalisé).
+	SetLines []setLineJSON `json:"set_lines"`
+	// La machine du serveur en « Gérer en root » : qui entre dans
+	// l'interface est root sur elle (R-DROIT-5).
+	RootHere bool              `json:"root_here"`
+	Groups   []rightsGroupJSON `json:"groups"`
+}
+
+type setLineJSON struct {
+	Set  string `json:"set"`
+	Line string `json:"line"`
+}
+
+// Un groupe : son verdict (agentpolicy.GroupFits), ses droits pour le
+// détail replié, la ligne grant qui l'ouvre quand il n'est pas permis, la
+// ligne revoke qui retire ce qu'il porte.
+type rightsGroupJSON struct {
+	Name         string           `json:"name"`
+	State        string           `json:"state"`
+	Until        *time.Time       `json:"until"`
+	WorthRoot    bool             `json:"worth_root"`
+	HostTerminal bool             `json:"host_terminal"`
+	Rights       []groupRightJSON `json:"rights"`
+	GrantLine    string           `json:"grant_line"`
+	RevokeLine   string           `json:"revoke_line"`
+}
+
+// Un droit du détail : son nom, sa valeur rapportée, son état et son
+// échéance (null sans).
+type groupRightJSON struct {
+	Name  string     `json:"name"`
+	Paths []string   `json:"paths"`
+	State string     `json:"state"`
+	Until *time.Time `json:"until"`
+}
+
+func rightsToJSON(agent machine.Agent) *rightsJSON {
+	if !agent.IsActive() || agent.ReportedAt.IsZero() {
+		return nil
+	}
+	set, ok := agentpolicy.SetOf(agent.Capabilities)
+	rights := &rightsJSON{
+		Set:      string(set),
+		SetLines: []setLineJSON{},
+		RootHere: agent.MachineID == machine.LocalID && agentpolicy.CoversSet(agent.Capabilities, agentpolicy.SetRoot),
+	}
+	for _, other := range agentpolicy.Sets() {
+		if !ok || other != set {
+			rights.SetLines = append(rights.SetLines, setLineJSON{Set: string(other), Line: agentpolicy.GrantSetLine(other)})
+		}
+	}
+	for _, group := range agent.GroupFits() {
+		rights.Groups = append(rights.Groups, groupToJSON(agent, group))
+	}
+	return rights
+}
+
+func groupToJSON(agent machine.Agent, group agentpolicy.GroupFit) rightsGroupJSON {
+	converted := rightsGroupJSON{
+		Name: string(group.Group), State: string(group.State), Until: httpx.TimeOrNil(group.Until),
+		WorthRoot: group.WorthRoot, HostTerminal: group.HostTerminal,
+		RevokeLine: agentpolicy.RevokeLine(group.HeldNames()),
+	}
+	if group.State == agentpolicy.FitMissing {
+		converted.GrantLine = agentpolicy.GrantLine(group.Opener, "")
+	}
+	for _, right := range group.Rights {
+		converted.Rights = append(converted.Rights, groupRightJSON{
+			Name: right.Right, Paths: orEmpty(agentpolicy.PathsOf(agent.Capabilities, right.Right)), State: string(right.State),
+			Until: httpx.TimeOrNil(agent.RightsUntil[right.Right]),
+		})
+	}
+	return converted
 }
 
 // state : "ok", "missing", "unavailable" (reason dit pourquoi) ou "unknown"
@@ -279,6 +364,7 @@ func agentToJSON(agent machine.Agent) *agentJSON {
 		PolicyDigest:         agent.PolicyDigest,
 		MigrateLine:          migrateLineFor(agent.PolicySource),
 		Fit:                  fitsToJSON(agent),
+		Rights:               rightsToJSON(agent),
 	}
 }
 
