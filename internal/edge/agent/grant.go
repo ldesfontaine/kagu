@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
@@ -84,15 +85,21 @@ type PolicyChange struct {
 	RootOnServer bool
 }
 
-// Changed dit si le geste change quelque chose ; sinon rien ne s'écrit.
+// Changed dit si le geste change la politique ; sinon elle ne s'écrit pas.
 func (c PolicyChange) Changed() bool {
 	return !c.Before.Same(c.After)
+}
+
+// LaysPrerequisites dit si le plan pose quelque chose sur le système, la
+// politique inchangée ou non (E03-10).
+func (c PolicyChange) LaysPrerequisites() bool {
+	return slices.ContainsFunc(c.Prerequisites, func(step Prerequisite) bool { return step.lay != nil })
 }
 
 // GrantRights pose des droits (« docker.deploy », « files.write=/srv/a »)
 // pour le terme donné, l'échéance posée sur l'horloge de la machine (R-A3-5).
 func GrantRights(opts PolicyOptions, granted []agentpolicy.Capability, term agentpolicy.Term, confirm func(PolicyChange) error) (PolicyChange, error) {
-	return changePolicy(opts, "grant", func(document agentpolicy.Document) (agentpolicy.Document, error) {
+	return changePolicy(opts, "grant", planSystem, func(document agentpolicy.Document) (agentpolicy.Document, error) {
 		return document.Grant(granted, term, opts.clock())
 	}, confirm)
 }
@@ -101,7 +108,7 @@ func GrantRights(opts PolicyOptions, granted []agentpolicy.Capability, term agen
 // échéance, pour la racine des services de l'agent et selon que la machine
 // est un hôte Proxmox.
 func GrantSet(opts PolicyOptions, set agentpolicy.Set, confirm func(PolicyChange) error) (PolicyChange, error) {
-	return changePolicy(opts, "grant", func(document agentpolicy.Document) (agentpolicy.Document, error) {
+	return changePolicy(opts, "grant", planSystem, func(document agentpolicy.Document) (agentpolicy.Document, error) {
 		identity, err := loadIdentityAsRoot(opts.StateDir, opts.StatePath)
 		if err != nil {
 			return agentpolicy.Document{}, err
@@ -112,17 +119,27 @@ func GrantSet(opts PolicyOptions, set agentpolicy.Set, confirm func(PolicyChange
 
 // RevokeRights retire des droits, par leur nom.
 func RevokeRights(opts PolicyOptions, names []string, confirm func(PolicyChange) error) (PolicyChange, error) {
-	return changePolicy(opts, "revoke", func(document agentpolicy.Document) (agentpolicy.Document, error) {
+	return changePolicy(opts, "revoke", planSystem, func(document agentpolicy.Document) (agentpolicy.Document, error) {
 		return document.Revoke(names)
 	}, confirm)
 }
+
+// systemPlan dit si un geste refait le plan des prérequis du système : grant
+// et revoke le refont à chaque appel, même quand les droits ne changent pas
+// (E03-10 : Docker installé après « Gérer ») ; trust ne touche qu'aux ancres.
+type systemPlan bool
+
+const (
+	planSystem  systemPlan = true
+	leaveSystem systemPlan = false
+)
 
 // changePolicy relit la politique sous son verrou, y applique change, dit ce
 // qui change à confirm, et n'écrit que si confirm l'accepte. Une politique qui
 // ne se lit pas, ou mal gardée, n'est pas réécrite : on ne pose rien sur ce
 // qu'on ne sait pas lire. Sans dossier de politique, rien ne s'écrit :
 // ErrNotMigrated.
-func changePolicy(opts PolicyOptions, verb string, change func(agentpolicy.Document) (agentpolicy.Document, error), confirm func(PolicyChange) error) (PolicyChange, error) {
+func changePolicy(opts PolicyOptions, verb string, plan systemPlan, change func(agentpolicy.Document) (agentpolicy.Document, error), confirm func(PolicyChange) error) (PolicyChange, error) {
 	identity, err := policyWriterIdentity(opts)
 	if err != nil {
 		return PolicyChange{}, err
@@ -149,18 +166,18 @@ func changePolicy(opts PolicyOptions, verb string, change func(agentpolicy.Docum
 		return PolicyChange{}, err
 	}
 	planned := PolicyChange{First: first, Before: before, After: after}
-	if err := planChange(opts, identity, &planned); err != nil {
-		return PolicyChange{}, err
+	if plan == planSystem {
+		if err := planChange(opts, identity, &planned); err != nil {
+			return PolicyChange{}, err
+		}
 	}
 	return writePolicy(opts, dir, verb, planned, confirm)
 }
 
-// planChange lit ce que le changement de droits demande au système, et si la
-// machine du serveur passe en « Gérer en root » (R-DROIT-5).
+// planChange lit ce que les droits d'après demandent au système, qu'ils
+// changent ou non, et si la machine du serveur passe en « Gérer en root »
+// (R-DROIT-5).
 func planChange(opts PolicyOptions, identity Identity, change *PolicyChange) error {
-	if agentpolicy.SameCapabilities(change.Before.Rights, change.After.Rights) {
-		return nil
-	}
 	account, err := agentAccountOf(opts.StateDir)
 	if err != nil {
 		return err
@@ -192,28 +209,25 @@ func policyWriterIdentity(opts PolicyOptions) (Identity, error) {
 }
 
 // writePolicy dit le changement à confirm puis l'écrit dans dir, verrou pris ;
-// un geste qui ne change rien n'écrit rien et ne demande rien.
+// un geste qui ne change ni la politique ni le système n'écrit rien et ne
+// demande rien. Une politique inchangée ne se réécrit pas : seul le plan se
+// pose, après le même accord (R-A3-15).
 func writePolicy(opts PolicyOptions, dir *os.Root, verb string, change PolicyChange, confirm func(PolicyChange) error) (PolicyChange, error) {
 	change.Added, change.Removed = agentpolicy.Changes(change.Before.Rights, change.After.Rights)
-	if !change.Changed() {
+	if !change.Changed() && !change.LaysPrerequisites() {
 		return change, nil
 	}
 	if err := confirm(change); err != nil {
 		return PolicyChange{}, err
 	}
-	content, err := agentpolicy.Encode(change.After)
-	if err != nil {
-		return PolicyChange{}, err
-	}
-	if err := fsx.WriteAtomicOwned(dir, policyFile, content, policyMode, opts.Place.Owner); err != nil {
-		return PolicyChange{}, fmt.Errorf("write policy: %w", err)
-	}
-	if opts.Audit != nil {
-		change.AuditError = opts.Audit(fmt.Sprintf("policy %s +[%s] -[%s] digest %s (uid %d)",
-			verb, strings.Join(change.Added, " "), strings.Join(change.Removed, " "), agentpolicy.Digest(content), opts.EUID))
+	if change.Changed() {
+		if err := savePolicy(opts, dir, verb, &change); err != nil {
+			return PolicyChange{}, err
+		}
 	}
 	// La politique d'abord : un retrait vaut dès qu'elle est relue, même si
 	// le système ne suit pas ; ce qui est posé se dit, l'échec aussi.
+	var err error
 	change.Laid, err = layPrerequisites(opts.system(), change.Prerequisites)
 	if err != nil {
 		return change, &PrerequisiteError{Change: change, Err: err}
@@ -221,15 +235,32 @@ func writePolicy(opts PolicyOptions, dir *os.Root, verb string, change PolicyCha
 	return change, nil
 }
 
-// PrerequisiteError : la politique est écrite, la pose du système s'est
-// arrêtée à un pas ; Change dit ce qui est posé.
+// savePolicy écrit la politique d'après d'un coup, puis trace le
+// changement au journal ; l'échec de la trace se rend dans change.
+func savePolicy(opts PolicyOptions, dir *os.Root, verb string, change *PolicyChange) error {
+	content, err := agentpolicy.Encode(change.After)
+	if err != nil {
+		return err
+	}
+	if err := fsx.WriteAtomicOwned(dir, policyFile, content, policyMode, opts.Place.Owner); err != nil {
+		return fmt.Errorf("write policy: %w", err)
+	}
+	if opts.Audit != nil {
+		change.AuditError = opts.Audit(fmt.Sprintf("policy %s +[%s] -[%s] digest %s (uid %d)",
+			verb, strings.Join(change.Added, " "), strings.Join(change.Removed, " "), agentpolicy.Digest(content), opts.EUID))
+	}
+	return nil
+}
+
+// PrerequisiteError : la pose du système s'est arrêtée à un pas, la
+// politique écrite si elle changeait ; Change dit ce qui est posé.
 type PrerequisiteError struct {
 	Change PolicyChange
 	Err    error
 }
 
 func (e *PrerequisiteError) Error() string {
-	return "policy written, system not fully prepared: " + e.Err.Error()
+	return "system not fully prepared: " + e.Err.Error()
 }
 func (e *PrerequisiteError) Unwrap() error { return e.Err }
 

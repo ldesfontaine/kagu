@@ -28,6 +28,7 @@ import { MachineSystemdUnits } from "../components/MachineSystemdUnits";
 import { NetworkView } from "../components/NetworkView";
 import { PageHead } from "../components/PageHead";
 import { RightsList } from "../components/RightsList";
+import { RootCommand } from "../components/RootCommand";
 import { RoleCard } from "../components/RoleCard";
 import { ProbeTable } from "../components/ProbeTable";
 import { ResourceHistory, ResourceStats } from "../components/Resources";
@@ -228,6 +229,7 @@ function MachineRights({ machine, now }: { machine: Machine; now: number }) {
                   <li key={line}>{line}</li>
                 ))}
               </ul>
+              {agent.rights !== null && agent.rights.prepare_line !== "" && <RootCommand command={agent.rights.prepare_line} notes={[t("rights.paste_shows_change")]} />}
             </Note>
           )}
           {agent.rights === null && <p className="secondary">{t("machine.agent_rights_unreported")}</p>}

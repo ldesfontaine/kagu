@@ -1394,7 +1394,10 @@ tout cela lui-même : il met le compte dans le groupe `docker` quand un droit le
 demande (et dit qu'il vaut root ; sans Docker, il le dit et pose le reste),
 crée les dossiers au compte de l'agent, réécrit `droits.conf` en entier, puis
 `systemctl daemon-reload` et relance l'agent, qui reprend une montée de service
-coupée. Il le dit avant la question `[o/N]`. `revoke` retire le groupe et le
+coupée. Il le dit avant la question `[o/N]`. Il refait ce plan même quand les
+droits ne changent pas : Docker installé après « Gérer », relancez
+`grant --set manage` ; il met alors le compte dans le groupe, après le même
+`[o/N]`. `revoke` retire le groupe et le
 chemin qui ne servent plus ; les dossiers restent. `grant` ne touche à aucun
 autre drop-in (`produce.conf`, `root.conf`) : il les nomme, et ce qu'ils
 ouvrent s'ajoute au sien.

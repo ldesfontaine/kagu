@@ -24,8 +24,9 @@ import (
 // (R-A3-8, fiche A3 §5) : le groupe docker, les dossiers des droits au nom du
 // compte de l'agent, le drop-in ReadWritePaths (machine.RightsDropInFile),
 // puis daemon-reload et la relance de l'agent, qui reprend un geste en cours
-// (resumeUpdates). Le plan se lit avant la question, se dit avec ce qui
-// change, et se pose après l'écriture de la politique. Jamais
+// (resumeUpdates). Le plan se refait à chaque grant et revoke, même quand
+// les droits ne changent pas ; il se lit avant la question, se dit avec ce
+// qui change, et se pose après l'écriture de la politique. Jamais
 // NoNewPrivileges=false : ce qui demande root passera par la porte (A5,
 // étape 14) ; ni sudoers ni produce.conf ne sont posés ou retirés ici.
 
@@ -101,7 +102,9 @@ type hostAccount struct {
 func (a hostAccount) isRoot() bool { return a.owner.UID == 0 }
 
 // planPrerequisites dit ce que le passage des droits before aux droits after
-// demande au système, les droits ayant changé. Le groupe docker se pose quand un droit d'après le demande ; il se retire
+// demande au système ; before et after égaux, il refait ce qui manque (le
+// groupe d'un Docker installé après coup, un drop-in effacé : E03-10). Le
+// groupe docker se pose quand un droit d'après le demande ; il se retire
 // quand un droit d'avant le demandait et qu'aucun d'après ne le demande. Les
 // dossiers se font pour les droits posés ; ceux des droits retirés restent
 // (ce sont des données). Le drop-in dit les dossiers des droits d'après.

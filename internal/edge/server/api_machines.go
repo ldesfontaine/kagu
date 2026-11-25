@@ -18,6 +18,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/module"
 	"github.com/ldesfontaine/kagu/internal/kit/version"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Une machine telle que le front la lit : des faits et des instants, pas
@@ -130,6 +131,11 @@ type rightsJSON struct {
 	// l'interface est root sur elle (R-DROIT-5).
 	RootHere bool              `json:"root_here"`
 	Groups   []rightsGroupJSON `json:"groups"`
+	// La ligne qui refait les prérequis du système quand un droit posé ne
+	// s'exerce pas faute du groupe docker (E03-10) : celle du jeu que les
+	// droits posent, grant refaisant le plan même sans changement ; vide
+	// sinon, et pour des droits personnalisés, que SetLines remplaceraient.
+	PrepareLine string `json:"prepare_line"`
 }
 
 type setLineJSON struct {
@@ -178,7 +184,21 @@ func rightsToJSON(agent machine.Agent) *rightsJSON {
 	for _, group := range agent.GroupFits() {
 		rights.Groups = append(rights.Groups, groupToJSON(agent, group))
 	}
+	if ok && dockerDenied(agent) {
+		rights.PrepareLine = agentpolicy.GrantSetLine(set)
+	}
 	return rights
+}
+
+// dockerDenied dit si un droit posé ne s'exerce pas parce que le compte de
+// l'agent n'ouvre pas la socket de Docker, tel que l'agent le rapporte.
+func dockerDenied(agent machine.Agent) bool {
+	for _, reason := range agent.Unavailable {
+		if reason == agentwire.ReasonDockerDenied {
+			return true
+		}
+	}
+	return false
 }
 
 func groupToJSON(agent machine.Agent, group agentpolicy.GroupFit) rightsGroupJSON {

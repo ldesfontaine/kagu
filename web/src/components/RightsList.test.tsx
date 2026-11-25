@@ -21,6 +21,7 @@ const rights: AgentRights = {
     { set: "root", line: "sudo kagu agent grant --set root" },
   ],
   root_here: false,
+  prepare_line: "",
   groups: [
     group({ name: "see", rights: [{ name: "observe", paths: [], state: "ok", until: null }], revoke_line: "" }),
     group({ name: "deploy", worth_root: true, rights: [{ name: "docker.deploy", paths: [], state: "ok", until: null }], revoke_line: "sudo kagu agent revoke docker.deploy" }),
