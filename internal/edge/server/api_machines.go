@@ -108,6 +108,10 @@ type agentJSON struct {
 	// Par droit connu, le verdict d'agentpolicy.Fit : l'écran l'affiche sans
 	// le recalculer.
 	Fit map[string]fitJSON `json:"fit"`
+	// Plus ancien que le serveur (R-B2-9), et les genres d'ordres du serveur
+	// qu'il ne reçoit pas, lus dans ce qu'il a annoncé (action.StandingOf).
+	Behind       bool     `json:"behind"`
+	MissingKinds []string `json:"missing_kinds"`
 	// L'onglet Droits ; null tant que l'agent n'a pas rapporté ses droits, et
 	// pour un agent révoqué.
 	Rights *rightsJSON `json:"rights"`
@@ -444,6 +448,10 @@ func (s *Server) readMachineFacts(ctx context.Context) (machineFacts, error) {
 // support est activée.
 func (s *Server) machineJSONOf(machineStatus machine.Status, facts machineFacts) machineJSON {
 	converted := machineToJSON(machineStatus)
+	if converted.Agent != nil {
+		standing := s.actions.StandingOf(machineStatus.Agent)
+		converted.Agent.Behind, converted.Agent.MissingKinds = standing.Behind, orEmpty(standing.Missing)
+	}
 	converted.Proxmox = proxmoxSummaryToJSON(facts.summaries[machineStatus.ID])
 	converted.Roles = httpx.ConvertAll(facts.roles[machineStatus.ID], roleToJSON)
 	converted.Modules = httpx.ConvertAll(facts.modules[machineStatus.ID], func(id module.ID) string { return string(id) })

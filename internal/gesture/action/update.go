@@ -72,9 +72,10 @@ func OfferReasons() []string {
 
 // Releases est ce que le composant lit de la bibliothèque des versions
 // importées : le binaire d'une version pour une architecture, revérifié à
-// chaque appel (release.Library).
+// chaque appel, et les versions importées (release.Library).
 type Releases interface {
 	Artifact(version release.Version, arch string) (release.Artifact, error)
+	Versions() ([]release.Version, error)
 }
 
 // UpdateOffer dit si l'agent d'une machine peut recevoir la version du

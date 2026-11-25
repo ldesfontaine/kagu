@@ -127,6 +127,10 @@ export interface Agent {
   // Par droit connu, le verdict du serveur : l'écran l'affiche sans le
   // recalculer.
   fit: Record<string, RightFit>;
+  // Plus ancien que le serveur (R-B2-9), et les genres d'ordres du serveur
+  // qu'il ne reçoit pas : jugés par le serveur, jamais recalculés ici.
+  behind: boolean;
+  missing_kinds: string[];
   // L'onglet Droits, tel que le serveur l'a jugé et écrit ; null tant que
   // l'agent n'a pas rapporté ses droits, et pour un agent révoqué.
   rights: AgentRights | null;

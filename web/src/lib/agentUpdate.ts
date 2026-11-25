@@ -1,4 +1,6 @@
 import { inFlightStates, type ActionRun } from "../api/actions";
+import type { Agent, Machine } from "../api/machines";
+import type { Translate } from "../i18n/context";
 
 // Où en est la dernière mise à jour (ou le dernier retour arrière) de l'agent
 // d'une machine, lue dans ses derniers ordres. Aucune mémoire côté navigateur :
@@ -41,22 +43,42 @@ export function agentUpdateState(runs: ActionRun[]): AgentUpdateState | null {
   return null;
 }
 
-const releaseVersion = /^v(\d+)\.(\d+)\.(\d+)$/;
+// Le libellé d'un genre d'ordre (« docker.deploy » → action.kind_docker_deploy).
+export function orderKindLabel(t: Translate, kind: string): string {
+  return t(`action.kind_${kind.split(".").join("_")}`);
+}
 
-// L'agent est en retard quand sa version est strictement plus ancienne que
-// celle du serveur. Une version qui n'a pas la forme vX.Y.Z (build de
-// développement) ne se compare pas : pas de repère.
-export function agentBehindServer(agentVersion: string, serverVersion: string): boolean {
-  const agent = releaseVersion.exec(agentVersion);
-  const server = releaseVersion.exec(serverVersion);
-  if (agent === null || server === null) {
-    return false;
+// Au-delà, la colonne dit combien d'autres genres manquent ; l'infobulle les
+// nomme tous.
+const shownMissingKinds = 2;
+
+// Ce que la colonne « Agent » de Machines dit de l'agent, tel que le serveur
+// l'a jugé (R-B2-9) : en retard ou non, et ce qu'il ne sait pas faire. Rien
+// n'est comparé ici.
+export interface AgentStandingText {
+  behind: string;
+  missing: string;
+  missingAll: string;
+}
+
+export function agentStandingText(t: Translate, agent: Pick<Agent, "behind" | "missing_kinds">): AgentStandingText {
+  const labels = agent.missing_kinds.map((kind) => orderKindLabel(t, kind));
+  const shown = labels.slice(0, shownMissingKinds).join(" · ");
+  let missing = "";
+  if (labels.length > shownMissingKinds) {
+    missing = t("machines.agent_missing_more", shown, labels.length - shownMissingKinds);
+  } else if (labels.length > 0) {
+    missing = t("machines.agent_missing", shown);
   }
-  for (let part = 1; part <= 3; part++) {
-    const difference = Number(agent[part]) - Number(server[part]);
-    if (difference !== 0) {
-      return difference < 0;
-    }
-  }
-  return false;
+  return {
+    behind: agent.behind ? t("machines.agent_behind") : "",
+    missing,
+    missingAll: labels.length > 0 ? t("machines.agent_missing", labels.join(" · ")) : "",
+  };
+}
+
+// Le nombre d'agents en retard, en tête de Machines (R-B2-13). Un agent
+// révoqué (machine archivée) n'est jamais en retard pour le serveur.
+export function behindAgents(machines: readonly Machine[]): number {
+  return machines.filter((machine) => machine.agent?.behind === true).length;
 }

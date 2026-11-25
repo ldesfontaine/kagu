@@ -8,6 +8,7 @@ import { anchorLabelKey, anchorOfReason } from "../lib/anchors";
 import { shownActorName } from "../lib/audit";
 import { capabilityLabelKey } from "../lib/machines";
 import { reenrollPath } from "../lib/rights";
+import { orderKindLabel } from "../lib/agentUpdate";
 import { formatWhen } from "../lib/time";
 import { AgentGate } from "./AgentGate";
 import { TokenBox } from "./Copy";
@@ -134,7 +135,7 @@ function RunRow({ run, now }: { run: ActionRun; now: number }) {
   return (
     <tr>
       <td>{formatWhen(run.requested_at, now)}</td>
-      <td>{t(`action.kind_${run.kind.split(".").join("_")}`)}</td>
+      <td>{orderKindLabel(t, run.kind)}</td>
       <td>
         <Pill tone={stateTones[run.state]}>{t(`action.state_${run.state}`)}</Pill>
         {run.reason !== "" && <div className="secondary">{reasonText(t, run.reason)}</div>}

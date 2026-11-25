@@ -107,6 +107,49 @@ function agentUpdatePath(machineID: string): string {
   return `/api/machines/${segment(machineID)}/agent-update`;
 }
 
+// Le plan des mises à jour d'agents : la version du serveur ; une version
+// importée plus récente, que root n'a pas installée, et la ligne qui
+// l'installe (vides sinon) ; la mise à jour en vol ; et, par machine, où en
+// est son agent, tel que le serveur l'a jugé.
+export interface AgentUpdatePlan {
+  target: string;
+  imported_ahead: string;
+  upgrade_line: string;
+  in_progress: AgentUpdateInProgress | null;
+  machines: AgentUpdatePlanEntry[];
+}
+
+interface AgentUpdateInProgress {
+  run_id: string;
+  kind: string;
+  machine_id: string | null;
+  machine_name: string;
+  requested_at: string;
+}
+
+interface AgentUpdatePlanEntry {
+  machine_id: string;
+  name: string;
+  version: string;
+  target: string;
+  up_to_date: boolean;
+  // Plus ancien que le serveur, et les genres d'ordres qu'il ne reçoit pas.
+  behind: boolean;
+  missing_kinds: string[];
+  rollback_capable: boolean;
+  online: boolean;
+  update_last: boolean;
+  // Une raison de la fiche (machine.agent_update_reason_*) ; vide si l'ordre
+  // peut partir, ou si la machine est à jour.
+  blocked_reason: string;
+  // Le rang recommandé ; null quand rien n'est à faire ou ne peut partir.
+  order: number | null;
+}
+
+export function useAgentUpdatePlan(): Resource<AgentUpdatePlan> {
+  return useResource<AgentUpdatePlan>("/api/agent-updates");
+}
+
 export function useAgentUpdateOffer(machineID: string): Resource<AgentUpdateOffer> {
   return useResource<AgentUpdateOffer>(() => agentUpdatePath(machineID));
 }

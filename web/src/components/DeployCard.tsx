@@ -7,6 +7,7 @@ import { useAction } from "../hooks/useAction";
 import { useNow } from "../hooks/useNow";
 import { useT } from "../i18n/context";
 import { stateTones } from "../lib/actions";
+import { orderKindLabel } from "../lib/agentUpdate";
 import { formatWhen } from "../lib/time";
 import { AgentGate } from "./AgentGate";
 import { Button } from "./Button";
@@ -99,7 +100,7 @@ function PlanBody({ plan }: { plan: DeployPlan }) {
               <span className="cluster">
                 <Pill tone={stateTones[run.state]}>{t(`action.state_${run.state}`)}</Pill>
                 <span className="secondary">
-                  {t(`action.kind_${run.kind.split(".").join("_")}`)} · {formatWhen(run.requested_at, now)}
+                  {orderKindLabel(t, run.kind)} · {formatWhen(run.requested_at, now)}
                 </span>
               </span>
               {run.reason !== "" && <span className="secondary">{reasonText(t, run.reason)}</span>}

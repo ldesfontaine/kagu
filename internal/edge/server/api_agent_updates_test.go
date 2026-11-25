@@ -72,6 +72,53 @@ func TestAgentUpdates_ThePlanIsReadableByAReadTokenAndRecommendsAnOrder(t *testi
 	}
 }
 
+// R-B2-9 et le bandeau : le plan et la fiche disent l'agent en retard et ce
+// qu'il ne reçoit pas ; une version importée au-dessus du serveur a sa ligne,
+// celle qui tourne n'en a pas.
+func TestAgentUpdates_SayWhatAnOlderAgentMissesAndANewerImport(t *testing.T) {
+	server := newTestServer(t)
+	enrolled, private := server.enroll(t, "vps-paris-1", remoteID)
+	withoutDeploy := agentwire.AnnouncedKinds()
+	delete(withoutDeploy, string(agentwire.KindDockerDeploy))
+	resp, _, _, cancel := servertest.OpenStreamAnnouncing(t, server.Server, enrolled.ID, private, withoutDeploy.Format())
+	defer resp.Body.Close()
+	defer cancel()
+	importRelease := server.publishRelease(t, "v0.0.3")
+	importRelease("v0.0.3")
+
+	readPlan := func() agentUpdatePlanJSON {
+		t.Helper()
+		var plan agentUpdatePlanJSON
+		got := callAPI(server.Server, http.MethodGet, "/api/agent-updates", nil)
+		if err := json.Unmarshal(got.Body.Bytes(), &plan); err != nil {
+			t.Fatalf("%v: %s", err, got.Body.String())
+		}
+		return plan
+	}
+	plan := readPlan()
+	if plan.ImportedAhead != "" || plan.UpgradeLine != "" {
+		t.Fatalf("the running version is no banner: %+v", plan)
+	}
+	var entry agentUpdatePlanEntryJSON
+	for _, machine := range plan.Machines {
+		if machine.MachineID == remoteID {
+			entry = machine
+		}
+	}
+	if entry.UpToDate || !entry.Behind || len(entry.MissingKinds) != 1 || entry.MissingKinds[0] != string(agentwire.KindDockerDeploy) {
+		t.Fatalf("entry %+v", entry)
+	}
+	machine := callAPI(server.Server, http.MethodGet, "/api/machines/"+remoteID, nil)
+	if !strings.Contains(machine.Body.String(), `"behind":true,"missing_kinds":["docker.deploy"]`) {
+		t.Fatalf("machine: %s", machine.Body.String())
+	}
+
+	importRelease("v0.0.4")
+	if plan := readPlan(); plan.ImportedAhead != "v0.0.4" || plan.UpgradeLine != "sudo opencloud upgrade" {
+		t.Fatalf("a newer import: %+v", plan)
+	}
+}
+
 func TestAgentUpdates_TheMigrationLinesComeFromTheInterface(t *testing.T) {
 	server := newTestServer(t)
 	got := callAPI(server.Server, http.MethodGet, "/api/agent-migration", nil)

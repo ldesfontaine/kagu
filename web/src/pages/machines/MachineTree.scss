@@ -14,6 +14,18 @@
   width: 280px;
 }
 
+// La colonne de l'agent : la version et sa pastille, puis ce qui lui manque.
+.tree-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tree-agent-missing {
+  display: block;
+  font-size: 12px;
+}
+
 // Un invité que nul agent ne suit se lit moins fort qu'une machine suivie.
 .tree-guest {
   color: var(--muted);

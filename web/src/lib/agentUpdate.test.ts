@@ -1,7 +1,8 @@
-import { describe, expect, it, test } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { ActionRun } from "../api/actions";
-import { agentBehindServer, agentUpdateState } from "./agentUpdate";
+import type { Machine } from "../api/machines";
+import { agentStandingText, agentUpdateState, behindAgents } from "./agentUpdate";
 
 function run(overrides: Partial<ActionRun>): ActionRun {
   return {
@@ -58,27 +59,31 @@ describe("agentUpdateState", () => {
   });
 });
 
-describe("agentBehindServer", () => {
-  test("une version plus ancienne est en retard, sur chaque composante", () => {
-    expect(agentBehindServer("v0.2.0", "v0.4.1")).toBe(true);
-    expect(agentBehindServer("v0.4.0", "v0.4.1")).toBe(true);
-    expect(agentBehindServer("v0.9.9", "v1.0.0")).toBe(true);
+// Un traducteur qui rend la clé et ses arguments : le test lit ce que la
+// colonne choisit de dire, pas le catalogue.
+const t = (key: string, ...args: (string | number)[]) => [key, ...args].join(":");
+
+describe("agentStandingText", () => {
+  it("says an older agent needs an update, and what it cannot do", () => {
+    const standing = agentStandingText(t, { behind: true, missing_kinds: ["docker.deploy"] });
+    expect(standing.behind).toBe("machines.agent_behind");
+    expect(standing.missing).toBe("machines.agent_missing:action.kind_docker_deploy");
   });
 
-  test("la même version, ou une plus récente, n'est pas en retard", () => {
-    expect(agentBehindServer("v0.4.1", "v0.4.1")).toBe(false);
-    expect(agentBehindServer("v0.5.0", "v0.4.1")).toBe(false);
-    expect(agentBehindServer("v1.0.0", "v0.9.9")).toBe(false);
+  it("never says it for an agent the server finds up to date", () => {
+    expect(agentStandingText(t, { behind: false, missing_kinds: [] })).toEqual({ behind: "", missing: "", missingAll: "" });
   });
 
-  test("la comparaison est numérique, pas alphabétique", () => {
-    expect(agentBehindServer("v0.9.0", "v0.10.0")).toBe(true);
-    expect(agentBehindServer("v0.10.0", "v0.9.0")).toBe(false);
+  it("names two kinds, counts the others, and names them all in the tooltip", () => {
+    const standing = agentStandingText(t, { behind: true, missing_kinds: ["docker.deploy", "docker.update", "agent.ping", "backup.receive"] });
+    expect(standing.missing).toBe("machines.agent_missing_more:action.kind_docker_deploy · action.kind_docker_update:2");
+    expect(standing.missingAll).toBe("machines.agent_missing:action.kind_docker_deploy · action.kind_docker_update · action.kind_agent_ping · action.kind_backup_receive");
   });
+});
 
-  test("une version qui n'est pas vX.Y.Z ne se compare pas", () => {
-    expect(agentBehindServer("dev", "v0.4.1")).toBe(false);
-    expect(agentBehindServer("v0.2.0", "")).toBe(false);
-    expect(agentBehindServer("v0.2.0-rc1", "v0.4.1")).toBe(false);
+describe("behindAgents", () => {
+  it("counts the agents the server says are behind", () => {
+    const machines = [{ agent: { behind: true } }, { agent: { behind: false } }, { agent: null }, { agent: { behind: true } }] as Machine[];
+    expect(behindAgents(machines)).toBe(2);
   });
 });

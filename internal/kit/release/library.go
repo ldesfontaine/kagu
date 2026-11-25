@@ -55,6 +55,12 @@ func NewLibrary(stateDir *os.Root, keys Keys) *Library {
 	return &Library{root: stateDir, keys: keys}
 }
 
+// UpgradeLine est la ligne que root lance sur la machine du serveur pour
+// installer la plus récente des versions importées.
+func UpgradeLine() string {
+	return "sudo " + brand.Command + " upgrade"
+}
+
 // BinaryName est le nom, dans une version, du binaire d'une architecture.
 func BinaryName(arch string) string {
 	return brand.ReleaseBinaryPrefix + arch
@@ -218,20 +224,9 @@ func (library *Library) Artifact(version Version, arch string) (Artifact, error)
 	dir := versionDir(version)
 	sumsPath := path.Join(dir, brand.ReleaseSumsFile)
 	signaturePath := path.Join(dir, brand.ReleaseSignatureFile)
-	sums, err := library.readImported(sumsPath)
+	signed, err := library.verifiedSums(version)
 	if err != nil {
 		return Artifact{}, err
-	}
-	signature, err := library.readImported(signaturePath)
-	if err != nil {
-		return Artifact{}, err
-	}
-	signed, err := VerifySums(sums, signature, library.keys)
-	if err != nil {
-		return Artifact{}, err
-	}
-	if signed.Version != version {
-		return Artifact{}, fmt.Errorf("%w: folder %s holds %s", ErrMalformed, version, signed.Version)
 	}
 	name := BinaryName(arch)
 	digest, listed := signed.Sums[name]
@@ -247,6 +242,59 @@ func (library *Library) Artifact(version Version, arch string) (Artifact, error)
 		Version: version, Name: name, Path: binaryPath, SumsPath: sumsPath, SignaturePath: signaturePath,
 		SHA256: digest, Size: size,
 	}, nil
+}
+
+// verifiedSums relit les sommes d'une version importée et leur signature, et
+// vérifie que le dossier porte bien la version qu'il nomme.
+func (library *Library) verifiedSums(version Version) (Release, error) {
+	dir := versionDir(version)
+	sums, err := library.readImported(path.Join(dir, brand.ReleaseSumsFile))
+	if err != nil {
+		return Release{}, err
+	}
+	signature, err := library.readImported(path.Join(dir, brand.ReleaseSignatureFile))
+	if err != nil {
+		return Release{}, err
+	}
+	signed, err := VerifySums(sums, signature, library.keys)
+	if err != nil {
+		return Release{}, err
+	}
+	if signed.Version != version {
+		return Release{}, fmt.Errorf("%w: folder %s holds %s", ErrMalformed, version, signed.Version)
+	}
+	return signed, nil
+}
+
+// Versions rend les versions importées, de la plus ancienne à la plus
+// récente : celles dont les sommes passent la signature. Un dossier coupé
+// avant ses sommes, ou qui ne passe plus la vérification, n'en est pas une.
+func (library *Library) Versions() ([]Version, error) {
+	folder, err := library.root.Open(brand.ReleasesDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("open releases folder: %w", err)
+	}
+	defer folder.Close()
+	entries, err := folder.ReadDir(-1)
+	if err != nil {
+		return nil, fmt.Errorf("read releases folder: %w", err)
+	}
+	var versions []Version
+	for _, entry := range entries {
+		version, err := ParseVersion(entry.Name())
+		if err != nil || !entry.IsDir() {
+			continue
+		}
+		if _, err := library.verifiedSums(version); err != nil {
+			continue
+		}
+		versions = append(versions, version)
+	}
+	slices.SortFunc(versions, Version.Compare)
+	return versions, nil
 }
 
 func (library *Library) checkBinary(signed Release, name, binaryPath string) (int64, error) {

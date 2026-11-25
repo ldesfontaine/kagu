@@ -17,6 +17,8 @@ function agent(over: Partial<Agent> = {}): Agent {
     run_as: null,
     rollback_capable: true, anchors: { reported: false, kinds: [] }, policy_source: "", policy_digest: "", migrate_line: "", rights: null,
     fit: {},
+    behind: false,
+    missing_kinds: [],
     ...over,
   };
 }
@@ -39,8 +41,8 @@ test("une machine archivée n'a rien à faire : son agent est coupé exprès", (
   expect(machineTodos(machine({ agent: agent({ revoked_at: "2026-02-01T00:00:00Z" }), kind: "unknown" }), [], "v0.5.0")).toEqual([]);
 });
 
-test("un agent en retard sur le serveur propose la mise à jour, pas un agent plus récent", () => {
-  expect(machineTodos(machine({ agent: agent({ version: "v0.4.1" }) }), [], "v0.4.2")).toEqual([{ kind: "agent_behind", serverVersion: "v0.4.2" }]);
+test("un agent que le serveur dit en retard propose la mise à jour, et lui seul", () => {
+  expect(machineTodos(machine({ agent: agent({ version: "v0.4.1", behind: true }) }), [], "v0.4.2")).toEqual([{ kind: "agent_behind", serverVersion: "v0.4.2" }]);
   expect(machineTodos(machine({ agent: agent({ version: "v0.5.0" }) }), [], "v0.4.2")).toEqual([]);
 });
 
@@ -77,7 +79,7 @@ test("la fin de support et le type inconnu se signalent, un type corrigé non", 
 });
 
 test("un type inconnu dû à un agent en retard ne double pas le geste de mise à jour", () => {
-  const todos = machineTodos(machine({ kind: "unknown", agent: agent({ version: "v0.2.0" }) }), [], "v0.4.2");
+  const todos = machineTodos(machine({ kind: "unknown", agent: agent({ version: "v0.2.0", behind: true }) }), [], "v0.4.2");
   expect(todos).toEqual([{ kind: "agent_behind", serverVersion: "v0.4.2" }]);
 });
 

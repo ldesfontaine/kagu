@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 
+import type { Agent } from "../../api/machines";
 import type { Current } from "../../api/resources";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
@@ -7,7 +8,8 @@ import { MachineKind } from "../../components/MachineKind";
 import { MachineStatePill, Pill } from "../../components/Pill";
 import { MachineMeters } from "../../components/Resources";
 import { Subject } from "../../components/Table";
-import { useI18n } from "../../i18n/context";
+import { useI18n, useT } from "../../i18n/context";
+import { agentStandingText } from "../../lib/agentUpdate";
 import type { TreeRow } from "../../lib/machineTree";
 import { machineSeen } from "../../lib/machines";
 import { guestStatusLabel, resourcesLabel } from "../../lib/proxmox";
@@ -64,13 +66,40 @@ function MachineRow({ row, current, now }: { row: Extract<TreeRow, { type: "mach
         <MachineStatePill machine={machine} />
       </td>
       <td className="secondary nowrap">{machineSeen(t, machine, now)}</td>
-      <td className="num wide-only">{machine.agent?.version ?? "—"}</td>
+      <AgentCell agent={machine.agent} />
       <td className="td-end wide-only">
         <Button variant="ghost" small to={`/machines/${machine.id}`}>
           {t("machines.open")}
         </Button>
       </td>
     </tr>
+  );
+}
+
+// La colonne « Agent » : sa version, « à mettre à jour » quand le serveur le
+// dit en retard (R-B2-9), et ce qu'il ne sait pas faire.
+function AgentCell({ agent }: { agent: Agent | null }) {
+  const t = useT();
+  if (agent === null) {
+    return <td className="num wide-only">—</td>;
+  }
+  const standing = agentStandingText(t, agent);
+  return (
+    <td className="wide-only">
+      <span className="tree-agent">
+        <span className="num">{agent.version}</span>
+        {standing.behind !== "" && (
+          <Pill tone="warn" small>
+            {standing.behind}
+          </Pill>
+        )}
+      </span>
+      {standing.missing !== "" && (
+        <span className="tree-agent-missing secondary" title={standing.missingAll}>
+          {standing.missing}
+        </span>
+      )}
+    </td>
   );
 }
 

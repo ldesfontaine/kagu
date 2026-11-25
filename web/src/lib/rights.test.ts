@@ -25,6 +25,8 @@ function agentWith(requested: string[], reported: { name: string; unavailable?: 
     run_as: null,
     rollback_capable: true, anchors: { reported: false, kinds: [] }, policy_source: "", policy_digest: "", migrate_line: "", rights: null,
     fit,
+    behind: false,
+    missing_kinds: [],
   } satisfies Agent;
 }
 
