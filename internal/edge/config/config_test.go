@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -351,5 +352,26 @@ func TestParse_GlobalLimits_DefaultCustomAndBad(t *testing.T) {
 		if _, _, err := Parse([]byte(line + "\n")); err == nil {
 			t.Errorf("%q was accepted", line)
 		}
+	}
+}
+
+// Le fichier que setup écrit se relit tel quel ; une adresse publique sans
+// HTTPS ne s'écrit pas (R-CNX-5), une adresse que serve refuserait non plus.
+func TestRenderForSetup_WritesWhatServeReadsAndRefusesAClearPublicListen(t *testing.T) {
+	content, err := RenderForSetup(DefaultListen, "", "/var/lib/kagu-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, warnings, err := Parse(content)
+	if err != nil || len(warnings) != 0 || cfg.Listen != DefaultListen || cfg.StateDir != "/var/lib/kagu-test" || cfg.PublicURL != "" {
+		t.Fatalf("read back %+v %v %v:\n%s", cfg, warnings, err, content)
+	}
+	for _, listen := range []string{"203.0.113.7:8080", "0.0.0.0:8080", "[::]:8080"} {
+		if content, err := RenderForSetup(listen, "https://kagu.example.org", "/var/lib/kagu-test"); !errors.Is(err, ErrServesClearHTTP) || content != nil {
+			t.Fatalf("%s: %v %q", listen, err, content)
+		}
+	}
+	if _, err := RenderForSetup("127.0.0.1:no-port", "", "/var/lib/kagu-test"); err == nil {
+		t.Fatal("a listen serve refuses was written")
 	}
 }

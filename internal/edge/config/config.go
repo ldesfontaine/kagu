@@ -25,8 +25,10 @@ import (
 )
 
 const (
-	DefaultPath     = brand.ConfigPath
-	defaultListen   = "127.0.0.1:8080"
+	DefaultPath = brand.ConfigPath
+	// DefaultListen : la boucle locale, jointe par le tunnel SSH ; setup
+	// l'écrit quand il n'y a pas de domaine (R-B1-8).
+	DefaultListen   = "127.0.0.1:8080"
 	defaultStateDir = brand.StateDir
 	// R-A2-18 : de quoi servir les agents derrière une même adresse, pas de
 	// quoi en tenir mille ouvertes depuis une seule.
@@ -86,7 +88,7 @@ type Config struct {
 
 func Default() Config {
 	return Config{
-		Listen:                  defaultListen,
+		Listen:                  DefaultListen,
 		StateDir:                defaultStateDir,
 		MaxConnections:          defaultMaxConnections,
 		MaxConnectionsPerSource: defaultMaxConnectionsPerSource,
@@ -164,6 +166,36 @@ func listensOnLoopback(listen string) bool {
 // declaresHTTPSProxy : public_url en https:// et un mandataire déclaré.
 func (c Config) declaresHTTPSProxy() bool {
 	return strings.HasPrefix(strings.ToLower(c.PublicURL), "https://") && len(c.TrustedProxies) > 0
+}
+
+// ErrServesClearHTTP : la configuration servirait l'interface en HTTP clair
+// hors de la machine (R-CNX-5, ServesClearHTTPBeyondLoopback).
+var ErrServesClearHTTP = errors.New("listen is not on loopback and no HTTPS proxy is declared")
+
+// setupFile est ce que setup écrit dans le fichier de configuration ; le
+// reste garde ses valeurs par défaut, que l'opérateur change à la main.
+type setupFile struct {
+	Listen    string `toml:"listen"`
+	PublicURL string `toml:"public_url,omitempty"`
+	StateDir  string `toml:"state_dir"`
+}
+
+// RenderForSetup écrit le fichier de configuration que setup pose, et le
+// relit comme serve le relira. Il refuse ce que serve refuserait, et une
+// adresse publique servie sans HTTPS (R-CNX-5) : rien ne s'écrit.
+func RenderForSetup(listen, publicURL, stateDir string) ([]byte, error) {
+	content, err := toml.Marshal(setupFile{Listen: listen, PublicURL: publicURL, StateDir: stateDir})
+	if err != nil {
+		return nil, err
+	}
+	cfg, _, err := Parse(content)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.ServesClearHTTPBeyondLoopback() {
+		return nil, ErrServesClearHTTP
+	}
+	return content, nil
 }
 
 // Lit le fichier, le valide, et renvoie les clés inconnues en avertissements.

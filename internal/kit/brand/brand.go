@@ -20,7 +20,17 @@ const ID = "kagu"
 const (
 	ConfigDir  = "/etc/" + ID
 	ConfigPath = ConfigDir + "/config.toml"
-	StateDir   = "/var/lib/" + ID
+	// Ce que setup retient d'une installation : ses réponses et ses étapes
+	// faites (root, 0600, aucun secret) ; la montée de version le relit.
+	SetupStateFile = ConfigDir + "/setup.json"
+	// Le verrou de setup : un second setup lancé pendant le premier s'arrête.
+	SetupLockPath = "/run/" + ID + "-setup.lock"
+	StateDir      = "/var/lib/" + ID
+	// Le compte système sous lequel tourne serve.
+	ServerAccount = ID
+	// Le binaire installé, que l'unité du serveur lance et dont setup copie
+	// l'agent de la machine Kagu et son lanceur stable.
+	InstalledBinary = "/usr/local/bin/" + Command
 	// L'état de l'agent (au compte de l'agent, root si on le lui demande,
 	// 0700). Hors de StateDir : sur la machine Kagu, StateDir appartient
 	// au compte du serveur, qui pourrait renommer un dossier dessous et en
@@ -80,6 +90,10 @@ const (
 	// AgentGuardEnv.
 	AgentGuardDir  = "/usr/local/lib/" + ID + "-agent"
 	AgentGuardPath = AgentGuardDir + "/" + AgentGuardBinary
+	// Le dossier où l'agent de la machine Kagu reçoit les sauvegardes de la
+	// base (backup.receive), dans son état : setup y pose le droit, quel que
+	// soit le jeu (R-SAUV-2).
+	AgentDatabaseBackupsDir = AgentStateDir + "/database-backups"
 	// Là où l'agent range ce qu'il produit (backup.produce), dans son état : à
 	// lui, 0700.
 	AgentProduceDir = "produce"

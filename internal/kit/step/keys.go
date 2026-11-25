@@ -14,3 +14,12 @@ var (
 	EnrollWorkspace = Define("step.enroll.workspace")
 	EnrollReady     = Define("step.enroll.ready")
 )
+
+// Les lignes de setup qui ne sont pas des étapes d'arrivée d'une machine :
+// setup les coche entre les siennes, dans l'ordre de B1 §5 (Système reconnu
+// et Dossier des services sont les étapes d'arrivée ci-dessus).
+var (
+	SetupAccount = Define("step.setup.account")
+	SetupServer  = Define("step.setup.server")
+	SetupAgent   = Define("step.setup.agent")
+)

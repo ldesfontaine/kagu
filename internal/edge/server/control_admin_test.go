@@ -55,6 +55,8 @@ var adminBodies = map[string]string{
 	"GET /control/admin/health":              ``,
 	"POST /control/admin/backup/pre-upgrade": `{}`,
 	"POST /control/admin/releases/import":    `{"folder":"/var/lib/kagu-import/v0.0.2"}`,
+	"POST /control/admin/local-enrollment":   ``,
+	"GET /control/admin/local-agent":         ``,
 }
 
 // R-A2-11 : un pair d'uid non nul reçoit 403 sur chaque route

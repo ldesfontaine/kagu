@@ -3,6 +3,7 @@ package machine
 import (
 	"context"
 	"errors"
+	"path"
 	"slices"
 	"strings"
 
@@ -108,4 +109,56 @@ func (s *Service) localMachineName() string {
 		return brand.LocalMachineName
 	}
 	return label
+}
+
+// ServerUnitFile est l'unité du serveur, que setup pose.
+const ServerUnitFile = "/etc/systemd/system/" + brand.ServerUnit
+
+// emptyBoundingSet retire toute capacité au serveur : le port 8080 n'en
+// demande aucune. Une directive de systemd, pas un nom de droit.
+const emptyBoundingSet = "CapabilityBoundingSet" + "="
+
+// ServerUnitLines est l'unité du serveur que setup pose, sans les
+// commentaires de docs/installation/kagu.service : ce fichier reste le
+// texte de référence, et un test échoue si les deux diffèrent.
+func ServerUnitLines() []string {
+	return []string{
+		"[Unit]",
+		"Description=" + brand.ProductName + " (serveur)",
+		"Documentation=" + brand.InstallDocURL,
+		"After=network-online.target docker.service",
+		"Wants=network-online.target",
+		"",
+		"[Service]",
+		"Type=simple",
+		"User=" + brand.ServerAccount,
+		"Group=" + brand.ServerAccount,
+		"SupplementaryGroups=" + brand.AgentAccount,
+		"ExecStart=" + brand.InstalledBinary + " serve -config " + brand.ConfigPath,
+		"Restart=on-failure",
+		"RestartSec=5",
+		"StateDirectory=" + path.Base(brand.StateDir),
+		"StateDirectoryMode=0700",
+		"RuntimeDirectory=" + path.Base(brand.RuntimeDir),
+		"RuntimeDirectoryMode=0755",
+		"UMask=0077",
+		"NoNewPrivileges=true",
+		"PrivateTmp=true",
+		"ProtectSystem=strict",
+		"ProtectHome=read-only",
+		emptyBoundingSet,
+		"ProtectKernelTunables=true",
+		"ProtectKernelModules=true",
+		"ProtectKernelLogs=true",
+		"ProtectControlGroups=true",
+		"ProtectClock=true",
+		"RestrictNamespaces=true",
+		"RestrictRealtime=true",
+		"RestrictSUIDSGID=true",
+		"LockPersonality=true",
+		"RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
+		"",
+		"[Install]",
+		"WantedBy=multi-user.target",
+	}
 }

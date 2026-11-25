@@ -43,6 +43,8 @@ func (s *Server) adminRoutes() []controlRoute {
 		{"GET " + adminPrefix + "health", s.controlHealth},
 		{"POST " + adminPrefix + "backup/pre-upgrade", s.copyBeforeUpgrade},
 		{"POST " + adminPrefix + "releases/import", s.importRelease},
+		{"POST " + adminPrefix + "local-enrollment", s.offerLocalEnrollmentToRoot},
+		{"GET " + adminPrefix + "local-agent", s.readLocalAgent},
 	}
 }
 
