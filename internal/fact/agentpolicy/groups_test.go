@@ -99,13 +99,24 @@ func TestSetOf_RecognisesTheSetPosed(t *testing.T) {
 		{"observe,probe.lan,agent.update,docker.deploy,docker.update,restic.produce,restic.docker,restic.restore,files.write=/srv,terminal.container,proxmox.power,proxmox.snapshot", SetManage, true},
 		{"observe,probe.lan,agent.update,docker.deploy,docker.update,restic.produce,restic.docker,restic.restore,files.write=/srv,terminal.container,terminal.host=root,service.free,network.private=1", SetRoot, true},
 		{"observe", "", false},
+		{"observe,probe.lan,agent.update,docker.deploy,docker.update,restic.produce,restic.docker,restic.restore,files.write=/srv,terminal.container,terminal.host=root", "", false},
 		{"observe,probe.lan,docker.deploy", "", false},
 	}
 	for _, c := range cases {
-		set, ok := SetOf(inPolicy(t, c.text).Rights)
+		set, ok := SetOf(inPolicy(t, c.text).Rights, nil)
 		if set != c.set || ok != c.ok {
 			t.Errorf("%s: %q %v, want %q %v", c.text, set, ok, c.set, c.ok)
 		}
+	}
+}
+
+// Un droit de jeu posé pour un temps (grant terminal.host --for 2h) ne
+// change pas le jeu : « Gérer » le reste.
+func TestSetOf_ARightWithAnExpiryLeavesTheSet(t *testing.T) {
+	rights := inPolicy(t, "observe,probe.lan,agent.update,docker.deploy,docker.update,restic.produce,restic.docker,restic.restore,files.write=/srv,terminal.container,terminal.host=root").Rights
+	until := map[string]time.Time{CapabilityTerminalHost: time.Date(2026, 11, 25, 16, 42, 0, 0, time.UTC)}
+	if set, ok := SetOf(rights, until); set != SetManage || !ok {
+		t.Errorf("%q %v, want manage", set, ok)
 	}
 }
 

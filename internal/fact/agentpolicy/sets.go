@@ -2,6 +2,7 @@ package agentpolicy
 
 import (
 	"slices"
+	"time"
 
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
@@ -146,12 +147,13 @@ func Sets() []Set {
 
 // SetOf rend le jeu que ces droits posent, à l'identique : leurs droits de
 // jeu sont ceux d'un jeu, partout ou sur un hôte Proxmox, quelles que soient
-// leurs valeurs ; les droits hors jeu n'y changent rien (--set les garde).
-// Faux : personnalisé.
-func SetOf(rights []Capability) (Set, bool) {
+// leurs valeurs ; les droits hors jeu n'y changent rien (--set les garde),
+// ni un droit à échéance (until) : un jeu se pose sans échéance, un droit
+// ajouté pour un temps ne le change pas. Faux : personnalisé.
+func SetOf(rights []Capability, until map[string]time.Time) (Set, bool) {
 	var held []string
 	for _, right := range rights {
-		if inSomeSet(right.Name) {
+		if _, lapses := until[right.Name]; inSomeSet(right.Name) && !lapses {
 			held = append(held, right.Name)
 		}
 	}

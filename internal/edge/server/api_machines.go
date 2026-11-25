@@ -160,7 +160,7 @@ func rightsToJSON(agent machine.Agent) *rightsJSON {
 	if !agent.IsActive() || agent.ReportedAt.IsZero() {
 		return nil
 	}
-	set, ok := agentpolicy.SetOf(agent.Capabilities)
+	set, ok := agentpolicy.SetOf(agent.Capabilities, agent.RightsUntil)
 	rights := &rightsJSON{
 		Set:      string(set),
 		SetLines: []setLineJSON{},

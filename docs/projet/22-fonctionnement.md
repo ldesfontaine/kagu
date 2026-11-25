@@ -393,7 +393,7 @@ et les groupes, jamais une liste à plat de noms. Le serveur rend le bloc
 
 | Champ | D'où | Ce que l'écran en fait |
 | --- | --- | --- |
-| `set` | `agentpolicy.SetOf` : les droits de jeu rapportés sont ceux d'un jeu (partout ou sur un hôte Proxmox), valeurs et droits hors jeu ignorés ; vide sinon | Le nom du jeu (ou « Personnalisé ») et sa phrase : `rights.observe_hint`, `rights.manage_risk`, `rights.root_risk`, `rights.custom_hint` |
+| `set` | `agentpolicy.SetOf` : les droits de jeu rapportés sont ceux d'un jeu (partout ou sur un hôte Proxmox), valeurs, droits hors jeu et droits à échéance ignorés (un jeu se pose sans échéance) ; vide sinon | Le nom du jeu (ou « Personnalisé ») et sa phrase : `rights.observe_hint`, `rights.manage_risk`, `rights.root_risk`, `rights.custom_hint` |
 | `set_lines` | `agentpolicy.GrantSetLine` des deux autres jeux (des trois en personnalisé) | Chaque ligne à coller, avec `rights.paste_shows_change` |
 | `root_here` | La machine Kagu (`machine.LocalID`) couvre « Gérer en root » (`CoversSet`) | `rights.root_here` en tête (R-DROIT-5) |
 | `groups[]` | `agentpolicy.GroupFits` : un groupe est `ok` dès qu'un de ses droits s'exerce, `unavailable` s'il en porte sans pouvoir, `unknown` avant le rapport, `missing` sinon ; `until`, l'échéance de son dernier droit exercé (aucune si l'un est sans échéance) | La coche : permis, permis jusqu'à une heure, pas permis |
