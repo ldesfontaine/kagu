@@ -5,9 +5,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
+	"path"
+	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/release"
 )
 
 var _ backup.Store = (*DB)(nil)
@@ -212,6 +220,85 @@ func (db *DB) NoteBackupAttempt(ctx context.Context, subject string, at time.Tim
 func (db *DB) SnapshotDatabase(ctx context.Context, path string) error {
 	if _, err := db.sql.ExecContext(ctx, `VACUUM INTO ?`, path); err != nil {
 		return fmt.Errorf("snapshot database: %w", err)
+	}
+	return nil
+}
+
+// Les copies d'avant montée : à serve seul, comme la base.
+const (
+	KeptUpgradeCopies = 3
+	upgradeDirMode    = 0o700
+	upgradeCopyMode   = 0o600
+	upgradeCopySuffix = ".db"
+)
+
+// CopyBeforeUpgrade écrit, au compte de serve, la copie de la base d'avant une
+// montée (R-B2-2) : state_dir/upgrade/avant-<running>.db, une base entière en
+// 0600, qui n'apparaît sous son nom qu'écrite. Une copie de la même version est
+// remplacée ; seules les KeptUpgradeCopies plus récentes restent. Rend le
+// chemin de la copie.
+func (db *DB) CopyBeforeUpgrade(ctx context.Context, running release.Version) (string, error) {
+	db.upgradeCopy.Lock()
+	defer db.upgradeCopy.Unlock()
+	if err := db.stateDir.MkdirAll(brand.UpgradeDir, upgradeDirMode); err != nil {
+		return "", fmt.Errorf("create upgrade folder: %w", err)
+	}
+	name := path.Join(brand.UpgradeDir, brand.UpgradeCopyPrefix+running.String()+upgradeCopySuffix)
+	partial := name + ".part"
+	if err := db.stateDir.Remove(partial); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", fmt.Errorf("remove partial upgrade copy: %w", err)
+	}
+	// Le fichier naît vide en 0600 (VACUUM INTO accepte un fichier vide) :
+	// SQLite le créerait sinon en 0644, umask compris.
+	if err := fsx.CreateExclusive(db.stateDir, partial, nil, upgradeCopyMode); err != nil {
+		return "", err
+	}
+	if err := db.SnapshotDatabase(ctx, filepath.Join(db.stateDir.Name(), partial)); err != nil {
+		_ = db.stateDir.Remove(partial)
+		return "", err
+	}
+	if err := db.stateDir.Rename(partial, name); err != nil {
+		return "", fmt.Errorf("name upgrade copy: %w", err)
+	}
+	if err := fsx.SyncDir(db.stateDir, brand.UpgradeDir); err != nil {
+		return "", err
+	}
+	if err := db.pruneUpgradeCopies(name); err != nil {
+		return "", err
+	}
+	return filepath.Join(db.stateDir.Name(), name), nil
+}
+
+// pruneUpgradeCopies efface les copies d'avant montée au-delà des
+// KeptUpgradeCopies plus récentes, sans jamais toucher à kept, celle qui
+// vient d'être écrite.
+func (db *DB) pruneUpgradeCopies(kept string) error {
+	entries, err := fs.ReadDir(db.stateDir.FS(), brand.UpgradeDir)
+	if err != nil {
+		return fmt.Errorf("list upgrade copies: %w", err)
+	}
+	type copyFile struct {
+		name     string
+		modified time.Time
+	}
+	var older []copyFile
+	for _, entry := range entries {
+		name := path.Join(brand.UpgradeDir, entry.Name())
+		isCopy := strings.HasPrefix(entry.Name(), brand.UpgradeCopyPrefix) && strings.HasSuffix(entry.Name(), upgradeCopySuffix)
+		if !isCopy || !entry.Type().IsRegular() || name == kept {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("stat upgrade copy: %w", err)
+		}
+		older = append(older, copyFile{name: name, modified: info.ModTime()})
+	}
+	slices.SortFunc(older, func(a, b copyFile) int { return b.modified.Compare(a.modified) })
+	for _, stale := range older[min(len(older), KeptUpgradeCopies-1):] {
+		if err := db.stateDir.Remove(stale.name); err != nil {
+			return fmt.Errorf("remove old upgrade copy: %w", err)
+		}
 	}
 	return nil
 }

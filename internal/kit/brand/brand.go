@@ -45,6 +45,10 @@ const (
 	// dossier par version, dont l'agent se met à jour sans rien télécharger
 	// d'Internet.
 	ReleasesDir = "releases"
+	// Les copies de la base faites par serve avant une montée, dans
+	// state_dir : UpgradeCopyPrefix + la version qui tournait + ".db".
+	UpgradeDir        = "upgrade"
+	UpgradeCopyPrefix = "avant-"
 	// Sur chaque machine, dans l'état de l'agent : les binaires installés
 	// (AgentBinaryPrefix + version) et le lien que l'unité lance.
 	AgentBinDir       = "bin"

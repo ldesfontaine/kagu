@@ -40,6 +40,9 @@ func (s *Server) adminRoutes() []controlRoute {
 		{"POST " + adminPrefix + "auth-mode", s.setAuthMode},
 		{"POST " + adminPrefix + "sessions/close-all", s.closeAllSessions},
 		{"POST " + adminPrefix + "tokens/revoke-all", s.revokeAllAPITokens},
+		{"GET " + adminPrefix + "health", s.controlHealth},
+		{"POST " + adminPrefix + "backup/pre-upgrade", s.copyBeforeUpgrade},
+		{"POST " + adminPrefix + "releases/import", s.importRelease},
 	}
 }
 

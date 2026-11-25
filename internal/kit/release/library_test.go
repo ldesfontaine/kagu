@@ -245,3 +245,26 @@ func sumsLine(name string) string {
 	digest := sha256.Sum256([]byte(name))
 	return hex.EncodeToString(digest[:]) + "  " + name + "\n"
 }
+
+// Un chemin relatif se lirait depuis le dossier courant de serve ; un dossier
+// que le compte qui importe ne voit pas, ou un binaire qui y manque, se dit
+// comme tel, avec sa clé.
+func TestImport_RefusesAFolderItCannotRead(t *testing.T) {
+	fixture := newImportFixture(t, Version{0, 0, 2})
+	library := NewLibrary(testkit.EmptyRoot(t), Keys{Current: fixture.publicKey})
+	if _, err := library.Import(filepath.Base(fixture.dir)); !errors.Is(err, ErrFolderNotAbsolute) {
+		t.Fatalf("a relative folder: %v", err)
+	}
+	if _, err := library.Import(filepath.Join(fixture.dir, "absent")); !errors.Is(err, ErrFolderUnreadable) || !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a missing folder: %v", err)
+	}
+	if err := os.Remove(filepath.Join(fixture.dir, BinaryName("arm64"))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.Import(fixture.dir); !errors.Is(err, ErrFolderUnreadable) {
+		t.Fatalf("a listed binary missing: %v", err)
+	}
+	if _, err := library.root.Stat("releases"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("something was left in the state (%v)", err)
+	}
+}

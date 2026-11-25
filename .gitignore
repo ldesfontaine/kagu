@@ -14,3 +14,4 @@ coverage.out
 /web/e2e/.results/
 /web/test-results/
 /web/playwright-report/
+/kagu
