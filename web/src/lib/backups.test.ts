@@ -227,16 +227,16 @@ describe("les adresses des fenêtres de Sauvegardes", () => {
 });
 
 describe("l'export d'un pare-feu", () => {
-  const firewallPlan: BackupPlan = { ...agentPlan, subject: "bordure", name: "", source_machine_id: "local", source_machine_name: "opencloud", producer: "opnsense-config", selector: "fw1" };
+  const firewallPlan: BackupPlan = { ...agentPlan, subject: "bordure", name: "", source_machine_id: "local", source_machine_name: "kagu", producer: "opnsense-config", selector: "fw1" };
 
   it("se reconnaît à son producteur et se lit dans le formulaire comme une troisième source", () => {
     expect(isFirewallPlan(firewallPlan)).toBe(true);
     expect(isFirewallPlan(agentPlan)).toBe(false);
     expect(planFormOf(firewallPlan)).toMatchObject({ kind: "firewall", selector: "fw1", subject: "bordure" });
-    expect(sourceLabel(t, firewallPlan)).toBe("backup.source_firewall:opencloud");
+    expect(sourceLabel(t, firewallPlan)).toBe("backup.source_firewall:kagu");
   });
 
-  it("part en requête « agent » sans machine : le serveur pose la machine openCloud", () => {
+  it("part en requête « agent » sans machine : le serveur pose la machine Kagu", () => {
     const values = { ...emptyPlanForm(false, { id: "fw1", name: "Pare-feu Bordure" }), destination: "bkd_1" };
     expect(values).toMatchObject({ kind: "firewall", subject: "pare-feu-bordure", selector: "fw1" });
     expect(planRequestOf(values, "bkd_1")).toEqual({

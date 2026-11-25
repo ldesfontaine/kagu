@@ -11,7 +11,7 @@ import { keyringPath, newDestinationPath } from "../../lib/backups";
 import { formatWhen } from "../../lib/time";
 
 
-// Ce dont la base d'openCloud a besoin en plus d'un plan : la clé qui chiffre
+// Ce dont la base de Kagu a besoin en plus d'un plan : la clé qui chiffre
 // ses archives, et les machines qui les reçoivent. Ces deux réglages vivaient
 // dans un bloc à part ; ils sont maintenant sur la ligne de la base, là où on
 // regarde si elle est sauvegardée.

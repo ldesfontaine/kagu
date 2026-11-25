@@ -69,7 +69,7 @@ func TestAct_SendsTheOrderOfTheGestureWithTheGuestKind(t *testing.T) {
 		{105, VerbStart, "", agentwire.KindProxmoxStart},
 		{106, VerbShutdown, "", agentwire.KindProxmoxShutdown},
 		{106, VerbSnapshot, "", agentwire.KindProxmoxSnapshot},
-		{105, VerbSnapshotDelete, "oc-20261021-120000", agentwire.KindProxmoxSnapshotDelete},
+		{105, VerbSnapshotDelete, "kg-20261021-120000", agentwire.KindProxmoxSnapshotDelete},
 	}
 	for _, c := range cases {
 		if _, err := service.Act(context.Background(), "host", c.vmid, c.verb, c.snapshot); err != nil {
@@ -104,7 +104,7 @@ func TestAct_RefusesBeforeSendingAnythingTheServerKnowsImpossible(t *testing.T) 
 		"the server's own guest": {108, VerbShutdown, "", ErrSelfTarget},
 		"a snapshot not ours":    {105, VerbSnapshotDelete, "avant-migration", ErrSnapshotName},
 		"no snapshot to delete":  {105, VerbSnapshotDelete, "", ErrSnapshotName},
-		"a name on a start":      {105, VerbStart, "oc-20261021-120000", ErrGuestInvalid},
+		"a name on a start":      {105, VerbStart, "kg-20261021-120000", ErrGuestInvalid},
 	}
 	for name, c := range cases {
 		service, orders := guestsRig(t)
@@ -142,14 +142,14 @@ func TestOwnSnapshots_AreCreatedMinusDeleted(t *testing.T) {
 	line := func(text string) []action.LogLine { return []action.LogLine{{Line: "task UPID"}, {Line: text}} }
 	// Du plus récent au plus ancien, comme la liste des runs.
 	runs := []action.Run{
-		{Kind: agentwire.KindProxmoxSnapshotDelete, State: action.StateSucceeded, Params: params(105, "oc-20261021-100000"), Output: line("snapshot_deleted qemu/105 oc-20261021-100000"), RequestedAt: time.Now()},
-		{Kind: agentwire.KindProxmoxSnapshot, State: action.StateFailed, Params: params(105, ""), Output: line("snapshot qemu/105 oc-20261021-110000")},
-		{Kind: agentwire.KindProxmoxSnapshot, State: action.StateSucceeded, Params: params(105, ""), Output: line("snapshot qemu/105 oc-20261021-100000")},
-		{Kind: agentwire.KindProxmoxSnapshot, State: action.StateSucceeded, Params: params(105, ""), Output: line("snapshot qemu/105 oc-20261021-090000")},
-		{Kind: agentwire.KindProxmoxSnapshot, State: action.StateSucceeded, Params: params(106, ""), Output: line("snapshot qemu/106 oc-20261021-090000")},
+		{Kind: agentwire.KindProxmoxSnapshotDelete, State: action.StateSucceeded, Params: params(105, "kg-20261021-100000"), Output: line("snapshot_deleted qemu/105 kg-20261021-100000"), RequestedAt: time.Now()},
+		{Kind: agentwire.KindProxmoxSnapshot, State: action.StateFailed, Params: params(105, ""), Output: line("snapshot qemu/105 kg-20261021-110000")},
+		{Kind: agentwire.KindProxmoxSnapshot, State: action.StateSucceeded, Params: params(105, ""), Output: line("snapshot qemu/105 kg-20261021-100000")},
+		{Kind: agentwire.KindProxmoxSnapshot, State: action.StateSucceeded, Params: params(105, ""), Output: line("snapshot qemu/105 kg-20261021-090000")},
+		{Kind: agentwire.KindProxmoxSnapshot, State: action.StateSucceeded, Params: params(106, ""), Output: line("snapshot qemu/106 kg-20261021-090000")},
 		{Kind: agentwire.KindProxmoxSnapshot, State: action.StateSucceeded, Params: params(105, ""), Output: line("snapshot qemu/105 manuel")},
 	}
-	if got := OwnSnapshots(runs, 105); !slices.Equal(got, []string{"oc-20261021-090000"}) {
+	if got := OwnSnapshots(runs, 105); !slices.Equal(got, []string{"kg-20261021-090000"}) {
 		t.Fatalf("%v", got)
 	}
 	if got := OwnSnapshots(nil, 105); got == nil || len(got) != 0 {

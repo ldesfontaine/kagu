@@ -21,7 +21,7 @@ func newMachines(t *testing.T) *machine.Service {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	machines := machine.New(storetest.Open(t), machine.NewSessions(), logger)
-	machines.SetServerHost(serverFingerprint, "oc-host.example.org")
+	machines.SetServerHost(serverFingerprint, "kg-host.example.org")
 	return machines
 }
 
@@ -45,7 +45,7 @@ func enrollThrough(t *testing.T, machines *machine.Service, cleartext, fingerpri
 		t.Fatal(err)
 	}
 	return machines.Enroll(context.Background(), machine.Enrollment{
-		MachineID: id, PublicKey: public, Token: cleartext, HostFingerprint: fingerprint, Hostname: "oc-host",
+		MachineID: id, PublicKey: public, Token: cleartext, HostFingerprint: fingerprint, Hostname: "kg-host",
 		ViaLocalSocket: viaLocalSocket,
 	})
 }
@@ -72,9 +72,9 @@ func TestMachineIDFor_TheServerFingerprintCountsOnlyThroughTheLocalSocket(t *tes
 		t.Run(c.name, func(t *testing.T) {
 			machines := newMachines(t)
 			if !c.serverKnown {
-				machines.SetServerHost("", "oc-host.example.org")
+				machines.SetServerHost("", "kg-host.example.org")
 			}
-			cleartext, _, err := machines.CreateToken(context.Background(), "oc-host", machine.RoleGeneric, nil)
+			cleartext, _, err := machines.CreateToken(context.Background(), "kg-host", machine.RoleGeneric, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -93,19 +93,19 @@ func TestMachineIDFor_TheServerFingerprintCountsOnlyThroughTheLocalSocket(t *tes
 }
 
 // L'agent qui présente l'empreinte de la machine du serveur devient la
-// machine openCloud, sous son identifiant stable ; les autres gardent le leur.
+// machine Kagu, sous son identifiant stable ; les autres gardent le leur.
 // Un second agent du serveur, par un jeton de machine neuve, est refusé tant
 // que le premier est actif, sans consommer le jeton ; révoqué, le suivant
 // reprend la même ligne et son historique.
 func TestEnroll_FromTheServerMachine_TakesTheStableID(t *testing.T) {
 	ctx := context.Background()
 	machines := newMachines(t)
-	cleartext, _, err := machines.CreateToken(ctx, "oc-host", machine.RoleGeneric, nil)
+	cleartext, _, err := machines.CreateToken(ctx, "kg-host", machine.RoleGeneric, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	local, err := enrollFrom(t, machines, cleartext, serverFingerprint)
-	if err != nil || local.ID != machine.LocalID || local.Name != "oc-host" || !local.Agent.IsActive() {
+	if err != nil || local.ID != machine.LocalID || local.Name != "kg-host" || !local.Agent.IsActive() {
 		t.Fatalf("server machine: %+v %v", local, err)
 	}
 
@@ -127,12 +127,12 @@ func TestEnroll_FromTheServerMachine_TakesTheStableID(t *testing.T) {
 		t.Fatal(err)
 	}
 	again, err := enrollFrom(t, machines, second, serverFingerprint)
-	if err != nil || again.ID != machine.LocalID || again.Name != "oc-host" || !again.CreatedAt.Equal(local.CreatedAt) || again.Agent.ID == local.Agent.ID {
+	if err != nil || again.ID != machine.LocalID || again.Name != "kg-host" || !again.CreatedAt.Equal(local.CreatedAt) || again.Agent.ID == local.Agent.ID {
 		t.Fatalf("the reinstalled agent takes the same row: %+v %v", again, err)
 	}
 }
 
-// Tant que la machine openCloud n'a jamais eu d'agent, le serveur offre la
+// Tant que la machine Kagu n'a jamais eu d'agent, le serveur offre la
 // ligne qui l'installe : la même tant qu'elle attend, avec observe et
 // probe.lan, nommée d'après le nom d'hôte. Une fois l'agent enrôlé, plus rien n'est offert.
 func TestOfferLocalEnrollment_UntilTheServerMachineHasAnAgent(t *testing.T) {
@@ -142,7 +142,7 @@ func TestOfferLocalEnrollment_UntilTheServerMachineHasAnAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if token.Name != "oc-host" || token.MachineID != "" || agentpolicy.FormatCapabilities(token.Capabilities) != "observe,probe.lan" {
+	if token.Name != "kg-host" || token.MachineID != "" || agentpolicy.FormatCapabilities(token.Capabilities) != "observe,probe.lan" {
 		t.Fatalf("offered token %+v", token)
 	}
 	again, sameToken, err := machines.OfferLocalEnrollment(ctx)

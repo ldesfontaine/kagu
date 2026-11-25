@@ -717,7 +717,7 @@ func newFakeVzdump(t *testing.T, wrapperBody string) fakeVzdump {
 	t.Helper()
 	dir := t.TempDir()
 	fake := fakeVzdump{
-		sudo: filepath.Join(dir, "sudo"), wrapper: filepath.Join(dir, "opencloud-vzdump"),
+		sudo: filepath.Join(dir, "sudo"), wrapper: filepath.Join(dir, "kagu-vzdump"),
 		record: filepath.Join(dir, "arguments"), environment: filepath.Join(dir, "environment"),
 	}
 	// Le faux sudo note ses arguments puis lance ce qui suit « -n », comme le
@@ -747,7 +747,7 @@ func (f fakeVzdump) arguments(t *testing.T) []string {
 }
 
 func TestVzdumpProducer_RunsSudoOnTheWrapperAndStreamsItsOutput(t *testing.T) {
-	t.Setenv("OPENCLOUD_TEST_LEAK", "ne-doit-pas-passer")
+	t.Setenv("KAGU_TEST_LEAK", "ne-doit-pas-passer")
 	fake := newFakeVzdump(t, `printf 'VMA\000\377octets de vzdump' ; printf 'INFO: Starting Backup of VM 5012 (qemu)\nINFO: transferred 1 GiB\n' >&2`)
 	b := newProduceRig(t)
 	b.useProducer(fake.producer())
@@ -768,7 +768,7 @@ func TestVzdumpProducer_RunsSudoOnTheWrapperAndStreamsItsOutput(t *testing.T) {
 			t.Errorf("the producer's environment lacks %q:\n%s", want, environment)
 		}
 	}
-	if strings.Contains(string(environment), "OPENCLOUD_TEST_LEAK") {
+	if strings.Contains(string(environment), "KAGU_TEST_LEAK") {
 		t.Errorf("the producer inherited the agent's environment:\n%s", environment)
 	}
 	uploaded, _ := b.server.received()

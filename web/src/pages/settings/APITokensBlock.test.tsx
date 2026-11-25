@@ -19,7 +19,7 @@ const offers: VerbOffer[] = [
 ];
 
 function token(over: Partial<APIToken>): APIToken {
-  return { id: "t1", name: "agent", masked: "ock_ab…", scope: "read", verbs: [], machines: null, guests: null, created_at: "2026-10-28T10:00:00Z", expires_at: null, last_used_at: null, ...over };
+  return { id: "t1", name: "agent", masked: "kgk_ab…", scope: "read", verbs: [], machines: null, guests: null, created_at: "2026-10-28T10:00:00Z", expires_at: null, last_used_at: null, ...over };
 }
 
 function state(tokens: APIToken[]): APITokensState {
@@ -32,7 +32,7 @@ function state(tokens: APIToken[]): APITokensState {
     limit: 16,
     lifetimes: { days: [30, 90, 365, 0], default_days: 90 },
     verbs: offers,
-    env: { mcp_host: "127.0.0.1", opencloud_url: "http://127.0.0.1:8080" },
+    env: { mcp_host: "127.0.0.1", kagu_url: "http://127.0.0.1:8080" },
   };
 }
 

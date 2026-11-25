@@ -1,4 +1,4 @@
-# openCloud — build, run, test, ci. Les outils sont épinglés par version ici
+# Kagu — build, run, test, ci. Les outils sont épinglés par version ici
 # et nulle part ailleurs ; la CI appelle ces mêmes cibles.
 
 MODULE      := github.com/ldesfontaine/kagu
@@ -20,7 +20,7 @@ export CGO_ENABLED = 0
 
 # Le front compilé est embarqué par go:embed : il précède tout build ou test Go.
 build: front
-	go build -trimpath -ldflags '$(LDFLAGS)' -o bin/opencloud ./cmd/kagu
+	go build -trimpath -ldflags '$(LDFLAGS)' -o bin/kagu ./cmd/kagu
 
 # Les binaires publiés : amd64 et arm64, statiques, avec leurs sommes. Le tag
 # release refuse de compiler sans clé de secours (internal/kit/release/key_release.go).
@@ -33,9 +33,9 @@ release: front
 RELEASE_DIR ?= dist-release
 release-binaries:
 	rm -rf $(RELEASE_DIR) && mkdir -p $(RELEASE_DIR)
-	GOARCH=amd64 go build -tags release -buildvcs=false -trimpath -ldflags '$(LDFLAGS)' -o $(RELEASE_DIR)/opencloud-linux-amd64 ./cmd/kagu
-	GOARCH=arm64 go build -tags release -buildvcs=false -trimpath -ldflags '$(LDFLAGS)' -o $(RELEASE_DIR)/opencloud-linux-arm64 ./cmd/kagu
-	cd $(RELEASE_DIR) && sha256sum opencloud-linux-* > SHA256SUMS
+	GOARCH=amd64 go build -tags release -buildvcs=false -trimpath -ldflags '$(LDFLAGS)' -o $(RELEASE_DIR)/kagu-linux-amd64 ./cmd/kagu
+	GOARCH=arm64 go build -tags release -buildvcs=false -trimpath -ldflags '$(LDFLAGS)' -o $(RELEASE_DIR)/kagu-linux-arm64 ./cmd/kagu
+	cd $(RELEASE_DIR) && sha256sum kagu-linux-* > SHA256SUMS
 
 # npm ci ne rejoue que si le verrou a changé ; le premier verrou se produit
 # avec npx npm@10 install si le npm de la machine (9.x) plante.
@@ -66,7 +66,7 @@ e2e: front $(FRONT_DIR)/node_modules/.stamp
 run: build
 	@mkdir -p dev
 	@test -f dev/config.toml || printf 'listen = "127.0.0.1:8080"\nstate_dir = "%s/dev/state"\n' "$(CURDIR)" > dev/config.toml
-	./bin/opencloud serve -config dev/config.toml
+	./bin/kagu serve -config dev/config.toml
 
 test: front
 	go test ./...
@@ -96,5 +96,5 @@ dupl:
 	go run $(DUPL) -t 80 -plumbing internal cmd | scripts/dupl-releve.sh
 
 clean:
-	rm -rf bin/opencloud dist dist-release
+	rm -rf bin/kagu dist dist-release
 	find $(FRONT_DIR)/dist -mindepth 1 -not -name .gitkeep -delete

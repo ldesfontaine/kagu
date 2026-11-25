@@ -1,13 +1,13 @@
 // Package brand est le seul endroit où le nom du produit s'écrit. Il ne
-// dépend de rien et ne porte que des constantes, en trois étages qui ne
-// dérivent pas l'un de l'autre :
+// dépend que de la bibliothèque standard et part de trois racines, seules
+// écrites en littéral : ProductName (le nom affiché), ID (l'identifiant
+// technique, d'où viennent les chemins, les unités et les étiquettes du
+// protocole) et TokenPrefix (les jetons). Tout le reste se construit depuis
+// elles (TestBrand_EveryNameDerivesFromID).
 //
-//   - le nom affiché, ce que lit l'opérateur ;
-//   - l'identifiant technique, d'où viennent les chemins et les fichiers ;
-//   - l'empreinte du protocole, des littéraux figés : en-têtes, préfixes
-//     de jetons, identifiants échangés avec les agents et les récepteurs.
-//
-// Un test (TestProductNameIsNotALiteral) échoue si le nom, l'ancien ou le
-// nouveau, ou l'un des préfixes de jeton réapparaît en littéral ailleurs dans
-// le code Go ou les composants du front : pour l'écrire, on passe par ce paquet.
+// Un test (TestProductNameIsNotALiteral) échoue si le nom ou l'un des
+// préfixes de jeton réapparaît en littéral ailleurs dans le code Go ou les
+// composants du front, et si l'ancien nom réapparaît où que ce soit hors de
+// l'histoire (migrations, journaux de versions, documents de docs/projet) :
+// pour l'écrire, on passe par ce paquet.
 package brand

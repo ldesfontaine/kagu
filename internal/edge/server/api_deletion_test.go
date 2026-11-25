@@ -61,12 +61,12 @@ func TestAPI_DeleteMachine_ReadsThePlanThenRefusesThenRemoves(t *testing.T) {
 	if got := callAPI(server.Server, http.MethodGet, "/api/machines/"+remoteID+"/delete-plan", nil); got.Code != http.StatusNotFound {
 		t.Fatalf("plan d'une machine retirée: %d", got.Code)
 	}
-	// La machine openCloud a son plan comme les autres : elle emporte son
+	// La machine Kagu a son plan comme les autres : elle emporte son
 	// agent.
 	var local deletionPlanJSON
 	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/machines/"+machine.LocalID+"/delete-plan", nil), &local)
 	if local.Blocked || len(local.Removes) == 0 || local.Removes[0].Kind != string(deletion.KindAgents) {
-		t.Fatalf("machine openCloud: %+v", local)
+		t.Fatalf("machine Kagu: %+v", local)
 	}
 }
 

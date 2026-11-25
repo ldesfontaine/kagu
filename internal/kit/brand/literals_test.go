@@ -1,6 +1,7 @@
 package brand
 
 import (
+	"bytes"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -20,15 +21,11 @@ type exception struct {
 	literal string
 }
 
-var exceptions = map[exception]string{
-	{"internal/domain/alert/payload.go", "alert.open_in_opencloud"}:        "clé de catalogue : les clés ne changent pas avec le nom",
-	{"internal/edge/server/api_tokens.go", `json:"opencloud_url"`}:         "clé JSON de l'API, lue par le front ; elle nomme la variable OPENCLOUD_URL du .env de mcp-maison",
-	{"internal/edge/server/api_settings_mcp.go", `json:"opencloud_tools"`}: "clé JSON de l'API, lue par le front ; elle compte les outils du groupe opencloud de mcp-maison",
-}
+var exceptions = map[exception]string{}
 
 // Les préfixes de jetons ne s'écrivent pas non plus ailleurs : un littéral
-// « oc_ » hors de ce paquet est un schéma de jeton copié.
-var tokenSchemes = []string{"oc_", "ock_"}
+// « kg_ » hors de ce paquet est un schéma de jeton copié.
+var tokenSchemes = []string{EnrollmentTokenScheme, APITokenScheme}
 
 // Le nom du produit, l'ancien comme le nouveau, s'écrit dans ce paquet et
 // nulle part ailleurs : aucun littéral du code Go de production ne le
@@ -50,10 +47,15 @@ func TestProductNameIsNotALiteral(t *testing.T) {
 		relative = filepath.ToSlash(relative)
 		if entry.IsDir() {
 			switch relative {
-			case ".git", "web/node_modules", "web/dist", "internal/kit/brand":
+			case ".git", ".claude", "bin", "dist", "dist-release", "dev", "web/node_modules", "web/dist",
+				"web/e2e/.results", "web/test-results", "web/playwright-report", "internal/kit/brand":
 				return filepath.SkipDir
 			}
 			return nil
+		}
+		// Dans un arbre de travail, .git est un fichier qui nomme le dépôt.
+		if relative != ".git" {
+			checkOldName(t, path, relative)
 		}
 		if strings.HasSuffix(path, ".tsx") && strings.HasPrefix(relative, "web/src/") && !strings.HasSuffix(path, ".test.tsx") {
 			checkFrontFile(t, root, path, relative, used)
@@ -100,6 +102,60 @@ func TestProductNameIsNotALiteral(t *testing.T) {
 	for key, why := range exceptions {
 		if !used[key] {
 			t.Errorf("exception no longer used, remove it: %s %q (%s)", key.file, key.literal, why)
+		}
+	}
+}
+
+// L'ancien nom et son préfixe de jeton (« oc_ », « ock_ », « oc- », et
+// « (oc|… » dans une expression régulière : le motif de l'essai E04-47, plus
+// la barre) ne s'écrivent nulle part, en littéral comme en commentaire, en
+// code comme en documentation, sauf là où l'histoire se garde : les
+// migrations rejouent les bases d'avant, les journaux de versions et les
+// documents du projet racontent ce qui a été, et .github est tenu par Lucas
+// (le miroir GitHub). Le code rangé sous docs/projet (les scripts d'un banc)
+// n'est pas de l'histoire : il tourne, et un masque de jeton qui suit l'ancien
+// schéma laisse passer le nouveau en clair.
+var oldName = regexp.MustCompile(`(?i)opencloud|\bock?[0-9_:./|-]`)
+
+var historyDirs = []string{"migrations/", "docs/versions/", ".github/", "internal/edge/store/testdata/legacy/"}
+
+const projectDocs = "docs/projet/"
+
+var codeExtensions = []string{".go", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".sh", ".py"}
+
+func keepsHistory(relative string) bool {
+	for _, dir := range historyDirs {
+		if strings.HasPrefix(relative, dir) {
+			return true
+		}
+	}
+	if !strings.HasPrefix(relative, projectDocs) {
+		return false
+	}
+	for _, extension := range codeExtensions {
+		if strings.HasSuffix(relative, extension) {
+			return false
+		}
+	}
+	return true
+}
+
+func checkOldName(t *testing.T, path, relative string) {
+	t.Helper()
+	if keepsHistory(relative) {
+		return
+	}
+	content, err := os.ReadFile(path) // #nosec G304 -- le parcours du dépôt par le test.
+	if err != nil {
+		t.Errorf("%s: %v", relative, err)
+		return
+	}
+	if bytes.IndexByte(content, 0) >= 0 {
+		return
+	}
+	for number, line := range strings.Split(string(content), "\n") {
+		if found := oldName.FindString(line); found != "" {
+			t.Errorf("%s:%d: %q is the old name", relative, number+1, found)
 		}
 	}
 }

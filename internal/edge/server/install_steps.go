@@ -23,7 +23,7 @@ const (
 )
 
 // installTarget dit pour quelle machine le jeton est émis : local, la machine
-// openCloud, dont le binaire est celui que le serveur a installé et non une
+// Kagu, dont le binaire est celui que le serveur a installé et non une
 // copie dans /tmp ; reenroll, une machine qui a déjà un agent.
 type installTarget struct {
 	local    bool
@@ -33,7 +33,7 @@ type installTarget struct {
 }
 
 // installSteps donne les étapes : l'arrêt de l'agent en place (un
-// ré-enrôlement seulement), le binaire (sauf sur la machine openCloud, qui
+// ré-enrôlement seulement), le binaire (sauf sur la machine Kagu, qui
 // l'a déjà), la préparation, l'enrôlement, l'unité, et les dossiers que les
 // droits autorisent (seulement quand un droit écrit hors de l'état). Le jeton
 // n'est que dans l'enrôlement. L'unité vient après lui : elle relit

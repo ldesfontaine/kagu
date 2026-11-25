@@ -293,7 +293,7 @@ func TestDialWith_ResolvesOnceAndDialsWhatItJudged(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	address := net.JoinHostPort("rebind.opencloud.test", portOf(t, listener))
+	address := net.JoinHostPort("rebind.kagu.test", portOf(t, listener))
 
 	// Sans le droit : la première réponse est la boucle locale, refusée ;
 	// la seconde (publique) n'est jamais demandée.

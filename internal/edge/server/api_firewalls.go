@@ -100,7 +100,7 @@ type firewallRulesResponse struct {
 	Rules []firewallRuleJSON `json:"rules"`
 }
 
-// firewallLeaseMachineJSON est la machine d'openCloud que le bail désigne, par
+// firewallLeaseMachineJSON est la machine de Kagu que le bail désigne, par
 // sa carte réseau ou son adresse.
 type firewallLeaseMachineJSON struct {
 	ID   string `json:"id"`
@@ -318,7 +318,7 @@ func (s *Server) deleteFirewall(w http.ResponseWriter, r *http.Request) {
 	s.finishAPIAction(w, r, s.firewalls.Remove(r.Context(), r.PathValue("id")), firewall.ErrNotFound)
 }
 
-// knownMachines : les machines d'openCloud, réduites à ce qui les reconnaît
+// knownMachines : les machines de Kagu, réduites à ce qui les reconnaît
 // dans un bail.
 func (s *Server) knownMachines(ctx context.Context) ([]firewall.KnownMachine, error) {
 	statuses, err := s.machines.List(ctx)

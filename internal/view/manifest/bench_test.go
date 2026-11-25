@@ -29,7 +29,7 @@ const (
 )
 
 // L'export se teste sur la vraie base SQLite, temporaire, avec la machine
-// openCloud et une machine distante nommée app-1.
+// Kagu et une machine distante nommée app-1.
 type bench struct {
 	db         *store.DB
 	manifest   *manifest.Manifest

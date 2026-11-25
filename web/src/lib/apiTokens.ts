@@ -148,5 +148,5 @@ export function reachLines(t: Translate, token: APIToken, machines: ReachMachine
 // Les trois lignes que mcp-maison lit dans son .env : où il écoute, où il
 // joint l'API en direct, et le jeton.
 export function envBlock(env: APITokenEnv, token: string): string {
-  return [`MCP_HOST=${env.mcp_host}`, `OPENCLOUD_URL=${env.opencloud_url}`, `OPENCLOUD_TOKEN=${token}`].join("\n");
+  return [`MCP_HOST=${env.mcp_host}`, `KAGU_URL=${env.kagu_url}`, `KAGU_TOKEN=${token}`].join("\n");
 }

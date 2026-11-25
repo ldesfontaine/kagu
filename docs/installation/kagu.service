@@ -1,4 +1,4 @@
-# /etc/systemd/system/opencloud.service — le serveur Kagu.
+# /etc/systemd/system/kagu.service — le serveur Kagu.
 [Unit]
 Description=Kagu (serveur)
 Documentation=https://github.com/ldesfontaine/kagu/blob/dev/docs/installation.md
@@ -9,28 +9,28 @@ Wants=network-online.target
 [Service]
 Type=simple
 # Ni root ni le groupe docker : le serveur ne lit rien de sa machine, c'est
-# son agent (opencloud-agent.service) qui le fait.
-User=opencloud
-Group=opencloud
+# son agent (kagu-agent.service) qui le fait.
+User=kagu
+Group=kagu
 # Le groupe de l'agent local, pour le seul usage de donner ce groupe à
-# /run/opencloud/agent.sock : l'agent de cette machine y ouvre la socket, et
+# /run/kagu/agent.sock : l'agent de cette machine y ouvre la socket, et
 # serve n'y admet que son uid. Le groupe doit exister avant le démarrage.
-SupplementaryGroups=opencloud-agent
-ExecStart=/usr/local/bin/opencloud serve -config /etc/opencloud/config.toml
+SupplementaryGroups=kagu-agent
+ExecStart=/usr/local/bin/kagu serve -config /etc/kagu/config.toml
 Restart=on-failure
 RestartSec=5
-# Crée /var/lib/opencloud en 0700, propriété de opencloud.
-StateDirectory=opencloud
+# Crée /var/lib/kagu en 0700, propriété de kagu.
+StateDirectory=kagu
 StateDirectoryMode=0700
-# Crée /run/opencloud en 0755 à chaque démarrage, propriété de opencloud :
+# Crée /run/kagu en 0755 à chaque démarrage, propriété de kagu :
 # l'agent local y traverse pour joindre agent.sock (0660).
-RuntimeDirectory=opencloud
+RuntimeDirectory=kagu
 RuntimeDirectoryMode=0755
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
 # strict : tout est en lecture seule, sauf StateDirectory. Un state_dir
-# ailleurs que /var/lib/opencloud demande son ReadWritePaths.
+# ailleurs que /var/lib/kagu demande son ReadWritePaths.
 ProtectSystem=strict
 ProtectHome=read-only
 # Le port 8080 n'exige aucune capacité.

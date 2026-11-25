@@ -345,7 +345,7 @@ func (s *Server) verbHandler(verbID string, next http.HandlerFunc) http.HandlerF
 // besoin. L'accès de l'opérateur enveloppe le tout, avant la garde. Un flux
 // de l'opérateur a sa garde d'origine, jugée avant son accès : une page d'un
 // autre site n'ouvre ni ne ferme aucune session. Ce qu'un
-// navigateur appelle avec l'état d'openCloud, /api, exige en plus un Host
+// navigateur appelle avec l'état de Kagu, /api, exige en plus un Host
 // reconnu, jugé avant tout le reste, authentification comprise.
 func (s *Server) mux() *http.ServeMux {
 	mux := http.NewServeMux()

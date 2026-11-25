@@ -1,11 +1,11 @@
--- Les machines gérées par openCloud et les jetons qui les enrôlent.
+-- Les machines gérées par Kagu et les jetons qui les enrôlent.
 -- Horodatages en secondes depuis l'époque Unix.
 
 CREATE TABLE machines (
     id            TEXT PRIMARY KEY,
     name          TEXT NOT NULL UNIQUE,
     kind          TEXT NOT NULL CHECK (kind IN ('local', 'remote')),
-    -- Clé publique Ed25519, 32 octets ; NULL pour la machine openCloud elle-même.
+    -- Clé publique Ed25519, 32 octets ; NULL pour la machine Kagu elle-même.
     public_key    BLOB,
     hostname      TEXT NOT NULL DEFAULT '',
     address       TEXT NOT NULL DEFAULT '',

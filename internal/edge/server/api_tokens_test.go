@@ -120,7 +120,7 @@ func TestAPIToken_Invalid_401AndRateLimited(t *testing.T) {
 		return callBearerWith(server.Server, http.MethodGet, "/api/counts", bearer, peer)
 	}
 	for i := range authAttemptBurst {
-		got := attempt("203.0.113.9", "ock_"+strings.Repeat("0", 40))
+		got := attempt("203.0.113.9", "kgk_"+strings.Repeat("0", 40))
 		if got.Code != http.StatusUnauthorized || errorCode(t, got) != codeAPITokenInvalid {
 			t.Fatalf("attempt %d: %d %s", i+1, got.Code, got.Body.String())
 		}
@@ -128,13 +128,13 @@ func TestAPIToken_Invalid_401AndRateLimited(t *testing.T) {
 			t.Fatalf("WWW-Authenticate %q", got.Header().Get("WWW-Authenticate"))
 		}
 	}
-	if got := attempt("203.0.113.9", "ock_"+strings.Repeat("1", 40)); got.Code != http.StatusTooManyRequests {
+	if got := attempt("203.0.113.9", "kgk_"+strings.Repeat("1", 40)); got.Code != http.StatusTooManyRequests {
 		t.Fatalf("after the burst: %d, want 429", got.Code)
 	}
 	if got := attempt("203.0.113.9", good); got.Code != http.StatusOK {
 		t.Fatalf("a valid token after the burst: %d", got.Code)
 	}
-	if got := attempt("198.51.100.7", "ock_"+strings.Repeat("2", 40)); got.Code != http.StatusUnauthorized {
+	if got := attempt("198.51.100.7", "kgk_"+strings.Repeat("2", 40)); got.Code != http.StatusUnauthorized {
 		t.Fatalf("another address: %d, want 401", got.Code)
 	}
 }
@@ -176,7 +176,7 @@ func TestAPIToken_IgnoredWhileNoAccount(t *testing.T) {
 
 // Derrière un mandataire, le jeton passe par lui-même : ni l'en-tête
 // d'identité ni le pair de confiance ne sont demandés à mcp-maison, qui
-// joint openCloud en direct.
+// joint Kagu en direct.
 func TestAPIToken_WorksInForwardModeWithoutTheProxy(t *testing.T) {
 	server := newFirstSetupServer(t)
 	bearer := server.issueAPIToken(t, "mcp-maison")
@@ -184,7 +184,7 @@ func TestAPIToken_WorksInForwardModeWithoutTheProxy(t *testing.T) {
 	if got := callBearerWith(server.Server, http.MethodGet, "/api/counts", bearer, untrustedPeer); got.Code != http.StatusOK {
 		t.Fatalf("status %d %s", got.Code, got.Body.String())
 	}
-	if got := callBearerWith(server.Server, http.MethodGet, "/api/counts", "ock_"+strings.Repeat("3", 40), untrustedPeer); got.Code != http.StatusUnauthorized {
+	if got := callBearerWith(server.Server, http.MethodGet, "/api/counts", "kgk_"+strings.Repeat("3", 40), untrustedPeer); got.Code != http.StatusUnauthorized {
 		t.Fatalf("a wrong token: %d", got.Code)
 	}
 	// Sans jeton, le même pair reste refusé.
@@ -361,7 +361,7 @@ func TestAPITokensAPI_ListCreateRevoke(t *testing.T) {
 	}
 	var body apiTokenCreated
 	decodeAPI(t, created, &body)
-	if !strings.HasPrefix(body.Token, "ock_") || body.Item.Scope != "read" || body.Item.ExpiresAt == nil {
+	if !strings.HasPrefix(body.Token, "kgk_") || body.Item.Scope != "read" || body.Item.ExpiresAt == nil {
 		t.Fatalf("created %+v", body)
 	}
 	listed := callAPI(server.Server, http.MethodGet, "/api/settings/api-tokens", nil)
@@ -370,7 +370,7 @@ func TestAPITokensAPI_ListCreateRevoke(t *testing.T) {
 	}
 	var list apiTokensResponse
 	decodeAPI(t, listed, &list)
-	if len(list.Tokens) != 1 || list.Limit != apitoken.MaxTokens || list.Env.OpenCloudURL != "http://example.com:80" {
+	if len(list.Tokens) != 1 || list.Limit != apitoken.MaxTokens || !strings.Contains(listed.Body.String(), `"`+brand.ID+`_url":"http://example.com:80"`) {
 		t.Fatalf("list %+v", list)
 	}
 	for _, request := range []apiTokenRequest{{Name: ""}, {Name: "ok", Scope: "admin"}, {Name: "ok", ExpiresInDays: new(7)}} {
@@ -418,13 +418,21 @@ func mustDecode(t *testing.T, body string, into any) {
 // que l'autre côté répond, version et outils comptés.
 func TestSettingsMCP_ReadsTheHealthOfMCPMaison(t *testing.T) {
 	server := newTestServer(t)
-	read := func() mcpCheckResponse {
+	// La forme que le front lit : mcpCheckResponse n'a pas de balises.
+	type mcpCheckRead struct {
+		URL          string `json:"url"`
+		State        string `json:"state"`
+		Version      string `json:"version"`
+		ProductTools int    `json:"kagu_tools"`
+		SuggestedURL string `json:"suggested_url"`
+	}
+	read := func() mcpCheckRead {
 		t.Helper()
 		got := callAPI(server.Server, http.MethodGet, "/api/settings/mcp", nil)
 		if got.Code != http.StatusOK {
 			t.Fatalf("status %d %s", got.Code, got.Body.String())
 		}
-		var response mcpCheckResponse
+		var response mcpCheckRead
 		decodeAPI(t, got, &response)
 		return response
 	}
@@ -443,7 +451,7 @@ func TestSettingsMCP_ReadsTheHealthOfMCPMaison(t *testing.T) {
 	server.mcpURL = fake.URL
 	server.mcpCheck = mcpcheck.New(fake.URL, server.now)
 	got := read()
-	if got.State != string(mcpcheck.StateReachable) || got.Version != "0.1.0" || got.OpenCloudTools != 2 || got.URL != fake.URL {
+	if got.State != string(mcpcheck.StateReachable) || got.Version != "0.1.0" || got.ProductTools != 2 || got.URL != fake.URL {
 		t.Fatalf("reachable: %+v", got)
 	}
 	// Le jeton d'API n'ouvre pas la carte : elle est de l'opérateur.

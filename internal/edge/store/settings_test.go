@@ -26,7 +26,7 @@ func TestUpdateSettings_ThenLoad_RoundTripsEveryKey(t *testing.T) {
 	want := settings.Settings{
 		Language:            lang.English,
 		DangerReminderHours: 24,
-		MailHost:            "smtp.example.org", MailPort: 465, MailTLS: "tls", MailUsername: "alerts", MailPassword: "s3cret", MailFrom: "oc@example.org",
+		MailHost:            "smtp.example.org", MailPort: 465, MailTLS: "tls", MailUsername: "alerts", MailPassword: "s3cret", MailFrom: "kagu@example.org",
 		LifecycleDisabled: true,
 	}
 	written, err := db.UpdateSettings(ctx, func(current *settings.Settings) { *current = want })
@@ -74,14 +74,14 @@ func TestUpdateSettings_LifecycleStaysOffUntilTurnedBackOn(t *testing.T) {
 func TestUpdateSettings_KeepsTheKeysItDoesNotTouch(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
-	if _, err := db.UpdateSettings(ctx, func(current *settings.Settings) { current.MailFrom = "oc@example.org" }); err != nil {
+	if _, err := db.UpdateSettings(ctx, func(current *settings.Settings) { current.MailFrom = "kagu@example.org" }); err != nil {
 		t.Fatal(err)
 	}
 	written, err := db.UpdateSettings(ctx, func(current *settings.Settings) { current.Language = lang.English })
 	if err != nil {
 		t.Fatal(err)
 	}
-	if written.MailFrom != "oc@example.org" || written.Language != lang.English {
+	if written.MailFrom != "kagu@example.org" || written.Language != lang.English {
 		t.Fatalf("got %+v", written)
 	}
 }
@@ -96,7 +96,7 @@ func TestUpdateSettings_TwoConcurrentWriters_BothValuesSurvive(t *testing.T) {
 	errs := make(chan error, 2*rounds)
 	writers.Go(func() {
 		for round := range rounds {
-			from := fmt.Sprintf("oc%d@example.org", round)
+			from := fmt.Sprintf("kagu%d@example.org", round)
 			_, err := db.UpdateSettings(ctx, func(current *settings.Settings) { current.MailFrom = from })
 			errs <- err
 		}
@@ -123,7 +123,7 @@ func TestUpdateSettings_TwoConcurrentWriters_BothValuesSurvive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := settings.Settings{Language: lang.English, DangerReminderHours: 12, MailFrom: fmt.Sprintf("oc%d@example.org", rounds-1)}
+	want := settings.Settings{Language: lang.English, DangerReminderHours: 12, MailFrom: fmt.Sprintf("kagu%d@example.org", rounds-1)}
 	if current != want {
 		t.Fatalf("got %+v, want %+v", current, want)
 	}

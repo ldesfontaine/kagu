@@ -143,7 +143,7 @@ func TestCoversPath(t *testing.T) {
 		want       bool
 	}{
 		{CapabilityBackupReceive, "/srv/backups", true},
-		{CapabilityBackupReceive, "/srv/backups/opencloud", true},
+		{CapabilityBackupReceive, "/srv/backups/kagu", true},
 		{CapabilityBackupReceive, "/srv/backups2", false},
 		{CapabilityBackupReceive, "/srv", false},
 		{CapabilityBackupReceive, "/srv/backups/../etc", false},
@@ -161,7 +161,7 @@ func TestCoversPath(t *testing.T) {
 	if CoversPath(nil, CapabilityBackupReceive, "/srv/backups") {
 		t.Error("no rights cover nothing")
 	}
-	if granted, ok := CoveringPath(capabilities, CapabilityBackupReceive, "/srv/backups/opencloud/nuit"); !ok || granted != "/srv/backups" {
+	if granted, ok := CoveringPath(capabilities, CapabilityBackupReceive, "/srv/backups/kagu/nuit"); !ok || granted != "/srv/backups" {
 		t.Errorf("covering path %q %t", granted, ok)
 	}
 }

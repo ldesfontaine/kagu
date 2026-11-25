@@ -39,7 +39,7 @@ func observed(id, name, project, composeService, image string) container.Observe
 // seedUndeclared montre ce que les machines font tourner sans que rien le
 // déclare : un projet Compose et un conteneur seul sur app-1, un service
 // Compose de plus dans le projet déclaré « wiki », un conteneur sur la machine
-// openCloud ; et ce qui ne se propose pas : les clés ignorées du seed, un
+// Kagu ; et ce qui ne se propose pas : les clés ignorées du seed, un
 // conteneur dont le label ne vise rien.
 func (b *bench) seedUndeclared(t *testing.T) {
 	t.Helper()
@@ -106,7 +106,7 @@ func TestExport_ProposeAppendsUndeclaredWithoutIDs(t *testing.T) {
 			added = append(added, item.Machine+"/"+item.Name)
 		}
 	}
-	want := []string{"app-1/cache", "app-1/db", "app-1/front", "app-1/web", "opencloud/another"}
+	want := []string{"app-1/cache", "app-1/db", "app-1/front", "app-1/web", "kagu/another"}
 	if strings.Join(added, ",") != strings.Join(want, ",") {
 		t.Fatalf("propositions = %v, want %v", added, want)
 	}
@@ -185,7 +185,7 @@ func TestExport_ProposedFileGivesAnApplicablePlan(t *testing.T) {
 	if len(plan.Problems) > 0 || !plan.Applicable() {
 		t.Fatalf("le plan du fichier proposé n'est pas applicable : %+v", plan.Problems)
 	}
-	want := []string{"create service/app-1/cache", "create service/app-1/db", "create service/app-1/front", "create service/app-1/web", "create service/opencloud/another"}
+	want := []string{"create service/app-1/cache", "create service/app-1/db", "create service/app-1/front", "create service/app-1/web", "create service/kagu/another"}
 	got := changeLabels(plan)
 	if len(got) != len(want) {
 		t.Fatalf("changes = %v, want %v", got, want)

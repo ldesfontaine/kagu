@@ -12,7 +12,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
-// declareService déclare un service sur la machine openCloud : l'alerte d'une
+// declareService déclare un service sur la machine Kagu : l'alerte d'une
 // montée y est rattachée (service_id est une clé étrangère).
 func (f *fixture) declareService(t *testing.T, name string) directory.Service {
 	t.Helper()

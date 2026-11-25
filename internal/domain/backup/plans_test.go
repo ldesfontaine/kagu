@@ -34,7 +34,7 @@ func (b *bench) withSource() {
 
 // Ce qu'un plan accepte, sans rien lire de la base : la base est le seul plan
 // qui s'appelle « database », une source agent a sa machine, son producteur
-// et son sélecteur, et « opencloud » préfixe les fichiers de la base.
+// et son sélecteur, et « kagu » préfixe les fichiers de la base.
 func TestPlanDefinition_Validate(t *testing.T) {
 	database := databasePlan("bkd_1", 14)
 	agent := agentPlan("pve-vm", "bkd_1")
@@ -64,7 +64,7 @@ func TestPlanDefinition_Validate(t *testing.T) {
 		{"a subject vm and digits without a dash before", with(agent, func(d *backup.PlanDefinition) { d.Subject = "vm-100" }), nil},
 		{"the database named after an agent", with(database, func(d *backup.PlanDefinition) { d.Subject = "pve" }), backup.ErrPlanInvalid},
 		{"an agent plan called database", with(agent, func(d *backup.PlanDefinition) { d.Subject = "database" }), backup.ErrPlanInvalid},
-		{"an agent plan taking the prefix of the database", with(agent, func(d *backup.PlanDefinition) { d.Subject = "opencloud" }), backup.ErrPlanInvalid},
+		{"an agent plan taking the prefix of the database", with(agent, func(d *backup.PlanDefinition) { d.Subject = "kagu" }), backup.ErrPlanInvalid},
 		{"the database with a machine", with(database, func(d *backup.PlanDefinition) { d.SourceMachineID = sourceID }), backup.ErrPlanInvalid},
 		{"the database with a producer", with(database, func(d *backup.PlanDefinition) { d.Producer = agentpolicy.ProducerProxmoxVzdump }), backup.ErrPlanInvalid},
 		{"the database with a selector", with(database, func(d *backup.PlanDefinition) { d.Selector = backup.SelectorAll }), backup.ErrPlanInvalid},

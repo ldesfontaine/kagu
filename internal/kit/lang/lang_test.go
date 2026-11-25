@@ -171,7 +171,7 @@ func TestFiles_NameOnlyThroughPlaceholders(t *testing.T) {
 		}
 		for key, value := range raw {
 			lower := strings.ToLower(value)
-			if strings.Contains(lower, "opencloud") || strings.Contains(lower, strings.ToLower(brand.ProductName)) {
+			if strings.Contains(lower, "kagu") || strings.Contains(lower, strings.ToLower(brand.ProductName)) {
 				t.Errorf("%s: %s names the product instead of a placeholder: %q", code, key, value)
 			}
 		}

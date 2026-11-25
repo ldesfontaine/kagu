@@ -171,7 +171,7 @@ func TestCheckCompose_AcceptsOnlyTheRenderedFile(t *testing.T) {
 		"ancre":                     strings.Replace(compose, "  db:\n", "  db: &db\n", 1),
 		"balise":                    strings.Replace(compose, "    image: postgres:16.4\n", "    image: !!str postgres:16.4\n", 1),
 		"autre projet":              strings.Replace(compose, "name: nextcloud", "name: autre", 1),
-		"autre service":             strings.Replace(compose, "opencloud.service: svc_1", "opencloud.service: svc_2", 1),
+		"autre service":             strings.Replace(compose, "kagu.service: svc_1", "kagu.service: svc_2", 1),
 		"restart":                   strings.Replace(compose, "restart: unless-stopped", "restart: always", 1),
 		"env_file":                  strings.Replace(compose, "path: .env", "path: /etc/shadow", 1),
 		"clé en double":             strings.Replace(compose, "    restart: unless-stopped\n", "    restart: unless-stopped\n    image: evil:1.0\n", 1),

@@ -206,7 +206,7 @@ func OwnSnapshots(runs []action.Run, vmid int) []string {
 }
 
 // snapshotInRun lit le nom de l'instantané qu'un run de ce genre a créé ou
-// supprimé sur cet invité : la ligne de sortie « snapshot qemu/105 oc-… ».
+// supprimé sur cet invité : la ligne de sortie « snapshot qemu/105 kg-… ».
 func snapshotInRun(run action.Run, vmid int) (string, bool) {
 	if run.Kind != agentwire.KindProxmoxSnapshot && run.Kind != agentwire.KindProxmoxSnapshotDelete {
 		return "", false

@@ -64,7 +64,7 @@ func firewallBench(t *testing.T) (*bench, *fakeFirewalls, backup.Keyring, backup
 	return b, fake, keyring, destination
 }
 
-func TestSavePlan_FirewallExportStartsFromTheOpenCloudMachine(t *testing.T) {
+func TestSavePlan_FirewallExportStartsFromTheKaguMachine(t *testing.T) {
 	b, _, _, destination := firewallBench(t)
 	plan, err := b.backups.SavePlan(operator(), firewallPlan(destination.ID))
 	if err != nil {

@@ -30,7 +30,7 @@ func Describe(catalog lang.Catalog, alert Alert, now time.Time) Text {
 // describe fait de même en passant par escape chaque morceau qui ne vient pas
 // du catalogue : nom d'objet, de machine, cible, point de montage. Un agent
 // choisit les noms qu'il rapporte, et un canal Discord ou Slack lirait son
-// texte comme du balisage, à côté du lien qu'openCloud ajoute lui-même.
+// texte comme du balisage, à côté du lien que Kagu ajoute lui-même.
 // escape nil laisse le texte tel quel.
 func describe(catalog lang.Catalog, alert Alert, now time.Time, escape func(string) string) Text {
 	if escape == nil {

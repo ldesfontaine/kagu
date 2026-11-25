@@ -120,7 +120,7 @@ type Lease struct {
 	ExpiresAt time.Time
 }
 
-// Les états d'une passerelle, dans les mots d'openCloud : chaque connecteur
+// Les états d'une passerelle, dans les mots de Kagu : chaque connecteur
 // traduit ceux de son constructeur.
 const (
 	GatewayOnline   = "online"

@@ -21,7 +21,7 @@ const (
 )
 
 // BackupJob est une tâche vzdump de la grappe, telle que /cluster/backup la
-// décrit. Proxmox la mène ; openCloud la montre, ne la lance jamais.
+// décrit. Proxmox la mène ; Kagu la montre, ne la lance jamais.
 type BackupJob struct {
 	ID       string
 	Schedule string

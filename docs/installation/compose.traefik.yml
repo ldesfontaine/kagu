@@ -42,7 +42,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./dynamic:/etc/traefik/dynamic:ro     # y poser traefik-opencloud.yml
+      - ./dynamic:/etc/traefik/dynamic:ro     # y poser traefik-kagu.yml
       - ./letsencrypt:/letsencrypt
     restart: unless-stopped
 

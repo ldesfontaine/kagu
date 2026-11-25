@@ -118,7 +118,7 @@ func FindingsOf(overview Overview, now time.Time) []Finding {
 
 // protectionFindings : pas de réussite depuis trop longtemps, test de
 // restauration périmé. Les tâches vzdump que Proxmox mène encore (observées)
-// ne sont pas jugées : openCloud ne connaît pas leur rythme.
+// ne sont pas jugées : Kagu ne connaît pas leur rythme.
 func protectionFindings(source Source, protection Protection, now time.Time) []Finding {
 	if protection.Origin != OriginRestic && protection.Origin != OriginArchive {
 		return nil

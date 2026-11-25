@@ -148,7 +148,7 @@
     "LogPath": "/var/lib/docker/containers/0082fc783011ead4e11be27f298f845fc39b25b371c0247ed7b7a798b8388513/0082fc783011ead4e11be27f298f845fc39b25b371c0247ed7b7a798b8388513-json.log",
     "MountLabel": "",
     "Mounts": [],
-    "Name": "/opencloud-fixture",
+    "Name": "/kagu-fixture",
     "NetworkSettings": {
         "EndpointID": "e7730ac534e14754737a492751f89531e6497dba5bf2f21f86f73c49ce61076a",
         "Gateway": "172.17.0.1",

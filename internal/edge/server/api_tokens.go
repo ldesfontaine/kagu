@@ -22,6 +22,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/gesture/apitoken"
 	"github.com/ldesfontaine/kagu/internal/gesture/verb"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // Ce que le serveur attend du composant des jetons d'API : le réglage de
@@ -50,11 +51,11 @@ const (
 	// La borne de l'émetteur (MAX_HEADER_VALUE chez mcp-maison).
 	maxOnBehalfOfRunes = 200
 	// La borne d'un identifiant de machine journalisé quand il vient du
-	// chemin de la requête : un identifiant d'openCloud est plus court.
+	// chemin de la requête : un identifiant de Kagu est plus court.
 	maxAuditedMachineRunes = 64
-	// Le port d'écoute de mcp-maison, qu'openCloud suggère de lire.
+	// Le port d'écoute de mcp-maison, que Kagu suggère de lire.
 	mcpDefaultPort = "3000"
-	// Le port d'openCloud quand l'adresse d'écoute n'en dit pas (config.go).
+	// Le port de Kagu quand l'adresse d'écoute n'en dit pas (config.go).
 	defaultListenPort = "8080"
 
 	// Le débit des gestes d'un jeton, par jeton, distinct des échecs
@@ -477,10 +478,16 @@ type apiTokenLifetimesJSON struct {
 }
 
 // env est ce que mcp-maison lit dans son .env, tiré de l'adresse d'écoute :
-// il joint openCloud en direct, jamais par Traefik ni par le SSO.
+// il joint Kagu en direct, jamais par Traefik ni par le SSO.
 type apiTokenEnvJSON struct {
-	MCPHost      string `json:"mcp_host"`
-	OpenCloudURL string `json:"opencloud_url"`
+	MCPHost    string
+	ProductURL string
+}
+
+// MarshalJSON écrit l'adresse sous brand.ID + "_url" : une balise de champ ne
+// lit pas brand.
+func (env apiTokenEnvJSON) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]string{"mcp_host": env.MCPHost, brand.ID + "_url": env.ProductURL})
 }
 
 type apiTokensResponse struct {
@@ -536,14 +543,14 @@ func (s *Server) listAPITokens(w http.ResponseWriter, r *http.Request) {
 	if s.failed(w, r, err, nil) {
 		return
 	}
-	host, openCloudURL := mcpEnvOf(s.listen)
+	host, productURL := mcpEnvOf(s.listen)
 	s.writeAPI(w, http.StatusOK, apiTokensResponse{
 		Machines:  machineChoices(names),
 		Tokens:    httpx.ConvertAll(tokens, apiTokenToJSON),
 		Limit:     apitoken.MaxTokens,
 		Lifetimes: apiTokenLifetimesJSON{Days: apitoken.Lifetimes(), DefaultDays: apitoken.DefaultDays},
 		Verbs:     httpx.ConvertAll(verb.Default.OpenToTokens(), verbOfferToJSON),
-		Env:       apiTokenEnvJSON{MCPHost: host, OpenCloudURL: openCloudURL},
+		Env:       apiTokenEnvJSON{MCPHost: host, ProductURL: productURL},
 	})
 }
 
@@ -613,9 +620,9 @@ func (s *Server) revokeAllAPITokens(w http.ResponseWriter, r *http.Request) {
 }
 
 // mcpEnvOf tire de l'adresse d'écoute l'hôte où mcp-maison écoute (MCP_HOST)
-// et l'adresse où il joint openCloud (OPENCLOUD_URL). Un hôte joker ou vide
+// et l'adresse où il joint Kagu (KAGU_URL). Un hôte joker ou vide
 // vaut la boucle locale.
-func mcpEnvOf(listen string) (host, openCloudURL string) {
+func mcpEnvOf(listen string) (host, productURL string) {
 	host, port, err := net.SplitHostPort(listen)
 	if err != nil {
 		host, port = "", ""

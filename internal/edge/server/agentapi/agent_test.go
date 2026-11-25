@@ -47,18 +47,18 @@ func (b *bench) enrollWithFingerprint(t *testing.T, mount http.Handler, name, fi
 	}
 	public, _, _ := ed25519.GenerateKey(nil)
 	return postJSONTo(mount, "/agent/enroll", agentwire.EnrollRequest{
-		MachineID: drawn, PublicKey: base64.StdEncoding.EncodeToString(public), Token: cleartext, Hostname: "oc-host", HostFingerprint: fingerprint,
+		MachineID: drawn, PublicKey: base64.StdEncoding.EncodeToString(public), Token: cleartext, Hostname: "kg-host", HostFingerprint: fingerprint,
 	}), drawn
 }
 
-// withoutLocalAgent révoque l'agent de la machine openCloud que le banc a
+// withoutLocalAgent révoque l'agent de la machine Kagu que le banc a
 // déjà : le suivant peut reprendre sa ligne.
 func (b *bench) withoutLocalAgent(t *testing.T) {
 	t.Helper()
 	if err := b.machines.Remove(context.Background(), machine.LocalID, machine.RemoveOptions{KeepHistory: true}); err != nil {
 		t.Fatal(err)
 	}
-	b.machines.SetServerHost("f00d", "oc-host")
+	b.machines.SetServerHost("f00d", "kg-host")
 }
 
 // enrolledID lit l'identifiant rendu par un enrôlement accepté.
@@ -72,7 +72,7 @@ func enrolledID(t *testing.T, recorder *httptest.ResponseRecorder) string {
 }
 
 // R-B1-7, N-F2 : par HTTPS, l'empreinte de la machine du serveur, lisible de
-// tous sur cette machine, ne rattache pas à la machine openCloud : l'agent
+// tous sur cette machine, ne rattache pas à la machine Kagu : l'agent
 // devient une machine neuve sous l'identifiant qu'il a tiré, et la ligne
 // locale reste sans agent. Le même enrôlement par la socket des agents
 // locaux rend LocalID. Un champ via_local_socket glissé dans le corps n'y
@@ -96,7 +96,7 @@ func TestR_B1_7_HTTPSEnrollmentWithTheServerFingerprintGetsANewMachine(t *testin
 	public, _, _ := ed25519.GenerateKey(nil)
 	forged := server.postJSON("/agent/enroll", map[string]any{
 		"machine_id": forgedID, "public_key": base64.StdEncoding.EncodeToString(public), "token": cleartext,
-		"hostname": "oc-host", "host_fingerprint": "f00d", "via_local_socket": true, "ViaLocalSocket": true,
+		"hostname": "kg-host", "host_fingerprint": "f00d", "via_local_socket": true, "ViaLocalSocket": true,
 	})
 	if got := enrolledID(t, forged); got != forgedID {
 		t.Fatalf("a field in the body must not make the agent local: enrolled under %q", got)
@@ -106,20 +106,20 @@ func TestR_B1_7_HTTPSEnrollmentWithTheServerFingerprintGetsANewMachine(t *testin
 		t.Fatalf("the server machine must stay without an agent: %+v %v", local.Agent, err)
 	}
 
-	throughSocket, _ := server.enrollWithFingerprint(t, server.socket, "oc-host", "f00d")
+	throughSocket, _ := server.enrollWithFingerprint(t, server.socket, "kg-host", "f00d")
 	if got := enrolledID(t, throughSocket); got != machine.LocalID {
 		t.Fatalf("through the local socket the agent enrolled under %q, want %q", got, machine.LocalID)
 	}
 }
 
 // L'agent qui arrive par la socket des agents locaux avec l'empreinte de la
-// machine du serveur s'enrôle comme la machine openCloud : l'identifiant
+// machine du serveur s'enrôle comme la machine Kagu : l'identifiant
 // rendu est LocalID, que l'agent garde. Un second, tant que le premier est
 // actif, est refusé sans consommer son jeton.
 func TestAgentEnroll_FromTheServerMachine_TakesTheStableID(t *testing.T) {
 	server := newBench(t)
 	server.withoutLocalAgent(t)
-	accepted, _ := server.enrollWithFingerprint(t, server.socket, "oc-host", "f00d")
+	accepted, _ := server.enrollWithFingerprint(t, server.socket, "kg-host", "f00d")
 	if got := enrolledID(t, accepted); got != machine.LocalID {
 		t.Fatalf("enrolled under %q", got)
 	}
@@ -165,7 +165,7 @@ func TestAgentEnroll_CreatesTheMachineAndMapsRefusals(t *testing.T) {
 		code   string
 	}{
 		"consumed": {func(*agentwire.EnrollRequest) {}, http.StatusConflict, "token_consumed"},
-		"unknown":  {func(r *agentwire.EnrollRequest) { r.Token = "oc_nope" }, http.StatusNotFound, "token_not_found"},
+		"unknown":  {func(r *agentwire.EnrollRequest) { r.Token = "kg_nope" }, http.StatusNotFound, "token_not_found"},
 		"bad key":  {func(r *agentwire.EnrollRequest) { r.PublicKey = "AAAA" }, http.StatusBadRequest, "bad_request"},
 		"bad id":   {func(r *agentwire.EnrollRequest) { r.MachineID = "local" }, http.StatusBadRequest, "bad_request"},
 	}
@@ -492,8 +492,8 @@ func TestAgentStream_StoresTheAccountAndUnavailableRightsAndIgnoresForgedOnes(t 
 		return status
 	}
 
-	status := open("998:opencloud-agent", "docker.deploy=docker_denied")
-	if status.Agent.RunAs == nil || status.Agent.RunAs.UID != 998 || status.Agent.RunAs.Name != "opencloud-agent" {
+	status := open("998:kagu-agent", "docker.deploy=docker_denied")
+	if status.Agent.RunAs == nil || status.Agent.RunAs.UID != 998 || status.Agent.RunAs.Name != "kagu-agent" {
 		t.Fatalf("account %+v", status.Agent.RunAs)
 	}
 	if status.Agent.UnavailableReason(agentpolicy.CapabilityDockerDeploy) != agentwire.ReasonDockerDenied {
@@ -511,7 +511,7 @@ func TestAgentStream_StoresTheAccountAndUnavailableRightsAndIgnoresForgedOnes(t 
 	}
 	for _, c := range forged {
 		status = open(c.account, c.unavailable)
-		if status.Agent.RunAs == nil || status.Agent.RunAs.UID != 998 || status.Agent.RunAs.Name != "opencloud-agent" {
+		if status.Agent.RunAs == nil || status.Agent.RunAs.UID != 998 || status.Agent.RunAs.Name != "kagu-agent" {
 			t.Errorf("forged account %q replaced the stored one: %+v", c.account, status.Agent.RunAs)
 		}
 		if len(status.Agent.Unavailable) != 0 {

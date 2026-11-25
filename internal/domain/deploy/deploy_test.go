@@ -56,8 +56,8 @@ services:
       - path: .env
         required: false
     labels:
-      opencloud.service: svc_00000000000000b1
-      opencloud.unit: app
+      kagu.service: svc_00000000000000b1
+      kagu.unit: app
   db:
     image: postgres:16.4
     restart: unless-stopped
@@ -65,8 +65,8 @@ services:
       - path: .env
         required: false
     labels:
-      opencloud.service: svc_00000000000000b1
-      opencloud.unit: db
+      kagu.service: svc_00000000000000b1
+      kagu.unit: db
 `
 
 func TestRender_WritesThePinnedComposeFile(t *testing.T) {

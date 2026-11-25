@@ -28,7 +28,7 @@ import (
 // qu'il est dans les arguments d'un processus : la commande ne le met qu'après
 // printf, un builtin qui ne crée pas de processus, et sudo ne reçoit rien.
 func TestInstallCommand_KeepsTheTokenOutOfEveryExecutedArgv(t *testing.T) {
-	safe := regexp.MustCompile(`^oc_[a-z0-9_]+$`)
+	safe := regexp.MustCompile(`^kg_[a-z0-9_]+$`)
 	for range 200 {
 		token, _, err := machine.NewToken("vps-paris-1", "")
 		if err != nil {
@@ -40,17 +40,17 @@ func TestInstallCommand_KeepsTheTokenOutOfEveryExecutedArgv(t *testing.T) {
 			t.Fatalf("token %q has characters that need escaping", token)
 		}
 		for _, code := range []lang.Code{lang.French, lang.English} {
-			command := installCommand("https://opencloud.example.org", token, code, nil, nil)
+			command := installCommand("https://kagu.example.org", token, code, nil, nil)
 			builtin, executed, piped := strings.Cut(command, " | ")
 			if !piped || builtin != "printf '%s\\n' '"+token+"'" {
 				t.Fatalf("the token must only follow printf: %q", command)
 			}
-			if strings.Contains(executed, token) || strings.Contains(executed, "-token") || !strings.HasPrefix(executed, "runuser -u opencloud-agent -- /var/lib/opencloud-agent/bin/current agent -server https://opencloud.example.org") {
+			if strings.Contains(executed, token) || strings.Contains(executed, "-token") || !strings.HasPrefix(executed, "runuser -u kagu-agent -- /var/lib/kagu-agent/bin/current agent -server https://kagu.example.org") {
 				t.Fatalf("the executed command must carry no token: %q", executed)
 			}
 		}
 	}
-	if command := installCommand("https://x", "oc_abc", lang.English, nil, nil); !strings.HasSuffix(command, " -lang en") {
+	if command := installCommand("https://x", "kg_abc", lang.English, nil, nil); !strings.HasSuffix(command, " -lang en") {
 		t.Fatalf("language missing: %q", command)
 	}
 }
@@ -59,7 +59,7 @@ func TestInstallCommand_KeepsTheTokenOutOfEveryExecutedArgv(t *testing.T) {
 // observe seul ne s'écrit pas, c'est le défaut de l'agent.
 func TestInstallCommand_CarriesTheCheckedRights(t *testing.T) {
 	observeOnly := []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}}
-	if command := installCommand("https://x", "oc_abc", lang.French, observeOnly, nil); strings.Contains(command, "-rights") {
+	if command := installCommand("https://x", "kg_abc", lang.French, observeOnly, nil); strings.Contains(command, "-rights") {
 		t.Fatalf("observe alone must not be written: %q", command)
 	}
 	checked, err := agentpolicy.NormalizeCapabilities([]agentpolicy.Capability{
@@ -69,7 +69,7 @@ func TestInstallCommand_CarriesTheCheckedRights(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := installCommand("https://x", "oc_abc", lang.French, checked, nil)
+	command := installCommand("https://x", "kg_abc", lang.French, checked, nil)
 	if !strings.HasSuffix(command, " -rights observe,agent.update,files.write=/opt/site:/srv/workspace") {
 		t.Fatalf("rights missing or misplaced: %q", command)
 	}
@@ -79,7 +79,7 @@ func TestInstallCommand_CarriesTheCheckedRights(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if command := installCommand("https://x", "oc_abc", lang.French, local, nil); !strings.HasSuffix(command, " -rights observe,probe.lan") {
+	if command := installCommand("https://x", "kg_abc", lang.French, local, nil); !strings.HasSuffix(command, " -rights observe,probe.lan") {
 		t.Fatalf("probe.lan missing: %q", command)
 	}
 }
@@ -90,19 +90,19 @@ const accountLines = 7
 
 // La préparation : une ligne par dossier où un droit coché écrit, aucune pour
 // observe seul ; le binaire vient de /tmp pour une machine ordinaire et du
-// serveur pour la machine openCloud.
+// serveur pour la machine Kagu.
 func TestInstallPreparation_PreparesTheAccountAndOneFolderPerCheckedRight(t *testing.T) {
 	observeOnly := []agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}}
 	plain := installPreparation(observeOnly, "v0.0.1", false)
 	want := strings.Join([]string{
-		"useradd --system --home-dir /var/lib/opencloud-agent --shell /usr/sbin/nologin opencloud-agent",
-		"getent group docker >/dev/null && usermod -aG docker opencloud-agent",
-		"install -d -m 0700 -o opencloud-agent -g opencloud-agent /var/lib/opencloud-agent",
-		"runuser -u opencloud-agent -- install -d -m 0700 /var/lib/opencloud-agent/bin",
-		"runuser -u opencloud-agent -- install -m 0755 /tmp/opencloud /var/lib/opencloud-agent/bin/opencloud-v0.0.1 && runuser -u opencloud-agent -- ln -sfn opencloud-v0.0.1 /var/lib/opencloud-agent/bin/current",
+		"useradd --system --home-dir /var/lib/kagu-agent --shell /usr/sbin/nologin kagu-agent",
+		"getent group docker >/dev/null && usermod -aG docker kagu-agent",
+		"install -d -m 0700 -o kagu-agent -g kagu-agent /var/lib/kagu-agent",
+		"runuser -u kagu-agent -- install -d -m 0700 /var/lib/kagu-agent/bin",
+		"runuser -u kagu-agent -- install -m 0755 /tmp/kagu /var/lib/kagu-agent/bin/kagu-v0.0.1 && runuser -u kagu-agent -- ln -sfn kagu-v0.0.1 /var/lib/kagu-agent/bin/current",
 		// Le lanceur stable, que l'unité lance : une copie à root, hors de bin/.
-		"install -d -m 0755 -o root -g root /usr/local/lib/opencloud-agent",
-		"install -m 0755 -o root -g root /tmp/opencloud /usr/local/lib/opencloud-agent/opencloud-guard",
+		"install -d -m 0755 -o root -g root /usr/local/lib/kagu-agent",
+		"install -m 0755 -o root -g root /tmp/kagu /usr/local/lib/kagu-agent/kagu-guard",
 	}, "\n")
 	if plain != want {
 		t.Fatalf("observe alone prepares the account and the guard only:\n%s", plain)
@@ -115,9 +115,9 @@ func TestInstallPreparation_PreparesTheAccountAndOneFolderPerCheckedRight(t *tes
 	lines := strings.Split(installPreparation(rights, "v0.0.1", false), "\n")
 	folders := lines[accountLines:]
 	wantFolders := []string{
-		"test ! -L /srv/workspace && install -d -m 0755 -o opencloud-agent -g opencloud-agent /srv/workspace # docker.deploy, docker.update, files.write",
-		"test ! -L /srv/backups && install -d -m 0700 -o opencloud-agent -g opencloud-agent /srv/backups # backup.receive",
-		"test ! -L /opt/site && install -d -m 0755 -o opencloud-agent -g opencloud-agent /opt/site # files.write",
+		"test ! -L /srv/workspace && install -d -m 0755 -o kagu-agent -g kagu-agent /srv/workspace # docker.deploy, docker.update, files.write",
+		"test ! -L /srv/backups && install -d -m 0700 -o kagu-agent -g kagu-agent /srv/backups # backup.receive",
+		"test ! -L /opt/site && install -d -m 0755 -o kagu-agent -g kagu-agent /opt/site # files.write",
 	}
 	// Un dossier demandé par deux droits n'est préparé qu'une fois.
 	if len(folders) != len(wantFolders) {
@@ -129,8 +129,8 @@ func TestInstallPreparation_PreparesTheAccountAndOneFolderPerCheckedRight(t *tes
 		}
 	}
 
-	if local := installPreparation(observeOnly, "v0.0.1", true); !strings.Contains(local, " /usr/local/bin/opencloud /var/lib/opencloud-agent/bin/opencloud-v0.0.1") || strings.Contains(local, "/tmp/") {
-		t.Fatalf("the openCloud machine installs the binary of the server:\n%s", local)
+	if local := installPreparation(observeOnly, "v0.0.1", true); !strings.Contains(local, " /usr/local/bin/kagu /var/lib/kagu-agent/bin/kagu-v0.0.1") || strings.Contains(local, "/tmp/") {
+		t.Fatalf("the Kagu machine installs the binary of the server:\n%s", local)
 	}
 }
 
@@ -142,29 +142,29 @@ func TestInstallPreparation_PreparesTheAccountAndOneFolderPerCheckedRight(t *tes
 // droit sous un dossier du compte se font sous le compte ; un dossier que root
 // donne est d'abord vérifié n'être pas un lien.
 func TestInstallPreparation_RootNeverActsOnWhatTheAccountControls(t *testing.T) {
-	rights, err := agentpolicy.ParseCapabilities("docker.deploy,backup.receive=/srv/backups/nightly,files.write=/srv/workspace/blog/static:/opt/site:/var/lib/opencloud-agent/extra")
+	rights, err := agentpolicy.ParseCapabilities("docker.deploy,backup.receive=/srv/backups/nightly,files.write=/srv/workspace/blog/static:/opt/site:/var/lib/kagu-agent/extra")
 	if err != nil {
 		t.Fatal(err)
 	}
-	accountFolders := []string{"/var/lib/opencloud-agent", "/srv/workspace", "/srv/backups/nightly", "/srv/workspace/blog/static", "/opt/site", "/var/lib/opencloud-agent/extra"}
+	accountFolders := []string{"/var/lib/kagu-agent", "/srv/workspace", "/srv/backups/nightly", "/srv/workspace/blog/static", "/opt/site", "/var/lib/kagu-agent/extra"}
 	seenNested := false
 	for number, line := range strings.Split(installPreparation(rights, "v0.0.1", false), "\n") {
 		code, _, _ := strings.Cut(line, " # ")
 		for _, command := range strings.Split(code, " && ") {
-			if strings.HasPrefix(command, "runuser -u opencloud-agent -- ") || !strings.Contains(command, "/var/lib/opencloud-agent") && !strings.HasPrefix(command, "install ") {
+			if strings.HasPrefix(command, "runuser -u kagu-agent -- ") || !strings.Contains(command, "/var/lib/kagu-agent") && !strings.HasPrefix(command, "install ") {
 				continue
 			}
 			target := command[strings.LastIndex(command, " ")+1:]
 			// root ne crée ni ne donne que l'état lui-même (sous /var/lib, à
 			// root) et des dossiers qui ne sont sous aucun dossier du compte.
-			if target != "/var/lib/opencloud-agent" && slices.ContainsFunc(accountFolders, func(folder string) bool { return strings.HasPrefix(target, folder+"/") }) {
+			if target != "/var/lib/kagu-agent" && slices.ContainsFunc(accountFolders, func(folder string) bool { return strings.HasPrefix(target, folder+"/") }) {
 				t.Errorf("line %d: root acts on %s, under a folder of the account: %q", number, target, line)
 			}
-			if strings.Contains(command, "-o opencloud-agent") && target != "/var/lib/opencloud-agent" && !strings.HasPrefix(code, "test ! -L "+target+" && ") {
+			if strings.Contains(command, "-o kagu-agent") && target != "/var/lib/kagu-agent" && !strings.HasPrefix(code, "test ! -L "+target+" && ") {
 				t.Errorf("line %d: root gives %s without checking it is not a link: %q", number, target, line)
 			}
 		}
-		if strings.HasPrefix(line, "runuser -u opencloud-agent -- install -d -m 0755 /srv/workspace/blog/static") {
+		if strings.HasPrefix(line, "runuser -u kagu-agent -- install -d -m 0755 /srv/workspace/blog/static") {
 			seenNested = true
 		}
 	}
@@ -234,11 +234,11 @@ func TestInstallPreparation_ProduceAddsOneLinePerGestureAfterTheAccount(t *testi
 	}
 	lines := strings.Split(installPreparation(rights, "v0.0.1", false), "\n")
 	want := []string{
-		"runuser -u opencloud-agent -- install -d -m 0700 /var/lib/opencloud-agent/produce",
-		`printf '%s\n' '#!/bin/sh' '# ` + brand.ProductName + ` : vzdump hors du bac à sable de l agent, sur ordre de l agent.' 'exec /usr/bin/systemd-run --pipe --wait --collect --quiet /usr/bin/vzdump "$@"' | install -m 0755 -o root -g root /dev/stdin /usr/local/sbin/opencloud-vzdump`,
-		`printf '%s\n' 'opencloud-agent ALL=(root) NOPASSWD: /usr/local/sbin/opencloud-vzdump' | install -m 0440 -o root -g root /dev/stdin /etc/sudoers.d/.opencloud-agent.tmp && visudo -cf /etc/sudoers.d/.opencloud-agent.tmp && mv /etc/sudoers.d/.opencloud-agent.tmp /etc/sudoers.d/opencloud-agent || { rm -f /etc/sudoers.d/.opencloud-agent.tmp; false; }`,
-		"install -d -m 0755 /etc/systemd/system/opencloud-agent.service.d",
-		`printf '%s\n' '[Service]' 'NoNewPrivileges=false' | install -m 0644 /dev/stdin /etc/systemd/system/opencloud-agent.service.d/produce.conf`,
+		"runuser -u kagu-agent -- install -d -m 0700 /var/lib/kagu-agent/produce",
+		`printf '%s\n' '#!/bin/sh' '# ` + brand.ProductName + ` : vzdump hors du bac à sable de l agent, sur ordre de l agent.' 'exec /usr/bin/systemd-run --pipe --wait --collect --quiet /usr/bin/vzdump "$@"' | install -m 0755 -o root -g root /dev/stdin /usr/local/sbin/kagu-vzdump`,
+		`printf '%s\n' 'kagu-agent ALL=(root) NOPASSWD: /usr/local/sbin/kagu-vzdump' | install -m 0440 -o root -g root /dev/stdin /etc/sudoers.d/.kagu-agent.tmp && visudo -cf /etc/sudoers.d/.kagu-agent.tmp && mv /etc/sudoers.d/.kagu-agent.tmp /etc/sudoers.d/kagu-agent || { rm -f /etc/sudoers.d/.kagu-agent.tmp; false; }`,
+		"install -d -m 0755 /etc/systemd/system/kagu-agent.service.d",
+		`printf '%s\n' '[Service]' 'NoNewPrivileges=false' | install -m 0644 /dev/stdin /etc/systemd/system/kagu-agent.service.d/produce.conf`,
 		"systemctl daemon-reload",
 	}
 	if len(lines) != accountLines+len(want)+1 || !slices.Equal(lines[accountLines:accountLines+len(want)], want) {
@@ -268,10 +268,10 @@ func TestInstallPreparation_ProduceRootOnlyWritesWhatIsRoots(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, line := range strings.Split(installPreparation(rights, "v0.0.1", false), "\n")[accountLines:] {
-		if strings.Contains(line, "/var/lib/opencloud-agent") && !strings.HasPrefix(line, "runuser -u opencloud-agent -- ") {
+		if strings.Contains(line, "/var/lib/kagu-agent") && !strings.HasPrefix(line, "runuser -u kagu-agent -- ") {
 			t.Errorf("root acts under the state of the account: %q", line)
 		}
-		if strings.Contains(line, "-o opencloud-agent") {
+		if strings.Contains(line, "-o kagu-agent") {
 			t.Errorf("root gives something to the account: %q", line)
 		}
 		if strings.Contains(line, "install") && !strings.HasPrefix(line, "runuser") && !strings.Contains(line, "-d -m 0755 /etc/") && !strings.Contains(line, "-o root -g root") && !strings.Contains(line, "-m 0644 /dev/stdin /etc/systemd/") {
@@ -331,13 +331,13 @@ func TestInstallPreparation_ProduceTheShellWritesExactlyTheTexts(t *testing.T) {
 	// trois commandes enchaînées (écrire, juger, poser).
 	const accountCommands = 9
 	wantProduce := [][]string{
-		{"runuser", "-u", "opencloud-agent", "--", "install", "-d", "-m", "0700", "/var/lib/opencloud-agent/produce"},
-		{"install", "-m", "0755", "-o", "root", "-g", "root", "/dev/stdin", "/usr/local/sbin/opencloud-vzdump"},
-		{"install", "-m", "0440", "-o", "root", "-g", "root", "/dev/stdin", "/etc/sudoers.d/.opencloud-agent.tmp"},
-		{"visudo", "-cf", "/etc/sudoers.d/.opencloud-agent.tmp"},
-		{"mv", "/etc/sudoers.d/.opencloud-agent.tmp", "/etc/sudoers.d/opencloud-agent"},
-		{"install", "-d", "-m", "0755", "/etc/systemd/system/opencloud-agent.service.d"},
-		{"install", "-m", "0644", "/dev/stdin", "/etc/systemd/system/opencloud-agent.service.d/produce.conf"},
+		{"runuser", "-u", "kagu-agent", "--", "install", "-d", "-m", "0700", "/var/lib/kagu-agent/produce"},
+		{"install", "-m", "0755", "-o", "root", "-g", "root", "/dev/stdin", "/usr/local/sbin/kagu-vzdump"},
+		{"install", "-m", "0440", "-o", "root", "-g", "root", "/dev/stdin", "/etc/sudoers.d/.kagu-agent.tmp"},
+		{"visudo", "-cf", "/etc/sudoers.d/.kagu-agent.tmp"},
+		{"mv", "/etc/sudoers.d/.kagu-agent.tmp", "/etc/sudoers.d/kagu-agent"},
+		{"install", "-d", "-m", "0755", "/etc/systemd/system/kagu-agent.service.d"},
+		{"install", "-m", "0644", "/dev/stdin", "/etc/systemd/system/kagu-agent.service.d/produce.conf"},
 		{"systemctl", "daemon-reload"},
 	}
 	if len(commands) != accountCommands+len(wantProduce) {
@@ -349,7 +349,7 @@ func TestInstallPreparation_ProduceTheShellWritesExactlyTheTexts(t *testing.T) {
 		}
 	}
 	for file, lines := range map[string][]string{
-		"opencloud-vzdump": machine.VzdumpWrapperLines(), ".opencloud-agent.tmp": machine.SudoersRuleLines(), "produce.conf": machine.ProduceDropInLines(),
+		"kagu-vzdump": machine.VzdumpWrapperLines(), ".kagu-agent.tmp": machine.SudoersRuleLines(), "produce.conf": machine.ProduceDropInLines(),
 	} {
 		got, err := os.ReadFile(filepath.Join(received, file)) // #nosec G304 G703 -- ce que le témoin a reçu, dans le dossier du test.
 		if err != nil {
@@ -481,7 +481,7 @@ func TestInstallPreparation_HostilePathsNeverReachTheLines(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if preparation := installPreparation(rights, "v0.0.1", false); strings.Contains(preparation, token) || strings.Contains(preparation, "oc_") {
+	if preparation := installPreparation(rights, "v0.0.1", false); strings.Contains(preparation, token) || strings.Contains(preparation, "kg_") {
 		t.Fatalf("the token must never be in the preparation:\n%s", preparation)
 	}
 }
@@ -495,10 +495,10 @@ func TestAPI_CreateMachineToken_ShowsTheTokenOnceAndListsItAsPending(t *testing.
 	var response tokenResponse
 	decodeAPI(t, recorder, &response)
 	enroll := stepCommand(response.Steps, stepEnroll)
-	if !tokenValue.MatchString(response.Token) || enroll != "printf '%s\\n' '"+response.Token+"' | runuser -u opencloud-agent -- /var/lib/opencloud-agent/bin/current agent -server https://example.com" || response.URLLocal {
+	if !tokenValue.MatchString(response.Token) || enroll != "printf '%s\\n' '"+response.Token+"' | runuser -u kagu-agent -- /var/lib/kagu-agent/bin/current agent -server https://example.com" || response.URLLocal {
 		t.Fatalf("token response %+v", response)
 	}
-	if prepare := stepCommand(response.Steps, stepPrepare); !strings.Contains(prepare, " /tmp/opencloud /var/lib/opencloud-agent/bin/opencloud-"+version.Number()) || strings.Contains(prepare, response.Token) {
+	if prepare := stepCommand(response.Steps, stepPrepare); !strings.Contains(prepare, " /tmp/kagu /var/lib/kagu-agent/bin/kagu-"+version.Number()) || strings.Contains(prepare, response.Token) {
 		t.Fatalf("preparation %q", prepare)
 	}
 	pending, err := server.machines.PendingTokens(context.Background())
@@ -532,7 +532,7 @@ func TestAPI_CreateMachineToken_RefusesABadNameWithItsKey(t *testing.T) {
 	}
 }
 
-func TestAPI_RemoveMachine_ForgetsItTheOpenCloudOneToo(t *testing.T) {
+func TestAPI_RemoveMachine_ForgetsItTheKaguOneToo(t *testing.T) {
 	server := newTestServer(t)
 	server.enroll(t, "vps-paris-1", remoteID)
 	if got := callAPI(server.Server, http.MethodDelete, "/api/machines/"+remoteID, nil); got.Code != http.StatusNoContent {
@@ -569,10 +569,10 @@ func TestAPI_Reenroll_IssuesATokenForTheSameMachine(t *testing.T) {
 	if got.Code != http.StatusCreated {
 		t.Fatalf("reenroll local: %d", got.Code)
 	}
-	// La machine openCloud prend le binaire du serveur, une autre celui de /tmp.
+	// La machine Kagu prend le binaire du serveur, une autre celui de /tmp.
 	var local tokenResponse
 	decodeAPI(t, got, &local)
-	if !strings.Contains(stepCommand(local.Steps, stepPrepare), " /usr/local/bin/opencloud ") || !strings.Contains(stepCommand(response.Steps, stepPrepare), " /tmp/opencloud ") {
+	if !strings.Contains(stepCommand(local.Steps, stepPrepare), " /usr/local/bin/kagu ") || !strings.Contains(stepCommand(response.Steps, stepPrepare), " /tmp/kagu ") {
 		t.Fatalf("binaries: %q / %q", stepCommand(local.Steps, stepPrepare), stepCommand(response.Steps, stepPrepare))
 	}
 	if got := callAPI(server.Server, http.MethodPost, "/api/machines/nope/actions/reenroll", nil); got.Code != http.StatusNotFound {
@@ -698,7 +698,7 @@ func TestAPI_CreateMachineToken_ProduceRightReachesTheCommandAndThePreparation(t
 	if !strings.HasSuffix(stepCommand(response.Steps, stepEnroll), " -rights observe,backup.produce=proxmox-vzdump") {
 		t.Errorf("command %q", stepCommand(response.Steps, stepEnroll))
 	}
-	for _, line := range []string{"visudo -cf /etc/sudoers.d/.opencloud-agent.tmp", "mv /etc/sudoers.d/.opencloud-agent.tmp /etc/sudoers.d/opencloud-agent", "systemctl daemon-reload", "install -d -m 0700 /var/lib/opencloud-agent/produce"} {
+	for _, line := range []string{"visudo -cf /etc/sudoers.d/.kagu-agent.tmp", "mv /etc/sudoers.d/.kagu-agent.tmp /etc/sudoers.d/kagu-agent", "systemctl daemon-reload", "install -d -m 0700 /var/lib/kagu-agent/produce"} {
 		if !strings.Contains(stepCommand(response.Steps, stepPrepare), line) {
 			t.Errorf("the preparation lacks %q:\n%s", line, stepCommand(response.Steps, stepPrepare))
 		}
@@ -778,15 +778,15 @@ func TestAPI_RemoveMachine_RefusesAnUnknownField(t *testing.T) {
 	}
 }
 
-// La ligne de l'agent de la machine openCloud s'offre tant qu'elle n'a
+// La ligne de l'agent de la machine Kagu s'offre tant qu'elle n'a
 // jamais eu d'agent : la même tant qu'elle attend, avec observe et probe.lan ; 409 une
 // fois qu'un agent l'a eue.
-func TestAPI_OfferLocalEnrollment_UntilTheOpenCloudMachineHasAnAgent(t *testing.T) {
+func TestAPI_OfferLocalEnrollment_UntilTheKaguMachineHasAnAgent(t *testing.T) {
 	server := newTestServer(t)
 	if got := callAPI(server.Server, http.MethodPost, "/api/machines/local-enrollment", nil); got.Code != http.StatusConflict || errorCode(t, got) != "machine.local_enrolled" {
 		t.Fatalf("with its agent: %d %s", got.Code, got.Body.String())
 	}
-	// Retirée, la machine openCloud n'a plus d'agent : la ligne s'offre de
+	// Retirée, la machine Kagu n'a plus d'agent : la ligne s'offre de
 	// nouveau, au nom du nom d'hôte.
 	if got := callAPI(server.Server, http.MethodDelete, "/api/machines/"+machine.LocalID, nil); got.Code != http.StatusNoContent {
 		t.Fatalf("remove: %d %s", got.Code, got.Body.String())
@@ -794,11 +794,11 @@ func TestAPI_OfferLocalEnrollment_UntilTheOpenCloudMachineHasAnAgent(t *testing.
 	var first, second tokenResponse
 	decodeAPI(t, callAPI(server.Server, http.MethodPost, "/api/machines/local-enrollment", nil), &first)
 	decodeAPI(t, callAPI(server.Server, http.MethodPost, "/api/machines/local-enrollment", nil), &second)
-	if first.Name != "opencloud-host" || !tokenValue.MatchString(first.Token) || !strings.HasSuffix(stepCommand(first.Steps, stepEnroll), " -rights observe,probe.lan") || stepCommand(first.Steps, stepEnroll) != stepCommand(second.Steps, stepEnroll) {
+	if first.Name != "kagu-host" || !tokenValue.MatchString(first.Token) || !strings.HasSuffix(stepCommand(first.Steps, stepEnroll), " -rights observe,probe.lan") || stepCommand(first.Steps, stepEnroll) != stepCommand(second.Steps, stepEnroll) {
 		t.Fatalf("offers %+v %+v", first, second)
 	}
-	if !strings.Contains(stepCommand(first.Steps, stepPrepare), " /usr/local/bin/opencloud ") || stepCommand(first.Steps, stepPrepare) != stepCommand(second.Steps, stepPrepare) {
-		t.Fatalf("the openCloud machine installs the binary of the server: %q", stepCommand(first.Steps, stepPrepare))
+	if !strings.Contains(stepCommand(first.Steps, stepPrepare), " /usr/local/bin/kagu ") || stepCommand(first.Steps, stepPrepare) != stepCommand(second.Steps, stepPrepare) {
+		t.Fatalf("the Kagu machine installs the binary of the server: %q", stepCommand(first.Steps, stepPrepare))
 	}
 }
 
@@ -814,18 +814,18 @@ func TestInstallCommand_CarriesTheAnchorsOfTheCheckedRights(t *testing.T) {
 	anchors := map[string][]string{
 		"backup.recipient": {recipient}, "backup.guest": {"101", "102"}, "restic.target-cert": {strings.Repeat("ab", 32)},
 	}
-	command := installCommand("https://x", "oc_abc", lang.French, produce, anchors)
+	command := installCommand("https://x", "kg_abc", lang.French, produce, anchors)
 	if !strings.HasSuffix(command, " -backup-recipient "+recipient+" -backup-guest 101,102") {
 		t.Fatalf("flags missing or misplaced: %q", command)
 	}
 	if strings.Contains(command, "restic-target-cert") {
 		t.Fatalf("restic.produce is not checked, its anchor has no use: %q", command)
 	}
-	if command := installCommand("https://x", "oc_abc", lang.French, produce, nil); strings.Contains(command, " -backup-") {
+	if command := installCommand("https://x", "kg_abc", lang.French, produce, nil); strings.Contains(command, " -backup-") {
 		t.Fatalf("no value, no flag: %q", command)
 	}
 	restic, _ := agentpolicy.ParseCapabilities("restic.produce")
-	if command := installCommand("https://x", "oc_abc", lang.French, restic, anchors); !strings.HasSuffix(command, " -restic-target-cert "+strings.Repeat("ab", 32)) {
+	if command := installCommand("https://x", "kg_abc", lang.French, restic, anchors); !strings.HasSuffix(command, " -restic-target-cert "+strings.Repeat("ab", 32)) {
 		t.Fatalf("restic flag: %q", command)
 	}
 }

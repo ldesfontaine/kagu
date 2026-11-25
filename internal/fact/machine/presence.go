@@ -22,7 +22,7 @@ func ObservedSince(now time.Time) time.Time {
 // dernier signal (envoyé toutes les 30 s) qui juge, pas le flux ouvert : une
 // machine coupée à chaud garde son flux ouvert jusqu'au délai de la
 // connexion, alors que les signaux, eux, cessent tout de suite. Le seuil
-// laisse passer le redémarrage d'un agent ou d'openCloud sans que rien
+// laisse passer le redémarrage d'un agent ou de Kagu sans que rien
 // n'ait l'air perdu. Les services de la machine, la page de statut et
 // l'alerte « machine perdue » appellent cette seule règle.
 func Observed(status Status, now time.Time) bool {

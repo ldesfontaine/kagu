@@ -39,7 +39,7 @@ func TestParcel_ServesItsMachineOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	file, err := writer.Create("opencloud-20261021-030000.tar.age")
+	file, err := writer.Create("kagu-20261021-030000.tar.age")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestParcel_ServesItsMachineOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := other.Create("opencloud-20261021-030000.tar.age")
+	foreign, err := other.Create("kagu-20261021-030000.tar.age")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestParcelUpload_ABodyShorterThanItsLengthKeepsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer connection.Close()
-	request := "PUT " + agentwire.ParcelPath(upload.ID(), archiveName) + " HTTP/1.1\r\nHost: opencloud.test\r\n" +
+	request := "PUT " + agentwire.ParcelPath(upload.ID(), archiveName) + " HTTP/1.1\r\nHost: kagu.test\r\n" +
 		agentwire.HeaderProtocol + ": " + agentwire.ProtocolVersion + "\r\n" +
 		"Authorization: Bearer " + session + "\r\n" +
 		agentwire.HeaderParcelSHA256 + ": " + testkit.SHA256Hex([]byte(archiveContent)) + "\r\n" +

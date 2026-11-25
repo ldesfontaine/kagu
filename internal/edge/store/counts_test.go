@@ -13,7 +13,7 @@ import (
 
 var countsNow = time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 
-// countTestContainer pose une fiche vivante sur la machine openCloud ; le
+// countTestContainer pose une fiche vivante sur la machine Kagu ; le
 // test règle ensuite l'état qui l'intéresse.
 func countTestContainer(name, image string) container.Container {
 	return container.Container{

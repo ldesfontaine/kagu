@@ -57,7 +57,7 @@ Trois dossiers hors git, pour trois raisons :
 | Dossier | Qui le crée | Contenu | `make clean` |
 |---|---|---|---|
 | `bin/` | `make build` | le binaire de dev, refait à chaque build | jette le binaire |
-| `dist-release/` | `make release` | les binaires `opencloud-linux-amd64` et `-arm64`, statiques, et `SHA256SUMS` ; c'est ce que `release.yml` publie. Pas de `.deb` | jette tout |
+| `dist-release/` | `make release` | les binaires `kagu-linux-amd64` et `-arm64`, statiques, et `SHA256SUMS` ; c'est ce que `release.yml` publie. Pas de `.deb` | jette tout |
 | `dev/` | `make run` la première fois, puis toi | `config.toml` et `state/` : ton `/etc` et ton `/var/lib` locaux | n'y touche jamais |
 | `web/node_modules/`, `web/dist/` | `make front` | les paquets npm épinglés par le verrou, et le front compilé | vide `dist/`, garde `node_modules/` |
 
@@ -69,11 +69,20 @@ l'opérateur en français** — interface, refus, notifications, documentation.
 Un fichier de chaînes par langue dès le départ, même s'il n'y en a qu'une.
 
 **Le nom du produit ne s'écrit qu'à un seul endroit** : aucun littéral
-« Kagu », « openCloud », « opencloud » ni préfixe de jeton en dehors de `internal/kit/brand`
+« Kagu », « kagu » ni préfixe de jeton en dehors de `internal/kit/brand`
 (`brand.ProductName`, `brand.Command`…). Les catalogues posent `{product}`,
 `{command}` ou `{signature_header}`, les pages HTML `{{product}}`. Un test
 (`TestProductNameIsNotALiteral`) l'impose ; les commentaires et les identifiants Go ne
-comptent pas.
+comptent pas. Une clé JSON qui porte le nom s'écrit par `MarshalJSON`
+(`brand.ID + "_url"`). L'ancien nom (« openCloud », `opencloud`, `oc_`,
+`ock_`) ne s'écrit plus nulle part, commentaires et documentation compris, hors
+des migrations, des journaux de versions, de `.github/` et des documents de
+`docs/projet/` (`.md`, maquettes, images). Le code rangé sous `docs/projet/`
+(`.go`, `.js`, `.mjs`, `.ts`, `.sh`…, les scripts d'un banc) est tenu comme
+le reste : un masque de jeton qui suit l'ancien schéma laisserait passer le
+nouveau en clair.
+Dans `brand`, tout nom se construit depuis `ID`, `ProductName` ou
+`TokenPrefix` (`TestBrand_EveryNameDerivesFromID`).
 
 ## Lisible par un humain, avant d'être court
 
@@ -256,7 +265,7 @@ s'y déclare avec sa raison, et il n'y en a aucune.
 | Les composants (`fact`, `gesture`, `domain`, `view/status`, `view/manifest`) | Les règles : vérifier, valider, écrire, publier sur le direct, donner les faits aux alertes. `action` : les ordres signés aux agents (la clé du serveur, le run écrit avant l'envoi, la réponse, l'expiration, les colis) ; `backup` : la sauvegarde de la base (la paire de clés, l'archive chiffrée, le plan ; il envoie par `action`, sans connaître le serveur ni le store) | HTTP, SQL, relayer une lecture de la base sans rien y ajouter |
 | `view/reader` | L'interface `Reader` : les lectures de la base sans règle (`List*`, `Get*`, `Count*`) que le serveur, la page de statut et le fichier de l'annuaire partagent ; `*store.DB` la satisfait (`var _ reader.Reader = (*DB)(nil)`) | Une requête, une règle, une écriture ; rendre les types d'un paquet qui l'importe (`status`, `manifest`) |
 | `edge/store` | Tout le SQL : requêtes, transactions, migrations, les comptes (`CountContainers`, `CountContainerUpdates`), et les contrôles qui doivent tenir dans la transaction de l'écriture (unicité de l'annuaire) | Une règle qu'un composant peut porter |
-| `wire/agentwire` | Le protocole entier, figé par les agents installés : en-têtes, corps, sections du signal ; la liste fermée de ce que le serveur pousse (`Kind`, `Command` typée, plus d'`any` sur le fil) et l'enveloppe des ordres (`OrderBody`, `SignedOrder`) ; les octets que les deux côtés signent ou comparent (`OrderSigningBytes`, `KeyFingerprint`) ; sa version (`ProtocolVersion`, l'en-tête `OpenCloud-Agent-Protocol`) et ses bornes (`MaxEventBytes`, `MaxEventLineBytes`, `EventDataLine`). Un changement que les agents installés ne liraient pas passe la version : le serveur refuse l'autre (`426`), jamais en silence. La preuve de l'agent (`machine.SignedPayload`) reste dans `machine`, que `agentwire` importe. Un domaine ne nomme jamais un événement : il déclare son commandeur typé (`container.Commander.RequestLogs`), le serveur l'encode | Une règle, un appel |
+| `wire/agentwire` | Le protocole entier, figé par les agents installés : en-têtes, corps, sections du signal ; la liste fermée de ce que le serveur pousse (`Kind`, `Command` typée, plus d'`any` sur le fil) et l'enveloppe des ordres (`OrderBody`, `SignedOrder`) ; les octets que les deux côtés signent ou comparent (`OrderSigningBytes`, `KeyFingerprint`) ; sa version (`ProtocolVersion`, l'en-tête `Kagu-Agent-Protocol`) et ses bornes (`MaxEventBytes`, `MaxEventLineBytes`, `EventDataLine`). Un changement que les agents installés ne liraient pas passe la version : le serveur refuse l'autre (`426`), jamais en silence. La preuve de l'agent (`machine.SignedPayload`) reste dans `machine`, que `agentwire` importe. Un domaine ne nomme jamais un événement : il déclare son commandeur typé (`container.Commander.RequestLogs`), le serveur l'encode | Une règle, un appel |
 | `fact/agentpolicy` | Ce que root permet à l'agent d'une machine : les seuls noms de droits, leur forme texte (`ParseCapabilities`), leurs jeux et groupes, la politique (`Policy`) et le seul verdict « l'agent peut-il ce droit ? » (`Fit`) | Lire un fichier ; importer `machine` ou `anchor` (ils l'importent) |
 | `wire/judge` | Le seul juge d'un ordre signé (`Judge`) : il lit l'ordre par `agentwire` contre une `Policy` reçue ; l'agent, la porte root et le relais l'appellent | Lire un fichier, juger l'agent visé ou le rang (ils vivent avec l'agent) |
 | Les outils (`kit`) | Un concept chacun, sans règle de Kagu. `deletion` : la forme du plan d'une suppression et le refus qui le porte, la règle restant au domaine (`machine.RefuseDeletion`) ; `ratelimit` : un limiteur par clé (`New`) ou par source (`BySource`, le /64 calculé dedans), balayé au passage ; `ident.New` : les identifiants de seize hexadécimaux (`machine.NewID`, un UUID, reste à part) ; `wait.For` : une pause qui s'arrête à l'annulation ; `audit` : l'acteur dans le contexte et le `Recorder` du journal d'audit, que tous les composants, `server`, `store` et `reader` importent ; `release` : la signature minisign des versions et la vérification d'un fichier contre elle ; la clé publique embarquée ; `rollback` : le marqueur d'une mise à jour d'agent en attente de confirmation, les liens `current` et `previous`, et le lanceur stable (`Guard`) qui rebascule seul à l'échéance | Importer un composant |
@@ -310,7 +319,7 @@ nouveau suit le même ordre, de haut en bas du fichier :
 - **L'existence se vérifie dans le composant**, avant toute écriture : la
   machine et le service d'une sonde, la machine d'une tâche quand elle en a
   une. Sans cela la clé étrangère refuse en erreur brute, et
-  `opencloud apply`, qui appelle le composant sans handler, passerait
+  `kagu apply`, qui appelle le composant sans handler, passerait
   sans contrôle. Ordre des refus, celui que l'API a toujours rendu : l'objet
   modifié (404), la machine, la définition, puis le service.
 - **Compter puis insérer** (un plafond) se tient sous un verrou du composant

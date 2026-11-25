@@ -135,7 +135,7 @@ func TestInventory_CoverageAndOrder(t *testing.T) {
 	}
 }
 
-// Les cibles sont les destinations d'openCloud et les stockages de Proxmox qui
+// Les cibles sont les destinations de Kagu et les stockages de Proxmox qui
 // acceptent des sauvegardes, séparés ; la dernière exécution d'une source se lit
 // dans l'historique.
 func TestInventory_TargetsAndLastRuns(t *testing.T) {

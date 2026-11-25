@@ -16,7 +16,7 @@ import (
 )
 
 // Les origines d'une protection : vue chez Proxmox (une tâche vzdump qu'il
-// mène), un plan par archives d'age, une sauvegarde restic d'openCloud.
+// mène), un plan par archives d'age, une sauvegarde restic de Kagu.
 const (
 	OriginObserved = "observed"
 	OriginArchive  = "archive"
@@ -34,7 +34,7 @@ const (
 	ProtectionUnknown = "unknown"
 )
 
-// Les sortes de cible : un rest-server d'openCloud, un stockage de Proxmox,
+// Les sortes de cible : un rest-server de Kagu, un stockage de Proxmox,
 // une destination des plans par archives.
 const (
 	TargetKindRestic      = "restic"

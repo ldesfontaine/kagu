@@ -164,7 +164,7 @@ func checkLayerRules(t *testing.T, rules ...int) {
 }
 
 // Un paquet n'importe que son dossier ou un rang plus bas (règles 1 et 2 :
-// kit, au rang 0, n'importe aucun autre paquet d'openCloud). Les bibliothèques
+// kit, au rang 0, n'importe aucun autre paquet de Kagu). Les bibliothèques
 // tierces de kit (go-toml dans lang, x/crypto dans release) ne sont pas
 // relevées : la règle 2 dit « bibliothèque standard », question posée à Lucas.
 func TestLayers_NoImportGoesUp(t *testing.T) {

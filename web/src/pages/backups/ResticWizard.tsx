@@ -130,7 +130,7 @@ function initialForm(t: Translate, overview: BackupOverview, wanted: string | nu
   };
 }
 
-// Une source que rien d'openCloud ne protège passe avant une déjà protégée.
+// Une source que rien de Kagu ne protège passe avant une déjà protégée.
 function firstFitSource(t: Translate, overview: BackupOverview, scope: ResticScope): string {
   const fit = candidatesFor(overview.sources, scope).filter((candidate) => sourceUnfit(t, candidate, overview.machines) === null);
   const unprotected = fit.find((candidate) => !candidate.protections.some((protection) => protection.origin !== "observed"));
@@ -239,7 +239,7 @@ function sourceOptions(t: Translate, listed: ReturnType<typeof listedSources>): 
     }));
 }
 
-// Ce qui protège déjà une source : Proxmox de lui-même, openCloud, ou rien.
+// Ce qui protège déjà une source : Proxmox de lui-même, Kagu, ou rien.
 function ProtectionPill({ source }: { source: BackupSource }) {
   const t = useT();
   if (source.protections.some((protection) => protection.origin === "restic" || protection.origin === "archive")) {

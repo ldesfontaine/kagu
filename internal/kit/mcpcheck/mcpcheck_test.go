@@ -47,12 +47,12 @@ func TestCheck_NotConfiguredTouchesNoNetwork(t *testing.T) {
 	}
 }
 
-func TestCheck_ReachableReportsVersionAndOpenCloudTools(t *testing.T) {
+func TestCheck_ReachableReportsVersionAndProductTools(t *testing.T) {
 	tools := toolNames(brand.ID+"_list_machines", brand.ID+"_get_job", brand.ID+"_list_alerts", "gmail_search")
 	server := serve(t, http.StatusOK, "application/json", `{"status":"ok","version":"0.1.0","tools":`+tools+`}`)
 	// Une barre finale dans mcp_url ne double pas le chemin.
 	health := New(server.URL+"/", now).Check(context.Background())
-	if health.State != StateReachable || health.Version != "0.1.0" || health.OpenCloudTools != 3 {
+	if health.State != StateReachable || health.Version != "0.1.0" || health.ProductTools != 3 {
 		t.Fatalf("health %+v", health)
 	}
 }
@@ -65,9 +65,9 @@ func TestCheck_AnOlderMCPMaisonHasNoVersion(t *testing.T) {
 	}
 }
 
-func TestCheck_AnswersWithoutTheOpenCloudGroup(t *testing.T) {
+func TestCheck_AnswersWithoutTheKaguGroup(t *testing.T) {
 	server := serve(t, http.StatusOK, "application/json", `{"status":"ok","version":"0.1.0","tools":`+toolNames("gmail_search", "calendar_list")+`}`)
-	if health := New(server.URL, now).Check(context.Background()); health.State != StateGroupMissing || health.OpenCloudTools != 0 {
+	if health := New(server.URL, now).Check(context.Background()); health.State != StateGroupMissing || health.ProductTools != 0 {
 		t.Fatalf("health %+v", health)
 	}
 	empty := serve(t, http.StatusOK, "application/json", `{"status":"ok"}`)

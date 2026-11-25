@@ -61,10 +61,10 @@ var labelSuffix = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,62}$`)
 // plus. Docker fusionne dans Config.Labels ceux de l'image, que son auteur
 // a écrits ; l'identifiant du service, tiré au hasard, les rend inoffensifs.
 // Un suffixe ou une valeur hors bornes est écarté, et la carte est coupée à
-// sa taille maximale : les deux labels qu'openCloud lit passent d'abord, pour
+// sa taille maximale : les deux labels que Kagu lit passent d'abord, pour
 // qu'une image bavarde ne les chasse pas.
 //
-// Le préfixe se reconnaît sans tenir compte de la casse : « Opencloud.service »
+// Le préfixe se reconnaît sans tenir compte de la casse : « Kagu.service »
 // est une tentative d'étiquette, pas un label d'autrui. Si des labels ont dû
 // partir et qu'il ne reste pas la paire service et unité, la carte porte la
 // clé réservée LabelInvalid (le nombre de clés écartées) : le conteneur est étiqueté, mal,

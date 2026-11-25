@@ -11,7 +11,7 @@ import (
 )
 
 // ErrEventTooLarge : le serveur a envoyé une ligne ou un événement plus long
-// que ce que le protocole permet. Le flux est coupé : ce n'est pas openCloud
+// que ce que le protocole permet. Le flux est coupé : ce n'est pas Kagu
 // qui parle, ou il s'est trompé.
 var ErrEventTooLarge = errors.New("stream event too large")
 

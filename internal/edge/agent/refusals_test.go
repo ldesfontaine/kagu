@@ -195,13 +195,13 @@ func TestBackupReceive_OutsideTheRightIsSaidBeforeTheAccount(t *testing.T) {
 func TestBackupPrune_RefusesAFolderTheAccountCannotWrite(t *testing.T) {
 	b := newLongBench(t, nil)
 	b.runner.checks.writable = deniedPath
-	names := []string{"opencloud-20261001-030000.tar.age", "opencloud-20261002-030000.tar.age", "opencloud-20261003-030000.tar.age"}
+	names := []string{"kagu-20261001-030000.tar.age", "kagu-20261002-030000.tar.age", "kagu-20261003-030000.tar.age"}
 	for _, name := range names {
 		if err := os.WriteFile(filepath.Join(b.dir, name), []byte(ageHeader), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	body := longOrder(1, agentwire.KindBackupPrune, agentwire.BackupPruneParams{Path: b.dir, Prefix: "opencloud", Keep: 1})
+	body := longOrder(1, agentwire.KindBackupPrune, agentwire.BackupPruneParams{Path: b.dir, Prefix: "kagu", Keep: 1})
 	b.runner.receive(b.signed(t, body))
 	report := b.results.take()
 	if report == nil || len(report.Results) != 1 || report.Results[0].State != agentwire.ActionRefused || report.Results[0].Reason != agentwire.ReasonPathDenied {
@@ -279,7 +279,7 @@ func TestSelfUpdater_UnavailableReason(t *testing.T) {
 	}
 
 	// Hors du dossier bin/ : not_self_updatable, sans demander au disque.
-	b.updater.executable = func() (string, error) { return "/usr/local/bin/opencloud", nil }
+	b.updater.executable = func() (string, error) { return "/usr/local/bin/kagu", nil }
 	asked := false
 	got := b.updater.unavailableReason(func(string) string {
 		asked = true

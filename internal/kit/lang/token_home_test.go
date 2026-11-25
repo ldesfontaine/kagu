@@ -15,7 +15,7 @@ func TestR_G2_8(t *testing.T) {
 			t.Error("compose.mcp-maison.yml sets network_mode")
 		}
 		if !strings.Contains(compose, "host.docker.internal:host-gateway") {
-			t.Error("compose.mcp-maison.yml does not reach openCloud through host-gateway")
+			t.Error("compose.mcp-maison.yml does not reach Kagu through host-gateway")
 		}
 	})
 	t.Run("the install guide shows no host network for mcp-maison", func(t *testing.T) {

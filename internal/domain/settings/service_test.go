@@ -39,12 +39,12 @@ func TestSetMailRelay_NoPort_FollowsTheTLSMode(t *testing.T) {
 	ctx := context.Background()
 	for mode, want := range map[mail.TLSMode]int{mail.TLSImplicit: 465, mail.TLSStartTLS: 587, mail.TLSNone: 587} {
 		relay, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: mail.Relay{
-			Host: " 10.0.0.25 ", TLS: mode, From: " oc@example.org ",
+			Host: " 10.0.0.25 ", TLS: mode, From: " kagu@example.org ",
 		}})
 		if err != nil {
 			t.Fatalf("%s: %v", mode, err)
 		}
-		if relay.Port != want || relay.Host != "10.0.0.25" || relay.From != "oc@example.org" {
+		if relay.Port != want || relay.Host != "10.0.0.25" || relay.From != "kagu@example.org" {
 			t.Fatalf("%s: got %+v", mode, relay)
 		}
 	}
@@ -55,7 +55,7 @@ func TestSetMailRelay_NoPort_FollowsTheTLSMode(t *testing.T) {
 func TestSetMailRelay_EmptyPassword_KeepsTheOneInTheDatabase(t *testing.T) {
 	service, db := newService(t)
 	ctx := context.Background()
-	typed := mail.Relay{Host: "smtp.example.org", Port: 587, TLS: mail.TLSStartTLS, Username: "alerts", Password: "s3cret", From: "oc@example.org"}
+	typed := mail.Relay{Host: "smtp.example.org", Port: 587, TLS: mail.TLSStartTLS, Username: "alerts", Password: "s3cret", From: "kagu@example.org"}
 	if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: typed}); err != nil {
 		t.Fatal(err)
 	}
@@ -94,12 +94,12 @@ func TestSetMailRelay_Invalid_IsRefusedAndWritesNothing(t *testing.T) {
 func TestSetMailRelay_InvalidOverAnExistingRelay_LeavesTheRowAsItWas(t *testing.T) {
 	service, db := newService(t)
 	ctx := context.Background()
-	typed := mail.Relay{Host: "smtp.example.org", TLS: mail.TLSStartTLS, Username: "alerts", Password: "s3cret", From: "oc@example.org"}
+	typed := mail.Relay{Host: "smtp.example.org", TLS: mail.TLSStartTLS, Username: "alerts", Password: "s3cret", From: "kagu@example.org"}
 	if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: typed}); err != nil {
 		t.Fatal(err)
 	}
 	before := load(t, db)
-	_, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: mail.Relay{Host: "smtp.example.org", TLS: "ssl", From: "oc@example.org"}, ClearPassword: true})
+	_, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: mail.Relay{Host: "smtp.example.org", TLS: "ssl", From: "kagu@example.org"}, ClearPassword: true})
 	if !errors.Is(err, mail.ErrTLSModeInvalid) {
 		t.Fatalf("got %v", err)
 	}
@@ -113,7 +113,7 @@ func TestSetMailRelay_InvalidOverAnExistingRelay_LeavesTheRowAsItWas(t *testing.
 func TestSetMailRelay_NoHost_ClearsEverything(t *testing.T) {
 	service, db := newService(t)
 	ctx := context.Background()
-	typed := mail.Relay{Host: "smtp.example.org", TLS: mail.TLSStartTLS, Password: "s3cret", From: "oc@example.org"}
+	typed := mail.Relay{Host: "smtp.example.org", TLS: mail.TLSStartTLS, Password: "s3cret", From: "kagu@example.org"}
 	if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: typed}); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestGestures_KeepTheOtherKeys(t *testing.T) {
 	if err := service.SetDangerReminderHours(ctx, 24); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: mail.Relay{Host: "smtp.example.org", TLS: mail.TLSStartTLS, From: "oc@example.org"}}); err != nil {
+	if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: mail.Relay{Host: "smtp.example.org", TLS: mail.TLSStartTLS, From: "kagu@example.org"}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.SetLifecycleEnabled(ctx, false); err != nil {
@@ -229,7 +229,7 @@ func TestGestures_KeepTheOtherKeys(t *testing.T) {
 	want := settings.Settings{
 		Language:            lang.English,
 		DangerReminderHours: 24,
-		MailHost:            "smtp.example.org", MailPort: 587, MailTLS: "starttls", MailFrom: "oc@example.org",
+		MailHost:            "smtp.example.org", MailPort: 587, MailTLS: "starttls", MailFrom: "kagu@example.org",
 		LifecycleDisabled: true,
 	}
 	if saved := load(t, db); saved != want {
@@ -271,7 +271,7 @@ func TestCurrentReads_DatabaseDown_FallBack(t *testing.T) {
 // mode TLS ne changent pas ; l'expéditeur et l'identifiant n'y changent rien.
 func TestR_A2_14(t *testing.T) {
 	ctx := context.Background()
-	original := mail.Relay{Host: "smtp.example.org", Port: 587, TLS: mail.TLSStartTLS, Username: "alerts", Password: "s3cret", From: "oc@example.org"}
+	original := mail.Relay{Host: "smtp.example.org", Port: 587, TLS: mail.TLSStartTLS, Username: "alerts", Password: "s3cret", From: "kagu@example.org"}
 	for name, change := range map[string]func(*mail.Relay){
 		"host": func(r *mail.Relay) { r.Host = "smtp.other.org" },
 		"port": func(r *mail.Relay) { r.Port = 2525 },
@@ -330,7 +330,7 @@ func TestR_SEC_7(t *testing.T) {
 	service, db := newService(t)
 	service.SetAuditor(audit.New(db, slog.New(slog.NewTextHandler(io.Discard, nil))))
 	ctx := context.Background()
-	original := mail.Relay{Host: "smtp.example.org", Port: 587, TLS: mail.TLSStartTLS, Password: "s3cret", From: "oc@example.org"}
+	original := mail.Relay{Host: "smtp.example.org", Port: 587, TLS: mail.TLSStartTLS, Password: "s3cret", From: "kagu@example.org"}
 	if _, err := service.SetMailRelay(ctx, settings.MailRelayChange{Relay: original}); err != nil {
 		t.Fatal(err)
 	}

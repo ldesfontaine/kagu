@@ -72,7 +72,7 @@ func TestManifestAPI_ExportMatchesGolden(t *testing.T) {
 	if got := recorder.Header().Get("Content-Type"); got != "application/yaml; charset=utf-8" {
 		t.Fatalf("Content-Type %q", got)
 	}
-	if got := recorder.Header().Get("Content-Disposition"); got != `attachment; filename="opencloud.yaml"` {
+	if got := recorder.Header().Get("Content-Disposition"); got != `attachment; filename="kagu.yaml"` {
 		t.Fatalf("Content-Disposition %q", got)
 	}
 	body := recorder.Body.String()

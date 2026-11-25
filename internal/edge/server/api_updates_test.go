@@ -99,9 +99,9 @@ func TestAPI_UnitUpdatePolicy_SurvivesTheRecreationOfTheContainer(t *testing.T) 
 }
 
 // Vérifier maintenant vers une machine hors ligne est refusé (409) avec la clé
-// du catalogue, la machine openCloud comme les autres : c'est son agent qui
+// du catalogue, la machine Kagu comme les autres : c'est son agent qui
 // vérifie.
-func TestCheckUpdates_OfflineRefused_TheOpenCloudMachineToo(t *testing.T) {
+func TestCheckUpdates_OfflineRefused_TheKaguMachineToo(t *testing.T) {
 	server := newTestServer(t)
 	server.enroll(t, "vps-paris-1", remoteID)
 	for _, machineID := range []string{remoteID, machine.LocalID} {

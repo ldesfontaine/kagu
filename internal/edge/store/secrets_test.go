@@ -42,7 +42,7 @@ func openSecretsDB(t *testing.T) *DB {
 }
 
 // insertPlaintextRows écrit en SQL brut des secrets en clair : un mot de
-// passe, un canal, une tâche au jeton en clair. Aucun chemin d'openCloud ne
+// passe, un canal, une tâche au jeton en clair. Aucun chemin de Kagu ne
 // les écrit ainsi ; les tests s'assurent qu'ils ne sont pas pris pour des
 // secrets.
 func insertPlaintextRows(t *testing.T, db *DB) {
@@ -63,7 +63,7 @@ func insertPlaintextRows(t *testing.T, db *DB) {
 }
 
 // insertSealedRows écrit les mêmes lignes, chiffrées avec la clé posée,
-// comme les écrit openCloud.
+// comme les écrit Kagu.
 func insertSealedRows(t *testing.T, db *DB) {
 	t.Helper()
 	ctx := context.Background()
@@ -87,7 +87,7 @@ func insertSealedRows(t *testing.T, db *DB) {
 		t.Fatal(err)
 	}
 	if _, err := db.sql.ExecContext(ctx,
-		`INSERT INTO machine_proxmox (machine_id, api_url, token_id, token_secret, verified_at, created_at) VALUES ('pve-host', 'https://pve.lan:8006', 'opencloud@pve!lecture', ?, 1, 1)`,
+		`INSERT INTO machine_proxmox (machine_id, api_url, token_id, token_secret, verified_at, created_at) VALUES ('pve-host', 'https://pve.lan:8006', 'kagu@pve!lecture', ?, 1, 1)`,
 		mustSeal(t, db, plainProxmoxToken, proxmoxTokenScope("pve-host"))); err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestWritesSealWhatTheyStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.SaveProxmoxHost(ctx, proxmox.Credentials{
-		Host:        proxmox.Host{MachineID: "pve-host", APIURL: "https://pve.lan:8006", TokenID: "opencloud@pve!lecture", Version: "8.2.4", VerifiedAt: now, CreatedAt: now},
+		Host:        proxmox.Host{MachineID: "pve-host", APIURL: "https://pve.lan:8006", TokenID: "kagu@pve!lecture", Version: "8.2.4", VerifiedAt: now, CreatedAt: now},
 		TokenSecret: plainProxmoxToken,
 	}); err != nil {
 		t.Fatal(err)
@@ -303,7 +303,7 @@ func TestForgetSecrets_EmptiesWhatWasLostAndRenewsPingTokens(t *testing.T) {
 	if got := rawColumn(t, db, `SELECT token_secret FROM machine_proxmox`); got != "" {
 		t.Fatalf("the lost Proxmox token must be emptied, got %q", got)
 	}
-	if credentials, err := db.GetProxmoxCredentials(ctx, "pve-host"); err != nil || credentials.TokenSecret != "" || credentials.TokenID != "opencloud@pve!lecture" {
+	if credentials, err := db.GetProxmoxCredentials(ctx, "pve-host"); err != nil || credentials.TokenSecret != "" || credentials.TokenID != "kagu@pve!lecture" {
 		t.Fatalf("the host must stay declared with an empty token: %+v, %v", credentials, err)
 	}
 

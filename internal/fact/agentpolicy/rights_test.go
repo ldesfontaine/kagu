@@ -155,7 +155,7 @@ func TestR_A3_10_PolicyOnlyRightsAreReadInThePolicy(t *testing.T) {
 // leur échéance, dont backup.receive de la machine du serveur.
 func TestR_A3_7_GrantSetReplacesTheSetAndKeepsTheRest(t *testing.T) {
 	clock := Clock{Now: time.Date(2026, 11, 24, 10, 0, 0, 0, time.UTC), Boot: "boot", Uptime: time.Hour}
-	rights, err := ParsePolicyRights("files.write=/srv/static,terminal.host,backup.receive=/var/lib/opencloud-agent/database-backups,observe.env,docker.deploy")
+	rights, err := ParsePolicyRights("files.write=/srv/static,terminal.host,backup.receive=/var/lib/kagu-agent/database-backups,observe.env,docker.deploy")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,10 +170,10 @@ func TestR_A3_7_GrantSetReplacesTheSetAndKeepsTheRest(t *testing.T) {
 	}
 	host := SetHost{ServicesRoot: "/srv/workspace"}
 	for set, want := range map[Set]string{
-		SetObserve: "observe,probe.lan,observe.env,backup.receive=/var/lib/opencloud-agent/database-backups",
-		SetManage: "observe,probe.lan,observe.env,agent.update,docker.deploy,docker.update,backup.receive=/var/lib/opencloud-agent/database-backups," +
+		SetObserve: "observe,probe.lan,observe.env,backup.receive=/var/lib/kagu-agent/database-backups",
+		SetManage: "observe,probe.lan,observe.env,agent.update,docker.deploy,docker.update,backup.receive=/var/lib/kagu-agent/database-backups," +
 			"files.write=/srv/workspace,restic.produce,restic.docker,restic.restore,terminal.container",
-		SetRoot: "observe,probe.lan,observe.env,agent.update,docker.deploy,docker.update,backup.receive=/var/lib/opencloud-agent/database-backups," +
+		SetRoot: "observe,probe.lan,observe.env,agent.update,docker.deploy,docker.update,backup.receive=/var/lib/kagu-agent/database-backups," +
 			"files.write=/srv/workspace,restic.produce,restic.docker,restic.restore,terminal.container,terminal.host=root,service.free,network.private=1",
 	} {
 		after, err := before.GrantSet(set, host)

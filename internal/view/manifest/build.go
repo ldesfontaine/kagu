@@ -16,7 +16,7 @@ import (
 type Current struct {
 	// Machines donne le nom de chaque machine, par identifiant.
 	Machines map[string]string
-	// LocalMachineID est la machine openCloud, celle d'une sonde sans
+	// LocalMachineID est la machine Kagu, celle d'une sonde sans
 	// « runner ».
 	LocalMachineID string
 	Projects       []directory.Project

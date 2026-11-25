@@ -80,9 +80,9 @@ func mustSized(t *testing.T, bytes int) string {
 // jetons d'API, d'enrôlement, de ping et le code de première configuration.
 func TestR_A2_2_ATokenHashStaysTheHexOfItsSHA256(t *testing.T) {
 	witnesses := map[string]struct{ token, want string }{
-		"enrollment": {"oc_abcdefghijklmnopqrstuvwxyz234567", "5e94b693f30467559bc9c7c88335758ed0dcc30de4dea36ebb2888d3a2bb1193"},  // gitleaks:allow -- faux secret de test
+		"enrollment": {"kg_abcdefghijklmnopqrstuvwxyz234567", "44fbb7cf379952d4dcd76be24fd81cc71a58546e3c08d47b3b4f481b93cba781"},  // gitleaks:allow -- faux secret de test
 		"ping":       {"hb_abcdefghijklmnopqrstuvwxyz", "7d66f5e35ed70e7a7116a6e0e8b1313a3afa02844437ab090161cb7261c0072f"},        // gitleaks:allow -- faux secret de test
-		"api":        {"ock_abcdefghijklmnopqrstuvwxyz234567", "6f7465869576816b7fdfb83d60daa21521d9d92a62599ea1f0eb83dbc5ceb1df"}, // gitleaks:allow -- faux secret de test
+		"api":        {"kgk_abcdefghijklmnopqrstuvwxyz234567", "0437141625b9c223a36f5e94bbecff9e85db9cd7bf55a5943866bd251fee94d5"}, // gitleaks:allow -- faux secret de test
 		"setup code": {"12345678", "ef797c8118f02dfb649607dd5d3f8c7623048c9c063d532cc95c5ed7a898a64f"},
 	}
 	for name, witness := range witnesses {
@@ -95,7 +95,7 @@ func TestR_A2_2_ATokenHashStaysTheHexOfItsSHA256(t *testing.T) {
 // Une autre valeur ne rend jamais la même empreinte : deux jetons, deux
 // empreintes, et la casse change l'empreinte.
 func TestHashToken_DiffersPerTokenAndPerCase(t *testing.T) {
-	if HashToken("oc_a") == HashToken("oc_b") || HashToken("oc_a") == HashToken("OC_A") {
+	if HashToken("kg_a") == HashToken("kg_b") || HashToken("kg_a") == HashToken("KG_A") {
 		t.Fatal("two different tokens share a hash")
 	}
 }

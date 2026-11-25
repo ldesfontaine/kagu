@@ -2,7 +2,7 @@ import type { AgentAnchors, AnchorKind, Anchors } from "../api/machines";
 
 // Les ancres de confiance locales : des valeurs que seul l'administrateur de la
 // machine pose (à l'installation, ou en root avec « agent trust »). Aucun ordre
-// de openCloud ne peut les changer ; sans ancre, l'agent refuse l'ordre qu'elle
+// de Kagu ne peut les changer ; sans ancre, l'agent refuse l'ordre qu'elle
 // borne. Ce fichier dit comment un écran les montre et les demande.
 
 // Le registre du serveur (internal/fact/anchor), dans son ordre : le droit dont

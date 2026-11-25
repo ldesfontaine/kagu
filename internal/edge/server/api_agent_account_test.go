@@ -28,7 +28,7 @@ func reconnectAs(t *testing.T, server *testServer, rights, account, unavailable 
 func TestMachine_SaysTheAccountAndWhatItCannotExercise(t *testing.T) {
 	server := newTestServer(t)
 	server.enroll(t, "vps-paris-1", remoteID)
-	reconnectAs(t, server, "observe,docker.deploy,backup.receive=/srv/backups", "998:opencloud-agent", "docker.deploy=docker_denied,backup.receive=path_denied")
+	reconnectAs(t, server, "observe,docker.deploy,backup.receive=/srv/backups", "998:kagu-agent", "docker.deploy=docker_denied,backup.receive=path_denied")
 
 	recorder := callAPI(server.Server, http.MethodGet, "/api/machines/"+remoteID, nil)
 	if recorder.Code != http.StatusOK {
@@ -63,7 +63,7 @@ func TestMachine_SaysTheAccountAndWhatItCannotExercise(t *testing.T) {
 func TestDeploy_AnUnavailableRightIsShownAndTheOrderStillGoes(t *testing.T) {
 	server := newTestServer(t)
 	id := deploySetup(t, server, "observe,docker.deploy,docker.update")
-	reconnectAs(t, server, "observe,docker.deploy,docker.update", "998:opencloud-agent", "docker.deploy=docker_denied")
+	reconnectAs(t, server, "observe,docker.deploy,docker.update", "998:kagu-agent", "docker.deploy=docker_denied")
 	path := "/api/directory/services/" + id + "/deploy-plan"
 
 	plan := callAPI(server.Server, http.MethodGet, path, nil)
@@ -83,7 +83,7 @@ func TestDeploy_AnUnavailableRightIsShownAndTheOrderStillGoes(t *testing.T) {
 func TestBackups_AnUnavailableRightIsShownAndTheRunStillGoes(t *testing.T) {
 	server := newTestServer(t)
 	backupSetup(t, server)
-	reconnectAs(t, server, "backup.receive=/srv/backups", "998:opencloud-agent", "backup.receive=path_unwritable")
+	reconnectAs(t, server, "backup.receive=/srv/backups", "998:kagu-agent", "backup.receive=path_unwritable")
 
 	overview := callAPI(server.Server, http.MethodGet, "/api/backups", nil)
 	if overview.Code != http.StatusOK {
@@ -102,7 +102,7 @@ func TestBackups_AnUnavailableRightIsShownAndTheRunStillGoes(t *testing.T) {
 func TestDeploy_AMissingRightStaysMissingWhateverTheReasons(t *testing.T) {
 	server := newTestServer(t)
 	id := deploySetup(t, server, "observe,docker.deploy")
-	reconnectAs(t, server, "observe", "998:opencloud-agent", "docker.deploy=docker_denied")
+	reconnectAs(t, server, "observe", "998:kagu-agent", "docker.deploy=docker_denied")
 	plan := callAPI(server.Server, http.MethodGet, "/api/directory/services/"+id+"/deploy-plan", nil)
 	var decoded deployPlanJSON
 	decodeAPI(t, plan, &decoded)

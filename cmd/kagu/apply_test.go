@@ -87,7 +87,7 @@ func (f *fakeServer) applyCalls() int {
 
 func writeManifestFile(t *testing.T, content string) string {
 	t.Helper()
-	path := filepath.Join(shortDir(t), "opencloud.yaml")
+	path := filepath.Join(shortDir(t), "kagu.yaml")
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func runApplyCommand(t *testing.T, fake *fakeServer, input string, interactive b
 	t.Helper()
 	configPath, stateDir := writeShortConfig(t)
 	serveOnControlSocket(t, stateDir, fake.handler())
-	file := writeManifestFile(t, "version: 1\nmachines:\n  - name: opencloud\n")
+	file := writeManifestFile(t, "version: 1\nmachines:\n  - name: kagu\n")
 	var out bytes.Buffer
 	args := append([]string{"-config", configPath}, flags...)
 	err := applyCommand(append(args, file), strings.NewReader(input), &out, interactive)
@@ -124,7 +124,7 @@ func TestApplyCommand_ShowsThePlanAndAsks(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	for _, want := range []string{
-		"Plan pour opencloud.yaml (sha256:1a2b3c4d…)\n",
+		"Plan pour kagu.yaml (sha256:1a2b3c4d…)\n",
 		"  + projet docs\n",
 		"  ~ service app-1/wiki (svc_7f3k…)\n      units[app].version : 2.4.0 → 2.4.1\n      public_url : ∅ → https://wiki.example.org\n",
 		"  ~ sonde wiki-http : interval 1m → 30s\n",
@@ -141,7 +141,7 @@ func TestApplyCommand_ShowsThePlanAndAsks(t *testing.T) {
 		t.Fatalf("apply calls: %d", len(fake.received))
 	}
 	got := fake.received[0]
-	if got["plan_hash"] != "sha256:plan1" || got["prune"] != true || got["file_name"] != "opencloud.yaml" || got["actor_name"] == nil || got["actor_name"] == "" {
+	if got["plan_hash"] != "sha256:plan1" || got["prune"] != true || got["file_name"] != "kagu.yaml" || got["actor_name"] == nil || got["actor_name"] == "" {
 		t.Fatalf("request: %+v", got)
 	}
 	if !strings.Contains(got["file"].(string), "version: 1") {
@@ -384,7 +384,7 @@ func TestR_A1_12_ACreationShowsEveryField(t *testing.T) {
 	plan := `{"language": "fr", "file_hash": "sha256:1a2b3c4d5e6f7a8b9c0d", "prune": false, "plan_hash": "sha256:p", "applicable": true,
 	  "summary": {"create": 1, "update": 0, "delete": 0, "unchanged": 0, "unmanaged": 0},
 	  "changes": [{"action": "create", "kind": "probe", "id": "", "name": "docker-api",
-	    "fields": [{"field": "runner", "before": "", "after": "opencloud"},
+	    "fields": [{"field": "runner", "before": "", "after": "kagu"},
 	               {"field": "target", "before": "", "after": "http://127.0.0.1:2375/x"},
 	               {"field": "method", "before": "", "after": "GET"}], "notes": [], "carries": []}],
 	  "unmanaged": [], "problems": []}`
@@ -396,7 +396,7 @@ func TestR_A1_12_ACreationShowsEveryField(t *testing.T) {
 	question := strings.Index(out, "Appliquer ces changements ?")
 	for _, want := range []string{
 		"  + sonde docker-api\n",
-		"      runner : ∅ → opencloud\n",
+		"      runner : ∅ → kagu\n",
 		"      target : ∅ → http://127.0.0.1:2375/x\n",
 		"      method : ∅ → GET\n",
 	} {
@@ -423,7 +423,7 @@ func TestR_A1_12_ServerTextIsPrintedStripped(t *testing.T) {
 	if strings.ContainsRune(out, '\x1b') {
 		t.Errorf("an escape reached the terminal: %q", out)
 	}
-	if !strings.Contains(out, "Plan pour opencloud.yaml (sha256:x\ufffd[31m\ufffdy)\n") {
+	if !strings.Contains(out, "Plan pour kagu.yaml (sha256:x\ufffd[31m\ufffdy)\n") {
 		t.Errorf("the plan header must stay on one stripped line:\n%s", out)
 	}
 	for _, want := range []string{"  + sonde a\ufffd[31mb\ufffdc\n", "target : ∅ → x\ufffd[2Jy\ufffdz\n", "interval 1\ufffd → 2\ufffd\n"} {

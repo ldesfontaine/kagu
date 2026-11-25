@@ -11,7 +11,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
-// Un proxy qui fournit la capacité proxy (machine openCloud), une application
+// Un proxy qui fournit la capacité proxy (machine Kagu), une application
 // avec une adresse publique et une sans (machine distante).
 func (ts *testServer) seedPublicServices(t *testing.T) (proxy, blog, internal string) {
 	t.Helper()

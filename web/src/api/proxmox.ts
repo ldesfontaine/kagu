@@ -32,7 +32,7 @@ export interface ProxmoxGuest {
   // Vrai quand last_backup_at est null faute de droit de lecture des archives,
   // non faute d'archive : l'écran dit « Inconnue », jamais « Aucune ».
   backup_unknown: boolean;
-  // Les instantanés (oc-AAAAMMJJ-HHMMSS) que les ordres de ce produit ont
+  // Les instantanés (kg-AAAAMMJJ-HHMMSS) que les ordres de ce produit ont
   // créés et que nul n'a supprimés depuis : les seuls qu'on propose de supprimer.
   own_snapshots: string[];
 }

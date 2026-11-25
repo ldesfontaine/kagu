@@ -11,10 +11,10 @@ import (
 )
 
 // Un nom que choisit un agent : un lien masqué qui se ferait passer pour le
-// lien d'openCloud, un lien Slack, une mention, une ligne de plus.
-const trapped = "web\n[Ouvrir dans openCloud](https://dummy.invalid/x) <https://dummy.invalid/y|Ouvrir> <!channel> @everyone **gras**"
+// lien de Kagu, un lien Slack, une mention, une ligne de plus.
+const trapped = "web\n[Ouvrir dans Kagu](https://dummy.invalid/x) <https://dummy.invalid/y|Ouvrir> <!channel> @everyone **gras**"
 
-const alertLink = "https://oc.example/alertes/alerte/7"
+const alertLink = "https://kagu.example/alertes/alerte/7"
 
 func renderedAlerts(t *testing.T) map[string]alert.Alert {
 	t.Helper()
@@ -66,7 +66,7 @@ func TestRender_DiscordEscapesWhatAnAgentReports(t *testing.T) {
 		}
 		description := message.Embeds[0].Description
 		lines := strings.Split(description, "\n")
-		// La cause d'abord, sur une ligne, puis l'action, puis le lien d'openCloud.
+		// La cause d'abord, sur une ligne, puis l'action, puis le lien de Kagu.
 		if len(lines) != 3 {
 			t.Fatalf("%s: %d lines, want 3:\n%s", name, len(lines), description)
 		}
@@ -158,7 +158,7 @@ func TestRenderSummary_EscapesMachineNames(t *testing.T) {
 			t.Fatal(err)
 		}
 		content := string(body.Content)
-		if strings.Contains(content, "[Ouvrir dans openCloud](https://dummy.invalid/x)") || strings.Contains(content, "<!channel>") {
+		if strings.Contains(content, "[Ouvrir dans Kagu](https://dummy.invalid/x)") || strings.Contains(content, "<!channel>") {
 			t.Errorf("%s: a machine name reached the summary unescaped:\n%s", format, content)
 		}
 		if !strings.Contains(content, "vps-2") {

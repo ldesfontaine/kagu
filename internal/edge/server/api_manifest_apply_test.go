@@ -63,7 +63,7 @@ func editedFile(t *testing.T, exported string) string {
 }
 
 func manifestPayload(file string, prune bool, planHash string) map[string]any {
-	return map[string]any{"file": file, "file_name": "opencloud.yaml", "prune": prune, "plan_hash": planHash}
+	return map[string]any{"file": file, "file_name": "kagu.yaml", "prune": prune, "plan_hash": planHash}
 }
 
 func TestManifestAPI_PlanMatchesGolden(t *testing.T) {
@@ -350,7 +350,7 @@ func TestControlSocket_ActorIsCLI(t *testing.T) {
 	// Sur TCP, le nom déclaré dans le corps n'est pas lu : celui de
 	// l'authentification l'est.
 	next := replaceFirst(t, file, "    grace: 1h\nignored:\n", "    grace: 2h\nignored:\n")
-	body, _ := json.Marshal(map[string]any{"file": next, "file_name": "../etc/opencloud.yaml", "plan_hash": "", "actor_name": "root"})
+	body, _ := json.Marshal(map[string]any{"file": next, "file_name": "../etc/kagu.yaml", "plan_hash": "", "actor_name": "root"})
 	request := httptest.NewRequest(http.MethodPost, "/api/manifest/plan", bytes.NewReader(body))
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")
@@ -358,7 +358,7 @@ func TestControlSocket_ActorIsCLI(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	server.ServeHTTP(recorder, request)
 	decodeAPI(t, recorder, &judged)
-	body, _ = json.Marshal(map[string]any{"file": next, "file_name": "../etc/opencloud.yaml", "plan_hash": judged.PlanHash, "actor_name": "root"})
+	body, _ = json.Marshal(map[string]any{"file": next, "file_name": "../etc/kagu.yaml", "plan_hash": judged.PlanHash, "actor_name": "root"})
 	request = httptest.NewRequest(http.MethodPost, "/api/manifest/apply", bytes.NewReader(body))
 	request.Header.Set("Sec-Fetch-Site", "same-origin")
 	request.Header.Set("Content-Type", "application/json")
@@ -369,7 +369,7 @@ func TestControlSocket_ActorIsCLI(t *testing.T) {
 		t.Fatalf("apply on TCP: %d %s", recorder.Code, recorder.Body.String())
 	}
 	decodeAPI(t, recorder, &result)
-	if result.ActorKind != "operator" || result.ActorName != testUsername || result.FileName != "opencloud.yaml" {
+	if result.ActorKind != "operator" || result.ActorName != testUsername || result.FileName != "kagu.yaml" {
 		t.Fatalf("actor on TCP: %+v", result)
 	}
 }

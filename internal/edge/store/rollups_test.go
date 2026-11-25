@@ -18,7 +18,7 @@ func TestMachineRollups_KeepHoursAndDaysApart(t *testing.T) {
 	ctx := context.Background()
 	day := time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC)
 	hour := day.Add(9 * time.Hour)
-	exec(t, db, `INSERT INTO machines (id, name, created_at) VALUES (?, 'opencloud', 1)`, machine.LocalID)
+	exec(t, db, `INSERT INTO machines (id, name, created_at) VALUES (?, 'kagu', 1)`, machine.LocalID)
 	readings := []sampler.Reading{
 		{SampledAt: hour.Add(10 * time.Second), CPUPercent: 20, CPUCores: 2, MemTotal: 8},
 		{SampledAt: hour.Add(20 * time.Second), CPUPercent: 40, CPUCores: 4, MemTotal: 8},

@@ -21,7 +21,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
-// ParcelLifetime est le temps qu'un colis reste sur la machine openCloud
+// ParcelLifetime est le temps qu'un colis reste sur la machine Kagu
 // avant de partir, téléchargé ou non : aucune sauvegarde ne s'y garde. Il ne
 // survit pas à son ordre : un ordre non pris expire après OrderLifetime, un
 // ordre pris échoue MaxRunDuration après sa demande (timeout), et l'agent ne

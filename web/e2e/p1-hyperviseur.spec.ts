@@ -6,7 +6,7 @@ import { expect, test } from "./support/findings";
 // L'onglet Hyperviseur en cartes (P1). Deux hôtes fictifs : celui de la machine
 // distante est lu avec un jeton PVEAuditor (les archives ne sont pas lisibles :
 // la fiche dit le droit qui manque, les VM disent « Inconnue »), celui de la
-// machine openCloud avec le droit de lecture (chaque VM dit sa dernière
+// machine Kagu avec le droit de lecture (chaque VM dit sa dernière
 // sauvegarde). Chaque bouton est cliqué, chaque menu ouvert avec un choix,
 // chaque pli ouvert. Avec E2E_CAPTURES=1, il laisse les captures P1-*.png
 // (clair et sombre).
@@ -106,7 +106,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByText("il y a 9 h", { exact: true }).first()).toBeVisible();
     await page.locator("details.fold", { hasText: label("machine.proxmox_stopped") }).locator("summary").click();
     await expect(page.getByText(label("machine.proxmox_no_backup"), { exact: true })).toHaveCount(1);
-    // Le menu d'une VM de la machine openCloud (hors ligne) : gestes grisés, raison dite.
+    // Le menu d'une VM de la machine Kagu (hors ligne) : gestes grisés, raison dite.
     await page.getByRole("button", { name: "Plus d'actions : vpn" }).click();
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();

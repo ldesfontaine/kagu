@@ -85,7 +85,7 @@ export function soonest(certificates: (Certificate | null)[]): Certificate | nul
 }
 
 // La note d'une ligne : ce qu'on ne peut pas prouver d'abord, l'âge du
-// certificat sinon. openCloud observe, il ne renouvelle pas : il ne dit
+// certificat sinon. Kagu observe, il ne renouvelle pas : il ne dit
 // donc rien d'un renouvellement.
 export function certificateNote(t: Translate, certificate: Certificate, reading: CertificateReading, now: number): string {
   if (reading.revoked) {

@@ -15,8 +15,8 @@ import (
 	"github.com/ldesfontaine/kagu/internal/view/status"
 )
 
-// deletionBench pose la machine openCloud, une machine distante « m1 » et un
-// service déclaré sur la machine openCloud (svc_0123456789abcdef) : de quoi
+// deletionBench pose la machine Kagu, une machine distante « m1 » et un
+// service déclaré sur la machine Kagu (svc_0123456789abcdef) : de quoi
 // poser, test par test, un lien entre objets déclarés.
 func deletionBench(t *testing.T) *DB {
 	t.Helper()
@@ -169,7 +169,7 @@ func TestDeleteMachine_TakesWhatItOwnsAndDetachesItsAlerts(t *testing.T) {
 	ctx := context.Background()
 	db := deletionBench(t)
 	exec(t, db, `INSERT INTO enrollment_tokens (id, token_hash, token_prefix, name, machine_id, created_at, expires_at)
-		VALUES ('tok1', 'hash', 'oc_', 'vps-paris-1', 'm1', 1, 9999999999)`)
+		VALUES ('tok1', 'hash', 'kg_', 'vps-paris-1', 'm1', 1, 9999999999)`)
 	exec(t, db, `INSERT INTO agents (id, machine_id, public_key, enrolled_at, revoked_at) VALUES ('agt_1', 'm1', zeroblob(32), 1, 2)`)
 	exec(t, db, `INSERT INTO agents (id, machine_id, public_key, enrolled_at) VALUES ('agt_2', 'm1', zeroblob(32), 2)`)
 	exec(t, db, `INSERT INTO agent_capabilities (agent_id, capability, reported_at) VALUES ('agt_2', 'observe', 2)`)

@@ -19,7 +19,7 @@ var rollbackNow = time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
 
 func (b *updateBench) installPrevious(t *testing.T, version string) {
 	t.Helper()
-	if err := b.stateDir.WriteFile("bin/opencloud-"+version, []byte("binary "+version), 0o755); err != nil {
+	if err := b.stateDir.WriteFile("bin/kagu-"+version, []byte("binary "+version), 0o755); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -51,11 +51,11 @@ func TestAgentUpdate_WritesTheMarkerAndThePreviousLinkWithTheGracePeriod(t *test
 	if marker != want {
 		t.Fatalf("marker %+v, want %+v", marker, want)
 	}
-	if b.link(t, "previous") != "opencloud-v0.0.1" || b.link(t, "current") != "opencloud-v0.0.2" {
+	if b.link(t, "previous") != "kagu-v0.0.1" || b.link(t, "current") != "kagu-v0.0.2" {
 		t.Fatalf("previous %s, current %s", b.link(t, "previous"), b.link(t, "current"))
 	}
 	// L'ancien binaire reste intact, c'est ce que le lanceur rebasculera.
-	if content, _ := b.stateDir.ReadFile("bin/opencloud-v0.0.1"); string(content) != "the running binary" {
+	if content, _ := b.stateDir.ReadFile("bin/kagu-v0.0.1"); string(content) != "the running binary" {
 		t.Fatalf("the previous binary became %q", content)
 	}
 	if rollback.GracePeriod != 3*time.Minute {
@@ -69,7 +69,7 @@ func TestAgentUpdate_WithoutAVersionToReturnTo_IsRefusedBeforeAnySwitch(t *testi
 	if err := b.stateDir.Remove("bin/current"); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.stateDir.Symlink("opencloud-dev", "bin/current"); err != nil {
+	if err := b.stateDir.Symlink("kagu-dev", "bin/current"); err != nil {
 		t.Fatal(err)
 	}
 	err := b.update(t, b.publish(t, "v0.0.2", "v0.0.2", b.private))
@@ -79,7 +79,7 @@ func TestAgentUpdate_WithoutAVersionToReturnTo_IsRefusedBeforeAnySwitch(t *testi
 	if _, err := rollback.Load(b.stateDir); !errors.Is(err, rollback.ErrNoMarker) {
 		t.Fatalf("a marker was written: %v", err)
 	}
-	if _, err := b.stateDir.Lstat("bin/opencloud-v0.0.2"); err == nil {
+	if _, err := b.stateDir.Lstat("bin/kagu-v0.0.2"); err == nil {
 		t.Fatal("the new binary was installed")
 	}
 }
@@ -111,16 +111,16 @@ func TestAgentRollback_SwitchesToPreviousAndWritesTheSameMarker(t *testing.T) {
 	if err := b.stateDir.Remove("bin/current"); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.stateDir.Symlink("opencloud-v0.0.2", "bin/current"); err != nil {
+	if err := b.stateDir.Symlink("kagu-v0.0.2", "bin/current"); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.stateDir.Symlink("opencloud-v0.0.1", "bin/previous"); err != nil {
+	if err := b.stateDir.Symlink("kagu-v0.0.1", "bin/previous"); err != nil {
 		t.Fatal(err)
 	}
 	if err := b.updater.rollback(context.Background(), "run9"); err != nil {
 		t.Fatal(err)
 	}
-	if b.link(t, "current") != "opencloud-v0.0.1" || b.link(t, "previous") != "opencloud-v0.0.2" {
+	if b.link(t, "current") != "kagu-v0.0.1" || b.link(t, "previous") != "kagu-v0.0.2" {
 		t.Fatalf("current %s, previous %s", b.link(t, "current"), b.link(t, "previous"))
 	}
 	marker, err := rollback.Load(b.stateDir)
@@ -135,7 +135,7 @@ func TestAgentRollback_SwitchesToPreviousAndWritesTheSameMarker(t *testing.T) {
 		t.Fatalf("marker %+v, want %+v", marker, want)
 	}
 	// La version d'avant est éprouvée comme une version neuve.
-	if len(b.checked) != 1 || !strings.HasSuffix(b.checked[0], "opencloud-v0.0.1 v0.0.1") {
+	if len(b.checked) != 1 || !strings.HasSuffix(b.checked[0], "kagu-v0.0.1 v0.0.1") {
 		t.Fatalf("checked %v", b.checked)
 	}
 }
@@ -148,7 +148,7 @@ func TestAgentRollback_RefusesWhenThereIsNothingToReturnTo(t *testing.T) {
 		t.Fatalf("reason %s", reason)
 	}
 	// Un précédent identique à ce qui tourne.
-	if err := b.stateDir.Symlink("opencloud-v0.0.1", "bin/previous"); err != nil {
+	if err := b.stateDir.Symlink("kagu-v0.0.1", "bin/previous"); err != nil {
 		t.Fatal(err)
 	}
 	err = b.updater.rollback(context.Background(), "run2")
@@ -158,7 +158,7 @@ func TestAgentRollback_RefusesWhenThereIsNothingToReturnTo(t *testing.T) {
 	if _, err := rollback.Load(b.stateDir); !errors.Is(err, rollback.ErrNoMarker) {
 		t.Fatalf("a refused rollback wrote a marker: %v", err)
 	}
-	if b.link(t, "current") != "opencloud-v0.0.1" || b.restarted != 0 {
+	if b.link(t, "current") != "kagu-v0.0.1" || b.restarted != 0 {
 		t.Fatal("a refused rollback moved something")
 	}
 }
@@ -169,10 +169,10 @@ func TestAgentRollback_ABrokenPreviousKeepsTheLink(t *testing.T) {
 	if err := b.stateDir.Remove("bin/current"); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.stateDir.Symlink("opencloud-v0.0.2", "bin/current"); err != nil {
+	if err := b.stateDir.Symlink("kagu-v0.0.2", "bin/current"); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.stateDir.Symlink("opencloud-v0.0.1", "bin/previous"); err != nil {
+	if err := b.stateDir.Symlink("kagu-v0.0.1", "bin/previous"); err != nil {
 		t.Fatal(err)
 	}
 	b.checkErr = errors.New("exec format error")
@@ -180,7 +180,7 @@ func TestAgentRollback_ABrokenPreviousKeepsTheLink(t *testing.T) {
 	if reason := reasonOf(t, err); reason != agentwire.ReasonSelfCheckFailed {
 		t.Fatalf("reason %s", reason)
 	}
-	if b.link(t, "current") != "opencloud-v0.0.2" {
+	if b.link(t, "current") != "kagu-v0.0.2" {
 		t.Fatal("a previous that does not start was switched to")
 	}
 	if _, err := rollback.Load(b.stateDir); !errors.Is(err, rollback.ErrNoMarker) {

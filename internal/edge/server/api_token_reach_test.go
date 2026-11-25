@@ -88,7 +88,7 @@ func (b reachBench) request(t *testing.T, verbID, machineID string) (method, pat
 	body = "{}"
 	switch verbID {
 	case "proxmox.vm.snapshot_delete":
-		body = `{"snapshot":"oc-20261021-120000"}`
+		body = `{"snapshot":"kg-20261021-120000"}`
 	}
 	return method, path, body
 }

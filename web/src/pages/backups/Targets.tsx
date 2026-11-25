@@ -23,7 +23,7 @@ import { sourceIcons } from "./SourceCard";
 
 const resticTones: Record<string, Tone> = { running: "ok", stopped: "danger", error: "danger", pending: "neutral" };
 
-// « Où ça va » : les cibles restic d'openCloud en grand (leur disque, leur
+// « Où ça va » : les cibles restic de Kagu en grand (leur disque, leur
 // rest-server, ce qu'elles gardent), puis les stockages de Proxmox et les
 // destinations des archives, plus petits.
 export function TargetsSection({ overview }: { overview: BackupOverview }) {

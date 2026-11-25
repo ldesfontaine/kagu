@@ -15,7 +15,7 @@ import (
 const documented = `version: 1
 machines:
   - name: app-1
-  - name: opencloud
+  - name: kagu
 projects:
   - id: prj_4m8d1x2a9b3c4d5e
     name: docs
@@ -50,7 +50,7 @@ services:
 probes:
   - id: 3f9a0c1d2e3f4a5b
     name: wiki-http
-    runner: opencloud
+    runner: kagu
     service: app-1/wiki
     kind: http
     target: https://wiki.example.org/healthz
@@ -95,7 +95,7 @@ func problemsOf(t *testing.T, text string) []Problem {
 
 func TestParse_ReadsTheDocumentedExample(t *testing.T) {
 	file := mustParse(t, documented)
-	if len(file.Machines) != 2 || file.Machines[1].Name != "opencloud" {
+	if len(file.Machines) != 2 || file.Machines[1].Name != "kagu" {
 		t.Fatalf("machines: %+v", file.Machines)
 	}
 	if len(file.Projects) != 1 || file.Projects[0].ID != "prj_4m8d1x2a9b3c4d5e" || file.Projects[0].Title != "Documentation" {

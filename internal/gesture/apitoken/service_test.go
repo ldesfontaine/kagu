@@ -39,7 +39,7 @@ func newService(t *testing.T) (*apitoken.Service, *clock, *store.DB, *bytes.Buff
 	return service, tick, db, &logs
 }
 
-// La machine openCloud, enregistrée par storetest.SaveLocalMachine.
+// La machine Kagu, enregistrée par storetest.SaveLocalMachine.
 const machineLocal = machine.LocalID
 
 func TestCreate_DefaultsToReadAndNinetyDays(t *testing.T) {

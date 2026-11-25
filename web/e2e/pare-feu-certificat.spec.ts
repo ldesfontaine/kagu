@@ -134,7 +134,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.addInitScript((value) => localStorage.setItem("theme", value), theme);
     const shoot = shooter(page, theme);
     const firewall = await declaredFirewall(page);
-    // La machine openCloud : la distante porte déjà l'hôte garni des données fictives.
+    // La machine Kagu : la distante porte déjà l'hôte garni des données fictives.
     await page.goto("/machines/local/proxmox");
     const dialog = page.locator("dialog[open]");
     await expect(dialog).toBeVisible();

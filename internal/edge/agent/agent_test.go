@@ -37,7 +37,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
-// Un vrai serveur openCloud sur un port éphémère, et un vrai agent contre lui.
+// Un vrai serveur Kagu sur un port éphémère, et un vrai agent contre lui.
 type bench struct {
 	url       string
 	handler   http.Handler
@@ -187,7 +187,7 @@ func TestRun_WithoutIdentityNorToken_Refuses(t *testing.T) {
 
 func TestRun_BadToken_FailsClearly(t *testing.T) {
 	b := newBench(t)
-	err := Run(context.Background(), b.options("oc_nope"))
+	err := Run(context.Background(), b.options("kg_nope"))
 	var refused *ServerError
 	if !errors.As(err, &refused) || refused.Code != "token_not_found" {
 		t.Fatalf("got %v", err)
@@ -558,7 +558,7 @@ func TestClient_DoesNotFollowARedirect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, enrollErr := client.Enroll(context.Background(), identity, "oc_x", hostinfo.Info{})
+	_, enrollErr := client.Enroll(context.Background(), identity, "kg_x", hostinfo.Info{})
 	_, streamErr := client.OpenStream(context.Background(), identity)
 	for name, err := range map[string]error{"enroll": enrollErr, "stream": streamErr} {
 		var refused *ServerError
@@ -602,7 +602,7 @@ func TestNewClient_RefusesPlainHTTPToARemoteServer(t *testing.T) {
 			t.Errorf("%s refused: %v", server, err)
 		}
 	}
-	for _, server := range []string{"http://192.168.1.10:8080", "http://oc.example.fr"} {
+	for _, server := range []string{"http://192.168.1.10:8080", "http://kagu.example.fr"} {
 		if _, err := NewClient(server, "", "v", false); !errors.Is(err, ErrPlainRefused) {
 			t.Errorf("%s: %v", server, err)
 		}

@@ -119,7 +119,7 @@ func verifySecrets(ctx context.Context, db *store.DB) error {
 	return nil
 }
 
-// opencloud secrets forget : la porte de secours quand la clé est perdue.
+// kagu secrets forget : la porte de secours quand la clé est perdue.
 // Elle écrit dans la base sous le compte du service : qui peut la lancer peut
 // déjà lire state_dir, elle n'ouvre rien de plus.
 func runSecrets(args []string) error {

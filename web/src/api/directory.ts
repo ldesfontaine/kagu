@@ -12,7 +12,7 @@ import type { DeletionPlan } from "./deletion";
 
 // Les listes sont fermées côté serveur ; le front les traduit par leur mot.
 export type Nature = "application" | "infra";
-// Ce qu'est le service ; vide dans une requête : openCloud la déduit de l'image.
+// Ce qu'est le service ; vide dans une requête : Kagu la déduit de l'image.
 export type Category = "web" | "sso" | "database" | "security" | "monitoring" | "application";
 export type Origin = "compose" | "container" | "binary";
 export type Capability = "sso" | "proxy" | "tls" | "backup-target";

@@ -124,7 +124,7 @@ func TestApply_HeartbeatEditedDuringApplyStops(t *testing.T) {
 func TestApply_DeleteOfAnObjectEditedMeanwhileStops(t *testing.T) {
 	b, _ := seeded(t)
 	ctx := context.Background()
-	data := "version: 1\nmachines:\n  - name: opencloud\n"
+	data := "version: 1\nmachines:\n  - name: kagu\n"
 	// Les suppressions de sondes passent par nom : api-post (1), mail-imaps
 	// (2), puis le premier « twin » (3), que l'interface édite pendant le
 	// premier geste.
@@ -205,7 +205,7 @@ func TestPlan_TargetCredentialsAreRefusedAndOldOnesRemovedUnseen(t *testing.T) {
 	b, data := seeded(t)
 	b.requireRefused(t, replaceOnce(t, data, "target: https://wiki.example.org/healthz", "target: https://u:one@wiki.example.org/healthz"), false, "probe.target_credentials")
 	b.requireRefused(t, replaceOnce(t, data, "heartbeats:\n", `  - name: private-feed
-    runner: opencloud
+    runner: kagu
     kind: http
     target: https://reader:one@feed.example.org/status
 heartbeats:
@@ -284,7 +284,7 @@ func TestApply_UpdateKeepsPauseProvenanceAndHistory(t *testing.T) {
 func TestPlan_HashReadsWhatADeletionCarriesStructurally(t *testing.T) {
 	b, _ := seeded(t)
 	ctx := context.Background()
-	data := "version: 1\nmachines:\n  - name: opencloud\n"
+	data := "version: 1\nmachines:\n  - name: kagu\n"
 	first := b.plan(t, data, true).Hash
 
 	b.addProbeResult(t, "00000000000000c1")
@@ -302,7 +302,7 @@ func TestPlan_HashReadsWhatADeletionCarriesStructurally(t *testing.T) {
 	if changed.Hash == first {
 		t.Fatal("a unit added in the UI to a service that --prune deletes must change the hash")
 	}
-	_, _, err := b.manifest.Apply(ctx, manifest.Request{File: []byte(data), FileName: "opencloud.yaml", Prune: true, PlanHash: first}, testActor)
+	_, _, err := b.manifest.Apply(ctx, manifest.Request{File: []byte(data), FileName: "kagu.yaml", Prune: true, PlanHash: first}, testActor)
 	if err != manifest.ErrPlanChanged {
 		t.Fatalf("a hash confirmed before the unit was added must be refused: %v", err)
 	}

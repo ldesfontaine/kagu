@@ -7,9 +7,9 @@ import (
 )
 
 // Command fabrique ce que l'opérateur tapera pour appliquer la mise à
-// jour ; openCloud ne l'exécute jamais. Un service Compose se tire et se
+// jour ; Kagu ne l'exécute jamais. Un service Compose se tire et se
 // recrée depuis son dossier ; un conteneur lancé à la main se tire
-// seulement : le recréer demande ses options, qu'openCloud ne connaît
+// seulement : le recréer demande ses options, que Kagu ne connaît
 // pas. Vide sans mise à jour : la garde contre une rétrogradation est
 // dans le constat, qui ne nomme qu'un tag strictement plus récent.
 func Command(found container.Container, check Check) string {

@@ -33,7 +33,7 @@ func ConvertAll[T, J any](items []T, convert func(T) J) []J {
 
 // TimeOrNil rend null pour un instant zéro : le front n'a pas à connaître
 // l'an 1. Tout part en UTC : la réponse ne dépend pas du fuseau de la
-// machine openCloud.
+// machine Kagu.
 func TimeOrNil(at time.Time) *time.Time {
 	if at.IsZero() {
 		return nil

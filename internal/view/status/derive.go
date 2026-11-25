@@ -29,7 +29,7 @@ func machineState(status machine.Status) (State, bool) {
 // un conteneur disparu est une panne, tant que sa fiche existe. Celui dont la
 // machine ne signale plus (observed faux) est une panne aussi, et elle
 // compte : sinon un composant fait de ces seuls services disparaîtrait de la
-// page publique pendant la panne. Si c'est le lien entre openCloud et la
+// page publique pendant la panne. Si c'est le lien entre Kagu et la
 // machine qui est coupé, la machine saine passe pour tombée : un incident, ou
 // une sonde membre du composant, dit la vérité.
 func containerState(found container.Container, observed bool) (State, bool) {

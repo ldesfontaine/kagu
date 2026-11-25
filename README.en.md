@@ -33,7 +33,7 @@ through mcp-maison. One Go binary, with SQLite and the web interface embedded.
 | --- | --- |
 | Samples each machine every 10 s: CPU, memory, disks, network | Act on a machine except through **signed orders**, one per action, which its agent accepts according to the **rights ticked when it was installed** (beyond `observe`, none by default). No shell, no free-form command, nothing through the API token |
 | Follows Docker containers: state, health, restarts, logs, networks | Write to Docker, except to deploy a declared service (`docker compose up`, Compose file **generated** from the directory, never typed in) |
-| Declares your services (interface, or YAML file: `opencloud export` / `opencloud apply`) and shows the gap with what runs | Declare anything on its own: an unknown container shows as "undeclared". The YAML file is applied by the command only |
+| Declares your services (interface, or YAML file: `kagu export` / `kagu apply`) and shows the gap with what runs | Declare anything on its own: an unknown container shows as "undeclared". The YAML file is applied by the command only |
 | Deploys or redeploys a declared Compose service from its page; the `.env` goes once with the order, written on the machine, never kept by Kagu | Remove a deployment: deleting the service from the directory leaves containers and folder on the machine |
 | Probes URLs and ports, checks certificates and their expiry | Renew a certificate |
 | Watches a cron job or a backup through a ping URL | Run the job |
@@ -41,7 +41,7 @@ through mcp-maison. One Go binary, with SQLite and the web interface embedded.
 | Backs up the database every night, once the Backups page is filled in: encrypted (`age`), sent to the agent of the machine you choose; `serve` keeps no copy | Back up a service's `data/` or `.env`: the database backup holds the database and its two keys only. Rule out the Kagu machine as a destination: choose another one. Lose the passphrase and no backup can be read. A failure shows on the page, with no alert |
 | Backs up the VMs and containers of a Proxmox host: one archive per VM, produced and encrypted (`age`) by the host's agent (`vzdump`), stored by the agent of another machine; restore without Kagu (`age`, `qmrestore`) | Make the `backup.produce` right harmless: it equals root on the host for a compromised agent. Back up several VMs at once (one at a time), or one that takes over 55 minutes. Write anything to Proxmox through its API (the read-only token only lists the VMs). See [Backing up Proxmox VMs](docs/installation.md#sauvegarder-des-vm-proxmox) (in French) |
 | Keeps an audit log of every writing action and every order, also sent to the channels you tick | Keep the trace if you tick no channel: whoever wipes the database wipes it |
-| Updates its agents from a signed version you import (`opencloud release import`) | Offer a signed version yet: none is published, and `v0.0.1` does not embed the key that verifies them. The first signed version is installed by hand, server and agents; the next ones go through this action |
+| Updates its agents from a signed version you import (`kagu release import`) | Offer a signed version yet: none is published, and `v0.0.1` does not embed the key that verifies them. The first signed version is installed by hand, server and agents; the next ones go through this action |
 | Sends alerts as signed webhooks (Discord, Slack, Mattermost, ntfy, JSON), by e-mail through your SMTP relay, or to a Matrix room | SMS |
 | Publishes public status pages under `/statut/<address>` | Multiple accounts or a second factor of its own: behind an SSO (Authelia), `forward` mode delegates them to it |
 | Gives an AI agent a read-only API token, for mcp-maison | Any write or action on a machine through that token, any secret returned |
@@ -57,17 +57,17 @@ Needs Go 1.26.11+, Node.js 20.19+, `make` and `git`. Linux only.
 
 ```sh
 git clone https://github.com/ldesfontaine/kagu.git
-cd opencloud
-make run          # builds bin/opencloud, writes dev/config.toml, starts on 127.0.0.1:8080
+cd kagu
+make run          # builds bin/kagu, writes dev/config.toml, starts on 127.0.0.1:8080
 ```
 
 Open <http://127.0.0.1:8080> and **create the account** on the first-setup
 screen (username, password of 12 characters or more); the interface then
-opens. Lost password: `opencloud auth disable -config dev/config.toml` brings
+opens. Lost password: `kagu auth disable -config dev/config.toml` brings
 back the first-setup screen. To add a machine: **Machines → Add a machine**, then paste
-the displayed commands on it as root: the preparation (the dedicated `opencloud-agent`
+the displayed commands on it as root: the preparation (the dedicated `kagu-agent`
 account, its folder, its binary), then the install line
-(`printf '%s\n' 'oc_…' | sudo -u opencloud-agent /var/lib/opencloud-agent/bin/current agent -server https://…`).
+(`printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://…`).
 The agent runs under that account, in the `docker` group when the machine has Docker:
 **the `docker` group is equivalent to root** (the socket starts a container that mounts `/`);
 the dedicated account guards against mistakes, not against a determined attacker.

@@ -14,8 +14,8 @@ var appliesNow = time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
 
 func sampleApply(id string, at time.Time) manifest.Apply {
 	return manifest.Apply{
-		ID: id, At: at, Actor: manifest.Actor{Kind: manifest.ActorCLI, Name: "opencloud"},
-		FileHash: "sha256:aa", FileName: "opencloud.yaml", Prune: true, PlanHash: "sha256:bb",
+		ID: id, At: at, Actor: manifest.Actor{Kind: manifest.ActorCLI, Name: "kagu"},
+		FileHash: "sha256:aa", FileName: "kagu.yaml", Prune: true, PlanHash: "sha256:bb",
 		State: manifest.ApplyConfirmed, Created: 1, Updated: 1, Deleted: 1, Unchanged: 4,
 		Changes: []manifest.Change{
 			{Action: manifest.ActionUpdate, Kind: manifest.KindProbe, ID: "p1", Name: "site",

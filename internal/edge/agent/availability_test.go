@@ -518,7 +518,7 @@ func TestSudoListsProgram_RunsSudoNonInteractivelyAndReadsTheExitCode(t *testing
 			t.Fatal(err)
 		}
 		t.Setenv("PATH", stubs)
-		t.Setenv("OPENCLOUD_TEST_SECRET", "leak")
+		t.Setenv("KAGU_TEST_SECRET", "leak")
 		err := sudoListsProgram(context.Background(), brand.VzdumpWrapperPath)
 		if (err == nil) != (exitCode == 0) {
 			t.Errorf("exit %d gave %v", exitCode, err)
@@ -531,7 +531,7 @@ func TestSudoListsProgram_RunsSudoNonInteractivelyAndReadsTheExitCode(t *testing
 		if !slices.Equal(lines[:3], []string{"-n", "-l", brand.VzdumpWrapperPath}) {
 			t.Errorf("sudo was called with %q", lines[:3])
 		}
-		if strings.Contains(string(recorded), "OPENCLOUD_TEST_SECRET") {
+		if strings.Contains(string(recorded), "KAGU_TEST_SECRET") {
 			t.Error("the environment of the agent reached sudo")
 		}
 	}

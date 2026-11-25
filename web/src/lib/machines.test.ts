@@ -77,7 +77,7 @@ test("probe.lan : coché dans le formulaire neuf, jamais coché pour un agent qu
 });
 
 test("describeAccount : le nom et l'uid, l'uid seul sans nom, rien tant que l'agent n'a rien dit", () => {
-  expect(describeAccount({ uid: 998, name: "opencloud-agent" })).toBe("opencloud-agent (998)");
+  expect(describeAccount({ uid: 998, name: "kagu-agent" })).toBe("kagu-agent (998)");
   expect(describeAccount({ uid: 0, name: "root" })).toBe("root (0)");
   expect(describeAccount({ uid: 4000, name: "" })).toBe("4000");
   expect(describeAccount(null)).toBeNull();

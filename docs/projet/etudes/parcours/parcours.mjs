@@ -1,12 +1,12 @@
 // Le parcours d'un nouvel utilisateur, tâche par tâche : chronomètre, clics,
 // captures, menus déroulants, blocs d'aide. Usage :
-//   OC_USER=… OC_PASSWORD=… node parcours.mjs T2 T3 …
-// Il vise un serveur de banc (OC_URL), jamais une production.
+//   KAGU_USER=… KAGU_PASSWORD=… node parcours.mjs T2 T3 …
+// Il vise un serveur de banc (KAGU_URL), jamais une production.
 import fs from "node:fs";
 import path from "node:path";
 import { openBrowser, bodyText, Task, checkDropdowns, proseStats, BASE, SHOTS } from "./lib.mjs";
 
-const results = process.env.OC_RESULTS ?? path.join(SHOTS, "mesures.jsonl");
+const results = process.env.KAGU_RESULTS ?? path.join(SHOTS, "mesures.jsonl");
 const wanted = process.argv.slice(2);
 const { browser, page } = await openBrowser();
 
@@ -38,7 +38,7 @@ const tasks = {
     await settle();
     await t.shot("02-ajouter-machine-1-nommer.png");
     await look(t, "nommer");
-    await page.locator("input").first().fill(process.env.OC_MACHINE ?? "vps-lyon");
+    await page.locator("input").first().fill(process.env.KAGU_MACHINE ?? "vps-lyon");
     await dropdowns("Nouvelle machine");
     await t.click(page.getByText("Avancé : droits de l'agent"));
     await t.click(page.getByText("Mettre à jour l'agent"));
@@ -48,7 +48,7 @@ const tasks = {
     await t.click(page.getByRole("button", { name: "Créer le jeton" }));
     await settle(1200);
     await t.shot("02-ajouter-machine-3-installer.png");
-    if (process.env.OC_TOKEN_FILE) fs.writeFileSync(process.env.OC_TOKEN_FILE, ((await bodyText(page)).match(/oc_[a-z0-9]{40,}/) ?? [""])[0]);
+    if (process.env.KAGU_TOKEN_FILE) fs.writeFileSync(process.env.KAGU_TOKEN_FILE, ((await bodyText(page)).match(/kg_[a-z0-9]{40,}/) ?? [""])[0]);
     await look(t, "installer");
     await t.click(page.getByRole("button", { name: "Suivant" }));
     await settle();
@@ -109,7 +109,7 @@ const tasks = {
     await dropdowns("Déclarer un service · identité");
     await t.click(page.getByRole("button", { name: "Suivant" }));
     await settle();
-    t.guess("l'image et le nom du conteneur sont à retaper : openCloud les connaît déjà (conteneur grafana-solo observé)");
+    t.guess("l'image et le nom du conteneur sont à retaper : Kagu les connaît déjà (conteneur grafana-solo observé)");
     await t.shot("04-service-2-unites.png");
     await look(t, "unités");
     const inputs = page.locator("main input:visible");
@@ -352,7 +352,7 @@ const tasks = {
     console.log((await text()).split("Agent\n").slice(1).join("Agent\n").slice(0, 1800));
     await record(t);
   },
-  // Un serveur neuf (OC_URL), sans compte : le premier lancement.
+  // Un serveur neuf (KAGU_URL), sans compte : le premier lancement.
   async T1() {
     await page.goto(BASE + "/"); await settle(900);
     const t = new Task(page, "T1 Premier lancement");
@@ -366,7 +366,7 @@ const tasks = {
     await t.click(page.getByRole("button", { name: "Créer le compte" }));
     await settle(1500);
     await t.shot("01-premier-lancement-2-agent.png", { full: true });
-    if (process.env.OC_TOKEN_FILE) fs.writeFileSync(process.env.OC_TOKEN_FILE, ((await bodyText(page)).match(/oc_[a-z0-9]{40,}/) ?? [""])[0]);
+    if (process.env.KAGU_TOKEN_FILE) fs.writeFileSync(process.env.KAGU_TOKEN_FILE, ((await bodyText(page)).match(/kg_[a-z0-9]{40,}/) ?? [""])[0]);
     await look(t, "agent de la machine");
     await t.click(page.getByRole("button", { name: "Ouvrir l'interface" }));
     await settle(1500);

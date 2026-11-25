@@ -17,12 +17,12 @@ import (
 
 var linksNow = time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
 
-// declaredOnLocal pose la machine openCloud et un service déclaré à une
+// declaredOnLocal pose la machine Kagu et un service déclaré à une
 // unité, que les tests de ce fichier relient à des sondes et des composants.
 func declaredOnLocal(t *testing.T, db *DB) directory.Service {
 	t.Helper()
 	ctx := context.Background()
-	exec(t, db, `INSERT INTO machines (id, name, hostname, created_at) VALUES (?, 'opencloud', 'host', ?)`, machine.LocalID, linksNow.Unix())
+	exec(t, db, `INSERT INTO machines (id, name, hostname, created_at) VALUES (?, 'kagu', 'host', ?)`, machine.LocalID, linksNow.Unix())
 	declared := directory.Service{
 		ID: "svc_0123456789abcdef", MachineID: machine.LocalID, Name: "whoami", Nature: directory.NatureApplication,
 		Origin: directory.OriginContainer, DeclaredBy: directory.ByOperator, CreatedAt: linksNow, UpdatedAt: linksNow,

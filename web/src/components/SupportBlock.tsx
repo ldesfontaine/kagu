@@ -10,7 +10,7 @@ import "./SupportBlock.scss";
 // système d'une machine : la branche, jusqu'à quand elle est maintenue,
 // les branches maintenues au-dessus. À titre d'information : aucune
 // commande. La source est nommée et liée : c'est elle qui le dit, pas
-// openCloud.
+// Kagu.
 export function SupportBlock({ lifecycle, subject }: { lifecycle: Lifecycle; subject: Subject }) {
   const { t } = useI18n();
   return (

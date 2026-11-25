@@ -44,11 +44,11 @@ func TestInstallSteps_FollowTheOrderTheOperatorPastes(t *testing.T) {
 	}{
 		{"a new machine, observe only", nil, installTarget{}, []string{"binary", "prepare", "enroll", "unit"}},
 		{"a new machine whose rights write elsewhere", rights, installTarget{}, []string{"binary", "prepare", "enroll", "unit", "rights"}},
-		{"the openCloud machine has the binary already", nil, installTarget{local: true}, []string{"prepare", "enroll", "unit"}},
+		{"the Kagu machine has the binary already", nil, installTarget{local: true}, []string{"prepare", "enroll", "unit"}},
 		{"a re-enrollment stops the agent first", rights, installTarget{reenroll: true}, []string{"stop", "binary", "prepare", "enroll", "unit", "rights"}},
 	}
 	for _, c := range cases {
-		if got := stepIDs(installSteps("https://opencloud.example.org", "oc_abc", lang.French, c.capabilities, c.target)); !slices.Equal(got, c.want) {
+		if got := stepIDs(installSteps("https://kagu.example.org", "kg_abc", lang.French, c.capabilities, c.target)); !slices.Equal(got, c.want) {
 			t.Errorf("%s: steps %v, want %v", c.name, got, c.want)
 		}
 	}
@@ -61,8 +61,8 @@ func TestInstallSteps_TheTokenIsOnlyInTheEnrollment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const token = "oc_jeton_secret_0123"
-	for _, step := range installSteps("https://opencloud.example.org", token, lang.French, rights, installTarget{reenroll: true}) {
+	const token = "kg_jeton_secret_0123"
+	for _, step := range installSteps("https://kagu.example.org", token, lang.French, rights, installTarget{reenroll: true}) {
 		if has := strings.Contains(step.Command, token); has != (step.ID == stepEnroll) {
 			t.Errorf("step %s: token present = %v", step.ID, has)
 		}
@@ -71,7 +71,7 @@ func TestInstallSteps_TheTokenIsOnlyInTheEnrollment(t *testing.T) {
 
 // Le bloc du binaire se joue de bout en bout avec des commandes témoins : il
 // télécharge pour l'architecture de la machine, vérifie la somme, et ne pose
-// /tmp/opencloud que si elle est bonne.
+// /tmp/kagu que si elle est bonne.
 func TestInstallBinary_DownloadsVerifiesThenInstalls(t *testing.T) {
 	shell, err := exec.LookPath("sh")
 	if err != nil {
@@ -86,7 +86,7 @@ func TestInstallBinary_DownloadsVerifiesThenInstalls(t *testing.T) {
 			}
 		}
 		witness("uname", "echo aarch64")
-		witness("curl", `echo "curl $*" >> `+log+`; : > opencloud-linux-arm64`)
+		witness("curl", `echo "curl $*" >> `+log+`; : > kagu-linux-arm64`)
 		status := "0"
 		if !sumOK {
 			status = "1"
@@ -98,10 +98,10 @@ func TestInstallBinary_DownloadsVerifiesThenInstalls(t *testing.T) {
 		runErr := cmd.Run()
 		calls, _ := os.ReadFile(log) // #nosec G304 -- un fichier de test.
 		text := string(calls)
-		if !strings.Contains(text, "opencloud-linux-arm64") || !strings.Contains(text, "/releases/download/"+version.Number()+"/SHA256SUMS") {
+		if !strings.Contains(text, "kagu-linux-arm64") || !strings.Contains(text, "/releases/download/"+version.Number()+"/SHA256SUMS") {
 			t.Errorf("sum ok=%v: wrong download:\n%s", sumOK, text)
 		}
-		if installed := strings.Contains(text, "install -m 0755 opencloud-linux-arm64 /tmp/opencloud"); installed != sumOK || (runErr == nil) != sumOK {
+		if installed := strings.Contains(text, "install -m 0755 kagu-linux-arm64 /tmp/kagu"); installed != sumOK || (runErr == nil) != sumOK {
 			t.Errorf("sum ok=%v: installed=%v err=%v\n%s", sumOK, installed, runErr, text)
 		}
 	}
@@ -127,7 +127,7 @@ func TestInstallUnit_TheShellWritesExactlyTheUnit(t *testing.T) {
 	if string(written) != strings.Join(machine.AgentUnitLines(), "\n")+"\n" {
 		t.Fatalf("unit written:\n%s", written)
 	}
-	if unit := installUnit(); !strings.HasSuffix(unit, "systemctl daemon-reload\nsystemctl enable --now opencloud-agent.service") {
+	if unit := installUnit(); !strings.HasSuffix(unit, "systemctl daemon-reload\nsystemctl enable --now kagu-agent.service") {
 		t.Fatalf("the unit step must end by enabling the service:\n%s", unit)
 	}
 }
@@ -144,8 +144,8 @@ func TestInstallRights_AuthorizesTheFoldersThatRightsWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := installRights(rights)
-	want := `printf '%s\n' '[Service]' 'ReadWritePaths=-/srv/workspace -/srv/backups -/srv/site -/srv/restic' | install -m 0644 /dev/stdin /etc/systemd/system/opencloud-agent.service.d/droits.conf`
-	if !strings.Contains(got, want) || !strings.HasSuffix(got, "systemctl restart opencloud-agent.service") {
+	want := `printf '%s\n' '[Service]' 'ReadWritePaths=-/srv/workspace -/srv/backups -/srv/site -/srv/restic' | install -m 0644 /dev/stdin /etc/systemd/system/kagu-agent.service.d/droits.conf`
+	if !strings.Contains(got, want) || !strings.HasSuffix(got, "systemctl restart kagu-agent.service") {
 		t.Fatalf("rights step:\n%s", got)
 	}
 }

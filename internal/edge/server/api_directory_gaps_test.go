@@ -16,7 +16,7 @@ import (
 // L'annuaire face à ce que seedContainers montre sur la machine distante :
 // nextcloud est déclaré avec deux unités, l'application qui tourne à la
 // version déclarée et un redis qui ne tourne pas ; nextcloud-db tourne dans
-// ce projet sans être déclaré. Un binaire sur la machine openCloud,
+// ce projet sans être déclaré. Un binaire sur la machine Kagu,
 // qu'aucun agent ne regarde.
 func (ts *testServer) seedGaps(t *testing.T) (serviceID string) {
 	t.Helper()
@@ -79,7 +79,7 @@ func TestDirectoryAPI_GapsFilterByMachineAndProject(t *testing.T) {
 	var onLocal gapsResponse
 	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/directory/gaps?machine=local", nil), &onLocal)
 	if len(onLocal.Services) != 1 || onLocal.Services[0].State != "unobserved" || len(onLocal.Undeclared) != 0 {
-		t.Fatalf("machine openCloud: %+v", onLocal)
+		t.Fatalf("machine Kagu: %+v", onLocal)
 	}
 	var onRemote gapsResponse
 	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/directory/gaps?machine="+remoteID, nil), &onRemote)

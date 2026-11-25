@@ -94,7 +94,7 @@ func TestThresholdGestures_AreJournaled_AndARefusalLeavesNothing(t *testing.T) {
 		global.Details["window_minutes"] != "10" || global.Details["machine_id"] != "" {
 		t.Errorf("global: %+v", global.Details)
 	}
-	if own.Details["resource"] != "disk" || own.Details["machine_id"] != machine.LocalID || own.Details["machine_name"] != "opencloud" || own.Details["attention_percent"] != "90" {
+	if own.Details["resource"] != "disk" || own.Details["machine_id"] != machine.LocalID || own.Details["machine_name"] != "kagu" || own.Details["attention_percent"] != "90" {
 		t.Errorf("override: %+v", own.Details)
 	}
 	if cleared.Details["cleared"] != "true" || cleared.Details["machine_id"] != machine.LocalID || cleared.Details["resource"] != "disk" {

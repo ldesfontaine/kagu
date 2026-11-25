@@ -87,7 +87,7 @@ func (f *fixture) matrixChannel(t *testing.T, homeserverURL string) alert.Channe
 func TestNotifier_Matrix_PutsAnHTMLMessageAndReplaysTheSameTransaction(t *testing.T) {
 	f := newFixture(t)
 	notifier := f.notifier(t, lang.French)
-	notifier.SetPublicURL("https://oc.example.fr")
+	notifier.SetPublicURL("https://kagu.example.fr")
 	server := newHomeserver(http.StatusBadGateway)
 	defer server.Close()
 	f.matrixChannel(t, server.URL+"/")
@@ -101,12 +101,12 @@ func TestNotifier_Matrix_PutsAnHTMLMessageAndReplaysTheSameTransaction(t *testin
 	if len(sends) != 2 || sends[0].path != sends[1].path {
 		t.Fatalf("a retry must reuse its transaction id: %+v", sends)
 	}
-	prefix := "/_matrix/client/v3/rooms/%21AbCdEf:matrix.exemple.fr/send/m.room.message/opencloud-"
+	prefix := "/_matrix/client/v3/rooms/%21AbCdEf:matrix.exemple.fr/send/m.room.message/kagu-"
 	got := sends[1]
 	if got.method != http.MethodPut || !strings.HasPrefix(got.path, prefix) || got.authorization != "Bearer syt_bot_token" {
 		t.Fatalf("request %s %s %q", got.method, got.path, got.authorization)
 	}
-	link := "https://oc.example.fr/alertes/alerte/"
+	link := "https://kagu.example.fr/alertes/alerte/"
 	if got.message.MsgType != "m.text" || got.message.Format != "org.matrix.custom.html" || !strings.HasPrefix(got.message.Body, "Alerte · Disque à 86 %") {
 		t.Fatalf("message %+v", got.message)
 	}
@@ -128,12 +128,12 @@ func TestNotifier_Matrix_EachTestIsANewTransaction(t *testing.T) {
 		}
 	}
 	sends := server.all()
-	if len(sends) != 2 || sends[0].path == sends[1].path || !strings.Contains(sends[0].path, "/opencloud-test-") {
+	if len(sends) != 2 || sends[0].path == sends[1].path || !strings.Contains(sends[0].path, "/kagu-test-") {
 		t.Fatalf("sends %+v", sends)
 	}
 	// L'aléa reste de trente-deux hexadécimaux en minuscules.
 	for _, send := range sends {
-		if !regexp.MustCompile(`/opencloud-test-[0-9a-f]{32}$`).MatchString(send.path) {
+		if !regexp.MustCompile(`/kagu-test-[0-9a-f]{32}$`).MatchString(send.path) {
 			t.Fatalf("transaction id shape: %s", send.path)
 		}
 	}

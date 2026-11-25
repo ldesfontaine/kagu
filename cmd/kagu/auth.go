@@ -26,7 +26,7 @@ const authUsage = `Usage : {command} auth status [-config chemin]
             changer de mode : sudo {command} admin
 `
 
-// opencloud auth status : l'état de l'accès, lu dans la base sous le compte
+// kagu auth status : l'état de l'accès, lu dans la base sous le compte
 // du service. La commande ne change rien : refaire l'accès passe par
 // « admin », sur le canal local, à root seul.
 func runAuth(args []string) error {

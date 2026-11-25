@@ -10,7 +10,7 @@ import { readingText } from "../../lib/lifecycle";
 import { SettingsSection } from "./SettingsSection";
 
 // La fin de support : activée tant que l'opérateur ne la coupe pas. La
-// section dit ce qui sort de la machine openCloud, permet de couper, et le
+// section dit ce qui sort de la machine Kagu, permet de couper, et le
 // pied dit ce que la dernière lecture a donné.
 export function LifecycleSection({ settings, reload }: { settings: LifecycleSettings; reload: () => void }) {
   const t = useT();

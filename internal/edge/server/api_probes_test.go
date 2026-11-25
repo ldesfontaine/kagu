@@ -37,7 +37,7 @@ func TestAPI_CreateProbe_ReturnsItAndRefusesBadDefinitionsWithTheirKey(t *testin
 		t.Fatalf("created %+v", created)
 	}
 	if created.MachineName == "" || created.MachineOnline {
-		t.Fatalf("la machine openCloud, nommée, hors ligne sans le flux de son agent: %+v", created)
+		t.Fatalf("la machine Kagu, nommée, hors ligne sans le flux de son agent: %+v", created)
 	}
 	if got, err := server.db.GetProbe(context.Background(), created.ID); err != nil || got.Name != "site nextcloud" {
 		t.Fatalf("stored %+v %v", got, err)
@@ -84,7 +84,7 @@ func TestAPI_CreateProbe_AcceptsADeclaredServiceOfAnyMachineAndRefusesTheRest(t 
 		}
 	}
 
-	// Le service tourne sur la machine distante, la sonde sur la machine openCloud.
+	// Le service tourne sur la machine distante, la sonde sur la machine Kagu.
 	request := probeRequest{Name: "x", Kind: "http", Target: "https://a.fr/", MachineID: machine.LocalID, ServiceID: declaredID}
 	created := server.createProbeVia(t, request)
 	if created.ServiceID != declaredID || created.ServiceName != "nextcloud" || created.ServiceMachineName != "vps-paris-1" {

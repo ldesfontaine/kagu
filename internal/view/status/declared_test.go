@@ -12,7 +12,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/view/status"
 )
 
-// shop déclare un projet Compose de deux unités sur la machine openCloud.
+// shop déclare un projet Compose de deux unités sur la machine Kagu.
 func (f *fixture) shop(t *testing.T) directory.Service {
 	t.Helper()
 	created, err := f.directory.CreateService(context.Background(), directory.ServiceDefinition{

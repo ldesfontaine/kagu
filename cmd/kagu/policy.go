@@ -8,7 +8,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
-// opencloud agent policy migrate : sur une machine installée avant la
+// kagu agent policy migrate : sur une machine installée avant la
 // politique, recopie dans la politique les droits, les ancres et la clé du
 // serveur qu'identity.json porte, puis les y efface. Root seul ; ce qui est
 // recopié est dit, puis demandé [o/N] (R-A3-15).

@@ -39,7 +39,7 @@ const (
 	// "Ed" ‖ identifiant ‖ clé, puis "ED" ‖ identifiant ‖ signature.
 	publicKeyBytes = 2 + keyIDSize + ed25519.PublicKeySize
 	signatureBytes = 2 + keyIDSize + ed25519.SignatureSize
-	// La clé privée d'openCloud : identifiant ‖ graine. Pas le format
+	// La clé privée de Kagu : identifiant ‖ graine. Pas le format
 	// de minisign, qui chiffre la sienne par un mot de passe.
 	privateKeyBytes = keyIDSize + ed25519.SeedSize
 )

@@ -140,7 +140,7 @@ func TestPlan_SameProbeTwiceIsWrittenOnce(t *testing.T) {
 
 func TestPlan_ResultCarriesTheCertificateOntoTheProbe(t *testing.T) {
 	known := map[string]Probe{"p1": watched()}
-	certificate := &Certificate{Subject: "cloud.exemple.fr", Issuer: "openCloud", NotBefore: planNow, NotAfter: planNow.Add(90 * 24 * time.Hour)}
+	certificate := &Certificate{Subject: "cloud.exemple.fr", Issuer: "Kagu", NotBefore: planNow, NotAfter: planNow.Add(90 * 24 * time.Hour)}
 	report := Report{Results: []Result{{ProbeID: "p1", CheckedAt: planNow, Outcome: OutcomeUp, Certificate: certificate}}}
 	changes := planChanges(known, report, planNow)
 	if changes.Probes[0].Certificate == nil || changes.Probes[0].Certificate.Subject != "cloud.exemple.fr" {

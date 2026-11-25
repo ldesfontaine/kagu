@@ -122,10 +122,10 @@ func TestNotifier_DeliversASignedBodyInTheInterfaceLanguage(t *testing.T) {
 		t.Fatalf("delivery %+v", delivery)
 	}
 	got := target.last()
-	if !alert.Verify("s3cret", got.body, got.headers.Get("OpenCloud-Signature")) {
-		t.Fatalf("signature %q does not match the body", got.headers.Get("OpenCloud-Signature"))
+	if !alert.Verify("s3cret", got.body, got.headers.Get("Kagu-Signature")) {
+		t.Fatalf("signature %q does not match the body", got.headers.Get("Kagu-Signature"))
 	}
-	if got.headers.Get("OpenCloud-Event") != "opened" || got.headers.Get("Content-Type") != "application/json" || got.headers.Get("User-Agent") != brand.UserAgent {
+	if got.headers.Get("Kagu-Event") != "opened" || got.headers.Get("Content-Type") != "application/json" || got.headers.Get("User-Agent") != brand.UserAgent {
 		t.Fatalf("headers %v", got.headers)
 	}
 	var payload struct {
@@ -146,7 +146,7 @@ func TestNotifier_DeliversASignedBodyInTheInterfaceLanguage(t *testing.T) {
 	if payload.Event != "opened" || payload.Language != "fr" || payload.Alert.Kind != "disk_full" || payload.Alert.Details.Percent != 86 {
 		t.Fatalf("payload %+v", payload)
 	}
-	if payload.Text.Fact != "Disque à 86 %" || !strings.Contains(payload.Text.Cause, "/data sur opencloud") || !strings.Contains(payload.Text.Cause, "85 %") || payload.Text.Action == "" {
+	if payload.Text.Fact != "Disque à 86 %" || !strings.Contains(payload.Text.Cause, "/data sur kagu") || !strings.Contains(payload.Text.Cause, "85 %") || payload.Text.Action == "" {
 		t.Fatalf("text %+v", payload.Text)
 	}
 	if !strings.HasPrefix(payload.Title, "Alerte · ") {
@@ -160,7 +160,7 @@ func TestNotifier_DeliversASignedBodyInTheInterfaceLanguage(t *testing.T) {
 func TestNotifier_LinksToTheAlertPageWhenThePublicURLIsKnown(t *testing.T) {
 	f := newFixture(t)
 	notifier := f.notifier(t, lang.French)
-	notifier.SetPublicURL("https://oc.example.fr/")
+	notifier.SetPublicURL("https://kagu.example.fr/")
 	targets := map[alert.Format]*receiver{}
 	// Les formats webhook : ceux qui ne passent pas par un POST ont leur test.
 	for _, format := range []alert.Format{alert.FormatJSON, alert.FormatText, alert.FormatDiscord, alert.FormatSlack} {
@@ -170,11 +170,11 @@ func TestNotifier_LinksToTheAlertPageWhenThePublicURLIsKnown(t *testing.T) {
 	}
 	f.Open(context.Background(), volumeFact(alert.SeverityAttention, 86))
 	opened := f.only(t, alert.StatusOpen)
-	want := "https://oc.example.fr/alertes/alerte/" + strconv.FormatInt(opened.ID, 10)
+	want := "https://kagu.example.fr/alertes/alerte/" + strconv.FormatInt(opened.ID, 10)
 	for format, target := range targets {
 		waittest.Until(t, string(format)+": a delivery", func() bool { return target.count() > 0 })
 		got := target.last()
-		if !alert.Verify("s3cret", got.body, got.headers.Get("OpenCloud-Signature")) {
+		if !alert.Verify("s3cret", got.body, got.headers.Get("Kagu-Signature")) {
 			t.Errorf("%s: signature does not match the body", format)
 		}
 		switch format {
@@ -199,7 +199,7 @@ func TestNotifier_LinksToTheAlertPageWhenThePublicURLIsKnown(t *testing.T) {
 	}
 }
 
-// Sans public_url, aucun lien : openCloud ne sait pas sous quelle adresse
+// Sans public_url, aucun lien : Kagu ne sait pas sous quelle adresse
 // on le lit, et une adresse devinée mènerait ailleurs.
 func TestNotifier_SendsNoLinkWithoutAPublicURL(t *testing.T) {
 	f := newFixture(t)
@@ -216,13 +216,13 @@ func TestNotifier_SendsNoLinkWithoutAPublicURL(t *testing.T) {
 
 func TestAlertLink_NeedsAPublicURLAndARealAlert(t *testing.T) {
 	opened := alert.Alert{ID: 42}
-	if got := alert.AlertLink("https://oc.example.fr", alert.EventOpened, opened); got != "https://oc.example.fr/alertes/alerte/42" {
+	if got := alert.AlertLink("https://kagu.example.fr", alert.EventOpened, opened); got != "https://kagu.example.fr/alertes/alerte/42" {
 		t.Fatalf("link %q", got)
 	}
 	if got := alert.AlertLink("", alert.EventOpened, opened); got != "" {
 		t.Fatalf("no public_url, link %q", got)
 	}
-	if got := alert.AlertLink("https://oc.example.fr", alert.EventTest, alert.Alert{}); got != "" {
+	if got := alert.AlertLink("https://kagu.example.fr", alert.EventTest, alert.Alert{}); got != "" {
 		t.Fatalf("test, link %q", got)
 	}
 }
@@ -245,7 +245,7 @@ func TestNotifier_RetriesThreeTimesThenLeavesTheNextToTheSweep(t *testing.T) {
 		t.Fatalf("requests %d", target.count())
 	}
 	got := target.last()
-	if got.headers.Get("OpenCloud-Signature") != "" || got.headers.Get("Content-Type") != "text/plain; charset=utf-8" || got.headers.Get("Priority") != "high" {
+	if got.headers.Get("Kagu-Signature") != "" || got.headers.Get("Content-Type") != "text/plain; charset=utf-8" || got.headers.Get("Priority") != "high" {
 		t.Fatalf("headers %v", got.headers)
 	}
 	if !strings.HasPrefix(string(got.body), "Alert · Disk at 97 %\n") || got.headers.Get("Title") != "Alert · Disk at 97 %" {
@@ -277,8 +277,8 @@ func TestNotifier_Test_SendsTheFormatOfTheChannel(t *testing.T) {
 			t.Fatalf("%s: %+v, %v", format, outcome, err)
 		}
 		got := target.last()
-		if got.headers.Get("OpenCloud-Event") != "test" {
-			t.Fatalf("%s: event %q", format, got.headers.Get("OpenCloud-Event"))
+		if got.headers.Get("Kagu-Event") != "test" {
+			t.Fatalf("%s: event %q", format, got.headers.Get("Kagu-Event"))
 		}
 		var payload map[string]any
 		if err := json.Unmarshal(got.body, &payload); err != nil {

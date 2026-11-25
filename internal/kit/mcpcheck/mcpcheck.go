@@ -29,7 +29,7 @@ type State string
 const (
 	StateNotConfigured State = "not_configured" // mcp_url vide
 	StateReachable     State = "reachable"
-	StateGroupMissing  State = "group_missing"  // répond, sans outil opencloud_*
+	StateGroupMissing  State = "group_missing"  // répond, sans outil kagu_*
 	StateUnreachable   State = "unreachable"    // rien en 3 s, refus de connexion
 	StateInvalidAnswer State = "invalid_answer" // pas 200, pas du JSON, status != "ok"
 )
@@ -41,10 +41,10 @@ func States() []State {
 // Health est ce que la vérification a trouvé. Version est vide quand
 // mcp-maison ne la dit pas (avant v0.1.0).
 type Health struct {
-	State          State
-	Version        string
-	OpenCloudTools int
-	CheckedAt      time.Time
+	State        State
+	Version      string
+	ProductTools int
+	CheckedAt    time.Time
 }
 
 // Checker lit le /health d'une adresse.
@@ -95,8 +95,8 @@ func (c *Checker) Check(ctx context.Context) Health {
 		return health
 	}
 	health.Version = body.Version
-	health.OpenCloudTools = countOpenCloudTools(body.Tools)
-	if health.OpenCloudTools == 0 {
+	health.ProductTools = countProductTools(body.Tools)
+	if health.ProductTools == 0 {
 		health.State = StateGroupMissing
 	}
 	return health
@@ -122,9 +122,9 @@ func (c *Checker) fetch(ctx context.Context) (healthBody, State) {
 	return body, StateReachable
 }
 
-// countOpenCloudTools compte les outils du groupe openCloud, que mcp-maison
+// countProductTools compte les outils du groupe Kagu, que mcp-maison
 // préfixe du nom du produit.
-func countOpenCloudTools(tools []string) int {
+func countProductTools(tools []string) int {
 	prefix := brand.ID + "_"
 	count := 0
 	for _, tool := range tools {

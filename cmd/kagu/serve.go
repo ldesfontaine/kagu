@@ -162,7 +162,7 @@ func runServe(args []string) error {
 	// serve n'observe rien de sa propre machine : c'est l'agent installé sur
 	// elle, comme sur les autres. L'empreinte de la machine ne sert qu'à le
 	// reconnaître à l'enrôlement, pour qu'il prenne l'identifiant stable de
-	// la machine openCloud et son historique.
+	// la machine Kagu et son historique.
 	hostname, _ := os.Hostname()
 	parts.machines.SetServerHost(hostinfo.HostFingerprint(), hostname)
 	offerLocalEnrollment(ctx, logger, parts)
@@ -392,7 +392,7 @@ func listenUntilSignal(ctx context.Context, logger *slog.Logger, httpServer *htt
 	return nil
 }
 
-// offerLocalEnrollment émet, tant que la machine openCloud n'a jamais eu
+// offerLocalEnrollment émet, tant que la machine Kagu n'a jamais eu
 // d'agent, le jeton qui l'installe : c'est la première étape de
 // l'installation. La ligne se lit dans l'interface, à la première
 // configuration ; le journal dit seulement qu'elle attend, jamais le jeton.

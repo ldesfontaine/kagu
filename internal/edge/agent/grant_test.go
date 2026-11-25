@@ -111,7 +111,7 @@ func TestR_A3_1_TheAgentAccountCannotWriteThePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if system.Owner.UID != 0 || system.Owner.GID != int(stateInfo.Sys().(*syscall.Stat_t).Gid) || system.Dir != "/etc/opencloud-agent" {
+	if system.Owner.UID != 0 || system.Owner.GID != int(stateInfo.Sys().(*syscall.Stat_t).Gid) || system.Dir != "/etc/kagu-agent" {
 		t.Fatalf("system place %+v", system)
 	}
 }

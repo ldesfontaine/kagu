@@ -203,7 +203,7 @@ func (s *Service) Get(ctx context.Context, id string) (Status, error) {
 }
 
 // Une machine est en ligne selon la présence installée : le flux ouvert de
-// son agent, ou son dernier signal. La machine openCloud comme les autres.
+// son agent, ou son dernier signal. La machine Kagu comme les autres.
 func (s *Service) status(machine Machine) Status {
 	return Status{Machine: machine, Online: s.presence.IsOnline(machine, s.now())}
 }
@@ -313,7 +313,7 @@ type RemoveOptions struct {
 	KeepHistory bool
 }
 
-// Remove retire une machine et coupe son flux, la machine openCloud comme les
+// Remove retire une machine et coupe son flux, la machine Kagu comme les
 // autres. Tant que son plan est bloqué, le refus porte ce plan. Avec
 // KeepHistory, rien ne part : la machine est archivée, et le plan ne la
 // retient pas.

@@ -2,7 +2,7 @@ package firewall
 
 import "strings"
 
-// KnownMachine est une machine d'openCloud, réduite à ce qui la reconnaît dans
+// KnownMachine est une machine de Kagu, réduite à ce qui la reconnaît dans
 // un bail : l'adresse par laquelle elle se présente et ses cartes réseau.
 type KnownMachine struct {
 	ID   string

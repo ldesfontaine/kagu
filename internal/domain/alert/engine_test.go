@@ -19,7 +19,7 @@ func TestOpen_SameKeyDedups_HigherSeverityAggravates(t *testing.T) {
 	f.Open(ctx, volumeFact(alert.SeverityAttention, 86))
 	f.Open(ctx, volumeFact(alert.SeverityAttention, 86))
 	opened := f.only(t, alert.StatusOpen)
-	if opened.Severity != alert.SeverityAttention || opened.Details.Percent != 86 || opened.MachineName != "opencloud" {
+	if opened.Severity != alert.SeverityAttention || opened.Details.Percent != 86 || opened.MachineName != "kagu" {
 		t.Fatalf("alert %+v", opened)
 	}
 	if _, err := f.Acknowledge(ctx, opened.ID); err != nil {

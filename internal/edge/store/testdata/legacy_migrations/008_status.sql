@@ -1,11 +1,11 @@
 -- La page de statut publique : des composants nommés pour un visiteur, faits
--- d'objets qu'openCloud surveille déjà ; des incidents écrits par
+-- d'objets que Kagu surveille déjà ; des incidents écrits par
 -- l'opérateur. Rien ici n'est calculé : l'état d'un composant se dérive à la
 -- lecture de ses objets, et un incident ouvert le remplace.
 
 CREATE TABLE status_components (
     id         TEXT PRIMARY KEY,
-    -- Le nom que le visiteur lit ; le seul mot d'openCloud qui sort en public.
+    -- Le nom que le visiteur lit ; le seul mot de Kagu qui sort en public.
     name       TEXT NOT NULL,
     -- L'ordre d'affichage, à la main.
     position   INTEGER NOT NULL DEFAULT 0,

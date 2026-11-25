@@ -50,7 +50,7 @@ test("un identifiant du serveur passe tel quel, encodé", () => {
   ];
   for (const id of ids) {
     expect(decodeURIComponent(segment(id))).toBe(id);
-    expect(new URL(`/api/jobs/${segment(id)}`, "http://openCloud.test").pathname.split("/")).toHaveLength(4);
+    expect(new URL(`/api/jobs/${segment(id)}`, "http://Kagu.test").pathname.split("/")).toHaveLength(4);
   }
 });
 
@@ -84,7 +84,7 @@ test("un identifiant qui change le chemin lève la même erreur qu'un 404", () =
 test("un identifiant forgé ne sort jamais de sa collection", () => {
   // Ce que react-router rend d'un lien « /alertes/canaux/..%2F..%2Fstatus%2Fcomponents%2Fx ».
   const decoded = "../../status/components/x";
-  const reached = (path: string) => new URL(path, "http://openCloud.test").pathname;
+  const reached = (path: string) => new URL(path, "http://Kagu.test").pathname;
   expect(reached(`/api/alerts/channels/${decoded}`)).toBe("/api/status/components/x");
   expect(() => `/api/alerts/channels/${segment(decoded)}`).toThrow(ApiError);
 });

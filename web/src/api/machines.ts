@@ -285,7 +285,7 @@ export async function deleteMachineToken(id: string): Promise<void> {
   return api.send(route("DELETE /api/machines/tokens/{id}", { id }));
 }
 
-// La ligne d'installation de l'agent de la machine openCloud, tant qu'elle
+// La ligne d'installation de l'agent de la machine Kagu, tant qu'elle
 // n'en a jamais eu : l'écran de première configuration la montre.
 export async function offerLocalEnrollment(): Promise<TokenResponse> {
   return api.send<TokenResponse>(route("POST /api/machines/local-enrollment"));

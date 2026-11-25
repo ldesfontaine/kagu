@@ -163,7 +163,7 @@ func TestAPI_Lifecycle_Enabled_TheMachineSaysItsSystemSupport(t *testing.T) {
 		t.Fatalf("remote machine: %+v", support)
 	}
 
-	// La machine openCloud du test se nomme « Debian 12 », pas comme
+	// La machine Kagu du test se nomme « Debian 12 », pas comme
 	// os-release : rien n'est deviné.
 	var list machinesResponse
 	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/machines", nil), &list)

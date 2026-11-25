@@ -42,7 +42,7 @@ export interface FirewallsResponse {
   limit: number;
 }
 
-// online, offline, degraded ou unknown : les mots d'openCloud, quel que soit
+// online, offline, degraded ou unknown : les mots de Kagu, quel que soit
 // le constructeur.
 export type GatewayStatus = "online" | "offline" | "degraded" | "unknown";
 
@@ -96,7 +96,7 @@ export interface FirewallRulesResponse extends FirewallReading {
   rules: FirewallRule[];
 }
 
-// La machine d'openCloud que le bail désigne, par sa carte réseau ou son adresse.
+// La machine de Kagu que le bail désigne, par sa carte réseau ou son adresse.
 interface FirewallLeaseMachine {
   id: string;
   name: string;

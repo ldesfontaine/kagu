@@ -189,8 +189,8 @@ test("restaurer sans le droit : le refus nomme le droit et porte sa ligne grant"
   expect(findings.unknown()).toEqual([]);
 });
 
-test("la base d'openCloud est une ligne de plus : sa clé et ses destinations sont sur sa carte", async ({ page, findings }) => {
-  findings.where = "/sauvegardes › base d'openCloud";
+test("la base de Kagu est une ligne de plus : sa clé et ses destinations sont sur sa carte", async ({ page, findings }) => {
+  findings.where = "/sauvegardes › base de Kagu";
   await openBackups(page);
   const database = card(page, label("backup.source_database").replace("{product}", "Kagu"));
   await expect(database).toContainText(label("backup.keyring_title"));

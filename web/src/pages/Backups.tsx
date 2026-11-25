@@ -26,7 +26,7 @@ import "./Backups.scss";
 
 // Les sauvegardes : ce qui est sauvegardé (et ce qui ne l'est pas), où ça va,
 // et comment y accéder. Une carte par VM ou par service, qu'elle soit faite
-// par Proxmox de lui-même, par les archives d'openCloud ou par restic. Chaque
+// par Proxmox de lui-même, par les archives de Kagu ou par restic. Chaque
 // ajout s'ouvre en fenêtre, à son adresse.
 export function Backups() {
   const t = useT();

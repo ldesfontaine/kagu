@@ -26,7 +26,7 @@ type Settings struct {
 	MailPassword string
 	MailFrom     string
 	// La fin de support est activée tant que l'opérateur ne l'a pas coupée :
-	// la machine openCloud lit endoflife.date une fois par jour, deux au
+	// la machine Kagu lit endoflife.date une fois par jour, deux au
 	// plus. Le réglage dit « coupée » pour que son absence vaille « activée ».
 	LifecycleDisabled bool
 }

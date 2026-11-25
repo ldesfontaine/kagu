@@ -229,7 +229,7 @@ func TestDeleteIncident_UnknownIsNotFoundAndSilent(t *testing.T) {
 	}
 }
 
-// serviceWithProbe pose un service déclaré sur la machine openCloud et une
+// serviceWithProbe pose un service déclaré sur la machine Kagu et une
 // sonde qui le regarde depuis la machine donnée, en bonne santé.
 func (f *fixture) serviceWithProbe(t *testing.T, name, probeMachineID string) (serviceID string, watching probe.Probe) {
 	t.Helper()

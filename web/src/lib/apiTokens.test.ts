@@ -78,7 +78,7 @@ test("toggleVerb coche puis décoche", () => {
 const token = (patch: Partial<APIToken>): APIToken => ({
   id: "t",
   name: "n",
-  masked: "ock_…",
+  masked: "kgk_…",
   scope: "read",
   verbs: [],
   machines: null,
@@ -98,8 +98,8 @@ test("scopeLabel dit la portée, et les verbes d'un jeton en écriture", () => {
 
 test("envBlock écrit les trois lignes du .env de mcp-maison", () => {
   const token = ["ock", "exemple"].join("_");
-  expect(envBlock({ mcp_host: "127.0.0.1", opencloud_url: "http://127.0.0.1:8080" }, token)).toBe(
-    `MCP_HOST=127.0.0.1\nOPENCLOUD_URL=http://127.0.0.1:8080\nOPENCLOUD_TOKEN=${token}`,
+  expect(envBlock({ mcp_host: "127.0.0.1", kagu_url: "http://127.0.0.1:8080" }, token)).toBe(
+    `MCP_HOST=127.0.0.1\nKAGU_URL=http://127.0.0.1:8080\nKAGU_TOKEN=${token}`,
   );
 });
 

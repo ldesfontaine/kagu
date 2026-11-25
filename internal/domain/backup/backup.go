@@ -16,7 +16,7 @@ const (
 	SubjectDatabase = agentwire.DatabaseSubject
 	ScheduleDaily   = "daily"
 
-	// Ce que la source d'un plan est : la base de la machine openCloud, ou
+	// Ce que la source d'un plan est : la base de la machine Kagu, ou
 	// ce qu'un agent produit sur sa machine.
 	SourceDatabase = "database"
 	SourceAgent    = "agent"

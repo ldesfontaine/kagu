@@ -19,7 +19,7 @@ func BinaryName(version string) string {
 }
 
 // VersionOf rend la version que porte un nom de binaire de bin/ ; faux si ce
-// n'est pas « opencloud-vX.Y.Z ».
+// n'est pas « kagu-vX.Y.Z ».
 func VersionOf(binaryName string) (string, bool) {
 	version, found := strings.CutPrefix(binaryName, brand.AgentBinaryPrefix)
 	if !found {

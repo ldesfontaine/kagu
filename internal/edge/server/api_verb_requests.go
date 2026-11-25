@@ -27,7 +27,7 @@ type VerbRequestService interface {
 }
 
 // Le plus long segment de chemin qu'une demande garde : un identifiant
-// d'openCloud est bien plus court.
+// de Kagu est bien plus court.
 const maxVerbParamRunes = 64
 
 // --- La demande d'un jeton ---

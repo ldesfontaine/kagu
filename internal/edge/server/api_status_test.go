@@ -123,9 +123,9 @@ func TestStatusPublic_LeaksNothingOfTheObjects(t *testing.T) {
 	server := newTestServer(t)
 	server.seedAll(t)
 	secrets := []string{
-		"vps-paris-1", "opencloud-host", "51.15.20.114", "10.8.0.1", remoteID, `"local"`,
+		"vps-paris-1", "kagu-host", "51.15.20.114", "10.8.0.1", remoteID, `"local"`,
 		"nextcloud", "postgres", "cloud.exemple.fr", "5432", "sauvegarde", "certbot", "hb_",
-		strings.Repeat("a", 12), strings.Repeat("b", 12), "openCloud dev", "Silence",
+		strings.Repeat("a", 12), strings.Repeat("b", 12), "Kagu dev", "Silence",
 	}
 	for _, path := range []string{"/statut/maison/api/status", "/statut/maison/api/i18n", "/statut/maison"} {
 		recorder := get(server.Server, path)

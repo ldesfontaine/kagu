@@ -27,7 +27,7 @@ const ProxmoxTokenID = brand.ProxmoxUser + "!" + brand.ProxmoxTokenName
 const ProxmoxRolePrivileges = "VM.Audit VM.PowerMgmt VM.Snapshot"
 
 // ProxmoxTokenCommands sont les commandes que l'opérateur joue en root sur
-// l'hôte Proxmox, dans l'ordre. Aucune n'est jouée par openCloud. Les quatre
+// l'hôte Proxmox, dans l'ordre. Aucune n'est jouée par Kagu. Les quatre
 // premières créent le rôle, le compte et le jeton ; les trois dernières posent
 // le secret et l'empreinte dans le fichier de l'agent : le secret se saisit
 // sans écho, il n'entre dans aucun argument de commande ni dans l'historique du

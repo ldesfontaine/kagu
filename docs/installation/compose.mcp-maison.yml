@@ -16,7 +16,7 @@ services:
     # Internet ne partage pas la pile réseau de l'hôte. Le port n'est publié
     # que sur MCP_HOST (le Traefik de la machine le joint là) ; Kagu se
     # joint par host-gateway, l'IP du pont docker0, qui est celle de `listen`
-    # (OPENCLOUD_URL en IP : Kagu refuse le nom host.docker.internal).
+    # (KAGU_URL en IP : Kagu refuse le nom host.docker.internal).
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -30,7 +30,7 @@ services:
       DATABASE_PATH: /app/data/mcp-maison.db
       AUDIT_LOG_PATH: /app/data/audit.jsonl
       PERMISSIONS_FILE: /app/data/permissions.yaml
-      TOOL_GROUPS: core,opencloud
+      TOOL_GROUPS: core,kagu
     # Un seul dossier, écrit par l'uid 1000 du conteneur : la base OAuth, le
     # journal, les droits.
     volumes:

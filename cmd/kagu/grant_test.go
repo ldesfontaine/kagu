@@ -260,7 +260,7 @@ func TestN_M6_GrantHostTerminalTellsItsRiskAndTakesTwoHours(t *testing.T) {
 	}
 	risk := "l'agent devient l'égal de root"
 	question := strings.Index(out, "[o/N]")
-	for _, want := range []string{"+ terminal.host=root", "terminal.host   jusqu'au", risk, "Un autre compte : sudo opencloud agent grant terminal.host=<compte> --for 2h"} {
+	for _, want := range []string{"+ terminal.host=root", "terminal.host   jusqu'au", risk, "Un autre compte : sudo kagu agent grant terminal.host=<compte> --for 2h"} {
 		if index := strings.Index(out, want); index < 0 || index > question {
 			t.Errorf("%q not said before the question:\n%s", want, out)
 		}
@@ -367,7 +367,7 @@ func TestR_A3_12_ManageSaysItIsWorthRoot(t *testing.T) {
 // R-DROIT-5 : sur la machine du serveur, « Gérer en root » se dit avant
 // d'être posé : qui entre dans l'interface y devient root. Ailleurs, ou
 // quand la machine y est déjà, la phrase ne vient pas.
-func TestR_DROIT_5_RootSetOnTheOpenCloudMachineSaysItBeforeLaying(t *testing.T) {
+func TestR_DROIT_5_RootSetOnTheKaguMachineSaysItBeforeLaying(t *testing.T) {
 	stateDir, place := policyState(t)
 	sentence := "qui entre dans l'interface devient root sur cette machine"
 	elsewhere, err := runPolicyOn(t, place, &quietSystem{}, fakeTerminal("N\n"), policyGrant, "-state", stateDir, "--set", "root")

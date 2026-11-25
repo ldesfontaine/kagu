@@ -11,7 +11,7 @@ import { counted } from "../../lib/counted";
 import { formatWhen } from "../../lib/time";
 
 // Les baux DHCP. Un bail dont la carte réseau ou l'adresse est celle d'une
-// machine d'openCloud la nomme, avec un lien vers sa fiche.
+// machine de Kagu la nomme, avec un lien vers sa fiche.
 export function FirewallLeases({ leases }: { leases: FirewallLease[] }) {
   const t = useT();
   const known = leases.filter((lease) => lease.machine !== null).length;

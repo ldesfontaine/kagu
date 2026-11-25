@@ -49,7 +49,7 @@ export const producers = ["proxmox-vzdump"] as const;
 
 // Le producteur que le serveur joue lui-même (backup.ProducerOPNsense) : la
 // configuration d'un pare-feu déclaré. Le formulaire en fait une troisième
-// source ; la requête reste « agent », sur la machine openCloud.
+// source ; la requête reste « agent », sur la machine Kagu.
 const firewallProducer = "opnsense-config";
 const firewallSourcePrefix = "firewall:";
 
@@ -237,7 +237,7 @@ export function subjectProblem(values: PlanFormValues, taken: readonly string[] 
 
 // Le sujet et le corps de l'écriture. Une base n'a ni machine, ni
 // producteur, ni sélecteur : le serveur les refuse s'ils sont là.
-// Un pare-feu part de la machine openCloud : le serveur la pose (source_machine_id vide).
+// Un pare-feu part de la machine Kagu : le serveur la pose (source_machine_id vide).
 export function planRequestOf(values: PlanFormValues, destination: string): { subject: string; request: PlanRequest } {
   const isDatabase = values.kind === "database";
   const isFirewall = values.kind === "firewall";

@@ -311,7 +311,7 @@ func TestGuard_AStillbornBinary_ReturnsToThePreviousVersionAtTheDeadline(t *test
 		if code := b.run(context.Background()); code != 1 {
 			t.Fatalf("attempt %d: code %d", attempt, code)
 		}
-		if b.current() != "opencloud-v0.0.2" {
+		if b.current() != "kagu-v0.0.2" {
 			t.Fatalf("switched back too early: %s", b.current())
 		}
 		b.clock.advance(time.Minute)
@@ -325,7 +325,7 @@ func TestGuard_AStillbornBinary_ReturnsToThePreviousVersionAtTheDeadline(t *test
 	waittest.Until(t, "the previous version started", func() bool { return len(b.launched()) == 4 })
 	cancel()
 	receive(t, done)
-	if b.current() != "opencloud-v0.0.1" {
+	if b.current() != "kagu-v0.0.1" {
 		t.Fatalf("current is %s", b.current())
 	}
 	marker := b.marker()
@@ -362,7 +362,7 @@ func TestGuard_ABinaryThatLoops_ReturnsToThePreviousVersion(t *testing.T) {
 	waittest.Until(t, "the previous version started", func() bool { return len(b.launched()) == 3 })
 	cancel()
 	receive(t, done)
-	if marker := b.marker(); marker.State != StateRolledBack || marker.Cause != CauseCrash || marker.Crashes != 2 || b.current() != "opencloud-v0.0.1" {
+	if marker := b.marker(); marker.State != StateRolledBack || marker.Cause != CauseCrash || marker.Crashes != 2 || b.current() != "kagu-v0.0.1" {
 		t.Fatalf("marker %+v, current %s", marker, b.current())
 	}
 }
@@ -374,7 +374,7 @@ func TestGuard_ABinaryThatNeverConfirms_IsStoppedAndSwitchedBackAtTheDeadline(t 
 	b.arm(KindUpdate)
 	done := b.runInBackground(context.Background())
 	waittest.Until(t, "the guard waits for the deadline", b.clock.hasWaiter)
-	if b.current() != "opencloud-v0.0.2" {
+	if b.current() != "kagu-v0.0.2" {
 		t.Fatal("switched back before the deadline")
 	}
 	b.clock.advance(GracePeriod)
@@ -387,7 +387,7 @@ func TestGuard_ABinaryThatNeverConfirms_IsStoppedAndSwitchedBackAtTheDeadline(t 
 		t.Fatal("the binary that never confirmed was not stopped")
 	}
 	marker := b.marker()
-	if b.current() != "opencloud-v0.0.1" || marker.State != StateRolledBack || marker.Cause != CauseTimeout {
+	if b.current() != "kagu-v0.0.1" || marker.State != StateRolledBack || marker.Cause != CauseTimeout {
 		t.Fatalf("marker %+v, current %s", marker, b.current())
 	}
 }
@@ -407,7 +407,7 @@ func TestGuard_AConfirmedUpdate_IsLeftAlone(t *testing.T) {
 	if code := receive(t, done); code != 0 {
 		t.Fatalf("code %d", code)
 	}
-	if b.current() != "opencloud-v0.0.2" {
+	if b.current() != "kagu-v0.0.2" {
 		t.Fatalf("a confirmed update was reverted: %s", b.current())
 	}
 	if _, err := Load(b.state); !errors.Is(err, ErrNoMarker) {
@@ -430,7 +430,7 @@ func TestGuard_WhenThePreviousVersionFailsToo_StopsWithoutLooping(t *testing.T) 
 	if marker.State != StateFailed || marker.Cause != CausePreviousCrash {
 		t.Fatalf("marker %+v", marker)
 	}
-	if b.current() != "opencloud-v0.0.1" {
+	if b.current() != "kagu-v0.0.1" {
 		t.Fatalf("current is %s", b.current())
 	}
 	// Un redémarrage par l'opérateur : on relance l'agent tel quel, on ne
@@ -440,7 +440,7 @@ func TestGuard_WhenThePreviousVersionFailsToo_StopsWithoutLooping(t *testing.T) 
 			t.Fatalf("code %d", code)
 		}
 	}
-	if b.current() != "opencloud-v0.0.1" {
+	if b.current() != "kagu-v0.0.1" {
 		t.Fatalf("the guard switched again: %s", b.current())
 	}
 	for _, version := range b.launched() {
@@ -462,7 +462,7 @@ func TestGuard_WhenThePreviousBinaryIsGone_SaysSoAndKeepsCurrent(t *testing.T) {
 	b.behave = func(string) behavior { return behavior{immediate: true, exitCode: 1} }
 	b.run(context.Background())
 	marker := b.marker()
-	if marker.State != StateFailed || marker.Cause != CausePreviousMissing || b.current() != "opencloud-v0.0.2" {
+	if marker.State != StateFailed || marker.Cause != CausePreviousMissing || b.current() != "kagu-v0.0.2" {
 		t.Fatalf("marker %+v, current %s", marker, b.current())
 	}
 }
@@ -476,7 +476,7 @@ func TestGuard_APreviousBinaryThatIsNotExecutable_IsNotSwitchedTo(t *testing.T) 
 	b.clock.advance(GracePeriod)
 	b.behave = func(string) behavior { return behavior{immediate: true, exitCode: 1} }
 	b.run(context.Background())
-	if marker := b.marker(); marker.State != StateFailed || b.current() != "opencloud-v0.0.2" {
+	if marker := b.marker(); marker.State != StateFailed || b.current() != "kagu-v0.0.2" {
 		t.Fatalf("marker %+v, current %s", marker, b.current())
 	}
 }
@@ -503,7 +503,7 @@ func TestGuard_AManualRollbackThatIsNotConfirmed_DoesNotSwitchAgain(t *testing.T
 	cancel()
 	receive(t, done)
 	got := b.marker()
-	if got.State != StateFailed || got.Cause != CauseUnconfirmed || b.current() != "opencloud-v0.0.1" {
+	if got.State != StateFailed || got.Cause != CauseUnconfirmed || b.current() != "kagu-v0.0.1" {
 		t.Fatalf("marker %+v, current %s", got, b.current())
 	}
 }
@@ -547,7 +547,7 @@ func TestGuard_AMarkerThatDoesNotRead_IsSetAsideAndTheAgentStarts(t *testing.T) 
 			if _, err := Load(b.state); !errors.Is(err, ErrNoMarker) {
 				t.Fatalf("the unreadable marker is still there: %v", err)
 			}
-			if b.current() != "opencloud-v0.0.2" {
+			if b.current() != "kagu-v0.0.2" {
 				t.Fatalf("the guard switched on a marker it could not read: %s", b.current())
 			}
 		})
@@ -658,7 +658,7 @@ func TestArm_WritesPreviousBeforeTheMarkerAndLeavesCurrentAlone(t *testing.T) {
 	if err := Arm(b.state, b.bin, marker); err != nil {
 		t.Fatal(err)
 	}
-	if LinkTarget(b.bin, brand.AgentPreviousLink) != "opencloud-v0.0.1" || b.current() != "opencloud-v0.0.2" {
+	if LinkTarget(b.bin, brand.AgentPreviousLink) != "kagu-v0.0.1" || b.current() != "kagu-v0.0.2" {
 		t.Fatalf("previous %s, current %s", LinkTarget(b.bin, brand.AgentPreviousLink), b.current())
 	}
 	if b.marker().RunID != "r" {
@@ -670,7 +670,7 @@ func TestArm_WritesPreviousBeforeTheMarkerAndLeavesCurrentAlone(t *testing.T) {
 }
 
 func TestVersionOf_OnlyReadsAnInstalledBinaryName(t *testing.T) {
-	for name, want := range map[string]string{"opencloud-v0.0.2": "v0.0.2", "opencloud-dev": "", "other-v0.0.1": "", "opencloud-v0.0.1-rc1": "", "": ""} {
+	for name, want := range map[string]string{"kagu-v0.0.2": "v0.0.2", "kagu-dev": "", "other-v0.0.1": "", "kagu-v0.0.1-rc1": "", "": ""} {
 		got, ok := VersionOf(name)
 		if got != want || ok != (want != "") {
 			t.Errorf("%q: %q %v", name, got, ok)

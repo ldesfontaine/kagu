@@ -179,7 +179,7 @@ export function whatIsMissing(t: Translate, source: BackupSource, overview: Back
 }
 
 // Une façon dont la source est sauvegardée : vue chez Proxmox, archive
-// chiffrée d'openCloud, ou restic.
+// chiffrée de Kagu, ou restic.
 function ProtectionBlock({ source, protection, machines }: { source: BackupSource; protection: BackupProtection; machines: readonly BackupMachine[] }) {
   const t = useT();
   const gestures = useProtectionGestures(source, protection);
@@ -209,7 +209,7 @@ function ProtectionFlow({ source, protection }: { source: BackupSource; protecti
     return <Flow from={source.name} fromIcon={icon} fromSub={t("backup.flow_by", source.machine_name)} label={t("backup.flow_vzdump")} to={storage} toSub={t("backup.flow_storage")} tone={stateTone(protection, "muted")} />;
   }
   if (protection.origin === "archive") {
-    // Un pare-feu part de lui-même : la machine openCloud le lit, elle n'en est pas la source.
+    // Un pare-feu part de lui-même : la machine Kagu le lit, elle n'en est pas la source.
     const isFirewall = source.kind === "firewall";
     return <Flow from={isFirewall ? source.name : source.machine_name} fromIcon={icon} fromSub={isFirewall ? t("backup.flow_read_by", source.machine_name) : t("backup.flow_source")} label={t("backup.flow_archive")} to={protection.target_machine_name} toSub={protection.storage} tone={stateTone(protection, "accent")} />;
   }
@@ -284,7 +284,7 @@ function lastSuccessFact(t: Translate, protection: BackupProtection, now: number
   return { value: ago(t, protection.last_success_at, now), sub: formatWhen(protection.last_success_at, now) };
 }
 
-// Une sauvegarde que Proxmox fait de lui-même, sans plan openCloud : la page la
+// Une sauvegarde que Proxmox fait de lui-même, sans plan Kagu : la page la
 // montre « observée » et dit qu'elle est à remplacer, avec le geste.
 function ReplaceNote({ source, protection }: { source: BackupSource; protection: BackupProtection }) {
   const t = useT();

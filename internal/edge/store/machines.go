@@ -27,7 +27,7 @@ const machineSelect = `SELECT m.id, m.name, m.hostname, m.address, m.os, m.arch,
 		ORDER BY revoked_at IS NOT NULL, enrolled_at DESC, id LIMIT 1)
 	LEFT JOIN enrollment_tokens t ON t.agent_id = a.id`
 
-// ListMachines rend les machines par nom, la machine openCloud parmi elles.
+// ListMachines rend les machines par nom, la machine Kagu parmi elles.
 func (db *DB) ListMachines(ctx context.Context) ([]machine.Machine, error) {
 	rows, err := db.sql.QueryContext(ctx, machineSelect+` ORDER BY m.name`)
 	if err != nil {
@@ -351,7 +351,7 @@ func replaceCapabilities(ctx context.Context, tx *sql.Tx, connection machine.Con
 // n'est classé qu'après, pour le message. Un jeton de ré-enrôlement révoque
 // l'agent actif de sa machine avant d'inscrire le nouveau. L'agent que le
 // service a reconnu comme celui de la machine du serveur arrive sous
-// LocalID : il reprend la ligne de la machine openCloud si elle existe.
+// LocalID : il reprend la ligne de la machine Kagu si elle existe.
 func (db *DB) Enroll(ctx context.Context, tokenHash string, candidate machine.Machine, agent machine.Agent, now time.Time) (machine.Machine, error) {
 	err := db.inTx(ctx, "enroll", func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `
@@ -441,7 +441,7 @@ func refuseLookalikeID(ctx context.Context, tx *sql.Tx, id string) error {
 	return nil
 }
 
-// adoptServerMachine inscrit la machine openCloud sous LocalID : sa ligne
+// adoptServerMachine inscrit la machine Kagu sous LocalID : sa ligne
 // est créée si elle manque, reprise si elle est restée sans agent (une base
 // d'avant les agents, un agent révoqué). Un agent actif la garde : le
 // remplacer est un ré-enrôlement, que l'opérateur demande sur sa fiche.

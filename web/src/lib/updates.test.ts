@@ -73,7 +73,7 @@ test("upgradeOffer se tait quand une des quatre conditions manque", () => {
   // Pas déclaré : la ligne à copier reste.
   expect(upgradeOffer(container, { ...declared, declared: false }, deployed)).toBeNull();
   expect(upgradeOffer(container, null, deployed)).toBeNull();
-  // Déclaré mais jamais déployé par openCloud, ou plan pas encore lu.
+  // Déclaré mais jamais déployé par Kagu, ou plan pas encore lu.
   expect(upgradeOffer(container, declared, { deployed: false, shared_with: [] })).toBeNull();
   expect(upgradeOffer(container, declared, null)).toBeNull();
   // Un projet Compose partagé avec d'autres services : le fichier écrit les retirerait.

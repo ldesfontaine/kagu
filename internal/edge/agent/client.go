@@ -33,7 +33,7 @@ const (
 	requestTimeout = 15 * time.Second
 	maxErrorBody   = 4 << 10
 	// Une réponse d'enrôlement tient en quelques centaines d'octets : au-delà,
-	// ce n'est pas openCloud qui parle.
+	// ce n'est pas Kagu qui parle.
 	maxAnswerBody = 64 << 10
 )
 
@@ -79,7 +79,7 @@ var (
 	// machine ; le jeton et les signaux passeraient en clair sur le réseau.
 	ErrPlainRefused = errors.New("plain http to a remote server refused")
 	// ErrPinMismatch : le certificat présenté n'est pas celui épinglé ; il a
-	// changé, ou quelqu'un se fait passer pour openCloud.
+	// changé, ou quelqu'un se fait passer pour Kagu.
 	ErrPinMismatch = errors.New("certificate does not match the pin")
 	// ErrSocketNotAbsolute : -server unix: ne vise qu'un chemin absolu ; un
 	// chemin relatif dépendrait du dossier où l'agent est lancé.
@@ -95,7 +95,7 @@ const unixScheme = "unix:"
 // seul pair est le serveur qui l'écoute.
 const unixBaseURL = "http://localhost"
 
-// Client parle à un serveur openCloud ; il ne sait rien de la boucle.
+// Client parle à un serveur Kagu ; il ne sait rien de la boucle.
 type Client struct {
 	server  string
 	http    *http.Client
@@ -252,7 +252,7 @@ func isLoopback(server string) bool {
 }
 
 // pinnedTLS accepte un seul certificat, celui dont l'empreinte SHA-256 est
-// donnée : le cas d'un openCloud sans domaine, au certificat auto-signé.
+// donnée : le cas d'un Kagu sans domaine, au certificat auto-signé.
 func pinnedTLS(pin string) (*tls.Config, error) {
 	expected, err := hex.DecodeString(strings.TrimPrefix(strings.ToLower(pin), "sha256:"))
 	if err != nil || len(expected) != sha256.Size {

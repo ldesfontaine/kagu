@@ -206,7 +206,7 @@ func TestResource_CPUAverageOpensAggravatesAndResolvesWithHysteresis(t *testing.
 		t.Fatalf("97 %% over the whole window: %q", f.kinds(t))
 	}
 	opened := f.only(t, alert.StatusOpen)
-	if opened.Object.Kind != alert.ObjectMachine || opened.Object.Name != "opencloud" || opened.Details.Percent != 97 ||
+	if opened.Object.Kind != alert.ObjectMachine || opened.Object.Name != "kagu" || opened.Details.Percent != 97 ||
 		opened.Details.WindowMinutes != 15 || opened.Details.Threshold != 95 {
 		t.Fatalf("alert %+v", opened)
 	}

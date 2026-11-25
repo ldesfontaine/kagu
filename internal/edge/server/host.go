@@ -10,7 +10,7 @@ import (
 )
 
 // requireKnownHost ferme la porte au DNS rebinding : une page d'un autre
-// site dont le nom pointe soudain sur openCloud parle avec un Host qui
+// site dont le nom pointe soudain sur Kagu parle avec un Host qui
 // n'est pas le nôtre. Sont reconnus l'hôte de public_url, localhost, toute
 // adresse IP écrite telle quelle, et l'hôte de listen. Derrière un
 // mandataire de confiance, l'hôte qu'il transmet est jugé aussi : Traefik

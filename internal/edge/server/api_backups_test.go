@@ -23,7 +23,7 @@ const backupPassphrase = "une phrase de test assez longue" // gitleaks:allow
 var (
 	backupRecipient   = regexp.MustCompile(`age1[a-z0-9]{40,}`)
 	backupFingerprint = regexp.MustCompile(`"fingerprint":"[0-9a-f]{16}"`)
-	backupKeyFile     = regexp.MustCompile(`opencloud-key-[0-9a-f]{16}\.age`)
+	backupKeyFile     = regexp.MustCompile(`kagu-key-[0-9a-f]{16}\.age`)
 	backupDestination = regexp.MustCompile(`bkd_[0-9a-f]{16}`)
 	backupSum         = regexp.MustCompile(`"sha256":"[0-9a-f]{64}"`)
 	backupSize        = regexp.MustCompile(`"size":[0-9]+`)
@@ -36,7 +36,7 @@ func normalizeBackups(body string) string {
 	body = normalize(body)
 	body = backupRecipient.ReplaceAllString(body, "age1_RECIPIENT")
 	body = backupFingerprint.ReplaceAllString(body, `"fingerprint":"FINGERPRINT"`)
-	body = backupKeyFile.ReplaceAllString(body, "opencloud-key-FINGERPRINT.age")
+	body = backupKeyFile.ReplaceAllString(body, "kagu-key-FINGERPRINT.age")
 	body = backupDestination.ReplaceAllString(body, "bkd_ID")
 	body = backupSum.ReplaceAllString(body, `"sha256":"SUM"`)
 	body = backupSize.ReplaceAllString(body, `"size":0`)
@@ -251,7 +251,7 @@ func TestBackups_MapsEachPlanRefusalToItsKey(t *testing.T) {
 	}
 	plan("Pve", agentPlan(func(map[string]any) {}), http.StatusUnprocessableEntity, "backup.plan_invalid")
 	plan("database", agentPlan(func(map[string]any) {}), http.StatusUnprocessableEntity, "backup.plan_invalid")
-	plan("opencloud", agentPlan(func(map[string]any) {}), http.StatusUnprocessableEntity, "backup.plan_invalid")
+	plan("kagu", agentPlan(func(map[string]any) {}), http.StatusUnprocessableEntity, "backup.plan_invalid")
 	plan("pve-vm", agentPlan(func(body map[string]any) { body["source_kind"] = "" }), http.StatusUnprocessableEntity, "backup.plan_invalid")
 	plan("pve-vm", agentPlan(func(body map[string]any) { body["source_machine_id"] = "inconnue" }), http.StatusUnprocessableEntity, "backup.source_machine_unknown")
 	plan("pve-vm", agentPlan(func(body map[string]any) { body["producer"] = "test-echo" }), http.StatusUnprocessableEntity, "backup.producer_unknown")

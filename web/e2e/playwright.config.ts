@@ -18,8 +18,8 @@ function portOfCheckout(): number {
 // Le serveur de données fictives est le test Go TestE2EFixtureServer, compilé
 // par `make e2e` en .fixture.test : le vrai serveur, sa vraie base, l'horloge
 // figée, rien de réel.
-// OPENCLOUD_E2E_ADDR impose l'adresse.
-const address = process.env.OPENCLOUD_E2E_ADDR ?? `127.0.0.1:${portOfCheckout()}`;
+// KAGU_E2E_ADDR impose l'adresse.
+const address = process.env.KAGU_E2E_ADDR ?? `127.0.0.1:${portOfCheckout()}`;
 
 export default defineConfig({
   testDir: ".",
@@ -41,7 +41,7 @@ export default defineConfig({
   },
   webServer: {
     command: "./.fixture.test -test.run TestE2EFixtureServer -test.timeout 0",
-    env: { OPENCLOUD_E2E_ADDR: address },
+    env: { KAGU_E2E_ADDR: address },
     url: `http://${address}/`,
     reuseExistingServer: false,
     timeout: 60_000,

@@ -14,19 +14,19 @@ func TestIsBackupFile_OnlyTheExactForm(t *testing.T) {
 		name string
 		want bool
 	}{
-		{"opencloud-20261021-030000.tar.age", true},
-		{"opencloud-key-0123456789abcdef.age", false},
-		{".opencloud-20261021-030000.tar.age.part", false},
-		{"opencloud-20261021-030000.tar.age.part", false},
+		{"kagu-20261021-030000.tar.age", true},
+		{"kagu-key-0123456789abcdef.age", false},
+		{".kagu-20261021-030000.tar.age.part", false},
+		{"kagu-20261021-030000.tar.age.part", false},
 		{"pve-vm-5010-20261021-030000.tar.age", true},
 		{"-20261021-030000.tar.age", false},
 		{"Pve-20261021-030000.tar.age", false},
 		{"20261021-030000.tar.age", false},
-		{"opencloud-20261021-030000.tar", false},
-		{"opencloud-2026102-030000.tar.age", false},
-		{"/srv/opencloud-20261021-030000.tar.age", false},
-		{"../opencloud-20261021-030000.tar.age", false},
-		{"opencloud-20261021-030000.tar.age\n", false},
+		{"kagu-20261021-030000.tar", false},
+		{"kagu-2026102-030000.tar.age", false},
+		{"/srv/kagu-20261021-030000.tar.age", false},
+		{"../kagu-20261021-030000.tar.age", false},
+		{"kagu-20261021-030000.tar.age\n", false},
 		{"", false},
 	}
 	for _, c := range cases {
@@ -43,20 +43,20 @@ func TestIsBackupKeyFile_OnlyTheExactForm(t *testing.T) {
 		name      string
 		key, sent bool
 	}{
-		{"opencloud-key-0123456789abcdef.age", true, true},
-		{"opencloud-key-0123456789abcdef.1.age", true, false},
-		{"opencloud-key-0123456789abcdef.12.age", true, false},
-		{"opencloud-key-0123456789abcdef.0.age", false, false},
-		{"opencloud-key-0123456789abcdef.01.age", false, false},
-		{"opencloud-key-0123456789abcdef..age", false, false},
-		{"opencloud-key-0123456789abcdef.-1.age", false, false},
-		{"opencloud-key-0123456789ABCDEF.age", false, false},
-		{"opencloud-key-0123456789abcde.age", false, false},
-		{"opencloud-key-0123456789abcdef.age.part", false, false},
-		{".opencloud-key-0123456789abcdef.age.part", false, false},
-		{"opencloud-20261021-030000.tar.age", false, false},
-		{"../opencloud-key-0123456789abcdef.age", false, false},
-		{"opencloud-key-0123456789abcdef.1.age\n", false, false},
+		{"kagu-key-0123456789abcdef.age", true, true},
+		{"kagu-key-0123456789abcdef.1.age", true, false},
+		{"kagu-key-0123456789abcdef.12.age", true, false},
+		{"kagu-key-0123456789abcdef.0.age", false, false},
+		{"kagu-key-0123456789abcdef.01.age", false, false},
+		{"kagu-key-0123456789abcdef..age", false, false},
+		{"kagu-key-0123456789abcdef.-1.age", false, false},
+		{"kagu-key-0123456789ABCDEF.age", false, false},
+		{"kagu-key-0123456789abcde.age", false, false},
+		{"kagu-key-0123456789abcdef.age.part", false, false},
+		{".kagu-key-0123456789abcdef.age.part", false, false},
+		{"kagu-20261021-030000.tar.age", false, false},
+		{"../kagu-key-0123456789abcdef.age", false, false},
+		{"kagu-key-0123456789abcdef.1.age\n", false, false},
 	}
 	for _, c := range cases {
 		if got := IsBackupKeyFile(c.name); got != c.key {
@@ -70,7 +70,7 @@ func TestIsBackupKeyFile_OnlyTheExactForm(t *testing.T) {
 
 func TestBackupKeyFileVersion_IsAKeyButNeverASentOne(t *testing.T) {
 	sent := BackupKeyFileName("0123456789abcdef")
-	for version, want := range map[int]string{1: "opencloud-key-0123456789abcdef.1.age", 10: "opencloud-key-0123456789abcdef.10.age"} {
+	for version, want := range map[int]string{1: "kagu-key-0123456789abcdef.1.age", 10: "kagu-key-0123456789abcdef.10.age"} {
 		got := BackupKeyFileVersion(sent, version)
 		if got != want || !IsBackupKeyFile(got) || IsSentBackupKeyFile(got) || IsBackupFile(got) || BackupKeyFingerprint(got) != "0123456789abcdef" {
 			t.Errorf("version %d: got %q", version, got)
@@ -82,13 +82,13 @@ func TestBackupFileName_IsUTCAndSortsByDate(t *testing.T) {
 	paris := time.FixedZone("CEST", 2*3600)
 	earlier := BackupFileName("database", time.Date(2026, 10, 21, 3, 0, 0, 0, paris))
 	later := BackupFileName("database", time.Date(2026, 10, 22, 3, 0, 0, 0, paris))
-	if earlier != "opencloud-20261021-010000.tar.age" || !IsBackupFile(earlier) {
+	if earlier != "kagu-20261021-010000.tar.age" || !IsBackupFile(earlier) {
 		t.Fatalf("got %q", earlier)
 	}
 	if earlier >= later {
 		t.Errorf("%q must sort before %q", earlier, later)
 	}
-	if key := BackupKeyFileName("0123456789abcdef"); key != "opencloud-key-0123456789abcdef.age" || IsBackupFile(key) {
+	if key := BackupKeyFileName("0123456789abcdef"); key != "kagu-key-0123456789abcdef.age" || IsBackupFile(key) {
 		t.Errorf("key file %q", key)
 	}
 }
@@ -97,7 +97,7 @@ func TestBackupFileName_IsUTCAndSortsByDate(t *testing.T) {
 // sujet, suivi du suffixe de sa source quand elle en a un.
 func TestBackupFilePrefix_TheDatabaseKeepsItsOldName(t *testing.T) {
 	for _, c := range []struct{ subject, suffix, want string }{
-		{"database", "", "opencloud"},
+		{"database", "", "kagu"},
 		{"pve", "", "pve"},
 		{"pve", "vm-5010", "pve-vm-5010"},
 	} {
@@ -112,27 +112,27 @@ func TestBackupFilePrefix_TheDatabaseKeepsItsOldName(t *testing.T) {
 }
 
 // Un préfixe ne prend que ses fichiers : ce qui suit est exactement l'instant,
-// si bien que « pve » ne prend jamais ceux de « pve-vm-100 », ni « opencloud »
+// si bien que « pve » ne prend jamais ceux de « pve-vm-100 », ni « kagu »
 // la clé déposée.
 func TestIsBackupFileOf_TheRestIsExactlyTheInstant(t *testing.T) {
 	cases := []struct {
 		name, prefix string
 		want         bool
 	}{
-		{"opencloud-20261021-030000.tar.age", "opencloud", true},
+		{"kagu-20261021-030000.tar.age", "kagu", true},
 		{"pve-20261021-030000.tar.age", "pve", true},
 		{"pve-vm-100-20261021-030000.tar.age", "pve", false},
 		{"pve-vm-100-20261021-030000.tar.age", "pve-vm-100", true},
 		{"pve-20261021-030000-20261021-030000.tar.age", "pve", false},
 		{"pve-20261021-030000-20261021-030000.tar.age", "pve-20261021-030000", true},
 		{"pve2-20261021-030000.tar.age", "pve", false},
-		{"opencloud-key-0123456789abcdef.age", "opencloud", false},
+		{"kagu-key-0123456789abcdef.age", "kagu", false},
 		{"pve-20261021-030000.tar.age.part", "pve", false},
 		{"pve-20261021-030000.tar.age", "", false},
 		{"-20261021-030000.tar.age", "", false},
-		{"opencloud-x-20261021-030000.tar.age", "opencloud", false},
-		{"opencloud-20261021-030000.tar.age", "opencloud-x", false},
-		{"opencloud-key-20261021-030000.tar.age", "opencloud", false},
+		{"kagu-x-20261021-030000.tar.age", "kagu", false},
+		{"kagu-20261021-030000.tar.age", "kagu-x", false},
+		{"kagu-key-20261021-030000.tar.age", "kagu", false},
 	}
 	for _, c := range cases {
 		if got := IsBackupFileOf(c.name, c.prefix); got != c.want {
@@ -143,7 +143,7 @@ func TestIsBackupFileOf_TheRestIsExactlyTheInstant(t *testing.T) {
 
 func TestIsBackupPrefix_AWordMadeOfLowercaseDigitsAndDashes(t *testing.T) {
 	for prefix, want := range map[string]bool{
-		"opencloud":             true,
+		"kagu":                  true,
 		"pve-vm-5010":           true,
 		"":                      false,
 		"-pve":                  false,
@@ -183,7 +183,7 @@ func TestOrderBody_SecretRoundTrips(t *testing.T) {
 }
 
 func TestParcelPath_EscapesWhatIsNotAPathSegment(t *testing.T) {
-	if got := ParcelPath("abc", "opencloud-20261021-030000.tar.age"); got != "/agent/parcels/abc/opencloud-20261021-030000.tar.age" {
+	if got := ParcelPath("abc", "kagu-20261021-030000.tar.age"); got != "/agent/parcels/abc/kagu-20261021-030000.tar.age" {
 		t.Errorf("got %q", got)
 	}
 	if got := ParcelPath("a/b", "x y"); got != "/agent/parcels/a%2Fb/x%20y" {

@@ -6,7 +6,7 @@ import { expect, test } from "./support/findings";
 // Les instances systemd (chantier L2). Les données fictives portent, sur la
 // machine distante, six unités relevées (Forgejo déclaré sans port, une
 // sauvegarde de nuit en échec, des unités que personne ne déclare), et sur la
-// machine openCloud un Caddy déclaré que le relevé ne connaît pas. Les tests
+// machine Kagu un Caddy déclaré que le relevé ne connaît pas. Les tests
 // se suivent et partagent cet état ; le fichier passe avant le parcours
 // générique (ordre alphabétique).
 test.describe.configure({ mode: "serial" });

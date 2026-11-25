@@ -64,7 +64,7 @@ func isPort(port string) bool {
 	return err == nil && number > 0 && number <= 65535
 }
 
-// validateTarget refuse une cible qu'openCloud ne sait pas sonder, et
+// validateTarget refuse une cible que Kagu ne sait pas sonder, et
 // celle qui pointe déjà, en clair, vers une adresse interdite. Ce que le
 // nom résout se revérifie au moment de composer : voir egress.Dial.
 func validateTarget(kind Kind, target string) error {
@@ -85,7 +85,7 @@ func validateTarget(kind Kind, target string) error {
 }
 
 // targetHasCredentials dit si une cible HTTP porte des identifiants
-// (« https://user:mot@hôte ») : openCloud ne sait pas les garder chiffrés, ils
+// (« https://user:mot@hôte ») : Kagu ne sait pas les garder chiffrés, ils
 // finiraient en clair dans la base et dans le fichier de l'annuaire.
 func targetHasCredentials(kind Kind, target string) bool {
 	if kind == KindTCP {

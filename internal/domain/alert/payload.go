@@ -28,17 +28,17 @@ type Body struct {
 	Urgent bool
 }
 
-// openLinkLabel est le libellé du lien vers openCloud, le même partout où un
+// openLinkLabel est le libellé du lien vers Kagu, le même partout où un
 // corps en porte un.
 func openLinkLabel(catalog lang.Catalog) string {
-	return catalog.Get("alert.open_in_opencloud")
+	return catalog.Get("alert.open_in_product")
 }
 
 // alertPath est la fiche d'une alerte dans l'interface, sous public_url.
 const alertPath = "/alertes/alerte/"
 
 // AlertLink est l'adresse de la fiche de l'alerte, ou rien : sans
-// public_url, openCloud ne sait pas sous quelle adresse on le lit, et un
+// public_url, Kagu ne sait pas sous quelle adresse on le lit, et un
 // test n'a pas de fiche.
 func AlertLink(publicURL string, event Event, alert Alert) string {
 	if publicURL == "" || event == EventTest || alert.ID == 0 {
@@ -56,7 +56,7 @@ func AlertsLink(publicURL string) string {
 }
 
 // RenderSummary fait le message qui remplace ce que la limite de débit
-// d'un canal a retenu : « N alertes de plus, voir openCloud », avec les
+// d'un canal a retenu : « N alertes de plus, voir Kagu », avec les
 // machines concernées, et rendu à la gravité la plus haute des alertes
 // retenues.
 func RenderSummary(catalog lang.Catalog, format Format, held Held, now time.Time, link string) (Body, error) {
@@ -132,7 +132,7 @@ func Render(catalog lang.Catalog, format Format, event Event, alert Alert, now t
 	case FormatMatrix:
 		return matrixBody(title, text, link, openLabel)
 	}
-	return jsonBody(title, link, openCloudPayload(catalog, title, text, alert, event, now, link))
+	return jsonBody(title, link, productPayload(catalog, title, text, alert, event, now, link))
 }
 
 func jsonBody(title, link string, payload any) (Body, error) {
@@ -186,7 +186,7 @@ func emailBody(title string, text Text, link, openLabel string) Body {
 	}
 }
 
-// Le corps d'openCloud : les faits, tels que l'API les rend, et les trois
+// Le corps de Kagu : les faits, tels que l'API les rend, et les trois
 // lignes rendues dans la langue de l'interface.
 type payload struct {
 	Event    string      `json:"event"`
@@ -236,7 +236,7 @@ type payloadObject struct {
 	Name string `json:"name"`
 }
 
-func openCloudPayload(catalog lang.Catalog, title string, text Text, alert Alert, event Event, now time.Time, link string) payload {
+func productPayload(catalog lang.Catalog, title string, text Text, alert Alert, event Event, now time.Time, link string) payload {
 	body := payload{
 		Event: string(event), SentAt: now.UTC(), Language: string(catalog.Code()), Title: title,
 		Text: payloadTextOf(text),
@@ -331,7 +331,7 @@ var slackEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "
 
 // Discord rend le titre cliquable par url, et le lien Markdown en fin de
 // description pour qui ne pense pas à cliquer le titre. Le texte arrive déjà
-// protégé par escapeDiscord : le seul lien actif est celui d'openCloud.
+// protégé par escapeDiscord : le seul lien actif est celui de Kagu.
 func discordPayload(title string, text Text, alert Alert, event Event, now time.Time, link, openLabel string) map[string]any {
 	decimal, _ := color(alert, event)
 	description := text.Cause

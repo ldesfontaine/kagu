@@ -71,7 +71,7 @@ func TestMigration008_KeepsLiveAPITokensReadOnlyAndDropsTheRest(t *testing.T) {
 }
 
 func newAPIToken(id, hash string, expires time.Time) apitoken.Token {
-	return apitoken.Token{ID: id, Hash: hash, Prefix: "ock_" + id, Scope: apitoken.ScopeRead, Name: "jeton " + id, CreatedAt: time.Unix(1000, 0), ExpiresAt: expires}
+	return apitoken.Token{ID: id, Hash: hash, Prefix: "kgk_" + id, Scope: apitoken.ScopeRead, Name: "jeton " + id, CreatedAt: time.Unix(1000, 0), ExpiresAt: expires}
 }
 
 func TestAPITokens_InsertGetListTouchDelete(t *testing.T) {
@@ -176,7 +176,7 @@ func TestAPITokenVerbs_RoundTripAndCascade(t *testing.T) {
 	ctx := context.Background()
 	db := openTestDB(t)
 	token := apitoken.Token{
-		ID: "tok_w", Hash: "hash_w", Prefix: "ock_w", Scope: apitoken.ScopeWrite, Name: "agent",
+		ID: "tok_w", Hash: "hash_w", Prefix: "kgk_w", Scope: apitoken.ScopeWrite, Name: "agent",
 		CreatedAt: time.Unix(1000, 0), Verbs: []string{"probe.pause", "agent.ping"},
 	}
 	if err := db.InsertAPIToken(ctx, token); err != nil {
@@ -199,7 +199,7 @@ func TestAPITokenVerbs_InsertIsAllOrNothing(t *testing.T) {
 	ctx := context.Background()
 	db := openTestDB(t)
 	token := apitoken.Token{
-		ID: "tok_w", Hash: "hash_w", Prefix: "ock_w", Scope: apitoken.ScopeWrite, Name: "agent",
+		ID: "tok_w", Hash: "hash_w", Prefix: "kgk_w", Scope: apitoken.ScopeWrite, Name: "agent",
 		CreatedAt: time.Unix(1000, 0), Verbs: []string{"agent.ping", "agent.ping"},
 	}
 	if err := db.InsertAPIToken(ctx, token); err == nil {

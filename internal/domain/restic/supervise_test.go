@@ -135,7 +135,7 @@ func TestFindingsOf_TheRestoreTestIsOneFindingPerRepository(t *testing.T) {
 func TestFindingsOf_SourceWithoutAPlan(t *testing.T) {
 	protected := serviceSource(resticProtectionOf("b1", hoursAgo(1), nil))
 	bare := []Source{
-		{Key: "database", Kind: backup.KindDatabase, Name: "opencloud", MachineID: "local"},
+		{Key: "database", Kind: backup.KindDatabase, Name: "kagu", MachineID: "local"},
 		{Key: "firewall:f1", Kind: backup.KindFirewall, Name: "opnsense", MachineID: "local"},
 		{Key: "vm:100", Kind: backup.KindVM, Name: "docker1", MachineID: "pve"},
 		{Key: "service:s2", Kind: agentwire.ResticScopeService, Name: "paperless", MachineID: "vps", ServiceID: "s2"},
@@ -157,7 +157,7 @@ func TestFindingsOf_SourceWithoutAPlan(t *testing.T) {
 }
 
 func TestFindingsOf_NothingIsMissingBeforeTheModuleIsInUse(t *testing.T) {
-	overview := Overview{Sources: []Source{{Key: "database", Kind: backup.KindDatabase, Name: "opencloud", MachineID: "local"}}}
+	overview := Overview{Sources: []Source{{Key: "database", Kind: backup.KindDatabase, Name: "kagu", MachineID: "local"}}}
 	if findings := FindingsOf(overview, now); len(findings) != 0 {
 		t.Fatalf("a fresh install must not ring: %+v", findings)
 	}

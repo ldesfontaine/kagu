@@ -1,5 +1,5 @@
 -- Les sondes : vérifier de l'extérieur qu'une URL ou qu'un port répond.
--- La machine qui sonde porte la sonde et l'exécute ; la machine openCloud
+-- La machine qui sonde porte la sonde et l'exécute ; la machine Kagu
 -- par défaut, qui est son propre agent. Horodatages en secondes depuis
 -- l'époque Unix, durées en millisecondes.
 

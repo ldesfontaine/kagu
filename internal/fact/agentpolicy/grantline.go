@@ -15,7 +15,7 @@ import (
 var lineChains = []string{";", "|", "&", "$(", "`", "<", ">"}
 
 // PendingLine écrit la ligne que l'interface donne pour un droit manquant,
-// la même pour tous : « sudo opencloud agent grant --pending ». Rien n'y vient
+// la même pour tous : « sudo kagu agent grant --pending ». Rien n'y vient
 // du serveur, qui sert l'écran : la commande pose les droits que l'agent a
 // lui-même refusés, après un « o » tapé au clavier (R-DROIT-8, R-A3-15).
 func PendingLine() string {
@@ -23,7 +23,7 @@ func PendingLine() string {
 }
 
 // GrantSetLine écrit la ligne qui pose un jeu (R-A3-7) :
-// « sudo opencloud agent grant --set manage ».
+// « sudo kagu agent grant --set manage ».
 func GrantSetLine(set Set) string {
 	return AgentLine("grant", "--set", string(set))
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/rollback"
 )
 
-// opencloud guard : le lanceur stable de l'agent. L'unité systemd lance cette
+// kagu guard : le lanceur stable de l'agent. L'unité systemd lance cette
 // commande depuis une copie du binaire que root a posée hors de bin/, et elle
 // lance bin/current avec le reste de la ligne (« agent -state … »). Elle rend
 // à systemd le code de sortie qu'il faut pour relancer, ou pour s'arrêter.

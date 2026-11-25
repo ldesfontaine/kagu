@@ -24,7 +24,7 @@ l'interface web embarqués.
 > arm64 sont dans la [release v0.0.1](https://github.com/ldesfontaine/kagu/releases/tag/v0.0.1),
 > ou se compilent. Une installation neuve n'a **pas de compte** : elle ne sert
 > que l'écran de première configuration, qui exige un code tiré sur la
-> machine : `sudo opencloud admin setup-code`.
+> machine : `sudo kagu admin setup-code`.
 
 ![Vue d'ensemble de Kagu, avec des machines d'exemple](docs/images/vue-ensemble.png)
 
@@ -34,7 +34,7 @@ l'interface web embarqués.
 | --- | --- |
 | Mesure chaque machine toutes les 10 s : processeur, mémoire, disques, réseau | N'agit sur une machine que par des **ordres signés**, un par geste, que son agent accepte selon les **droits cochés à son installation** (hors `observe` et `probe.lan`, qui ouvre le réseau local aux sondes sans permettre aucun ordre, rien n'est coché d'office). Aucun shell, aucune commande libre, rien par le jeton d'API |
 | Suit les conteneurs Docker : état, santé, redémarrages, journaux, réseaux | Lit Docker en lecture seule ; n'y touche que pour déployer un service déclaré (`docker compose up`, fichier Compose **généré** depuis l'annuaire, jamais saisi) |
-| Déclare vos services (interface, ou fichier YAML : `opencloud export` / `opencloud apply`) et montre l'écart avec ce qui tourne | Ne déclare rien tout seul : un conteneur inconnu s'affiche « non déclaré ». Le fichier YAML ne s'applique que par la commande |
+| Déclare vos services (interface, ou fichier YAML : `kagu export` / `kagu apply`) et montre l'écart avec ce qui tourne | Ne déclare rien tout seul : un conteneur inconnu s'affiche « non déclaré ». Le fichier YAML ne s'applique que par la commande |
 | Déploie ou redéploie un service Compose déclaré, depuis sa fiche ; le `.env` part une fois avec l'ordre, écrit sur la machine, jamais gardé par Kagu | Ne retire rien : supprimer le service de l'annuaire laisse conteneurs et dossier sur la machine |
 | Sonde des URL et des ports, juge les certificats et leur échéance | Ne renouvelle pas un certificat |
 | Surveille un cron ou une sauvegarde par une URL de ping | N'exécute pas la tâche |
@@ -43,7 +43,7 @@ l'interface web embarqués.
 | Sauvegarde la base chaque nuit, une fois la page Sauvegardes remplie : chiffrée (`age`), envoyée à l'agent de la machine que vous choisissez ; `serve` n'en garde aucune copie | La sauvegarde de la base ne prend que la base et ses deux clés, pas le `data/` ni le `.env` d'un service. N'écarte pas la machine Kagu comme destination : choisissez-en une autre. Phrase perdue, aucune sauvegarde ne se relit. Un échec se lit sur la page, sans alerte |
 | Sauvegarde les VM et conteneurs d'un hôte Proxmox : une archive par VM, produite et chiffrée (`age`) par l'agent de l'hôte (`vzdump`), rangée chez l'agent d'une autre machine ; restauration sans Kagu (`age`, `qmrestore`) | Le droit `backup.produce` vaut root sur l'hôte pour un agent compromis. Une VM à la fois, plus de 55 minutes par VM échoue. N'écrit rien dans Proxmox par son API (le jeton, en lecture seule, ne sert qu'à lister les VM). Voir [Sauvegarder des VM Proxmox](docs/installation.md#sauvegarder-des-vm-proxmox) |
 | Tient un journal d'audit de chaque geste qui écrit et de chaque ordre, envoyé aussi vers les canaux que vous cochez | Sans canal coché, qui efface la base efface la trace |
-| Met à jour ses agents depuis une version signée que vous importez (`opencloud release import`) | Aucune version signée n'est encore publiée, et la `v0.0.1` n'embarque pas la clé qui les vérifie : la première version signée s'installe à la main, serveur et agents ; les suivantes passent par ce geste |
+| Met à jour ses agents depuis une version signée que vous importez (`kagu release import`) | Aucune version signée n'est encore publiée, et la `v0.0.1` n'embarque pas la clé qui les vérifie : la première version signée s'installe à la main, serveur et agents ; les suivantes passent par ce geste |
 | Envoie les alertes en webhook signé (Discord, Slack, Mattermost, ntfy, JSON), par e-mail via votre relais SMTP, ou dans un salon Matrix | Pas de SMS |
 | Publie des pages de statut publiques sous `/statut/<adresse>` | Pas de comptes multiples ni de second facteur en propre : derrière un SSO (Authelia), le mode `forward` les lui délègue |
 | Donne à un agent IA un jeton d'API, pour mcp-maison | En lecture, aucune écriture. En écriture, seulement les verbes cochés (pause d'une sonde, ping d'un agent…), jamais une suppression ; aucun secret rendu |
@@ -58,8 +58,8 @@ chaque flux est dans
 
 | Pièce | Rôle |
 | --- | --- |
-| `opencloud serve` | Sur la machine Kagu : l'interface, l'API, la base. Il n'observe rien de sa machine et n'agit sur aucune machine lui-même : il signe des ordres que les agents exécutent |
-| `opencloud agent` | Sur **chaque** machine, la machine Kagu comprise : s'enrôle une fois par jeton, puis tient un flux HTTPS vers le serveur. Clé Ed25519, aucune connexion entrante. Il exécute les ordres signés que ses droits admettent, et refuse les autres |
+| `kagu serve` | Sur la machine Kagu : l'interface, l'API, la base. Il n'observe rien de sa machine et n'agit sur aucune machine lui-même : il signe des ordres que les agents exécutent |
+| `kagu agent` | Sur **chaque** machine, la machine Kagu comprise : s'enrôle une fois par jeton, puis tient un flux HTTPS vers le serveur. Clé Ed25519, aucune connexion entrante. Il exécute les ordres signés que ses droits admettent, et refuse les autres |
 | Un proxy (Traefik) | Termine TLS devant `serve`, qui écoute en HTTP sur une adresse locale |
 
 Linux seulement (l'agent lit `/proc`). Vérifié sur Linux amd64 ; arm64 se
@@ -74,8 +74,8 @@ Il faut Go 1.26.11 ou plus, Node.js 20.19 ou plus, `make` et `git`.
 
 ```sh
 git clone https://github.com/ldesfontaine/kagu.git
-cd opencloud
-make build                      # compile le front puis le binaire : bin/opencloud
+cd kagu
+make build                      # compile le front puis le binaire : bin/kagu
 ```
 
 Une configuration minimale :
@@ -86,7 +86,7 @@ cat > dev/config.toml <<EOF
 listen = "127.0.0.1:8080"
 state_dir = "$PWD/dev/state"
 EOF
-./bin/opencloud serve -config dev/config.toml
+./bin/kagu serve -config dev/config.toml
 ```
 
 `make run` fait ces deux étapes à votre place. Ouvrez
@@ -103,11 +103,11 @@ curl -X POST -H 'Content-Type: application/json' \
 ```
 
 **Ajoutez une machine** : Machines → Ajouter une machine, donnez-lui un nom.
-Kagu affiche la préparation de la machine (le compte dédié `opencloud-agent`,
+Kagu affiche la préparation de la machine (le compte dédié `kagu-agent`,
 son dossier, son binaire) puis une commande à coller, en root :
 
 ```sh
-printf '%s\n' 'oc_…' | sudo -u opencloud-agent /var/lib/opencloud-agent/bin/current agent -server https://opencloud.example.org
+printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://kagu.example.org
 ```
 
 L'agent tourne sous ce compte, dans le groupe `docker` si la machine a Docker :
@@ -128,7 +128,7 @@ s'affiche qu'une fois, et vaut 1 h : passé ce délai, « Ajouter une machine »
 jouée sur elle en redonne une (ou Ré-enrôler, sur sa fiche). L'unité systemd de
 cet agent est dans [docs/installation.md](docs/installation.md#installer-le-serveur).
 
-Mot de passe perdu : `opencloud auth disable -config dev/config.toml` ramène
+Mot de passe perdu : `kagu auth disable -config dev/config.toml` ramène
 à l'écran de première configuration.
 
 ## Documentation

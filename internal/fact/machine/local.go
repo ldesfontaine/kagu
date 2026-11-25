@@ -10,7 +10,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
-// La machine openCloud est une machine comme les autres, avec un agent comme
+// La machine Kagu est une machine comme les autres, avec un agent comme
 // les autres. Deux choses seulement la touchent ici : l'agent qui s'enrôle
 // par la socket des agents locaux, depuis la machine du serveur, prend son
 // identifiant stable, LocalID ; et tant qu'elle n'a jamais eu d'agent, le
@@ -31,7 +31,7 @@ func (s *Service) SetServerHost(fingerprint, hostname string) {
 
 // machineIDFor rend l'identifiant sous lequel l'agent s'enrôle : LocalID
 // s'il arrive par la socket des agents locaux avec l'empreinte de la machine
-// du serveur (c'est ainsi qu'on reconnaît la machine openCloud, et qu'elle
+// du serveur (c'est ainsi qu'on reconnaît la machine Kagu, et qu'elle
 // retrouve son historique), sinon celui qu'il a tiré. Par HTTPS l'empreinte
 // ne compte pas : c'est un SHA-256 de /etc/machine-id et du boot_id, lisibles
 // de tous ; un compte quelconque de la machine, avec un jeton de machine
@@ -43,16 +43,16 @@ func (s *Service) machineIDFor(request Enrollment) string {
 	return request.MachineID
 }
 
-// localOffer est la ligne offerte pour la machine openCloud : le clair du
+// localOffer est la ligne offerte pour la machine Kagu : le clair du
 // jeton ne vit qu'en mémoire, jamais en base ni au journal.
 type localOffer struct {
 	cleartext string
 	token     Token
 }
 
-// OfferLocalEnrollment rend le jeton de l'agent de la machine openCloud, tant
+// OfferLocalEnrollment rend le jeton de l'agent de la machine Kagu, tant
 // qu'elle n'a jamais eu d'agent : celui déjà offert s'il attend encore, sinon
-// un neuf, avec observe et probe.lan : une sonde de la machine openCloud vise
+// un neuf, avec observe et probe.lan : une sonde de la machine Kagu vise
 // d'abord ses propres services. Un jeton de ré-enrôlement si sa ligne existe
 // (une base d'avant les agents), un jeton de machine neuve, nommée d'après
 // le nom d'hôte, sinon : l'agent qui l'utilise par la socket des agents
@@ -99,7 +99,7 @@ func (s *Service) isPending(ctx context.Context, token Token) (bool, error) {
 	return slices.ContainsFunc(pending, func(candidate Token) bool { return candidate.ID == token.ID }), nil
 }
 
-// localMachineName tire le nom de la machine openCloud de son nom d'hôte,
+// localMachineName tire le nom de la machine Kagu de son nom d'hôte,
 // sans le domaine ; un nom d'hôte qui ne fait pas un nom de machine laisse
 // celui du produit.
 func (s *Service) localMachineName() string {

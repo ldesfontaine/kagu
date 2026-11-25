@@ -170,8 +170,8 @@ func TestDeliver_MachineShare_HoldsTheSurplusAndSummarizesIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err := alert.RenderSummary(catalogs.For(lang.French), alert.FormatText, summary.Held, f.clock, "https://oc.exemple.fr/alertes")
-	if err != nil || !strings.Contains(string(body.Content), "10 alertes de plus, voir "+brand.ProductName) || !strings.Contains(string(body.Content), "Machines concernées : opencloud.") {
+	body, err := alert.RenderSummary(catalogs.For(lang.French), alert.FormatText, summary.Held, f.clock, "https://kagu.exemple.fr/alertes")
+	if err != nil || !strings.Contains(string(body.Content), "10 alertes de plus, voir "+brand.ProductName) || !strings.Contains(string(body.Content), "Machines concernées : kagu.") {
 		t.Fatalf("body %q %v", body.Content, err)
 	}
 }
@@ -266,7 +266,7 @@ func TestDeliver_Summary_CarriesTheHighestHeldSeverityAndTheMachines(t *testing.
 		lang.French:  {"gravité danger", "Machines concernées : vps-paris-1."},
 		lang.English: {"danger severity", "Machines involved: vps-paris-1."},
 	} {
-		body, err := alert.RenderSummary(catalogs.For(code), alert.FormatText, summary.Held, f.clock, "https://oc.exemple.fr/alertes")
+		body, err := alert.RenderSummary(catalogs.For(code), alert.FormatText, summary.Held, f.clock, "https://kagu.exemple.fr/alertes")
 		if err != nil || !body.Urgent {
 			t.Fatalf("%s: urgent=%v err=%v", code, body.Urgent, err)
 		}

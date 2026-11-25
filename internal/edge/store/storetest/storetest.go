@@ -45,7 +45,7 @@ func OpenWithStateDir(t testing.TB) (*os.Root, *store.DB) {
 	return root, db
 }
 
-// SaveLocalMachine inscrit la machine openCloud et son agent par la base
+// SaveLocalMachine inscrit la machine Kagu et son agent par la base
 // seule, sans le service des machines : un jeton écrit puis consommé sous
 // LocalID, comme le fait l'enrôlement de l'agent qui tourne sur la machine
 // du serveur.
@@ -71,7 +71,7 @@ func SaveLocalMachine(t testing.TB, db *store.DB, at time.Time) {
 	}
 }
 
-// Ce que les rendus figés voient de la machine openCloud.
+// Ce que les rendus figés voient de la machine Kagu.
 const (
 	localHostname = brand.ID + "-host"
 	localAgentID  = "agt_0000000000000001"
@@ -127,7 +127,7 @@ func PublishedProject(t testing.TB, db *store.DB, slug string) string {
 	return project.ID
 }
 
-// EnsureLocalMachine enrôle l'agent de la machine openCloud par le service
+// EnsureLocalMachine enrôle l'agent de la machine Kagu par le service
 // des machines, comme en vrai : un jeton, puis un agent qui arrive par la
 // socket des agents locaux avec l'empreinte de la machine du serveur, et
 // prend LocalID.

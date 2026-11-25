@@ -35,9 +35,9 @@ ou reçoit, `serve` ordonne et journalise.
 ## 1. Installation de Kagu et arborescence
 
 **Aujourd'hui** ([`installation.md`](../installation.md)) : binaire statique dans
-`/usr/local/bin`, config dans `/etc/opencloud/config.toml`, état dans
-`/var/lib/opencloud` (`StateDirectory=`), serveur sous l'utilisateur
-`opencloud`, agent sous le compte dédié `opencloud-agent` (22/10 : `/proc`, volumes
+`/usr/local/bin`, config dans `/etc/kagu/config.toml`, état dans
+`/var/lib/kagu` (`StateDirectory=`), serveur sous l'utilisateur
+`kagu`, agent sous le compte dédié `kagu-agent` (22/10 : `/proc`, volumes
 montés, socket Docker par le groupe `docker`), root sur demande. Les
 réglages vivent à quatre endroits : `config.toml`, `settings.toml`,
 `lifecycle.json`, la base ([« Ce qui est stocké »](22-fonctionnement.md#ce-qui-est-stocké-et-où)).
@@ -51,11 +51,11 @@ machine Kagu comprise : elle reçoit un agent comme les autres.
 
 | Chemin | Contenu | Aujourd'hui |
 | --- | --- | --- |
-| `/usr/local/bin/opencloud` | le binaire, serveur ou agent | pareil |
-| `/etc/opencloud/config.toml` | ce que l'admin pose avant le démarrage ; **lecture seule** pour le serveur | `settings.toml` disparaît, vers la base ; `lifecycle.json` reste un cache, hors export |
-| `/var/lib/opencloud/` | la base, `secret.key`, `server.key` | pareil |
-| `/var/lib/opencloud-agent/` | l'état de l'agent, au compte de l'agent (`opencloud-agent`, ou root s'il y tient) `0700` : l'identité, `bin/`, sa rétention locale | `identity.json` et `bin/` (**fait**, 22 octobre 2026, #235) ; la rétention n'existe pas |
-| `/srv/workspace/<service>/` | `compose.yml`, `.env`, conf ; `data/` : un service déployé par Kagu. Racine réglable dans le fichier de l'agent à l'installation ; fichier témoin `.opencloud` | n'existe pas |
+| `/usr/local/bin/kagu` | le binaire, serveur ou agent | pareil |
+| `/etc/kagu/config.toml` | ce que l'admin pose avant le démarrage ; **lecture seule** pour le serveur | `settings.toml` disparaît, vers la base ; `lifecycle.json` reste un cache, hors export |
+| `/var/lib/kagu/` | la base, `secret.key`, `server.key` | pareil |
+| `/var/lib/kagu-agent/` | l'état de l'agent, au compte de l'agent (`kagu-agent`, ou root s'il y tient) `0700` : l'identité, `bin/`, sa rétention locale | `identity.json` et `bin/` (**fait**, 22 octobre 2026, #235) ; la rétention n'existe pas |
+| `/srv/workspace/<service>/` | `compose.yml`, `.env`, conf ; `data/` : un service déployé par Kagu. Racine réglable dans le fichier de l'agent à l'installation ; fichier témoin `.kagu` | n'existe pas |
 
 Le nom du produit n'est pas définitif : les chemins, labels, préfixe de jeton
 et en-têtes qui le portent passent par un seul paquet de constantes
@@ -72,7 +72,7 @@ et en-têtes qui le portent passent par un seul paquet de constantes
 | Machine Kagu avec un agent | `serve`, migration | Un seul mécanisme : le chemin intégré disparaît | Faible ; la machine garde son id et son historique, mais ne se voit plus tant que l'agent n'est pas installé. **Fait** (migration `030_agents.sql`) : l'agent s'installe dès la première configuration, l'empreinte du serveur le rattache à l'identifiant `local` |
 | Mise à jour d'un **agent** depuis le serveur | agent, nouvelle action | Le geste le plus utile et le moins dangereux : premier geste (décision 14) | Moyen : télécharger, vérifier la somme, remplacer, redémarrer. Prérequis **fait** (21/10) : versions immuables, signées, vérifiées par le binaire (`22-fonctionnement.md`, « Comment une version est publiée et vérifiée »). **Fait** (22/10) : l'ordre `agent.update`, la bibliothèque des versions importées, le bouton de la fiche (« Comment un agent se met à jour ») |
 | Le **serveur** ne se met jamais à jour seul | doc | Il porte la base ; une montée ratée casse tout | Nul |
-| Agent root ou non | `opencloud-agent.service` | Lire `/proc` et Docker en root est accepté aujourd'hui ; écrire dans `/srv/workspace` en root l'est moins | Décision 2, prise le 22 octobre 2026 : compte dédié par défaut, root sur demande |
+| Agent root ou non | `kagu-agent.service` | Lire `/proc` et Docker en root est accepté aujourd'hui ; écrire dans `/srv/workspace` en root l'est moins | Décision 2, prise le 22 octobre 2026 : compte dédié par défaut, root sur demande |
 
 ## 2. Déclarer : l'annuaire, export, `apply`
 
@@ -100,8 +100,8 @@ statut. Le **service déclaré** en est l'objet central.
 | Service déclaré | identité propre, jamais tirée de Docker ; un dossier avec ses unités (service Compose, conteneur, binaire) ; machine, nature (application ou outil d'infra), image et version épinglée par unité, ports, adresse publique, protégé ou non. Générique : rien de propre à une infra donnée | Komodo (`[[stack]]`, `[[server]]`) |
 | Projet | regroupe des services ; sert à la page de statut, au routage des canaux, au filtre de l'interface, plus tard aux droits | — |
 | Page de statut | une par projet, créée à la main ; remplace la page globale | — |
-| `opencloud export` | sort l'annuaire en YAML lisible, `id` + `name`, **sans aucun secret** (marqueur « conservé ») ; peut aller dans Git | Komodo `ExportAllResourcesToToml`, Beszel `config-yaml` |
-| `opencloud apply <fichier>` | calcule le diff, **l'affiche, demande confirmation**, crée ou modifie sur place, ne recrée jamais. Ne supprime ce qui n'est pas déclaré que sur option explicite | Komodo Resource Sync (`delete` opt-in) ; piège Beszel (supprime au démarrage) |
+| `kagu export` | sort l'annuaire en YAML lisible, `id` + `name`, **sans aucun secret** (marqueur « conservé ») ; peut aller dans Git | Komodo `ExportAllResourcesToToml`, Beszel `config-yaml` |
+| `kagu apply <fichier>` | calcule le diff, **l'affiche, demande confirmation**, crée ou modifie sur place, ne recrée jamais. Ne supprime ce qui n'est pas déclaré que sur option explicite | Komodo Resource Sync (`delete` opt-in) ; piège Beszel (supprime au démarrage) |
 | Vue « écart » | par service : déclaré et absent, présent et non déclaré (adoptable d'un clic), conforme. Dans l'interface et par l'API, lisible par un jeton d'API | — |
 
 **Écart et coût**
@@ -192,7 +192,7 @@ ordre lance un programme à chemin constant, arguments en liste, environnement
 remplacé (`docker`, `vzdump`). Les droits sont
 cochés à l'installation, écrits dans le fichier de l'agent, rapportés,
 affichés et **appliqués par l'agent** ; les changer, c'est ré-enrôler. Le jeton d'enrôlement vaut 1 h, sert une fois. L'agent tourne sous le compte
-dédié `opencloud-agent`, root sur demande. Machine et agent sont deux tables (`agents`, migration
+dédié `kagu-agent`, root sur demande. Machine et agent sont deux tables (`agents`, migration
 `030_agents.sql`) ; un agent se révoque sans supprimer sa machine
 ([« Comment une machine entre »](22-fonctionnement.md#comment-une-machine-entre)).
 
@@ -204,7 +204,7 @@ dédié `opencloud-agent`, root sur demande. Machine et agent sont deux tables (
 | Droits (capacités) | **pas de « modes »** : un seul agent, une liste de droits cochée dans l'interface à l'installation, écrite par la ligne générée dans le fichier local de l'agent. L'agent fait ce qu'il a le droit de faire, rien d'autre ; un refus est journalisé. Liste de départ : décision 9, **prise** ; changement après l'installation : décision 10, **prise** (ré-enrôler). **Fait** : cochés, écrits, rapportés et affichés avec l'écart (030) ; **appliqués** par l'agent, refus rapporté et journalisé, ordre non envoyé quand le serveur sait le droit absent (#146) | Komodo `disable_terminals`, `core_public_keys` ; Netdata `allow from` |
 | Vérification réciproque | l'agent connaît la clé publique du serveur et vérifie chaque session ; un faux serveur ne commande rien. **Fait** (#146) : la clé publique livrée à l'enrôlement et épinglée, chaque ordre signé et vérifié (machine, agent, échéance, rang) ; l'agent ne vérifie pas le flux lui-même, seulement ce qui agit ; il ne suit aucune redirection et lit le flux borné ; versions du protocole annoncées, une autre refusée (`426`) | Komodo (clés `core_public_keys`), Beszel (le hub signe le jeton) |
 | Enrôlement | jeton à usage unique, porté par la ligne générée ; **rotation** de la clé de l'agent et de celle du serveur. Machine et agent séparés : ré-enrôler, réinstaller ou tourner la clé garde la machine et son historique. **Fait** (#146) : rotation de `server.key` (la neuve livrée par un ordre que l'ancienne signe, les deux valables le temps que chaque agent la prenne) et de `secret.key` (chaque secret rescellé) ; la clé d'un agent tourne en le ré-enrôlant, comme une clé du serveur volée | Teleport (jeton 30 min), Komodo `RotatePrivateKey`, Swarm (3 mois) |
-| Root | **Fait (22/10, décision 2)** : l'agent tourne sous `opencloud-agent` (groupe `docker` si Docker), root sur demande. **Contrepartie** : le groupe `docker` équivaut à root ; le droit `backup.produce` (24/10, décision 9) aussi, par une porte étroite (une règle `sudo` sur un script de root, `NoNewPrivileges=false` dans l'unité), sur l'hôte Proxmox seulement. Piste, si l'usage le demande : un observateur non privilégié + un exécuteur root étroit avec politique locale | — |
+| Root | **Fait (22/10, décision 2)** : l'agent tourne sous `kagu-agent` (groupe `docker` si Docker), root sur demande. **Contrepartie** : le groupe `docker` équivaut à root ; le droit `backup.produce` (24/10, décision 9) aussi, par une porte étroite (une règle `sudo` sur un script de root, `NoNewPrivileges=false` dans l'unité), sur l'hôte Proxmox seulement. Piste, si l'usage le demande : un observateur non privilégié + un exécuteur root étroit avec politique locale | — |
 | Commandes d'observation | `probes` et `logs` ne sont pas signées. **Fait** (22/10, #146) : l'agent rejuge le jeu de sondes (mêmes bornes que le serveur, 64 au plus, ce qu'il écarte est dit dans son journal) et n'ouvre que le journal d'un conteneur qu'il a inventorié. **Fait** (22/10) : droit `probe.lan`, coché par défaut, les adresses privées en dépendent ; un refus de l'agent se lit sur la sonde | Nagios NRPE (le serveur ne demande qu'un nom) |
 | Contrôles | après l'étape 2 : contrôles sur le modèle NRPE, commandes définies dans le fichier local de l'agent, le serveur ne demande qu'un nom ; code de sortie 0/1/2/3. Un genre de sonde, avec un état « avertissement » | Nagios NRPE |
 
@@ -217,7 +217,7 @@ difficile, secrets dans les commandes. Kagu n'a jamais d'accès SSH.
 
 ## 6. Les données
 
-**Aujourd'hui** : tout vit sur la machine Kagu, dans `opencloud.db` :
+**Aujourd'hui** : tout vit sur la machine Kagu, dans `kagu.db` :
 brut toutes les 10 s, moyennes horaires, journalières, avec leurs purges
 ([« Ce qui est stocké »](22-fonctionnement.md#ce-qui-est-stocké-et-où)).
 L'agent **ne garde rien** : flux coupé, mesures perdues. **Fait** (21/10) : la
@@ -230,8 +230,8 @@ Les jetons de ping sont chiffrés dans la base (**fait**, décision 13). **Fait*
 
 | Où | Quoi | Combien de temps | Pourquoi |
 | --- | --- | --- | --- |
-| Serveur, `opencloud.db` | les données principales ; les secrets saisis dans l'interface **chiffrés** par la clé du serveur ; un historique long par service, sur son identité stable ; trafic sans les interfaces virtuelles (veth, ponts) ; un agrégat horaire par volume | purges actuelles | Une base volée sans la clé ne livre rien ; trafic compté deux fois et volume plein noyé dans la somme aujourd'hui |
-| Agent, `/var/lib/opencloud-agent/local.db` | un **petit SQLite** : mesures, résultats de sondes, dernier jeu de sondes, sa part de l'annuaire | **24 h**, anneau | Un tampon en mémoire disparaît au redémarrage, et c'est au redémarrage qu'on veut les données. Quelques Mo |
+| Serveur, `kagu.db` | les données principales ; les secrets saisis dans l'interface **chiffrés** par la clé du serveur ; un historique long par service, sur son identité stable ; trafic sans les interfaces virtuelles (veth, ponts) ; un agrégat horaire par volume | purges actuelles | Une base volée sans la clé ne livre rien ; trafic compté deux fois et volume plein noyé dans la somme aujourd'hui |
+| Agent, `/var/lib/kagu-agent/local.db` | un **petit SQLite** : mesures, résultats de sondes, dernier jeu de sondes, sa part de l'annuaire | **24 h**, anneau | Un tampon en mémoire disparaît au redémarrage, et c'est au redémarrage qu'on veut les données. Quelques Mo |
 | Agent → serveur | **rejeu** des échantillons manqués à la reconnexion, fenêtre bornée à 24 h | — | Netdata (`replication period`), Centreon (fichiers de rétention rejoués) |
 | Destination de sauvegarde | la base, avec la clé du serveur ; chaque service (`data/` + `.env`). **Chiffrées**, envoyées vers une destination choisie : une machine avec agent, plus tard un stockage externe. **Pas de copie locale** ; sans destination, l'interface le dit | N copies gardées, à régler | Sans ça, la base-vérité n'a pas de filet. Une sauvegarde parmi d'autres, dans la page Sauvegardes |
 | Chiffrement des sauvegardes | une paire de clés : la publique chiffre chaque nuit, sur le serveur pour la base, sur l'hôte producteur pour une VM Proxmox ; la privée, chiffrée par une phrase de passe, est déposée avec les sauvegardes | — | Sauvegarde automatique sans secret en clair sur le serveur, et sans clair d'une VM hors de son hôte ; seule la phrase est à garder de côté |
@@ -327,7 +327,7 @@ Uptime Kuma, Dokploy, Coolify, Teleport, Nomad, Swarm, Centreon.
 | 7 | à ouvrir | déployer un compose dans `/srv/workspace/<service>/`. **Fait** (première version, 21/10) : déployer et redéployer un service Compose déclaré ; pas de retrait, pas de modules | oui |
 | 8 | #152 | clés SSH distribuées. **Étape 1 faite** (22/10) : relevé en lecture seule des `authorized_keys` de chaque compte, affiché par machine et en matrice ; l'écriture (`ssh.keys`) reste à décider | non pour l'étape 1, oui ensuite |
 | 9 | à ouvrir | modules et dépendances ; catalogue | — |
-| 10 | #266 | **gestes sur Proxmox**. **Fait** (28/10) : démarrer, arrêter proprement, prendre et supprimer ses instantanés `oc-`, par l'agent de l'hôte et son jeton local (droits `proxmox.power`, `proxmox.snapshot`, décision 18) | oui, sur l'hôte Proxmox |
+| 10 | #266 | **gestes sur Proxmox**. **Fait** (28/10) : démarrer, arrêter proprement, prendre et supprimer ses instantanés `kg-`, par l'agent de l'hôte et son jeton local (droits `proxmox.power`, `proxmox.snapshot`, décision 18) | oui, sur l'hôte Proxmox |
 | 10 | à ouvrir | **jetons d'API en écriture** (décision 19). **Fait** (28/10) : registre de verbes (`internal/gesture/verb`), jeton `write` avec sa liste de verbes (migration `016`), admission par verbe, débit par jeton, audit `api_token.deny`, contrat de réponse (`run_id`, `state`, `reverse_with`) ; départ : `agent.ping`, `probe.pause`/`resume`, `job.pause`/`resume`. **Fait** (28/10) : les quatre verbes Proxmox (`proxmox.vm.start`/`shutdown`, `snapshot`/`snapshot_delete`, décision 18) et `GET /api/token/verbs`, par lequel un jeton lit SES verbes. **Fait** (28/10) : l'audit nomme l'acteur d'un jeton (nom recopié à l'écriture, « pour : … » ou « pour : inconnu »), distingue personne, jeton, agent, règle et CLI, avec filtre et recherche (migration `017`) ; un nom de jeton vivant est unique. **Fait** (29/10) : `agent.update` ↔ `agent.rollback` (décisions 21 à 23). **Fait** (31/10, #382) : la portée d'un jeton, par machines et par invités Proxmox (migration `023`, `403 api_token.out_of_scope`). À suivre : OPNsense en écriture (décision 20, phase 2c) | oui : les gestes cochés, par jeton |
 
 Rien ne passe à l'étape 5 tant que 2 et 3 ne sont pas fermées. Les contrôles
@@ -341,7 +341,7 @@ donné avant la décision.
 | N° | Question | Options | Mon avis | Décision |
 | --- | --- | --- | --- | --- |
 | 1 | Un seul fichier de réglages ? | garder `settings.toml` + `lifecycle.json` ; tout ramener dans `config.toml` + base | tout ramener | `config.toml` = posé par l'admin avant le démarrage, lecture seule pour le serveur. Ce que l'interface change va en base ; `settings.toml` disparaît. `lifecycle.json` reste un cache, hors export |
-| 2 | L'agent reste root ? | root pour tout ; utilisateur `opencloud` + root ciblé | utilisateur dédié, root ciblé, si le coût reste raisonnable | **Prise le 22 octobre 2026** : compte dédié par défaut (`opencloud-agent`, groupe `docker` si Docker), root sur demande ; l'agent dit son compte et refuse lisiblement ce qu'il ne peut pas (#250). Contrepartie : le groupe `docker` équivaut à root ; le découpage observateur/exécuteur n'est pas fait. *Avant, reportée avant l'étape 2. Piste : observateur non privilégié + exécuteur root étroit avec politique locale.* **État au 21 octobre 2026** (#146) : l'agent reste root ; ce sont ses droits, appliqués par lui, qui bornent ce qu'un ordre demande. Le découpage reste à décider par Lucas. **État au 22 octobre 2026** : l'état de l'agent vit hors du dossier du serveur, root `0700`, et l'agent n'écrit rien si un dossier au-dessus appartient à un autre compte (#235). Utile quel que soit le découpage décidé. `backup.receive` est le premier ordre qui écrit sur une machine (21/10) : l'agent reste root, borné par ses droits et un `os.Root` sur le chemin (à revoir avec cette décision). **État au 24 octobre 2026** : l'agent est sous son compte dédié ; seul l'hôte qui porte `backup.produce` desserre son unité (`NoNewPrivileges=false`), voir la décision 9 |
+| 2 | L'agent reste root ? | root pour tout ; utilisateur `kagu` + root ciblé | utilisateur dédié, root ciblé, si le coût reste raisonnable | **Prise le 22 octobre 2026** : compte dédié par défaut (`kagu-agent`, groupe `docker` si Docker), root sur demande ; l'agent dit son compte et refuse lisiblement ce qu'il ne peut pas (#250). Contrepartie : le groupe `docker` équivaut à root ; le découpage observateur/exécuteur n'est pas fait. *Avant, reportée avant l'étape 2. Piste : observateur non privilégié + exécuteur root étroit avec politique locale.* **État au 21 octobre 2026** (#146) : l'agent reste root ; ce sont ses droits, appliqués par lui, qui bornent ce qu'un ordre demande. Le découpage reste à décider par Lucas. **État au 22 octobre 2026** : l'état de l'agent vit hors du dossier du serveur, root `0700`, et l'agent n'écrit rien si un dossier au-dessus appartient à un autre compte (#235). Utile quel que soit le découpage décidé. `backup.receive` est le premier ordre qui écrit sur une machine (21/10) : l'agent reste root, borné par ses droits et un `os.Root` sur le chemin (à revoir avec cette décision). **État au 24 octobre 2026** : l'agent est sous son compte dédié ; seul l'hôte qui porte `backup.produce` desserre son unité (`NoNewPrivileges=false`), voir la décision 9 |
 | 3 | Édition des sondes avant tout ? | oui ; non, on recrée | oui | Oui : un `apply` modifie sur place, ne recrée jamais ; sondes, tâches, composants gardent historique et jeton |
 | 4 | Format du fichier déclaratif | YAML ; TOML | YAML, plus courant chez ceux qui écrivent des compose | YAML |
 | 5 | `apply` supprime ce qui n'est pas déclaré ? | jamais ; option explicite ; toujours | option explicite, jamais par défaut | Sur option explicite seulement, en affichant ce que la suppression emporte |
@@ -370,7 +370,7 @@ donné avant la décision.
 | Sujet | Décision |
 | --- | --- |
 | Installation | L'agent s'installe par une ligne générée par l'interface (`curl … \| sh`), aussi en cloud-init ; jeton à usage unique lu sur stdin ou dans un fichier, jamais en argv. Le serveur n'a jamais d'accès SSH |
-| Racine | Racine des services par défaut `/srv/workspace`, réglable dans le fichier de l'agent à l'installation. Dossier existant et non vide : l'installation s'arrête et demande un autre chemin. Fichier témoin `.opencloud` |
+| Racine | Racine des services par défaut `/srv/workspace`, réglable dans le fichier de l'agent à l'installation. Dossier existant et non vide : l'installation s'arrête et demande un autre chemin. Fichier témoin `.kagu` |
 | Droits | Pas de « modes » : un seul agent, une liste de droits cochée dans l'interface à l'installation, écrite par la ligne générée dans le fichier local de l'agent. L'agent fait ce qu'il a le droit de faire, rien d'autre |
 | Nom | Le nom du produit n'est pas définitif : tout ce qui le porte passe par un seul endroit. Affichage : une constante + les catalogues ; technique : un paquet de constantes (chemins, labels, préfixe de jeton, en-têtes) |
 | Identité de service | Le service déclaré a sa propre identité stable ; les conteneurs s'y rattachent : label posé par Kagu pour ce qu'il déploie, sinon machine + projet + service Compose, sinon nom du conteneur (signalé comme faible). Recréer un conteneur ne casse aucun lien |

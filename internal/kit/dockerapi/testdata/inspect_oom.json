@@ -1,6 +1,6 @@
 {
     "Id": "5c0f3b7d2e8a41960d7e6ab3c19f0a24e8b5d6c7f1a2b3c4d5e6f708192a3b4c",
-    "Name": "/opencloud-fixture-oom",
+    "Name": "/kagu-fixture-oom",
     "Image": "sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
     "Created": "2026-09-19T08:15:35.848652237Z",
     "RestartCount": 0,

@@ -134,7 +134,7 @@ func serverKeysOf(blocks []fileServerKey) ([]ServerKey, error) {
 }
 
 // ParseServerKey lit une clé publique Ed25519 du serveur en base64, telle que
-// « opencloud secrets server-key » et la ligne « trust set » la donnent.
+// « kagu secrets server-key » et la ligne « trust set » la donnent.
 func ParseServerKey(text string) ([]byte, error) {
 	key, err := base64.StdEncoding.Strict().DecodeString(text)
 	if err != nil || len(key) != ed25519.PublicKeySize {

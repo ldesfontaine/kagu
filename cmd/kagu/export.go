@@ -31,7 +31,7 @@ const exportUsage = `Usage : {command} export [-config chemin] [-o fichier] [-pr
 // l'infrastructure. Qui veut le partager l'ouvre lui-même.
 const exportFileMode = 0o600
 
-// opencloud export : l'annuaire en YAML, tel que le serveur le sert à
+// kagu export : l'annuaire en YAML, tel que le serveur le sert à
 // l'interface. Elle n'ouvre pas la base : lancée en root, elle ne crée donc
 // pas de fichier -wal au nom de root.
 func runExport(args []string) error {

@@ -52,13 +52,13 @@ const (
 	backupFileSuffix     = ".tar.age"
 	backupKeySuffix      = ".age"
 	// DatabaseSubject est le sujet du plan de la base : ses fichiers gardent
-	// le nom d'avant les plans multiples (opencloud-AAAAMMJJ-HHMMSS.tar.age).
+	// le nom d'avant les plans multiples (kagu-AAAAMMJJ-HHMMSS.tar.age).
 	DatabaseSubject = "database"
 	// Le préfixe tient dans un nom de fichier, avec l'instant et le suffixe.
 	maxBackupPrefix = 64
 
 	// PrefixSinceVersion est la première version d'agent qui lit le préfixe de
-	// backup.prune. Un agent plus ancien l'ignore et élague « opencloud-… »
+	// backup.prune. Un agent plus ancien l'ignore et élague « kagu-… »
 	// avec le nombre à garder de n'importe quel plan : le serveur ne lui envoie
 	// pas l'élagage d'un plan machine.
 	PrefixSinceVersion = "v0.2.0"
@@ -73,7 +73,7 @@ var (
 
 // BackupFilePrefix est ce que les fichiers d'un plan ont en commun : le
 // sujet, suivi d'un suffixe quand une source produit plusieurs archives
-// (une par machine virtuelle). Le plan de la base garde « opencloud ».
+// (une par machine virtuelle). Le plan de la base garde « kagu ».
 func BackupFilePrefix(subject, suffix string) string {
 	prefix := subject
 	if subject == DatabaseSubject {

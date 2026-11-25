@@ -11,7 +11,7 @@ import (
 )
 
 func TestAccount_ReadsBackWhatItWrites(t *testing.T) {
-	cases := []Account{{UID: 0, Name: "root"}, {UID: 998, Name: "opencloud-agent"}, {UID: 1000}, {UID: 4294967295, Name: "_svc"}}
+	cases := []Account{{UID: 0, Name: "root"}, {UID: 998, Name: "kagu-agent"}, {UID: 1000}, {UID: 4294967295, Name: "_svc"}}
 	for _, want := range cases {
 		got, ok := ParseAccount(FormatAccount(want))
 		if !ok || got != want {

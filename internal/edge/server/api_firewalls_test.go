@@ -302,7 +302,7 @@ func TestFirewalls_TheSecretNeverLeaves(t *testing.T) {
 	}
 }
 
-// Un bail se rattache à la machine d'openCloud qui porte la même carte réseau ;
+// Un bail se rattache à la machine de Kagu qui porte la même carte réseau ;
 // un bail d'un appareil inconnu reste sans machine.
 func TestFirewallLeases_AttachTheMachineOfTheSameNetworkCard(t *testing.T) {
 	server, fake, _ := firewallBench(t)

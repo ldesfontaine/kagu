@@ -139,10 +139,10 @@ func TestDirectoryGapsAPI_ObservedFollowsTheMachineOfTheService(t *testing.T) {
 	if !observed[cloud] {
 		t.Fatalf("machine vue à l'instant : %v", observed)
 	}
-	// Le service de la machine openCloud, qui n'a jamais signalé, reste non observé.
+	// Le service de la machine Kagu, qui n'a jamais signalé, reste non observé.
 	for id, ok := range observed {
 		if id != cloud && ok {
-			t.Fatalf("la machine openCloud n'a jamais signalé : %v", observed)
+			t.Fatalf("la machine Kagu n'a jamais signalé : %v", observed)
 		}
 	}
 }

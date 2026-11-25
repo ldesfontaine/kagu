@@ -31,7 +31,7 @@ async function partlyReadSSH(page: Page): Promise<void> {
             machine_name: "vps-lyon",
             reported_at: "2026-10-28T09:00:00Z",
             truncated: false,
-            accounts: [account("opencloud-agent", 998, "read", [key]), account("root", 0, "denied", [])],
+            accounts: [account("kagu-agent", 998, "read", [key]), account("root", 0, "denied", [])],
           },
         ],
       },

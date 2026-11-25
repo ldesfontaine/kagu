@@ -38,7 +38,7 @@ var (
 
 // snapshotNamePattern est exactement ce que SnapshotName écrit : le préfixe,
 // la date, l'heure. Plus étroit qu'un simple préfixe, pour qu'aucun nom de
-// l'opérateur (« oc-avant-migration ») ni aucun caractère de chemin ne passe.
+// l'opérateur (« kg-avant-migration ») ni aucun caractère de chemin ne passe.
 var snapshotNamePattern = regexp.MustCompile("^" + regexp.QuoteMeta(brand.SnapshotPrefix) + `[0-9]{8}-[0-9]{6}$`)
 
 // SnapshotName rend le nom d'un instantané créé à cet instant, en UTC.

@@ -13,7 +13,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
-// Format est la forme du corps envoyé : celle d'openCloud, structurée ;
+// Format est la forme du corps envoyé : celle de Kagu, structurée ;
 // du texte brut, ce que lit ntfy ; un embed Discord ; un message Slack,
 // que Mattermost et Rocket.Chat lisent aussi. Un seul genre de canal, le
 // webhook : tout ce qui a une URL entrante se branche. L'e-mail n'a pas

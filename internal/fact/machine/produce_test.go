@@ -39,7 +39,7 @@ func TestProduceTexts_SayExactlyWhatTheDocumentationSays(t *testing.T) {
 	if got := VzdumpWrapperLines(); !slices.Equal(got, wantWrapper) {
 		t.Errorf("wrapper %q, want %q", got, wantWrapper)
 	}
-	wantRule := []string{"opencloud-agent ALL=(root) NOPASSWD: /usr/local/sbin/opencloud-vzdump"}
+	wantRule := []string{"kagu-agent ALL=(root) NOPASSWD: /usr/local/sbin/kagu-vzdump"}
 	if got := SudoersRuleLines(); !slices.Equal(got, wantRule) {
 		t.Errorf("rule %q, want %q", got, wantRule)
 	}
@@ -47,7 +47,7 @@ func TestProduceTexts_SayExactlyWhatTheDocumentationSays(t *testing.T) {
 	if got := ProduceDropInLines(); !slices.Equal(got, wantDropIn) {
 		t.Errorf("drop-in %q, want %q", got, wantDropIn)
 	}
-	if ProduceDropInFile != "/etc/systemd/system/opencloud-agent.service.d/produce.conf" || SudoersFile != "/etc/sudoers.d/opencloud-agent" || ProduceDir != "/var/lib/opencloud-agent/produce" {
+	if ProduceDropInFile != "/etc/systemd/system/kagu-agent.service.d/produce.conf" || SudoersFile != "/etc/sudoers.d/kagu-agent" || ProduceDir != "/var/lib/kagu-agent/produce" {
 		t.Errorf("paths: %s %s %s", ProduceDropInFile, SudoersFile, ProduceDir)
 	}
 }

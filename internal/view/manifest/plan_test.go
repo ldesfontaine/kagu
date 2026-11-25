@@ -257,7 +257,7 @@ func TestPlan_UnknownReferencesAreRefused(t *testing.T) {
 		key  string
 	}{
 		"machine of a service": {func(s string) string {
-			return replaceOnce(t, s, "    machine: opencloud\n    name: legacy", "    machine: ghost\n    name: legacy")
+			return replaceOnce(t, s, "    machine: kagu\n    name: legacy", "    machine: ghost\n    name: legacy")
 		}, manifest.KeyMachineUnknown},
 		"runner of a probe": {func(s string) string {
 			return replaceOnce(t, s, "    name: mail-imaps\n    runner: app-1", "    name: mail-imaps\n    runner: ghost")
@@ -269,13 +269,13 @@ func TestPlan_UnknownReferencesAreRefused(t *testing.T) {
 			return replaceOnce(t, s, "    projects: [docs]\n", "    projects: [nowhere]\n")
 		}, manifest.KeyProjectUnknown},
 		"machine of an ignored key": {func(s string) string {
-			return replaceOnce(t, s, "  - machine: opencloud\n    container_name: portainer", "  - machine: ghost\n    container_name: portainer")
+			return replaceOnce(t, s, "  - machine: kagu\n    container_name: portainer", "  - machine: ghost\n    container_name: portainer")
 		}, manifest.KeyMachineUnknown},
 		"provides on an application": {func(s string) string {
 			return replaceOnce(t, s, "    nature: application\n    origin: compose", "    nature: application\n    provides: [proxy]\n    origin: compose")
 		}, "directory.provides_need_infra"},
 		"negative threshold": {func(s string) string {
-			return replaceOnce(t, s, "    name: wiki-http\n    runner: opencloud\n    service: app-1/wiki\n    kind: http\n    target: https://wiki.example.org/healthz\n    interval: 1m\n    timeout: 10s\n    failure_threshold: 3", "    name: wiki-http\n    runner: opencloud\n    service: app-1/wiki\n    kind: http\n    target: https://wiki.example.org/healthz\n    interval: 1m\n    timeout: 10s\n    failure_threshold: -1")
+			return replaceOnce(t, s, "    name: wiki-http\n    runner: kagu\n    service: app-1/wiki\n    kind: http\n    target: https://wiki.example.org/healthz\n    interval: 1m\n    timeout: 10s\n    failure_threshold: 3", "    name: wiki-http\n    runner: kagu\n    service: app-1/wiki\n    kind: http\n    target: https://wiki.example.org/healthz\n    interval: 1m\n    timeout: 10s\n    failure_threshold: -1")
 		}, "probe.threshold_invalid"},
 		"zero interval": {func(s string) string {
 			return replaceOnce(t, s, "    name: mail-imaps\n    runner: app-1\n    kind: tcp\n    target: mail.example.org:993\n    interval: 90s", "    name: mail-imaps\n    runner: app-1\n    kind: tcp\n    target: mail.example.org:993\n    interval: 0s")

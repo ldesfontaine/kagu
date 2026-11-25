@@ -84,18 +84,18 @@ func TestSignalSections_KeepTheirOrderAndRefusalKeys(t *testing.T) {
 // Les en-têtes de la preuve signée sont ceux que les agents installés posent.
 func TestWire_HeaderNamesAreFrozen(t *testing.T) {
 	want := map[string]string{
-		HeaderMachine:        "OpenCloud-Machine",
-		HeaderNonce:          "OpenCloud-Nonce",
-		HeaderTimestamp:      "OpenCloud-Timestamp",
-		HeaderSignature:      "OpenCloud-Signature",
-		HeaderAgentVersion:   "OpenCloud-Agent-Version",
-		HeaderAgentOS:        "OpenCloud-Agent-OS",
-		HeaderAgentRights:    "OpenCloud-Agent-Rights",
-		HeaderAgentRoot:      "OpenCloud-Agent-Root",
-		HeaderSignalSections: "OpenCloud-Signal-Sections",
-		HeaderServerKey:      "OpenCloud-Server-Key",
-		HeaderProtocol:       "OpenCloud-Agent-Protocol",
-		HeaderParcelSHA256:   "OpenCloud-SHA256",
+		HeaderMachine:        "Kagu-Machine",
+		HeaderNonce:          "Kagu-Nonce",
+		HeaderTimestamp:      "Kagu-Timestamp",
+		HeaderSignature:      "Kagu-Signature",
+		HeaderAgentVersion:   "Kagu-Agent-Version",
+		HeaderAgentOS:        "Kagu-Agent-OS",
+		HeaderAgentRights:    "Kagu-Agent-Rights",
+		HeaderAgentRoot:      "Kagu-Agent-Root",
+		HeaderSignalSections: "Kagu-Signal-Sections",
+		HeaderServerKey:      "Kagu-Server-Key",
+		HeaderProtocol:       "Kagu-Agent-Protocol",
+		HeaderParcelSHA256:   "Kagu-SHA256",
 	}
 	for got, name := range want {
 		if got != name {

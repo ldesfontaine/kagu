@@ -247,7 +247,7 @@ func TestManifestAPI_ExportProposeMatchesGolden(t *testing.T) {
 	}
 }
 
-// La socket de commande sert le même fichier : opencloud export -propose y passe.
+// La socket de commande sert le même fichier : kagu export -propose y passe.
 func TestControlSocket_ExportProposeIsServed(t *testing.T) {
 	server := newTestServer(t)
 	server.enroll(t, "vps-paris-1", remoteID)

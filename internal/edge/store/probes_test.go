@@ -11,11 +11,11 @@ import (
 
 var probeTestNow = time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
 
-// insertProbeOnLocalMachine pose la machine openCloud puis une sonde neuve.
+// insertProbeOnLocalMachine pose la machine Kagu puis une sonde neuve.
 func insertProbeOnLocalMachine(t *testing.T, db *DB) probe.Probe {
 	t.Helper()
 	ctx := context.Background()
-	exec(t, db, `INSERT INTO machines (id, name, hostname, created_at) VALUES (?, 'opencloud', 'host', ?)`, machine.LocalID, probeTestNow.Unix())
+	exec(t, db, `INSERT INTO machines (id, name, hostname, created_at) VALUES (?, 'kagu', 'host', ?)`, machine.LocalID, probeTestNow.Unix())
 	item := probe.Probe{
 		ID: "p1", Name: "site", Kind: probe.KindHTTP, Target: "https://cloud.exemple.fr/", MachineID: machine.LocalID,
 		Status: probe.StatusNew, Interval: time.Minute, Timeout: 10 * time.Second,
