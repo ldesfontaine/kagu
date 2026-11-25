@@ -128,8 +128,8 @@ func readBackupProduce(order judgedOrder, capabilities []agentpolicy.Capability,
 }
 
 // isProducePrefix : un préfixe de sauvegarde qui n'est pas celui de la base.
-// BackupFileName renommerait « database » en « opencloud », et une archive
-// sous « opencloud » serait élaguée avec les sauvegardes de la base.
+// BackupFileName renommerait « database » en « kagu », et une archive
+// sous « kagu » serait élaguée avec les sauvegardes de la base.
 func isProducePrefix(prefix string) bool {
 	return agentwire.IsBackupPrefix(prefix) && prefix != agentwire.DatabaseSubject && prefix != brand.ID
 }

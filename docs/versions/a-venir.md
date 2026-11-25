@@ -6,6 +6,7 @@ renommée `<tag>.md` à la publication, et son entrée passe dans le tableau de
 
 ## L'essentiel
 
+- **Le produit s'appelle `kagu` partout** (T04-18) : chemins (`/etc/kagu`, `/var/lib/kagu`, `/var/lib/kagu-agent`), unités (`kagu.service`, `kagu-agent.service`), compte `kagu-agent`, commande `kagu`, binaires `kagu-linux-<arch>`, jetons `kg_…` et `kgk_…`, en-têtes `Kagu-…` et `X-Kagu-Proxy-Secret`, étiquettes `kagu.`, rôle Proxmox `KaguAgent`, variables `KAGU_URL` et `KAGU_TOKEN` de mcp-maison. **Aucune mise à jour en place** : une installation d'avant ne se relit pas, elle se réinstalle ; ses agents et ses jetons ne sont plus reconnus.
 - **Un serveur openCloud compromis ne peut plus exfiltrer de données par les sauvegardes** (lot 1 de l'étude « compromission du serveur », #487) : l'agent n'exécute `backup.produce` et `restic.provision` que sur des **ancres de confiance** que l'administrateur de la machine pose lui-même.
 - **La mémoire d'une machine en ZFS ne compte plus le cache ZFS** (#328) : un Pi de sauvegarde à 70 % de mémoire « utilisée » dont 9,9 Go d'ARC affiche désormais ce qu'il utilise vraiment, et le cache ZFS apparaît à part sur la fiche.
 - **Une montée de version de service revient seule en arrière** (#493, lot A) : l'agent juge la santé du service pendant 5 minutes et remet la version précédente si elle ne tient pas. **Les données ne sont pas restaurées.** Voir plus bas.

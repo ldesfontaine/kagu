@@ -55,7 +55,7 @@ func TestOutbox_OpensOnlyForItsMachineAndUntilExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeParcelFile(t, writer, "opencloud-20261021-120000.tar.age", "contenu chiffré de test")
+	writeParcelFile(t, writer, "kagu-20261021-120000.tar.age", "contenu chiffré de test")
 	id, files := writer.Seal()
 	sum := sha256.Sum256([]byte("contenu chiffré de test"))
 	if len(files) != 1 || files[0].Size != int64(len("contenu chiffré de test")) || files[0].SHA256 != hex.EncodeToString(sum[:]) {
@@ -325,7 +325,7 @@ func TestOutbox_ReceiveOnlyTakesProducedArchiveNames(t *testing.T) {
 	}
 	for _, name := range []string{
 		"", "autre.txt", "../pve-vm-5012-20261021-030000.tar.age", "a/b-20261021-030000.tar.age",
-		"opencloud-key-0123456789abcdef.age", uploadedName + ".part", "PVE-20261021-030000.tar.age",
+		"kagu-key-0123456789abcdef.age", uploadedName + ".part", "PVE-20261021-030000.tar.age",
 		"pve-20261021-030000.tar", "-pve-20261021-030000.tar.age", uploadedName + "\n",
 	} {
 		if err := receive(outbox, producerID, upload.ID(), name, uploadedBytes); !errors.Is(err, action.ErrUploadName) {
@@ -483,7 +483,7 @@ func TestUpload_StageThenHandoverListsEverythingAndClosesTheParcelToTheProducer(
 	if err != nil {
 		t.Fatal(err)
 	}
-	const keyName = "opencloud-key-0123456789abcdef.age"
+	const keyName = "kagu-key-0123456789abcdef.age"
 	if err := upload.Stage(keyName, []byte("clé scellée de test")); err != nil {
 		t.Fatal(err)
 	}

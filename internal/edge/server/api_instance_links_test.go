@@ -13,7 +13,7 @@ import (
 
 // Trois services : l'application et sa base (un service Compose chacun, dans
 // le projet des conteneurs de la planche), et un proxy en binaire sur la
-// machine openCloud. Rend leurs identifiants.
+// machine Kagu. Rend leurs identifiants.
 func (ts *testServer) seedLinkedServices(t *testing.T) (app, db, proxy string) {
 	t.Helper()
 	ctx := context.Background()
@@ -83,7 +83,7 @@ func TestAPI_ServiceLinks_TheOperatorAddsAndRemovesHisOwnAndNeverAToolOne(t *tes
 	server.seedContainers(t)
 	app, db, proxy := server.seedLinkedServices(t)
 
-	// Le proxy (sur la machine openCloud) utilise l'application (sur l'autre) : un lien entre machines.
+	// Le proxy (sur la machine Kagu) utilise l'application (sur l'autre) : un lien entre machines.
 	created := callAPI(server.Server, http.MethodPost, "/api/directory/links", linkRequest{FromServiceID: proxy, ToServiceID: app, Port: 8080})
 	if created.Code != http.StatusNoContent {
 		t.Fatalf("création : %d %s", created.Code, created.Body.String())

@@ -59,8 +59,8 @@ func TestExport_IsDeterministicAndSorted(t *testing.T) {
 		heartbeats = append(heartbeats, item.Name)
 	}
 	want := map[string][]string{
-		"machines":   {"app-1", "opencloud"},
-		"services":   {"app-1/backup", "app-1/proxy", "app-1/wiki", "opencloud/legacy"},
+		"machines":   {"app-1", "kagu"},
+		"services":   {"app-1/backup", "app-1/proxy", "app-1/wiki", "kagu/legacy"},
 		"probes":     {"api-post 00000000000000c5", "mail-imaps 00000000000000c2", "twin 00000000000000c3", "twin 00000000000000c4", "wiki-http 00000000000000c1"},
 		"heartbeats": {"certbot", "wiki-dump"},
 	}
@@ -246,7 +246,7 @@ func TestExport_StartsWithItsHeader(t *testing.T) {
 func TestExport_AnEmptyDirectoryWritesEverySection(t *testing.T) {
 	b := newBench(t)
 	text := string(b.export(t))
-	for _, want := range []string{"version: 1\n", "projects: []\n", "services: []\n", "probes: []\n", "heartbeats: []\n", "ignored: []\n", "  - name: app-1\n", "  - name: opencloud\n"} {
+	for _, want := range []string{"version: 1\n", "projects: []\n", "services: []\n", "probes: []\n", "heartbeats: []\n", "ignored: []\n", "  - name: app-1\n", "  - name: kagu\n"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("lacks %q:\n%s", want, text)
 		}

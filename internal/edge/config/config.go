@@ -43,11 +43,11 @@ type Config struct {
 	Listen string `toml:"listen" validate:"required"`
 	// Répertoire d'état : la base SQLite et le cache lifecycle.json.
 	StateDir string `toml:"state_dir" validate:"required"`
-	// Adresse à laquelle les machines joignent openCloud, mise dans la
+	// Adresse à laquelle les machines joignent Kagu, mise dans la
 	// commande d'installation. Vide : déduite de la requête.
 	PublicURL string `toml:"public_url" validate:"omitempty,http_url"`
 	// Adresse de mcp-maison, le serveur MCP installé à côté : Paramètres lit
-	// son /health. Vide : openCloud ne le cherche pas et marche sans lui.
+	// son /health. Vide : Kagu ne le cherche pas et marche sans lui.
 	MCPURL string `toml:"mcp_url" validate:"omitempty,http_url"`
 	// Mandataires dont les en-têtes X-Forwarded-* sont crus, en CIDR.
 	TrustedProxies []string `toml:"trusted_proxies" validate:"dive,cidr"`
@@ -57,10 +57,10 @@ type Config struct {
 	// Fichier d'une ligne qui porte le secret partagé avec le mandataire
 	// d'authentification (32 caractères au moins, illisible pour les autres
 	// comptes). En mode forward, l'identité n'est crue que d'une requête qui
-	// porte ce secret dans l'en-tête X-OpenCloud-Proxy-Secret. Vide : l'adresse
+	// porte ce secret dans l'en-tête X-Kagu-Proxy-Secret. Vide : l'adresse
 	// du pair seule, ce qu'une boucle locale de confiance ne prouve pas.
 	ForwardSecretFile string `toml:"forward_secret_file"`
-	// Identités que le mandataire peut transmettre et qu'openCloud admet, en
+	// Identités que le mandataire peut transmettre et que Kagu admet, en
 	// mode forward : une seconde serrure derrière le SSO. Comparaison exacte,
 	// casse comprise. Vide : toute identité transmise est admise.
 	ForwardUsers []string `toml:"forward_users"`

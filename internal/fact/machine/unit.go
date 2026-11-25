@@ -102,7 +102,7 @@ func RightsDropInLines(folders []RightFolder) []string {
 }
 
 // AgentUnitLines est l'unité de l'agent que la page d'installation donne à
-// poser, sans les commentaires de docs/installation/opencloud-agent.service :
+// poser, sans les commentaires de docs/installation/kagu-agent.service :
 // ce fichier reste le texte de référence, et un test échoue si les deux
 // diffèrent.
 func AgentUnitLines() []string {

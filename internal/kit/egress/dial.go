@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// ErrForbiddenAddress : la destination résout vers une adresse qu'openCloud
+// ErrForbiddenAddress : la destination résout vers une adresse que Kagu
 // ne doit pas joindre.
 var ErrForbiddenAddress = errors.New("forbidden egress address")
 

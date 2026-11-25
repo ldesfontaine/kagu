@@ -23,7 +23,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
-// fakeServer joue le serveur openCloud du point de vue de l'agent : flux,
+// fakeServer joue le serveur Kagu du point de vue de l'agent : flux,
 // signal. Chaque route répond ce que le test lui dit.
 type fakeServer struct {
 	mu sync.Mutex

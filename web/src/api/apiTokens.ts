@@ -40,7 +40,7 @@ export interface VerbOffer {
 // Ce que mcp-maison lit dans son .env, tiré de l'adresse d'écoute.
 export interface APITokenEnv {
   mcp_host: string;
-  opencloud_url: string;
+  kagu_url: string;
 }
 
 // Une machine que la liste à cocher offre.

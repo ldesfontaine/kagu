@@ -91,7 +91,7 @@ type testServer struct {
 }
 
 // Le serveur de test tourne sur le vrai composant machine et une vraie base
-// SQLite temporaire, avec la machine openCloud déjà en place. Il est
+// SQLite temporaire, avec la machine Kagu déjà en place. Il est
 // configuré comme une installation qui a passé sa première configuration : un
 // compte natif, dont une session est posée sur toute requête de l'opérateur
 // qui n'en porte pas, pour que les tests qui ne parlent pas de l'accès

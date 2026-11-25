@@ -109,7 +109,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.locator("details.firewall-group tbody tr")).toHaveCount(7);
     await kinds.getByRole("radio", { name: new RegExp(`^${label("firewall.rules_filter_all")}`) }).check();
 
-    // Les baux : celui d'une machine d'openCloud porte son nom, avec un lien.
+    // Les baux : celui d'une machine de Kagu porte son nom, avec un lien.
     const known = page.locator("a.firewall-machine");
     await expect(known).toHaveCount(1);
     await expect(page.locator("tr", { hasText: "imprimante" })).not.toContainText("vps-lyon");

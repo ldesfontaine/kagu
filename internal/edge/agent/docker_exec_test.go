@@ -41,9 +41,9 @@ func readNote(t *testing.T, program, name string) string {
 // L'environnement de Compose est remplacé, pas hérité : un secret ou un
 // proxy de l'agent n'y passe pas.
 func TestExecCompose_ReplacesTheEnvironment(t *testing.T) {
-	t.Setenv("OPENCLOUD_TEST_SECRET", "ne-doit-pas-passer")
+	t.Setenv("KAGU_TEST_SECRET", "ne-doit-pas-passer")
 	program := fakeDocker(t, "echo 2.29.7\n")
-	compose := execCompose{path: program, environment: composeEnvironment("/home/opencloud", "")}
+	compose := execCompose{path: program, environment: composeEnvironment("/home/kagu", "")}
 	version, err := compose.Version(context.Background())
 	if err != nil || version != "2.29.7" {
 		t.Fatalf("version %q %v", version, err)
@@ -51,19 +51,19 @@ func TestExecCompose_ReplacesTheEnvironment(t *testing.T) {
 	if got := readNote(t, program, "args"); got != "compose\nversion\n--short\n" {
 		t.Errorf("version arguments %q", got)
 	}
-	assertComposeEnvironment(t, readNote(t, program, "env"), "HOME=/home/opencloud")
+	assertComposeEnvironment(t, readNote(t, program, "env"), "HOME=/home/kagu")
 
 	if _, err := compose.Up(context.Background(), "/srv/workspace/nextcloud", "nextcloud"); err != nil {
 		t.Fatal(err)
 	}
-	assertComposeEnvironment(t, readNote(t, program, "env"), "HOME=/home/opencloud")
+	assertComposeEnvironment(t, readNote(t, program, "env"), "HOME=/home/kagu")
 }
 
 // Sans dossier personnel connu, Compose n'a pas de HOME : il ne cherche pas
 // les identifiants d'un autre compte, et l'environnement de l'agent ne passe pas
 // non plus (un Env nul serait hérité).
 func TestExecCompose_WithoutAHomeHasNoHome(t *testing.T) {
-	t.Setenv("OPENCLOUD_TEST_SECRET", "ne-doit-pas-passer")
+	t.Setenv("KAGU_TEST_SECRET", "ne-doit-pas-passer")
 	t.Setenv("HOME", "/home/someone-else")
 	program := fakeDocker(t, "echo 2.29.7\n")
 	for name, compose := range map[string]execCompose{
@@ -97,7 +97,7 @@ func assertComposeEnvironment(t *testing.T, env, home string) {
 			t.Errorf("the environment lacks %s:\n%s", want, env)
 		}
 	}
-	if strings.Contains(env, "OPENCLOUD_TEST_SECRET") || strings.Contains(env, "ne-doit-pas-passer") {
+	if strings.Contains(env, "KAGU_TEST_SECRET") || strings.Contains(env, "ne-doit-pas-passer") {
 		t.Errorf("the agent's environment leaked:\n%s", env)
 	}
 }

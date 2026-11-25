@@ -31,7 +31,7 @@ func TestMigration026_DeducesTheKindOfAlreadyLinkedMachines(t *testing.T) {
 	exec(t, db, `INSERT INTO machines (id, name, created_at) VALUES
 		('pve', 'pve', 1), ('web', 'web', 1), ('ct', 'ct', 1), ('alone', 'alone', 1)`)
 	exec(t, db, `INSERT INTO machine_proxmox (machine_id, api_url, token_id, token_secret, verified_at, created_at)
-		VALUES ('pve', 'https://pve.lan:8006', 'oc@pve!r', 'x', 1, 1)`)
+		VALUES ('pve', 'https://pve.lan:8006', 'kagu@pve!r', 'x', 1, 1)`)
 	exec(t, db, `INSERT INTO proxmox_guests (machine_id, vmid, kind, name, node, linked_machine_id) VALUES
 		('pve', 100, 'qemu', 'web', 'pve', 'web'), ('pve', 101, 'lxc', 'ct', 'pve', 'ct')`)
 
@@ -147,7 +147,7 @@ func TestProxmoxReading_ClustersAreSharedAndPrunedWithTheirLastHost(t *testing.T
 	for _, id := range []string{"pve1", "pve2"} {
 		exec(t, db, `INSERT INTO machines (id, name, created_at) VALUES (?, ?, 1)`, id, id)
 		exec(t, db, `INSERT INTO machine_proxmox (machine_id, api_url, token_id, token_secret, verified_at, created_at)
-			VALUES (?, 'https://'||?||':8006', 'oc@pve!r', 'x', 1, 1)`, id, id)
+			VALUES (?, 'https://'||?||':8006', 'kagu@pve!r', 'x', 1, 1)`, id, id)
 	}
 	at := time.Unix(1_800_000_000, 0)
 	for _, id := range []string{"pve1", "pve2"} {
@@ -186,7 +186,7 @@ func TestProxmoxReading_ClustersAreSharedAndPrunedWithTheirLastHost(t *testing.T
 	}
 	// Un nœud seul n'a pas de grappe.
 	exec(t, db, `INSERT INTO machine_proxmox (machine_id, api_url, token_id, token_secret, verified_at, created_at)
-		VALUES ('pve1', 'https://pve1:8006', 'oc@pve!r', 'x', 1, 1)`)
+		VALUES ('pve1', 'https://pve1:8006', 'kagu@pve!r', 'x', 1, 1)`)
 	if err := db.ReplaceProxmoxReading(ctx, "pve1", proxmox.Reading{Node: "pve1"}, at); err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestProxmoxSummaries_AnOverrideElsewhereHidesTheLink(t *testing.T) {
 	db := openTestDB(t)
 	exec(t, db, `INSERT INTO machines (id, name, created_at) VALUES ('pve', 'pve', 1), ('other', 'other', 1), ('web', 'web', 1)`)
 	exec(t, db, `INSERT INTO machine_proxmox (machine_id, api_url, token_id, token_secret, verified_at, created_at)
-		VALUES ('pve', 'https://pve:8006', 'oc@pve!r', 'x', 1, 1)`)
+		VALUES ('pve', 'https://pve:8006', 'kagu@pve!r', 'x', 1, 1)`)
 	exec(t, db, `INSERT INTO proxmox_guests (machine_id, vmid, kind, name, node, linked_machine_id) VALUES ('pve', 100, 'qemu', 'web', 'pve', 'web')`)
 
 	summaries, _ := db.ProxmoxSummaries(ctx)

@@ -58,7 +58,7 @@ func newFixture(t *testing.T) *fixture {
 	f.machines.SetClock(clock)
 	storetest.EnsureLocalMachine(t, f.machines)
 	// Les conteneurs du banc sont rapportés par l'agent de la machine
-	// openCloud : il vient de signaler, la machine est observée.
+	// Kagu : il vient de signaler, la machine est observée.
 	f.seen(t, machine.LocalID)
 	f.heartbeats = heartbeat.New(db, logger)
 	f.heartbeats.SetClock(clock)
@@ -147,7 +147,7 @@ func (f *fixture) enroll(t *testing.T, name string) string {
 	return storetest.EnrollMachine(t, f.machines, "22222222-2222-4333-8444-555555555555", name).ID
 }
 
-// service pose un conteneur sur la machine openCloud et le déclare à l'annuaire :
+// service pose un conteneur sur la machine Kagu et le déclare à l'annuaire :
 // un composant surveille le service déclaré, jamais le conteneur. Rend
 // l'identifiant du service déclaré.
 func (f *fixture) service(t *testing.T, name string, state container.State, exitCode int) string {
@@ -259,10 +259,10 @@ func TestDerive_ServicesAndMachines(t *testing.T) {
 	if got := f.component(t, "Nuage", status.MemberRef{Kind: status.KindService, ID: stopped}).Effective; got != status.StateDown {
 		t.Fatalf("a stopped service is an outage, got %q", got)
 	}
-	// La machine openCloud comme les autres : en ligne par le flux de son
+	// La machine Kagu comme les autres : en ligne par le flux de son
 	// agent, hors ligne sans lui.
 	if got := f.component(t, "Serveur", status.MemberRef{Kind: status.KindMachine, ID: machine.LocalID}).Effective; got != status.StateDown {
-		t.Fatalf("the openCloud machine without its agent's stream is an outage, got %q", got)
+		t.Fatalf("the Kagu machine without its agent's stream is an outage, got %q", got)
 	}
 	local, err := f.machines.Get(context.Background(), machine.LocalID)
 	if err != nil {
@@ -274,7 +274,7 @@ func TestDerive_ServicesAndMachines(t *testing.T) {
 	}
 	defer f.machines.Disconnect(session)
 	if got := f.component(t, "Serveur en ligne", status.MemberRef{Kind: status.KindMachine, ID: machine.LocalID}).Effective; got != status.StateOperational {
-		t.Fatalf("the openCloud machine with its agent's stream, got %q", got)
+		t.Fatalf("the Kagu machine with its agent's stream, got %q", got)
 	}
 	remote := f.enroll(t, "vps-paris-1")
 	if got := f.component(t, "VPS", status.MemberRef{Kind: status.KindMachine, ID: remote}).Effective; got != status.StateDown {

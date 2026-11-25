@@ -122,7 +122,7 @@ func isReason(reason Reason) bool {
 
 // OCSP est ce que l'agrafe remise pendant la poignée de main a dit de la
 // révocation, par un mot d'une liste fermée. Vide : la cible n'agrafe
-// rien, et openCloud ne contacte aucun répondeur pour le savoir.
+// rien, et Kagu ne contacte aucun répondeur pour le savoir.
 type OCSP string
 
 const (
@@ -179,7 +179,7 @@ const (
 	// Un essai daté d'après cette avance est refusé : horloge fausse.
 	maxFutureSkew = 5 * time.Minute
 
-	// Ce qu'il reste à un certificat avant qu'openCloud le signale. Deux
+	// Ce qu'il reste à un certificat avant que Kagu le signale. Deux
 	// seuils, pas cinq : sans destinataire, un seuil de plus ne fait
 	// qu'un ton de plus. Le navigateur les dérive, le serveur ne les
 	// applique pas.
@@ -200,7 +200,7 @@ type Probe struct {
 	Kind Kind
 	// L'URL d'une sonde HTTP, « hôte:port » d'une sonde TCP.
 	Target string
-	// La machine qui sonde ; jamais vide, la machine openCloud par défaut.
+	// La machine qui sonde ; jamais vide, la machine Kagu par défaut.
 	MachineID   string
 	MachineName string
 	// Sans son flux, la machine ne sonde pas : l'état montré est le dernier

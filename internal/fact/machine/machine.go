@@ -10,7 +10,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
-// L'identifiant stable de la machine openCloud : la ligne qu'elle a toujours
+// L'identifiant stable de la machine Kagu : la ligne qu'elle a toujours
 // eue, et celle que prend l'agent qui s'enrôle depuis la même machine que le
 // serveur (local.go). C'est une machine comme les autres : rien d'autre ne la
 // distingue.
@@ -127,10 +127,10 @@ var (
 	// ErrUnknown : la machine visée n'existe pas.
 	ErrUnknown = refusal.Invalid("machine.unknown", "the machine does not exist")
 	// Un agent s'enrôle depuis la machine du serveur, par un jeton de
-	// machine neuve, alors que la machine openCloud a déjà un agent actif :
+	// machine neuve, alors que la machine Kagu a déjà un agent actif :
 	// c'est un ré-enrôlement, qui se demande sur sa fiche.
 	ErrLocalAgentActive = errors.New("the server machine already has an active agent")
-	// La machine openCloud a, ou a eu, un agent : sa ligne d'installation ne
+	// La machine Kagu a, ou a eu, un agent : sa ligne d'installation ne
 	// s'offre plus d'elle-même.
 	ErrLocalEnrolled = refusal.Conflict("machine.local_enrolled", "the server machine already has, or had, an agent")
 )

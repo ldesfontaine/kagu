@@ -91,11 +91,11 @@ func TestConnect_RecordsTheAccountAndWhyARightCannotBeExercised(t *testing.T) {
 	}
 
 	const rights = "observe,agent.update,docker.deploy"
-	if _, err := h.service.Connect(ctx, enrolled, "192.0.2.1", "v0.0.2", rights, "998:opencloud-agent", "docker.deploy=docker_denied", ""); err != nil {
+	if _, err := h.service.Connect(ctx, enrolled, "192.0.2.1", "v0.0.2", rights, "998:kagu-agent", "docker.deploy=docker_denied", ""); err != nil {
 		t.Fatal(err)
 	}
 	status, _ = h.service.Get(ctx, enrolled.ID)
-	if status.Agent.RunAs == nil || *status.Agent.RunAs != (Account{UID: 998, Name: "opencloud-agent"}) {
+	if status.Agent.RunAs == nil || *status.Agent.RunAs != (Account{UID: 998, Name: "kagu-agent"}) {
 		t.Fatalf("account %+v", status.Agent.RunAs)
 	}
 	if status.Agent.UnavailableReason(agentpolicy.CapabilityDockerDeploy) != "docker_denied" || status.Agent.UnavailableReason(agentpolicy.CapabilityAgentUpdate) != "" {
@@ -123,7 +123,7 @@ func TestConnect_RecordsTheAccountAndWhyARightCannotBeExercised(t *testing.T) {
 		t.Fatal(err)
 	}
 	status, _ = h.service.Get(ctx, enrolled.ID)
-	if status.Agent.RunAs == nil || status.Agent.RunAs.Name != "opencloud-agent" || status.Agent.Unavailable != nil {
+	if status.Agent.RunAs == nil || status.Agent.RunAs.Name != "kagu-agent" || status.Agent.Unavailable != nil {
 		t.Fatalf("after a silent report: %+v", status.Agent)
 	}
 

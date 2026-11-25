@@ -29,7 +29,7 @@ import (
 const archBinary = brand.ReleaseBinaryPrefix + "amd64"
 
 // updateBench est un agent installé comme la doc le dit : <état>/bin/ porte
-// opencloud-v0.0.1 et le lien current qui y mène. Les versions se signent avec
+// kagu-v0.0.1 et le lien current qui y mène. Les versions se signent avec
 // une clé tirée ici, que l'agent embarque ; l'épreuve est factice.
 type updateBench struct {
 	stateDir  *os.Root
@@ -61,15 +61,15 @@ func newUpdateBench(t *testing.T, ownVersion string) *updateBench {
 	if err := root.MkdirAll(brand.AgentBinDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := root.WriteFile("bin/opencloud-v0.0.1", []byte("the running binary"), 0o755); err != nil {
+	if err := root.WriteFile("bin/kagu-v0.0.1", []byte("the running binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := root.Symlink("opencloud-v0.0.1", "bin/current"); err != nil {
+	if err := root.Symlink("kagu-v0.0.1", "bin/current"); err != nil {
 		t.Fatal(err)
 	}
 	b.updater = newSelfUpdater(root, ownVersion, slog.New(slog.DiscardHandler))
 	b.updater.keys, b.updater.hasKey = release.Keys{Current: public}, true
-	b.updater.executable = func() (string, error) { return filepath.Join(state, "bin", "opencloud-v0.0.1"), nil }
+	b.updater.executable = func() (string, error) { return filepath.Join(state, "bin", "kagu-v0.0.1"), nil }
 	b.updater.selfCheck = func(_ context.Context, binary, version string) error {
 		b.checked = append(b.checked, binary+" "+version)
 		return b.checkErr
@@ -122,7 +122,7 @@ func (b *updateBench) current(t *testing.T) string {
 // tentative.
 func (b *updateBench) untouched(t *testing.T) {
 	t.Helper()
-	if target := b.current(t); target != "opencloud-v0.0.1" {
+	if target := b.current(t); target != "kagu-v0.0.1" {
 		t.Fatalf("current points to %s", target)
 	}
 	entries, err := os.ReadDir(filepath.Join(b.state, "bin"))
@@ -133,7 +133,7 @@ func (b *updateBench) untouched(t *testing.T) {
 	for _, entry := range entries {
 		names = append(names, entry.Name())
 	}
-	if strings.Join(names, " ") != "current opencloud-v0.0.1" {
+	if strings.Join(names, " ") != "current kagu-v0.0.1" {
 		t.Fatalf("bin holds %v", names)
 	}
 	if b.restarted != 0 {
@@ -155,7 +155,7 @@ func TestAgentUpdate_InstallsVerifiesSwapsAndAsksForARestart(t *testing.T) {
 	// Des restes de ce que l'agent a posé avant : une vieille version et un
 	// dossier d'arrivée d'une mise à jour coupée disparaissent ; le reste de
 	// bin/ n'est pas à l'agent.
-	if err := b.stateDir.WriteFile("bin/opencloud-v0.0.0", []byte("older"), 0o755); err != nil {
+	if err := b.stateDir.WriteFile("bin/kagu-v0.0.0", []byte("older"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := b.stateDir.MkdirAll("bin/.incoming-v0.0.9", 0o700); err != nil {
@@ -169,27 +169,27 @@ func TestAgentUpdate_InstallsVerifiesSwapsAndAsksForARestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if target := b.current(t); target != "opencloud-v0.0.2" {
+	if target := b.current(t); target != "kagu-v0.0.2" {
 		t.Fatalf("current points to %s", target)
 	}
-	installed, err := b.stateDir.Stat("bin/opencloud-v0.0.2")
+	installed, err := b.stateDir.Stat("bin/kagu-v0.0.2")
 	if err != nil || installed.Mode().Perm() != 0o755 {
 		t.Fatalf("installed %v %v", installed, err)
 	}
-	if content, _ := b.stateDir.ReadFile("bin/opencloud-v0.0.2"); string(content) != "the binary of v0.0.2" {
+	if content, _ := b.stateDir.ReadFile("bin/kagu-v0.0.2"); string(content) != "the binary of v0.0.2" {
 		t.Fatalf("installed %q", content)
 	}
-	if len(b.checked) != 1 || b.checked[0] != filepath.Join(b.state, "bin", "opencloud-v0.0.2")+" v0.0.2" {
+	if len(b.checked) != 1 || b.checked[0] != filepath.Join(b.state, "bin", "kagu-v0.0.2")+" v0.0.2" {
 		t.Fatalf("checked %v", b.checked)
 	}
 	// L'épreuve est passée avant la bascule : au moment où elle a tourné, le
 	// lien visait encore l'ancienne version (testé plus bas par l'échec).
-	for _, kept := range []string{"bin/opencloud-v0.0.1", "bin/notes.txt"} {
+	for _, kept := range []string{"bin/kagu-v0.0.1", "bin/notes.txt"} {
 		if _, err := b.stateDir.Stat(kept); err != nil {
 			t.Errorf("%s was removed: %v", kept, err)
 		}
 	}
-	for _, gone := range []string{"bin/opencloud-v0.0.0", "bin/.incoming-v0.0.9", "bin/.incoming-v0.0.2", "bin/current.new"} {
+	for _, gone := range []string{"bin/kagu-v0.0.0", "bin/.incoming-v0.0.9", "bin/.incoming-v0.0.2", "bin/current.new"} {
 		if _, err := b.stateDir.Lstat(gone); !errors.Is(err, os.ErrNotExist) {
 			t.Errorf("%s is still there (%v)", gone, err)
 		}
@@ -227,7 +227,7 @@ func TestAgentUpdate_NeverReplacesTheBinaryCurrentRuns(t *testing.T) {
 		t.Fatalf("reason %s", reason)
 	}
 	b.untouched(t)
-	if content, _ := b.stateDir.ReadFile("bin/opencloud-v0.0.1"); string(content) != "the running binary" {
+	if content, _ := b.stateDir.ReadFile("bin/kagu-v0.0.1"); string(content) != "the running binary" {
 		t.Fatalf("the running binary became %q", content)
 	}
 }
@@ -239,16 +239,16 @@ func TestAgentUpdate_KeepsThePreviousOfAnAbsoluteLink(t *testing.T) {
 	if err := b.stateDir.Remove("bin/current"); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.stateDir.Symlink(filepath.Join(b.state, "bin", "opencloud-v0.0.1"), "bin/current"); err != nil {
+	if err := b.stateDir.Symlink(filepath.Join(b.state, "bin", "kagu-v0.0.1"), "bin/current"); err != nil {
 		t.Fatal(err)
 	}
 	if err := b.update(t, b.publish(t, "v0.0.2", "v0.0.2", b.private)); err != nil {
 		t.Fatal(err)
 	}
-	if target := b.current(t); target != "opencloud-v0.0.2" {
+	if target := b.current(t); target != "kagu-v0.0.2" {
 		t.Fatalf("current points to %s", target)
 	}
-	if _, err := b.stateDir.Stat("bin/opencloud-v0.0.1"); err != nil {
+	if _, err := b.stateDir.Stat("bin/kagu-v0.0.1"); err != nil {
 		t.Fatalf("the previous version was removed: %v", err)
 	}
 }
@@ -258,7 +258,7 @@ func TestAgentUpdate_AnOwnVersionThatDoesNotParseIsOlderThanAnyRelease(t *testin
 	if err := b.update(t, b.publish(t, "v0.0.2", "v0.0.2", b.private)); err != nil {
 		t.Fatal(err)
 	}
-	if target := b.current(t); target != "opencloud-v0.0.2" {
+	if target := b.current(t); target != "kagu-v0.0.2" {
 		t.Fatalf("current points to %s", target)
 	}
 }
@@ -338,7 +338,7 @@ func TestR_B2_10(t *testing.T) {
 	if reason := reasonOf(t, b.update(t, b.publish(t, "v0.0.4", "v0.0.4", b.private))); reason != agentwire.ReasonSignatureInvalid {
 		t.Fatalf("signed by the retired key: reason %s", reason)
 	}
-	if target := b.current(t); target != "opencloud-v0.0.3" {
+	if target := b.current(t); target != "kagu-v0.0.3" {
 		t.Fatalf("current points to %s", target)
 	}
 	if err := b.update(t, b.publish(t, "v0.0.4", "v0.0.4", backupPrivate)); err != nil {
@@ -440,7 +440,7 @@ func TestSelfUpdatable_OnlyFromItsOwnBin(t *testing.T) {
 	if !b.updater.isSelfUpdatable() {
 		t.Fatal("the current link leads to bin/")
 	}
-	outside := filepath.Join(t.TempDir(), "opencloud")
+	outside := filepath.Join(t.TempDir(), "kagu")
 	if err := os.WriteFile(outside, []byte("elsewhere"), 0o755); err != nil { // #nosec G306 -- un fichier de test, exécutable
 		t.Fatal(err)
 	}
@@ -514,7 +514,7 @@ func TestOrderRunner_AgentUpdateIsRefusedAcceptedOrMalformed(t *testing.T) {
 	}
 	b.runner.fetch = sourceFor(t, published.server)
 	job(context.Background())
-	if update.restarted != 1 || update.current(t) != "opencloud-v0.0.2" {
+	if update.restarted != 1 || update.current(t) != "kagu-v0.0.2" {
 		t.Fatalf("restarted %d, current %s", update.restarted, update.current(t))
 	}
 	// Réussie, la mise à jour ne rapporte rien de plus que « accepté » : le
@@ -557,7 +557,7 @@ func withSum(params agentwire.AgentUpdateParams, sum string) agentwire.AgentUpda
 // de shell. Il dit la version demandée, et échoue si l'agent lui a laissé son
 // environnement.
 func TestSelfCheck_RunsTheBinaryWithAReplacedEnvironment(t *testing.T) {
-	t.Setenv("OPENCLOUD_CANARY", "from the agent")
+	t.Setenv("KAGU_CANARY", "from the agent")
 	write := func(name, script string) string {
 		path := filepath.Join(t.TempDir(), name)
 		if err := writeProgram(path, []byte(script), 0o755); err != nil { // #nosec G306 -- un script de test, exécutable
@@ -565,14 +565,14 @@ func TestSelfCheck_RunsTheBinaryWithAReplacedEnvironment(t *testing.T) {
 		}
 		return path
 	}
-	good := write("good", "#!/bin/sh\n[ -z \"$OPENCLOUD_CANARY\" ] || exit 7\n[ \"$LC_ALL\" = C ] || exit 8\necho 'opencloud v0.0.2 (test)'\n")
+	good := write("good", "#!/bin/sh\n[ -z \"$KAGU_CANARY\" ] || exit 7\n[ \"$LC_ALL\" = C ] || exit 8\necho 'kagu v0.0.2 (test)'\n")
 	if err := runSelfCheck(context.Background(), good, "v0.0.2"); err != nil {
 		t.Fatalf("good binary: %v", err)
 	}
 	cases := map[string]string{
-		"another version":                    "#!/bin/sh\necho 'opencloud v0.0.3 (test)'\n",
+		"another version":                    "#!/bin/sh\necho 'kagu v0.0.3 (test)'\n",
 		"no output":                          "#!/bin/sh\n",
-		"fails":                              "#!/bin/sh\necho 'opencloud v0.0.2'\nexit 1\n",
+		"fails":                              "#!/bin/sh\necho 'kagu v0.0.2'\nexit 1\n",
 		"the version is not the second word": "#!/bin/sh\necho 'v0.0.2'\n",
 	}
 	for name, script := range cases {
@@ -582,7 +582,7 @@ func TestSelfCheck_RunsTheBinaryWithAReplacedEnvironment(t *testing.T) {
 	}
 	// Une sortie sans fin ne remplit pas la mémoire : elle est bornée, et la
 	// version, dite avant, est lue.
-	loud := write("loud", "#!/bin/sh\necho 'opencloud v0.0.2 (test)'\nyes | head -c 1000000\n")
+	loud := write("loud", "#!/bin/sh\necho 'kagu v0.0.2 (test)'\nyes | head -c 1000000\n")
 	if err := runSelfCheck(context.Background(), loud, "v0.0.2"); err != nil {
 		t.Fatalf("a talkative binary: %v", err)
 	}
@@ -629,7 +629,7 @@ func TestRun_UpdatesItselfAndTheServerSeesItComeBack(t *testing.T) {
 	b.actions.SetOutbox(outbox)
 	library := release.NewLibrary(serverState, release.Keys{Current: public})
 	b.actions.SetReleases(library, "v0.0.2")
-	script := "#!/bin/sh\necho 'opencloud v0.0.2 (test)'\n"
+	script := "#!/bin/sh\necho 'kagu v0.0.2 (test)'\n"
 	if _, err := library.Import(releasetest.Write(t, private, "v0.0.2", map[string][]byte{release.BinaryName(runtime.GOARCH): []byte(script)})); err != nil {
 		t.Fatal(err)
 	}
@@ -638,10 +638,10 @@ func TestRun_UpdatesItselfAndTheServerSeesItComeBack(t *testing.T) {
 	if err := b.stateDir.MkdirAll("bin", 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.stateDir.WriteFile("bin/opencloud-v0.0.1", []byte("the running binary"), 0o755); err != nil {
+	if err := b.stateDir.WriteFile("bin/kagu-v0.0.1", []byte("the running binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := b.stateDir.Symlink("opencloud-v0.0.1", "bin/current"); err != nil {
+	if err := b.stateDir.Symlink("kagu-v0.0.1", "bin/current"); err != nil {
 		t.Fatal(err)
 	}
 	options := b.options("")
@@ -654,7 +654,7 @@ func TestRun_UpdatesItselfAndTheServerSeesItComeBack(t *testing.T) {
 	// Sous le lanceur stable : sans lui, l'agent ne rapporte pas de retour
 	// arrière et refuse de basculer son lien.
 	options.GuardVersion = 1
-	options.executable = func() (string, error) { return filepath.Join(b.stateDir.Name(), "bin", "opencloud-v0.0.1"), nil }
+	options.executable = func() (string, error) { return filepath.Join(b.stateDir.Name(), "bin", "kagu-v0.0.1"), nil }
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -678,7 +678,7 @@ func TestRun_UpdatesItselfAndTheServerSeesItComeBack(t *testing.T) {
 	case <-time.After(benchTimeout):
 		t.Fatal("the agent never restarted")
 	}
-	if target, err := b.stateDir.Readlink("bin/current"); err != nil || target != "opencloud-v0.0.2" {
+	if target, err := b.stateDir.Readlink("bin/current"); err != nil || target != "kagu-v0.0.2" {
 		t.Fatalf("current points to %q (%v)", target, err)
 	}
 	// La bascule a écrit l'attente de confirmation, avec le lien previous : de
@@ -687,7 +687,7 @@ func TestRun_UpdatesItselfAndTheServerSeesItComeBack(t *testing.T) {
 	if err != nil || marker.State != rollback.StatePending || marker.Target != "v0.0.2" || marker.Previous != "v0.0.1" || marker.RunID != sent.ID {
 		t.Fatalf("marker %+v %v", marker, err)
 	}
-	if target, err := b.stateDir.Readlink("bin/previous"); err != nil || target != "opencloud-v0.0.1" {
+	if target, err := b.stateDir.Readlink("bin/previous"); err != nil || target != "kagu-v0.0.1" {
 		t.Fatalf("previous points to %q (%v)", target, err)
 	}
 	// Tant que l'agent n'est pas revenu, l'ordre n'est pas fait.
@@ -698,7 +698,7 @@ func TestRun_UpdatesItselfAndTheServerSeesItComeBack(t *testing.T) {
 	// Relancé par systemd : la même identité, la nouvelle version.
 	relaunch := options
 	relaunch.Token, relaunch.Version = "", "v0.0.2"
-	relaunch.executable = func() (string, error) { return filepath.Join(b.stateDir.Name(), "bin", "opencloud-v0.0.2"), nil }
+	relaunch.executable = func() (string, error) { return filepath.Join(b.stateDir.Name(), "bin", "kagu-v0.0.2"), nil }
 	go func() { done <- Run(runCtx, relaunch) }()
 	finished := b.waitForRun(t, sent.ID, action.StateSucceeded)
 	// Acquittée par le serveur, la nouvelle version a confirmé : plus rien

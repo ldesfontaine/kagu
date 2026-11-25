@@ -27,11 +27,11 @@ func TestParse_EmptyFile_UsesDefaults(t *testing.T) {
 }
 
 func TestParse_KnownKeys_AreApplied(t *testing.T) {
-	cfg, _, err := Parse([]byte("listen = \"0.0.0.0:9090\"\nstate_dir = \"/tmp/oc\"\n"))
+	cfg, _, err := Parse([]byte("listen = \"0.0.0.0:9090\"\nstate_dir = \"/tmp/kagu\"\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Listen != "0.0.0.0:9090" || cfg.StateDir != "/tmp/oc" {
+	if cfg.Listen != "0.0.0.0:9090" || cfg.StateDir != "/tmp/kagu" {
 		t.Fatalf("got %+v", cfg)
 	}
 }
@@ -79,14 +79,14 @@ func TestLoad_ReadsTheFileAtThePath(t *testing.T) {
 }
 
 func TestParse_PublicURLAndProxies_AreValidated(t *testing.T) {
-	cfg, _, err := Parse([]byte("public_url = \"https://oc.example.fr\"\ntrusted_proxies = [\"127.0.0.1/32\", \"10.0.0.0/8\"]\n"))
+	cfg, _, err := Parse([]byte("public_url = \"https://kagu.example.fr\"\ntrusted_proxies = [\"127.0.0.1/32\", \"10.0.0.0/8\"]\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.PublicURL != "https://oc.example.fr" || len(cfg.TrustedPrefixes()) != 2 {
+	if cfg.PublicURL != "https://kagu.example.fr" || len(cfg.TrustedPrefixes()) != 2 {
 		t.Fatalf("got %+v", cfg)
 	}
-	if _, _, err := Parse([]byte("public_url = \"oc.example.fr\"\n")); err == nil {
+	if _, _, err := Parse([]byte("public_url = \"kagu.example.fr\"\n")); err == nil {
 		t.Error("public_url without scheme accepted")
 	}
 	if _, _, err := Parse([]byte("trusted_proxies = [\"not-a-cidr\"]\n")); err == nil {
@@ -94,7 +94,7 @@ func TestParse_PublicURLAndProxies_AreValidated(t *testing.T) {
 	}
 }
 
-// mcp_url est l'adresse de mcp-maison : vide, openCloud ne le cherche pas ;
+// mcp_url est l'adresse de mcp-maison : vide, Kagu ne le cherche pas ;
 // sinon une adresse http(s), sans quoi le démarrage la refuse.
 func TestParse_MCPURL_IsEmptyByDefaultAndMustBeAnHTTPAddress(t *testing.T) {
 	cfg, _, err := Parse([]byte(""))
@@ -125,11 +125,11 @@ func TestParse_WideTrustedProxy_Warns(t *testing.T) {
 }
 
 func TestParse_ForwardSecretFile_IsAPathNotTheSecret(t *testing.T) {
-	cfg, warnings, err := Parse([]byte("forward_secret_file = \"/etc/opencloud/forward.secret\"\n"))
+	cfg, warnings, err := Parse([]byte("forward_secret_file = \"/etc/kagu/forward.secret\"\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ForwardSecretFile != "/etc/opencloud/forward.secret" || len(warnings) != 0 {
+	if cfg.ForwardSecretFile != "/etc/kagu/forward.secret" || len(warnings) != 0 {
 		t.Fatalf("got %+v, warnings %v", cfg, warnings)
 	}
 	if Default().ForwardSecretFile != "" {

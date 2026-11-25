@@ -4,7 +4,7 @@ import { label } from "./support/catalog";
 import { expect, test } from "./support/findings";
 
 // Le type d'une machine et le geste « Supprimer la machine » : une VM sans
-// hôte connu n'est un VPS que sur une adresse publique (la machine openCloud
+// hôte connu n'est un VPS que sur une adresse publique (la machine Kagu
 // des données fictives, en réseau privé, est une VM ; la distante, publique,
 // un VPS), et la puce « MCP » n'existe plus : une infobulle dit en une phrase
 // qu'un agent IA peut aussi faire le geste.

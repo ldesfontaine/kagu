@@ -139,7 +139,7 @@ function agent(over: Partial<Agent> = {}): Agent {
     requested: [],
     capabilities_differ: false,
     server_key_fingerprint: "",
-    run_as: { uid: 998, name: "opencloud" },
+    run_as: { uid: 998, name: "kagu" },
     rollback_capable: true, anchors: { reported: false, kinds: [] }, policy_source: "", policy_digest: "", migrate_line: "", rights: null,
     fit: {},
     behind: false,
@@ -156,10 +156,10 @@ const verbsOf = (gestures: { verb: string; snapshot: string }[]) => gestures.map
 
 test("les gestes suivent l'état : démarrer à l'arrêt, arrêter en marche, l'instantané toujours, ses propres instantanés à supprimer", () => {
   expect(verbsOf(guestGestures(guest(100, { status: "stopped" }), host()))).toEqual(["start", "snapshot"]);
-  expect(verbsOf(guestGestures(guest(100, { status: "running", own_snapshots: ["oc-20261028-101500"] }), host()))).toEqual([
+  expect(verbsOf(guestGestures(guest(100, { status: "running", own_snapshots: ["kg-20261028-101500"] }), host()))).toEqual([
     "shutdown",
     "snapshot",
-    "snapshot-delete:oc-20261028-101500",
+    "snapshot-delete:kg-20261028-101500",
   ]);
   expect(verbsOf(guestGestures(guest(100, { status: "paused" }), host()))).toEqual(["snapshot"]);
   expect(guestGestures(guest(100, { status: "running" }), host()).every((gesture) => gesture.blocked === null)).toBe(true);
@@ -202,7 +202,7 @@ test("sans agent actif, ou hors ligne, tout est grisé", () => {
   expect(guestGestures(guest(100), host({ online: false }))[0]?.blocked).toEqual({ kind: "offline" });
 });
 
-test("la VM qui héberge openCloud ne s'arrête pas d'ici ; son instantané reste possible", () => {
+test("la VM qui héberge Kagu ne s'arrête pas d'ici ; son instantané reste possible", () => {
   const [shutdown, snapshot] = guestGestures(guest(100, { status: "running", linked_machine_id: "local" }), host());
   expect(shutdown?.blocked).toEqual({ kind: "self" });
   expect(snapshot?.blocked).toBeNull();
@@ -211,9 +211,9 @@ test("la VM qui héberge openCloud ne s'arrête pas d'ici ; son instantané rest
 
 test("libellés et questions disent le geste, l'invité et l'instantané", () => {
   expect(gestureLabel(t, { verb: "shutdown", snapshot: "" })).toBe("machine.proxmox_gesture_shutdown");
-  expect(gestureLabel(t, { verb: "snapshot-delete", snapshot: "oc-1" })).toBe("machine.proxmox_gesture_snapshot_delete(oc-1)");
+  expect(gestureLabel(t, { verb: "snapshot-delete", snapshot: "kg-1" })).toBe("machine.proxmox_gesture_snapshot_delete(kg-1)");
   expect(gestureQuestion(t, { verb: "start", snapshot: "" }, "dns")).toBe("machine.proxmox_confirm_start(dns)");
-  expect(gestureQuestion(t, { verb: "snapshot-delete", snapshot: "oc-1" }, "dns")).toBe("machine.proxmox_confirm_snapshot_delete(oc-1|dns)");
+  expect(gestureQuestion(t, { verb: "snapshot-delete", snapshot: "kg-1" }, "dns")).toBe("machine.proxmox_confirm_snapshot_delete(kg-1|dns)");
 });
 
 test("l'avancement d'un geste : envoyé, accepté par l'agent, fait, ou échoué", () => {

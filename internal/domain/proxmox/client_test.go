@@ -449,11 +449,11 @@ func TestClient_APermissionsFailureFailsTheReading(t *testing.T) {
 }
 
 func TestGrantFor_WritesTheSmallestCommandsOnTheStorageOnly(t *testing.T) {
-	grant := GrantFor("opencloud@pve!lecture", []string{"pi-sauvegardes", "nas.2"})
+	grant := GrantFor("kagu@pve!lecture", []string{"pi-sauvegardes", "nas.2"})
 	want := []string{
 		`pveum role add LectureSauvegardes --privs "Datastore.Audit Datastore.Allocate"`,
-		`pveum acl modify /storage/pi-sauvegardes --roles LectureSauvegardes --tokens 'opencloud@pve!lecture'`,
-		`pveum acl modify /storage/nas.2 --roles LectureSauvegardes --tokens 'opencloud@pve!lecture'`,
+		`pveum acl modify /storage/pi-sauvegardes --roles LectureSauvegardes --tokens 'kagu@pve!lecture'`,
+		`pveum acl modify /storage/nas.2 --roles LectureSauvegardes --tokens 'kagu@pve!lecture'`,
 	}
 	if grant == nil || !slices.Equal(grant.Commands, want) {
 		t.Fatalf("commands: %+v", grant)
@@ -468,13 +468,13 @@ func TestGrantFor_WritesTheSmallestCommandsOnTheStorageOnly(t *testing.T) {
 // Ce qui ne ressemble pas à un identifiant Proxmox ne s'écrit jamais dans une
 // commande à coller.
 func TestGrantFor_DropsWhatCouldInjectIntoAShell(t *testing.T) {
-	if grant := GrantFor("opencloud@pve!lecture", []string{"a; rm -rf /", "$(id)", "x'y"}); grant != nil {
+	if grant := GrantFor("kagu@pve!lecture", []string{"a; rm -rf /", "$(id)", "x'y"}); grant != nil {
 		t.Errorf("hostile storages gave %+v", grant)
 	}
 	if grant := GrantFor("a@b!c'; id; '", []string{"local"}); grant != nil {
 		t.Errorf("hostile token gave %+v", grant)
 	}
-	grant := GrantFor("opencloud@pve!lecture", []string{"local", "bad name"})
+	grant := GrantFor("kagu@pve!lecture", []string{"local", "bad name"})
 	if grant == nil || len(grant.Commands) != 2 {
 		t.Errorf("only the valid storage must remain: %+v", grant)
 	}

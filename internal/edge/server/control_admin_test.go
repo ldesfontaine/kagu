@@ -26,7 +26,7 @@ func asPeer(request *http.Request, uid uint32) *http.Request {
 	return request.WithContext(peercred.ConnContext(readUID)(request.Context(), nil))
 }
 
-// asRoot : la requête de `sudo opencloud admin …`.
+// asRoot : la requête de `sudo kagu admin …`.
 func asRoot(request *http.Request) *http.Request {
 	return asPeer(request, rootUID)
 }
@@ -54,7 +54,7 @@ var adminBodies = map[string]string{
 	"POST /control/admin/tokens/revoke-all":  `{}`,
 	"GET /control/admin/health":              ``,
 	"POST /control/admin/backup/pre-upgrade": `{}`,
-	"POST /control/admin/releases/import":    `{"folder":"/var/lib/opencloud-import/v0.0.2"}`,
+	"POST /control/admin/releases/import":    `{"folder":"/var/lib/kagu-import/v0.0.2"}`,
 }
 
 // R-A2-11 : un pair d'uid non nul reçoit 403 sur chaque route

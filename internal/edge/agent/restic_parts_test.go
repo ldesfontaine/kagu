@@ -94,7 +94,7 @@ func serveFakeDaemon(t *testing.T, containers []fakeContainer, volumes []string)
 		daemon.mu.Unlock()
 		mux.ServeHTTP(w, r)
 	})
-	dir, err := os.MkdirTemp("/tmp", "oc")
+	dir, err := os.MkdirTemp("/tmp", "kg")
 	if err != nil {
 		t.Fatal(err)
 	}

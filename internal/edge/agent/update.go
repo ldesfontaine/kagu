@@ -44,11 +44,11 @@ const (
 	binDirMode           = 0o755
 )
 
-// updateBinaryName : « opencloud-linux- » et une architecture, rien d'autre.
+// updateBinaryName : « kagu-linux- » et une architecture, rien d'autre.
 var updateBinaryName = regexp.MustCompile(`^` + regexp.QuoteMeta(brand.ReleaseBinaryPrefix) + `[a-z0-9]{2,16}$`)
 
 // selfUpdater remplace le binaire que l'agent lance. L'agent tourne depuis
-// <état>/bin/current, un lien vers <état>/bin/opencloud-<version> : l'unité
+// <état>/bin/current, un lien vers <état>/bin/kagu-<version> : l'unité
 // systemd n'autorise d'écrire que dans l'état, jamais dans /usr. Le serveur ne
 // se met jamais à jour ainsi : seul un agent le fait.
 type selfUpdater struct {
@@ -484,7 +484,7 @@ func runSelfCheck(ctx context.Context, binary, version string) error {
 	if err := command.Run(); err != nil {
 		return fmt.Errorf("run %s version: %w", filepath.Base(binary), err)
 	}
-	// « opencloud v0.0.2 (commit) » : la commande, puis la version.
+	// « kagu v0.0.2 (commit) » : la commande, puis la version.
 	fields := strings.Fields(output.String())
 	if len(fields) < 2 || fields[1] != version {
 		return fmt.Errorf("%s says %q, want %s", filepath.Base(binary), strings.TrimSpace(output.String()), version)

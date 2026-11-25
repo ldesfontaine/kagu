@@ -18,7 +18,7 @@ import (
 )
 
 // Ce que Proxmox sauvegarde de lui-même se voit dès la déclaration de
-// l'hôte, sans aucun plan d'openCloud : la tâche vzdump qui couvre chaque
+// l'hôte, sans aucun plan de Kagu : la tâche vzdump qui couvre chaque
 // invité, son stockage, sa prochaine exécution et sa rétention, telles que
 // /cluster/backup les dit. L'opérateur et un jeton de lecture lisent le même
 // aperçu.

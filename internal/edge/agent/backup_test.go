@@ -30,8 +30,8 @@ import (
 
 const (
 	parcelSession = "session-de-test"
-	archiveName   = "opencloud-20261021-030000.tar.age"
-	keyName       = "opencloud-key-0123456789abcdef.age"
+	archiveName   = "kagu-20261021-030000.tar.age"
+	keyName       = "kagu-key-0123456789abcdef.age"
 )
 
 // Un faux contenu age : l'en-tête suffit à l'agent, qui n'a pas la clé.
@@ -182,7 +182,7 @@ func sourceFor(t *testing.T, server *parcelServer) *fetcher {
 }
 
 func TestBackupReceive_WritesVerifiesAndReportsEachFile(t *testing.T) {
-	dir := filepath.Join(backupDir(t), "opencloud")
+	dir := filepath.Join(backupDir(t), "kagu")
 	files := map[string]string{archiveName: ageLike("sauvegarde chiffrée de test"), keyName: ageLike("clé scellée de test")}
 	server := &parcelServer{files: files}
 
@@ -289,20 +289,20 @@ func TestBackupReceive_ReportsAnUnwritablePath(t *testing.T) {
 func TestBackupPrune_KeepsTheNewestAndTouchesNothingElse(t *testing.T) {
 	dir := backupDir(t)
 	backups := []string{
-		"opencloud-20261018-030000.tar.age", "opencloud-20261019-030000.tar.age", "opencloud-20261020-030000.tar.age",
-		"opencloud-20261021-030000.tar.age",
+		"kagu-20261018-030000.tar.age", "kagu-20261019-030000.tar.age", "kagu-20261020-030000.tar.age",
+		"kagu-20261021-030000.tar.age",
 	}
-	others := []string{keyName, ".opencloud-20261001-030000.tar.age.part", "notes.txt", "opencloud-20261001-030000.tar", "opencloud-2026-030000.tar.age"}
+	others := []string{keyName, ".kagu-20261001-030000.tar.age.part", "notes.txt", "kagu-20261001-030000.tar", "kagu-2026-030000.tar.age"}
 	for _, name := range append(slices.Clone(backups), others...) {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.Mkdir(filepath.Join(dir, "opencloud-20260101-030000.tar.age"), 0o700); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, "kagu-20260101-030000.tar.age"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 
-	output, err := pruneBackups(dir, agentwire.BackupPruneParams{Path: dir, Prefix: "opencloud", Keep: 2})
+	output, err := pruneBackups(dir, agentwire.BackupPruneParams{Path: dir, Prefix: "kagu", Keep: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +310,7 @@ func TestBackupPrune_KeepsTheNewestAndTouchesNothingElse(t *testing.T) {
 	for _, line := range output {
 		lines = append(lines, line.Line)
 	}
-	want := []string{"removed opencloud-20261018-030000.tar.age", "removed opencloud-20261019-030000.tar.age", "kept 2"}
+	want := []string{"removed kagu-20261018-030000.tar.age", "removed kagu-20261019-030000.tar.age", "kept 2"}
 	if !slices.Equal(lines, want) {
 		t.Fatalf("output %v, want %v", lines, want)
 	}
@@ -320,17 +320,17 @@ func TestBackupPrune_KeepsTheNewestAndTouchesNothingElse(t *testing.T) {
 		names = append(names, entry.Name())
 	}
 	slices.Sort(names)
-	wantLeft := append([]string{backups[2], backups[3], "opencloud-20260101-030000.tar.age"}, others...)
+	wantLeft := append([]string{backups[2], backups[3], "kagu-20260101-030000.tar.age"}, others...)
 	slices.Sort(wantLeft)
 	if !slices.Equal(names, wantLeft) {
 		t.Fatalf("left %v, want %v", names, wantLeft)
 	}
 
 	// Rien à élaguer, ou un dossier qui n'existe pas encore : réussi.
-	if output, err := pruneBackups(dir, agentwire.BackupPruneParams{Path: dir, Prefix: "opencloud", Keep: 30}); err != nil || output[len(output)-1].Line != "kept 2" {
+	if output, err := pruneBackups(dir, agentwire.BackupPruneParams{Path: dir, Prefix: "kagu", Keep: 30}); err != nil || output[len(output)-1].Line != "kept 2" {
 		t.Fatalf("nothing to prune: %v %v", output, err)
 	}
-	if output, err := pruneBackups(dir, agentwire.BackupPruneParams{Path: filepath.Join(dir, "absent"), Prefix: "opencloud", Keep: 3}); err != nil || output[0].Line != "kept 0" {
+	if output, err := pruneBackups(dir, agentwire.BackupPruneParams{Path: filepath.Join(dir, "absent"), Prefix: "kagu", Keep: 3}); err != nil || output[0].Line != "kept 0" {
 		t.Fatalf("a folder that does not exist: %v %v", output, err)
 	}
 }
@@ -340,7 +340,7 @@ func TestBackupPrune_KeepsTheNewestAndTouchesNothingElse(t *testing.T) {
 func TestBackupPrune_OnlyTouchesItsOwnPrefix(t *testing.T) {
 	dir := backupDir(t)
 	names := []string{
-		"opencloud-20261001-030000.tar.age", "opencloud-20261002-030000.tar.age", "opencloud-20261003-030000.tar.age",
+		"kagu-20261001-030000.tar.age", "kagu-20261002-030000.tar.age", "kagu-20261003-030000.tar.age",
 		"pve-20261001-030000.tar.age", "pve-20261002-030000.tar.age", "pve-20261003-030000.tar.age",
 		"pve-vm-100-20261001-030000.tar.age", "pve-vm-100-20261002-030000.tar.age",
 		"pve2-20261001-030000.tar.age",
@@ -373,19 +373,19 @@ func TestBackupPrune_OnlyTouchesItsOwnPrefix(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "pve-vm-100-20261001-030000.tar.age")); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("the older archive of pve-vm-100 stayed: %v", err)
 	}
-	for _, name := range []string{"opencloud-20261001-030000.tar.age", "pve-20261003-030000.tar.age", "pve-vm-100-20261002-030000.tar.age", "pve2-20261001-030000.tar.age"} {
+	for _, name := range []string{"kagu-20261001-030000.tar.age", "pve-20261003-030000.tar.age", "pve-vm-100-20261002-030000.tar.age", "pve2-20261001-030000.tar.age"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Errorf("%s was touched: %v", name, err)
 		}
 	}
 }
 
-// Le préfixe de la base et un sujet qui commence pareil (« opencloud-x ») :
+// Le préfixe de la base et un sujet qui commence pareil (« kagu-x ») :
 // aucun n'élague l'autre, et la clé déposée ne part jamais.
 func TestBackupPrune_TheDatabasePrefixAndALookalikeStayApart(t *testing.T) {
 	dir := backupDir(t)
-	database := []string{"opencloud-20261001-030000.tar.age", "opencloud-20261002-030000.tar.age"}
-	lookalike := []string{"opencloud-x-20261001-030000.tar.age", "opencloud-x-20261002-030000.tar.age", "opencloud-x-20261003-030000.tar.age"}
+	database := []string{"kagu-20261001-030000.tar.age", "kagu-20261002-030000.tar.age"}
+	lookalike := []string{"kagu-x-20261001-030000.tar.age", "kagu-x-20261002-030000.tar.age", "kagu-x-20261003-030000.tar.age"}
 	for _, name := range append(append([]string{keyName}, database...), lookalike...) {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
@@ -403,11 +403,11 @@ func TestBackupPrune_TheDatabasePrefixAndALookalikeStayApart(t *testing.T) {
 		}
 		return lines
 	}
-	if got, want := prune("opencloud"), []string{"removed " + database[0], "kept 1"}; !slices.Equal(got, want) {
-		t.Fatalf("opencloud: %v, want %v", got, want)
+	if got, want := prune("kagu"), []string{"removed " + database[0], "kept 1"}; !slices.Equal(got, want) {
+		t.Fatalf("kagu: %v, want %v", got, want)
 	}
-	if got, want := prune("opencloud-x"), []string{"removed " + lookalike[0], "removed " + lookalike[1], "kept 1"}; !slices.Equal(got, want) {
-		t.Fatalf("opencloud-x: %v, want %v", got, want)
+	if got, want := prune("kagu-x"), []string{"removed " + lookalike[0], "removed " + lookalike[1], "kept 1"}; !slices.Equal(got, want) {
+		t.Fatalf("kagu-x: %v, want %v", got, want)
 	}
 	for _, name := range []string{keyName, database[1], lookalike[2]} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
@@ -420,13 +420,13 @@ func TestBackupPrune_TheDatabasePrefixAndALookalikeStayApart(t *testing.T) {
 // est un ordre faux : rien n'est effacé.
 func TestBackupPrune_WithoutAValidPrefixIsABadOrder(t *testing.T) {
 	b := newLongBench(t, nil)
-	names := []string{"opencloud-20261001-030000.tar.age", "opencloud-20261002-030000.tar.age"}
+	names := []string{"kagu-20261001-030000.tar.age", "kagu-20261002-030000.tar.age"}
 	for _, name := range names {
 		if err := os.WriteFile(filepath.Join(b.dir, name), []byte(ageHeader), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for name, prefix := range map[string]string{"none": "", "a path": "../opencloud", "upper case": "OpenCloud", "a dash first": "-opencloud"} {
+	for name, prefix := range map[string]string{"none": "", "a path": "../kagu", "upper case": "Kagu", "a dash first": "-kagu"} {
 		b.runner.identity.LastOrderSeq = 0
 		body := longOrder(1, agentwire.KindBackupPrune, agentwire.BackupPruneParams{Path: b.dir, Prefix: prefix, Keep: 1})
 		b.runner.receive(b.signed(t, body))
@@ -445,12 +445,12 @@ func TestBackupPrune_WithoutAValidPrefixIsABadOrder(t *testing.T) {
 func TestBackupPrune_KeepsItsOutputWithinWhatAReportAccepts(t *testing.T) {
 	dir := backupDir(t)
 	for day := range 120 {
-		name := "opencloud-2026" + twoDigits(1+day/28) + twoDigits(1+day%28) + "-030000.tar.age"
+		name := "kagu-2026" + twoDigits(1+day/28) + twoDigits(1+day%28) + "-030000.tar.age"
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	output, err := pruneBackups(dir, agentwire.BackupPruneParams{Path: dir, Prefix: "opencloud", Keep: 1})
+	output, err := pruneBackups(dir, agentwire.BackupPruneParams{Path: dir, Prefix: "kagu", Keep: 1})
 	if err != nil || len(output) > agentwire.MaxOutputLines {
 		t.Fatalf("%d lines, %v", len(output), err)
 	}
@@ -596,7 +596,7 @@ func TestBackupReceive_RefusesAPathOutsideItsRight(t *testing.T) {
 		}
 		b.runner.identity.LastOrderSeq = 0
 	}
-	prune := longOrder(1, agentwire.KindBackupPrune, agentwire.BackupPruneParams{Path: b.dir + "2", Prefix: "opencloud", Keep: 3})
+	prune := longOrder(1, agentwire.KindBackupPrune, agentwire.BackupPruneParams{Path: b.dir + "2", Prefix: "kagu", Keep: 3})
 	b.runner.receive(b.signed(t, prune))
 	if report := b.results.take(); report == nil || report.Results[0].Reason != agentwire.ReasonPathOutsideRight {
 		t.Fatalf("prune: %+v", report)
@@ -615,8 +615,8 @@ func TestBackupReceive_RefusesASymlinkLeavingTheRight(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(granted, "sortie")); err != nil {
 		t.Fatal(err)
 	}
-	old := "opencloud-20200101-030000.tar.age"
-	for _, name := range []string{old, "opencloud-20200102-030000.tar.age"} {
+	old := "kagu-20200101-030000.tar.age"
+	for _, name := range []string{old, "kagu-20200102-030000.tar.age"} {
 		if err := os.WriteFile(filepath.Join(outside, name), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -626,7 +626,7 @@ func TestBackupReceive_RefusesASymlinkLeavingTheRight(t *testing.T) {
 	for _, destination := range []string{filepath.Join(granted, "sortie"), filepath.Join(granted, "sortie", "nuit")} {
 		_, err := receiveBackup(context.Background(), discardLogger, sourceFor(t, server), granted, agentwire.BackupReceiveParams{Parcel: "colis1", Path: destination, Files: listed(files)})
 		assertReason(t, err, agentwire.ReasonPathOutsideRight)
-		_, err = pruneBackups(granted, agentwire.BackupPruneParams{Path: destination, Prefix: "opencloud", Keep: 1})
+		_, err = pruneBackups(granted, agentwire.BackupPruneParams{Path: destination, Prefix: "kagu", Keep: 1})
 		assertReason(t, err, agentwire.ReasonPathOutsideRight)
 	}
 	if len(server.requests) != 0 {
@@ -662,7 +662,7 @@ func TestBackupReceive_RefusesWhatIsNotABackup(t *testing.T) {
 	if result := b.send(t, body, b.private); result.Reason != "right_missing:backup.receive" {
 		t.Fatalf("without the right: %+v", result)
 	}
-	files := map[string]string{"autre.txt": "x", "../opencloud-20261021-030000.tar.age": "x"}
+	files := map[string]string{"autre.txt": "x", "../kagu-20261021-030000.tar.age": "x"}
 	granted := newLongBench(t, files)
 	for name, params := range map[string]agentwire.BackupReceiveParams{
 		"no files":        {Parcel: "colis1", Path: granted.dir},
@@ -1071,17 +1071,17 @@ func TestBackupPrune_NeverTouchesAKey(t *testing.T) {
 		agentwire.BackupKeyFileVersion(keyName, 1):  ageLike("k1"),
 		agentwire.BackupKeyFileVersion(keyName, 2):  ageLike("k2"),
 		agentwire.BackupKeyFileVersion(keyName, 10): ageLike("k10"),
-		"opencloud-20261023-030000.tar.age":         ageLike("la plus récente"),
+		"kagu-20261023-030000.tar.age":              ageLike("la plus récente"),
 	}
 	for name, content := range want {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(dir, "opencloud-20261021-030000.tar.age"), []byte(ageLike("ancienne")), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "kagu-20261021-030000.tar.age"), []byte(ageLike("ancienne")), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for _, prefix := range []string{"opencloud", "opencloud-key", "opencloud-key-0123456789abcdef"} {
+	for _, prefix := range []string{"kagu", "kagu-key", "kagu-key-0123456789abcdef"} {
 		if _, err := pruneBackups(dir, agentwire.BackupPruneParams{Path: dir, Prefix: prefix, Keep: 1}); err != nil {
 			t.Fatalf("%s: %v", prefix, err)
 		}

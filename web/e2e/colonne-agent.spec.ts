@@ -78,7 +78,7 @@ test("la colonne Agent, l'en-tête des agents en retard et le bandeau de version
   await page.reload();
   const banner = page.locator(".card").filter({ has: page.getByText(format("machines.imported_ahead", "v0.0.2"), { exact: true }) });
   await expect(banner).toBeVisible();
-  await expect(banner.locator(".token-box code")).toHaveText("sudo opencloud upgrade");
+  await expect(banner.locator(".token-box code")).toHaveText("sudo kagu upgrade");
   await expect(page.getByText(behindHeader)).toHaveCount(0);
   await expect(page.locator(".pill-warn").filter({ hasText: label("machines.agent_behind") })).toHaveCount(0);
 
@@ -108,7 +108,7 @@ test("la colonne Agent, l'en-tête des agents en retard et le bandeau de version
   await expect(page.locator(".pill-warn").filter({ hasText: label("machines.agent_behind") })).toHaveCount(behind.length);
   await expect(page.getByText(format("machines.agents_behind", behind.length), { exact: true })).toBeVisible();
   await expect(page.locator(".card").filter({ has: page.getByText(format("machines.imported_ahead", "v0.0.3"), { exact: true }) }).locator(".token-box code")).toHaveText(
-    "sudo opencloud upgrade",
+    "sudo kagu upgrade",
   );
   findings.screens.push("/machines");
 });

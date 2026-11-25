@@ -25,7 +25,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/view/status"
 )
 
-var testActor = manifest.Actor{Kind: manifest.ActorCLI, Name: "opencloud"}
+var testActor = manifest.Actor{Kind: manifest.ActorCLI, Name: "kagu"}
 
 // Un refus d'application porte la clé que le journal et les clients citent
 // par sa constante : les deux écritures du même mot ne divergent pas.
@@ -46,7 +46,7 @@ func TestRefusals_CarryTheirKeyConstant(t *testing.T) {
 
 func (b *bench) plan(t *testing.T, text string, prune bool) manifest.Plan {
 	t.Helper()
-	plan, err := b.manifest.Plan(context.Background(), manifest.Request{File: []byte(text), FileName: "opencloud.yaml", Prune: prune})
+	plan, err := b.manifest.Plan(context.Background(), manifest.Request{File: []byte(text), FileName: "kagu.yaml", Prune: prune})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,11 +66,11 @@ func (b *bench) apply(t *testing.T, text string, prune bool) (manifest.Apply, ma
 
 func (b *bench) tryApply(text string, prune bool) (manifest.Apply, manifest.Plan, error) {
 	ctx := context.Background()
-	plan, err := b.manifest.Plan(ctx, manifest.Request{File: []byte(text), FileName: "opencloud.yaml", Prune: prune})
+	plan, err := b.manifest.Plan(ctx, manifest.Request{File: []byte(text), FileName: "kagu.yaml", Prune: prune})
 	if err != nil {
 		return manifest.Apply{}, plan, err
 	}
-	return b.manifest.Apply(ctx, manifest.Request{File: []byte(text), FileName: "opencloud.yaml", Prune: prune, PlanHash: plan.Hash}, testActor)
+	return b.manifest.Apply(ctx, manifest.Request{File: []byte(text), FileName: "kagu.yaml", Prune: prune, PlanHash: plan.Hash}, testActor)
 }
 
 // snapshot est tout l'annuaire tel que la base le garde, dates comprises :
@@ -357,7 +357,7 @@ func prunable(t *testing.T, data string) string {
 	data = cut(t, data, "  - id: svc_00000000000000b4\n", "probes:\n")
 	data = cut(t, data, "  - id: 00000000000000c2\n", "  - id: 00000000000000c3\n")
 	data = cut(t, data, "  - id: 00000000000000d2\n", "  - id: 00000000000000d1\n")
-	return replaceOnce(t, data, "  - machine: opencloud\n    container_name: portainer\n", "")
+	return replaceOnce(t, data, "  - machine: kagu\n    container_name: portainer\n", "")
 }
 
 func TestApply_WithoutPruneKeepsWhatIsNotInTheFile(t *testing.T) {
@@ -373,7 +373,7 @@ func TestApply_WithoutPruneKeepsWhatIsNotInTheFile(t *testing.T) {
 		unmanaged = append(unmanaged, string(ref.Kind)+"/"+ref.Name)
 	}
 	slices.Sort(unmanaged)
-	if want := []string{"heartbeat/certbot", "ignored/opencloud/container_name:portainer", "probe/mail-imaps", "service/opencloud/legacy"}; !slices.Equal(unmanaged, want) {
+	if want := []string{"heartbeat/certbot", "ignored/kagu/container_name:portainer", "probe/mail-imaps", "service/kagu/legacy"}; !slices.Equal(unmanaged, want) {
 		t.Fatalf("unmanaged %v, want %v", unmanaged, want)
 	}
 	if _, _, err := b.tryApply(data, false); err != manifest.ErrNothingToApply {
@@ -457,7 +457,7 @@ func TestPlan_PruneOfAProbeOrJobShownOnStatusIsBlockedLikeTheGesture(t *testing.
 		t.Fatal(err)
 	}
 
-	plan := b.requireRefused(t, "version: 1\nmachines:\n  - name: opencloud\n", true, manifest.KeyPruneBlocked)
+	plan := b.requireRefused(t, "version: 1\nmachines:\n  - name: kagu\n", true, manifest.KeyPruneBlocked)
 
 	var blocked []string
 	for _, problem := range plan.Problems {
@@ -491,7 +491,7 @@ func TestPlan_PruneOfAPublishedProjectIsBlocked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	plan := b.requireRefused(t, "version: 1\nmachines:\n  - name: opencloud\n", true, manifest.KeyPrunePublished)
+	plan := b.requireRefused(t, "version: 1\nmachines:\n  - name: kagu\n", true, manifest.KeyPrunePublished)
 
 	for _, problem := range plan.Problems {
 		if problem.Key == manifest.KeyPrunePublished && (problem.Path != "vitrine" || problem.Value != "vitrine-publique") {
@@ -515,7 +515,7 @@ func TestApply_UpdatingAPublishedProjectKeepsItsPublication(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data := "version: 1\nmachines:\n  - name: opencloud\nprojects:\n  - name: vitrine\n    title: Nouvelle vitrine\n"
+	data := "version: 1\nmachines:\n  - name: kagu\nprojects:\n  - name: vitrine\n    title: Nouvelle vitrine\n"
 	applied, _ := b.apply(t, data, false)
 	if applied.State != manifest.ApplyApplied {
 		t.Fatalf("apply: %+v", applied)
@@ -532,7 +532,7 @@ func TestApply_UpdatingAPublishedProjectKeepsItsPublication(t *testing.T) {
 
 func TestApply_PruneNeverTouchesMachines(t *testing.T) {
 	b, _ := seeded(t)
-	data := "version: 1\nmachines:\n  - name: opencloud\n"
+	data := "version: 1\nmachines:\n  - name: kagu\n"
 	plan := b.plan(t, data, true)
 	if len(plan.Problems) > 0 {
 		t.Fatalf("problems: %+v", plan.Problems)
@@ -632,7 +632,7 @@ func TestApply_StalePlanIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := b.snapshot(t)
-	_, newer, err := b.manifest.Apply(ctx, manifest.Request{File: []byte(data), FileName: "opencloud.yaml", PlanHash: plan.Hash}, testActor)
+	_, newer, err := b.manifest.Apply(ctx, manifest.Request{File: []byte(data), FileName: "kagu.yaml", PlanHash: plan.Hash}, testActor)
 	if err != manifest.ErrPlanChanged {
 		t.Fatalf("got %v", err)
 	}
@@ -646,11 +646,11 @@ func TestApply_StalePlanIsRefused(t *testing.T) {
 		t.Fatalf("a refused apply leaves no line: %+v", applies)
 	}
 	// Une empreinte vide n'applique rien non plus.
-	if _, _, err := b.manifest.Apply(ctx, manifest.Request{File: []byte(data), FileName: "opencloud.yaml"}, testActor); err != manifest.ErrPlanChanged {
+	if _, _, err := b.manifest.Apply(ctx, manifest.Request{File: []byte(data), FileName: "kagu.yaml"}, testActor); err != manifest.ErrPlanChanged {
 		t.Fatalf("no hash: %v", err)
 	}
 	// Et avec l'empreinte d'aujourd'hui, ça passe.
-	if _, _, err := b.manifest.Apply(ctx, manifest.Request{File: []byte(data), FileName: "opencloud.yaml", PlanHash: newer.Hash}, testActor); err != nil {
+	if _, _, err := b.manifest.Apply(ctx, manifest.Request{File: []byte(data), FileName: "kagu.yaml", PlanHash: newer.Hash}, testActor); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -674,7 +674,7 @@ func TestApply_BusyWhileAnotherRuns(t *testing.T) {
 		finished <- applied
 	}()
 	<-started
-	_, _, err := b.manifest.Apply(context.Background(), manifest.Request{File: []byte(data), FileName: "opencloud.yaml", PlanHash: "sha256:x"}, testActor)
+	_, _, err := b.manifest.Apply(context.Background(), manifest.Request{File: []byte(data), FileName: "kagu.yaml", PlanHash: "sha256:x"}, testActor)
 	if err != manifest.ErrBusy {
 		t.Fatalf("second apply: %v", err)
 	}
@@ -695,7 +695,7 @@ func TestApply_ClientGoneDoesNotCutTheApply(t *testing.T) {
 			gone()
 		}
 	}
-	applied, _, err := b.manifest.Apply(ctx, manifest.Request{File: []byte(data), FileName: "opencloud.yaml", PlanHash: plan.Hash}, testActor)
+	applied, _, err := b.manifest.Apply(ctx, manifest.Request{File: []byte(data), FileName: "kagu.yaml", PlanHash: plan.Hash}, testActor)
 	if err != nil || applied.State != manifest.ApplyApplied || applied.Done != 5 {
 		t.Fatalf("apply: %+v %v", applied, err)
 	}
@@ -756,7 +756,7 @@ func TestApply_JournalKeepsWhoWhatAndHowItEnded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Actor != testActor || stored.FileName != "opencloud.yaml" || stored.FileHash != manifest.HashBytes([]byte(data)) ||
+	if stored.Actor != testActor || stored.FileName != "kagu.yaml" || stored.FileHash != manifest.HashBytes([]byte(data)) ||
 		stored.PlanHash != plan.Hash || stored.State != manifest.ApplyApplied || stored.Updated != 5 || stored.Done != 5 ||
 		stored.Unchanged != plan.Unchanged || len(stored.Changes) != 5 || !strings.HasPrefix(stored.ID, manifest.ApplyPrefix) {
 		t.Fatalf("stored: %+v", stored)

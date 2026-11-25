@@ -16,7 +16,7 @@ func TestVerifySums_ReadsTheVersionFromTheTrustedComment(t *testing.T) {
 	if signed.Version != (Version{0, 0, 2}) || len(signed.Sums) != 2 {
 		t.Fatalf("release %+v", signed)
 	}
-	if signed.Sums["opencloud-linux-arm64"] != "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b" {
+	if signed.Sums["kagu-linux-arm64"] != "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b" {
 		t.Fatalf("sums %v", signed.Sums)
 	}
 }

@@ -3,7 +3,7 @@
 version: 1
 machines:
   - name: app-1
-  - name: opencloud
+  - name: kagu
 projects:
   - id: prj_00000000000000a1
     name: docs
@@ -55,7 +55,7 @@ services:
         ports: ["8080:3000/tcp", "80"]
         updates: watch
   - id: svc_00000000000000b4
-    machine: opencloud
+    machine: kagu
     name: legacy
     nature: application
     origin: container
@@ -89,7 +89,7 @@ probes:
     tls: true
   - id: 00000000000000c3
     name: twin
-    runner: opencloud
+    runner: kagu
     kind: tcp
     target: db:5433
     interval: 1m
@@ -98,7 +98,7 @@ probes:
     recovery_threshold: 2
   - id: 00000000000000c4
     name: twin
-    runner: opencloud
+    runner: kagu
     kind: tcp
     target: db:5432
     interval: 1m
@@ -107,7 +107,7 @@ probes:
     recovery_threshold: 2
   - id: 00000000000000c1
     name: wiki-http
-    runner: opencloud
+    runner: kagu
     service: app-1/wiki
     kind: http
     target: https://wiki.example.org/healthz
@@ -136,5 +136,5 @@ ignored:
     compose_project: scratch
   - machine: app-1
     container_name: tmp-debug
-  - machine: opencloud
+  - machine: kagu
     container_name: portainer

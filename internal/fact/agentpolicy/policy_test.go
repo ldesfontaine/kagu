@@ -159,10 +159,10 @@ func TestLapsed_FollowsTheMonotonicClock(t *testing.T) {
 // d'enchaîné (R-A3-15), toujours « trust set » (N-M2).
 func TestServerKeyLine_IsAlwaysTrustSet(t *testing.T) {
 	key := testKey(t)
-	if got, want := ServerKeyLine(key), "sudo opencloud agent trust set server-key "+base64.StdEncoding.EncodeToString(key); got != want {
+	if got, want := ServerKeyLine(key), "sudo kagu agent trust set server-key "+base64.StdEncoding.EncodeToString(key); got != want {
 		t.Fatalf("%q, want %q", got, want)
 	}
-	if got := MigrateLine(); got != "sudo opencloud agent policy migrate" {
+	if got := MigrateLine(); got != "sudo kagu agent policy migrate" {
 		t.Fatalf("%q", got)
 	}
 }

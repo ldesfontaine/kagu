@@ -88,7 +88,7 @@ type Unit struct {
 	Line    int
 }
 
-// Probe : Runner vide veut dire la machine openCloud. Service s'écrit
+// Probe : Runner vide veut dire la machine Kagu. Service s'écrit
 // « machine/nom », vide quand la sonde ne vise aucun service.
 type Probe struct {
 	ID                string

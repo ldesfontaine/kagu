@@ -18,7 +18,7 @@ const tabs = [
   { to: incidentsPath, key: "availability.tab_incidents" },
 ];
 
-// La page Disponibilité : ce qu'openCloud vérifie depuis l'extérieur (les
+// La page Disponibilité : ce que Kagu vérifie depuis l'extérieur (les
 // sondes), ce que le public lit (la page de chaque projet publié) et les
 // incidents que l'opérateur lui dit. Une seule rangée d'onglets ; l'action
 // principale de l'en-tête est la création de l'objet de l'onglet.

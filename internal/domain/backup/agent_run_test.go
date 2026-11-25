@@ -560,7 +560,7 @@ func TestRunNow_AParcelWithAnotherNameIsNotDelivered(t *testing.T) {
 	b := newBench(t, rights)
 	b.readyAgent("100,101", 3)
 	fleet := playAgents(t, b)
-	fleet.extraUpload["100"] = "opencloud-20991231-235959.tar.age"
+	fleet.extraUpload["100"] = "kagu-20991231-235959.tar.age"
 	fleet.extraUpload["101"] = agentwire.BackupFileName("pve-vm-102", benchNow)
 
 	if _, err := b.backups.RunNow(operator(), "pve"); err != nil {

@@ -43,7 +43,7 @@ var adminPaths = map[string]string{
 	adminRevokeTokens:  "/control/admin/tokens/revoke-all",
 }
 
-// opencloud admin : les gestes de root sur la machine Kagu, par la socket
+// kagu admin : les gestes de root sur la machine Kagu, par la socket
 // locale du serveur qui tourne (R-A2-10, R-A2-11). Le serveur juge l'uid du
 // pair : seul root passe ; la commande refuse un autre compte avant, pour
 // dire « sudo » plutôt que le droit d'ouvrir la socket.

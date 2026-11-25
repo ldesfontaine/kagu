@@ -104,6 +104,25 @@ func TestAuthForwardSecret_ALoopbackPeerMustProveItWentThroughTheProxy(t *testin
 	}
 }
 
+// Le secret ne se lit que sous brand.ProxySecretHeader : sous un autre nom,
+// celui d'un produit d'avant ou sans préfixe, il ne vaut rien (aucune double
+// lecture, T04-18).
+func TestAuthForwardSecret_OnlyItsOwnHeaderCarriesTheSecret(t *testing.T) {
+	server := newFirstSetupServer(t)
+	server.enableForwardOnLoopback(t, proxySecret)
+	for _, header := range []string{"X-Proxy-Secret", "X-Example-Proxy-Secret", strings.TrimPrefix(brand.ProxySecretHeader, "X-")} {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/counts", nil)
+		request.RemoteAddr = net.JoinHostPort(loopbackPeer, "4000")
+		proxied(testUsername)(request)
+		request.Header.Set(header, proxySecret)
+		recorder := httptest.NewRecorder()
+		server.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusUnauthorized {
+			t.Errorf("secret under %s: status %d, want 401", header, recorder.Code)
+		}
+	}
+}
+
 func TestAuthForwardSecret_ARefusalNeverLogsTheValueReceived(t *testing.T) {
 	server := newFirstSetupServer(t)
 	server.enableForwardOnLoopback(t, proxySecret)

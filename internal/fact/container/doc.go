@@ -1,4 +1,4 @@
-// Package container porte les conteneurs d'openCloud : ce qui tourne sur une
+// Package container porte les conteneurs de Kagu : ce qui tourne sur une
 // machine. Aujourd'hui, un conteneur Docker que l'agent de la machine
 // découvre et suit ; le modèle laisse la place à d'autres genres. Il reçoit
 // ce que l'agent rapporte (inventaire, événements, mesures), écrit les

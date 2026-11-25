@@ -19,8 +19,8 @@ import (
 
 // Le producteur « export de la configuration d'un pare-feu » : c'est le
 // serveur qui le joue, pas un agent. La clé d'API du pare-feu ne quitte donc
-// pas la machine openCloud, et le fichier lu n'en sort que chiffré. Le plan
-// qui l'utilise a pour machine source la machine openCloud et pour sélecteur
+// pas la machine Kagu, et le fichier lu n'en sort que chiffré. Le plan
+// qui l'utilise a pour machine source la machine Kagu et pour sélecteur
 // l'identifiant du pare-feu déclaré. Il n'a aucun droit d'agent : rien ne
 // s'exécute sur une autre machine que la destination.
 const (

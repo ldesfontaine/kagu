@@ -51,11 +51,11 @@ const (
 	CauseTimeout = "timeout"
 	// CauseRefused : la machine répond, mais rien n'écoute sur ce port.
 	CauseRefused = "refused"
-	// CauseUnresolved : le nom n'est pas résolu par la machine openCloud.
+	// CauseUnresolved : le nom n'est pas résolu par la machine Kagu.
 	CauseUnresolved = "unresolved"
-	// CauseNoRoute : la machine openCloud n'a pas de route vers l'adresse.
+	// CauseNoRoute : la machine Kagu n'a pas de route vers l'adresse.
 	CauseNoRoute = "no_route"
-	// CauseForbidden : adresse qu'openCloud ne joint jamais (lien-local).
+	// CauseForbidden : adresse que Kagu ne joint jamais (lien-local).
 	CauseForbidden = "forbidden"
 	// CauseNotTLS : quelque chose répond, mais pas en TLS (port http).
 	CauseNotTLS = "not_tls"

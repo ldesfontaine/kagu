@@ -297,7 +297,7 @@ func TestActions_AgentUpdateOfferThenOrder(t *testing.T) {
 	if json.Unmarshal(signed.Body, &body) != nil || json.Unmarshal(body.Params, &params) != nil {
 		t.Fatalf("order %s", signed.Body)
 	}
-	if body.Kind != agentwire.KindAgentUpdate || params.Version != "v0.0.3" || params.Binary != "opencloud-linux-amd64" || len(params.Files) != 3 {
+	if body.Kind != agentwire.KindAgentUpdate || params.Version != "v0.0.3" || params.Binary != "kagu-linux-amd64" || len(params.Files) != 3 {
 		t.Fatalf("order %+v params %+v", body, params)
 	}
 

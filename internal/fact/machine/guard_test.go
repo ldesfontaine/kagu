@@ -9,34 +9,34 @@ import (
 )
 
 func TestGuardInstallLines_PutRootsCopyOutsideTheStateOfTheAccount(t *testing.T) {
-	got := GuardInstallLines("/tmp/opencloud")
+	got := GuardInstallLines("/tmp/kagu")
 	want := []string{
-		"install -d -m 0755 -o root -g root /usr/local/lib/opencloud-agent",
-		"install -m 0755 -o root -g root /tmp/opencloud /usr/local/lib/opencloud-agent/opencloud-guard",
+		"install -d -m 0755 -o root -g root /usr/local/lib/kagu-agent",
+		"install -m 0755 -o root -g root /tmp/kagu /usr/local/lib/kagu-agent/kagu-guard",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("got:\n%s", strings.Join(got, "\n"))
 	}
 	for _, line := range got {
 		// Ce que root pose n'est jamais sous l'état que le compte de l'agent écrit.
-		if strings.Contains(line, "/var/lib/opencloud-agent") || strings.Contains(line, "runuser") {
+		if strings.Contains(line, "/var/lib/kagu-agent") || strings.Contains(line, "runuser") {
 			t.Errorf("root acts under the state of the account: %q", line)
 		}
 	}
 }
 
 func TestGuardMigrationLines_AreTheExactLinesToPasteWithSudo(t *testing.T) {
-	got := strings.Join(GuardMigrationLines("/tmp/opencloud", "v0.0.2", false), "\n")
+	got := strings.Join(GuardMigrationLines("/tmp/kagu", "v0.0.2", false), "\n")
 	want := strings.Join([]string{
-		"sudo systemctl stop opencloud-agent.service",
-		"sudo install -d -m 0755 -o root -g root /usr/local/lib/opencloud-agent",
-		"sudo install -m 0755 -o root -g root /tmp/opencloud /usr/local/lib/opencloud-agent/opencloud-guard",
-		"sudo -u opencloud-agent install -m 0755 /tmp/opencloud /var/lib/opencloud-agent/bin/opencloud-v0.0.2",
-		"sudo -u opencloud-agent ln -sfn opencloud-v0.0.2 /var/lib/opencloud-agent/bin/current",
-		"sudo sed -i 's|^ExecStart=/var/lib/opencloud-agent/bin/current |ExecStart=/usr/local/lib/opencloud-agent/opencloud-guard guard -state /var/lib/opencloud-agent |' /etc/systemd/system/opencloud-agent.service",
-		"systemctl cat opencloud-agent.service | grep '^ExecStart='",
+		"sudo systemctl stop kagu-agent.service",
+		"sudo install -d -m 0755 -o root -g root /usr/local/lib/kagu-agent",
+		"sudo install -m 0755 -o root -g root /tmp/kagu /usr/local/lib/kagu-agent/kagu-guard",
+		"sudo -u kagu-agent install -m 0755 /tmp/kagu /var/lib/kagu-agent/bin/kagu-v0.0.2",
+		"sudo -u kagu-agent ln -sfn kagu-v0.0.2 /var/lib/kagu-agent/bin/current",
+		"sudo sed -i 's|^ExecStart=/var/lib/kagu-agent/bin/current |ExecStart=/usr/local/lib/kagu-agent/kagu-guard guard -state /var/lib/kagu-agent |' /etc/systemd/system/kagu-agent.service",
+		"systemctl cat kagu-agent.service | grep '^ExecStart='",
 		"sudo systemctl daemon-reload",
-		"sudo systemctl start opencloud-agent.service",
+		"sudo systemctl start kagu-agent.service",
 	}, "\n")
 	if got != want {
 		t.Fatalf("got:\n%s", got)
@@ -55,18 +55,18 @@ func TestGuardMigrationLines_AreTheExactLinesToPasteWithSudo(t *testing.T) {
 // Sans sudo (un hôte Proxmox n'en a pas) : les mêmes lignes en root, le compte
 // de l'agent pris par runuser. Aucune ne nomme sudo.
 func TestGuardMigrationLines_RootVariantNeverNamesSudo(t *testing.T) {
-	lines := GuardMigrationLines("/tmp/opencloud", "v0.0.2", true)
+	lines := GuardMigrationLines("/tmp/kagu", "v0.0.2", true)
 	for _, line := range lines {
 		if strings.Contains(line, "sudo") {
 			t.Errorf("the root variant names sudo: %q", line)
 		}
 	}
 	want := []string{
-		"systemctl stop opencloud-agent.service",
-		"runuser -u opencloud-agent -- install -m 0755 /tmp/opencloud /var/lib/opencloud-agent/bin/opencloud-v0.0.2",
-		"runuser -u opencloud-agent -- ln -sfn opencloud-v0.0.2 /var/lib/opencloud-agent/bin/current",
+		"systemctl stop kagu-agent.service",
+		"runuser -u kagu-agent -- install -m 0755 /tmp/kagu /var/lib/kagu-agent/bin/kagu-v0.0.2",
+		"runuser -u kagu-agent -- ln -sfn kagu-v0.0.2 /var/lib/kagu-agent/bin/current",
 		"systemctl daemon-reload",
-		"systemctl start opencloud-agent.service",
+		"systemctl start kagu-agent.service",
 	}
 	text := strings.Join(lines, "\n")
 	for _, line := range want {
@@ -77,7 +77,7 @@ func TestGuardMigrationLines_RootVariantNeverNamesSudo(t *testing.T) {
 }
 
 // Le bloc de migration commence par le téléchargement vérifié : il ne suppose
-// plus /tmp/opencloud déjà copié.
+// plus /tmp/kagu déjà copié.
 func TestGuardMigrationText_DownloadsAndChecksTheBinaryFirst(t *testing.T) {
 	text := GuardMigrationText("v0.0.2", true)
 	download := strings.Join(ReleaseDownloadLines("v0.0.2"), "\n")
@@ -91,9 +91,9 @@ func TestGuardMigrationText_DownloadsAndChecksTheBinaryFirst(t *testing.T) {
 	}
 	for _, want := range []string{
 		"base=https://github.com/ldesfontaine/kagu/releases/download/v0.0.2 &&",
-		`curl -fLO "$base/opencloud-linux-$arch" -fLO "$base/SHA256SUMS" &&`,
+		`curl -fLO "$base/kagu-linux-$arch" -fLO "$base/SHA256SUMS" &&`,
 		"sha256sum -c --ignore-missing SHA256SUMS &&",
-		`install -m 0755 "opencloud-linux-$arch" /tmp/opencloud)`,
+		`install -m 0755 "kagu-linux-$arch" /tmp/kagu)`,
 	} {
 		if !strings.Contains(download, want) {
 			t.Errorf("the download lacks %q:\n%s", want, download)
@@ -109,7 +109,7 @@ func TestGuardMigration_RewritesTheOldUnitLineIntoTheShippedOne(t *testing.T) {
 		t.Skip("no sed")
 	}
 	var script string
-	for _, line := range GuardMigrationLines("/tmp/opencloud", "v0.0.2", false) {
+	for _, line := range GuardMigrationLines("/tmp/kagu", "v0.0.2", false) {
 		if strings.HasPrefix(line, "sudo sed -i ") {
 			parts := strings.Split(line, "'")
 			if len(parts) != 3 {
@@ -121,8 +121,8 @@ func TestGuardMigration_RewritesTheOldUnitLineIntoTheShippedOne(t *testing.T) {
 	if script == "" {
 		t.Fatal("no sed line")
 	}
-	unit := filepath.Join(t.TempDir(), "opencloud-agent.service")
-	old := "[Service]\nUser=opencloud-agent\nExecStart=/var/lib/opencloud-agent/bin/current agent -state /var/lib/opencloud-agent -ca-file /etc/ssl/ca-interne.pem\nRestart=on-failure\n"
+	unit := filepath.Join(t.TempDir(), "kagu-agent.service")
+	old := "[Service]\nUser=kagu-agent\nExecStart=/var/lib/kagu-agent/bin/current agent -state /var/lib/kagu-agent -ca-file /etc/ssl/ca-interne.pem\nRestart=on-failure\n"
 	if err := os.WriteFile(unit, []byte(old), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -135,12 +135,12 @@ func TestGuardMigration_RewritesTheOldUnitLineIntoTheShippedOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const wantLine = "ExecStart=/usr/local/lib/opencloud-agent/opencloud-guard guard -state /var/lib/opencloud-agent agent -state /var/lib/opencloud-agent -ca-file /etc/ssl/ca-interne.pem"
+	const wantLine = "ExecStart=/usr/local/lib/kagu-agent/kagu-guard guard -state /var/lib/kagu-agent agent -state /var/lib/kagu-agent -ca-file /etc/ssl/ca-interne.pem"
 	if !strings.Contains(string(migrated), wantLine+"\n") || strings.Count(string(migrated), "ExecStart=") != 1 {
 		t.Fatalf("migrated unit:\n%s", migrated)
 	}
 
-	shipped, err := os.ReadFile("../../../docs/installation/opencloud-agent.service") // #nosec G304 -- le fichier livré, lu par un test.
+	shipped, err := os.ReadFile("../../../docs/installation/kagu-agent.service") // #nosec G304 -- le fichier livré, lu par un test.
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestGuardMigration_RewritesTheOldUnitLineIntoTheShippedOne(t *testing.T) {
 	}
 	// Le reste de l'unité livrée ne change pas ce que les autres textes disent :
 	// Restart=on-failure relance un code 3, RestartPreventExitStatus=2 ne retient que le 2.
-	for _, line := range []string{"Restart=on-failure", "RestartPreventExitStatus=2", "NoNewPrivileges=true", "User=opencloud-agent"} {
+	for _, line := range []string{"Restart=on-failure", "RestartPreventExitStatus=2", "NoNewPrivileges=true", "User=kagu-agent"} {
 		if !strings.Contains(string(shipped), "\n"+line+"\n") {
 			t.Errorf("the shipped unit lost %q", line)
 		}
@@ -165,7 +165,7 @@ func TestGuardMigration_RewritesTheOldUnitLineIntoTheShippedOne(t *testing.T) {
 // L'unité que la page d'installation donne à poser est celle du fichier livré,
 // commentaires mis à part : un seul texte de référence, deux présentations.
 func TestAgentUnitLines_MatchTheShippedUnit(t *testing.T) {
-	shipped, err := os.ReadFile("../../../docs/installation/opencloud-agent.service") // #nosec G304 -- le fichier livré, lu par un test.
+	shipped, err := os.ReadFile("../../../docs/installation/kagu-agent.service") // #nosec G304 -- le fichier livré, lu par un test.
 	if err != nil {
 		t.Fatal(err)
 	}

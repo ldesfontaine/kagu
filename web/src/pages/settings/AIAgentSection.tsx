@@ -13,7 +13,7 @@ import { SettingsSection } from "./SettingsSection";
 
 // La pastille de chaque verdict : joignable va ; sans ses outils ou une
 // réponse inattendue demandent un regard ; rien qui répond est un danger ;
-// non réglé n'est pas un défaut, openCloud marche sans.
+// non réglé n'est pas un défaut, Kagu marche sans.
 const tones: Record<MCPCheckState, Tone> = {
   not_configured: "neutral",
   reachable: "ok",
@@ -68,7 +68,7 @@ function MCPCheckRows({ check, reload }: { check: MCPCheck; reload: () => void }
         </SettingRow>
       )}
       {reachable && (
-        <SettingRow label={t("ai_agent.version_label")} description={t("ai_agent.tools", check.opencloud_tools)}>
+        <SettingRow label={t("ai_agent.version_label")} description={t("ai_agent.tools", check.kagu_tools)}>
           <span className="mono">{check.version === "" ? t("ai_agent.version_unknown") : check.version}</span>
         </SettingRow>
       )}

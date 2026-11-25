@@ -11,7 +11,7 @@ import (
 )
 
 // Le protocole 2 signe l'étiquette, l'aléa, l'identifiant précédé de sa
-// longueur et l'horodatage : octet pour octet, figé. La machine openCloud
+// longueur et l'horodatage : octet pour octet, figé. La machine Kagu
 // (« local ») signe comme les autres.
 func TestSignedPayload_IsByteExact(t *testing.T) {
 	nonce := bytes.Repeat([]byte{7}, NonceSize)
@@ -19,7 +19,7 @@ func TestSignedPayload_IsByteExact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := append([]byte("opencloud-agent-proof/v2\x00"), nonce...)
+	want := append([]byte("kagu-agent-proof/v2\x00"), nonce...)
 	want = append(want, 0, 0, 0, 5)
 	want = append(want, "local"...)
 	want = append(want, 0, 0, 0, 0, 0, 0, 0, 1)

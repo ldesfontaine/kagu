@@ -63,7 +63,7 @@ func (LinkSecrets) LogValue() slog.Value { return slog.StringValue(redactedSecre
 
 func (LinkSecrets) MarshalJSON() ([]byte, error) { return json.Marshal(redactedSecrets) }
 
-// isLost : la clé du serveur a été perdue (opencloud secrets forget) ; le
+// isLost : la clé du serveur a été perdue (kagu secrets forget) ; le
 // lien n'a plus rien à envoyer.
 func (s LinkSecrets) isLost() bool {
 	return s.REST == "" || s.Repo == ""

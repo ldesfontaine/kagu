@@ -34,7 +34,7 @@ interface ObjectPickerProps {
 }
 
 // Choisir des objets de l'annuaire (machine, service déclaré, tâche, sonde)
-// parmi ce qu'openCloud connaît déjà. Un composant y rattache ses objets, un
+// parmi ce que Kagu connaît déjà. Un composant y rattache ses objets, un
 // incident y vise les siens.
 export function ObjectPicker({ value, onChange, labelKeyPrefix, label, addLabel, emptyText, nameOf, detailOf }: ObjectPickerProps) {
   const t = useT();

@@ -20,7 +20,7 @@ import { StatusStatePill } from "./StatusStatePill";
 // projet, à /disponibilite/pages/:id/composants/nouveau ou
 // …/composants/:componentId. Le projet est celui de l'adresse : un composant
 // ne change jamais de projet. Un nom public, un ordre, et les objets
-// rattachés, choisis parmi ce qu'openCloud surveille déjà.
+// rattachés, choisis parmi ce que Kagu surveille déjà.
 export function ComponentModal() {
   const { id = "", componentId } = useParams();
   const t = useT();

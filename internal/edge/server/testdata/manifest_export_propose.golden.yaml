@@ -1,14 +1,14 @@
-# Annuaire de Kagu, exporté par « opencloud export ».
+# Annuaire de Kagu, exporté par « kagu export ».
 # Les identifiants (id) rattachent chaque entrée à son objet : gardez-les.
 # Un jeton ne s'écrit jamais ici : « secret: kept » garde celui du serveur.
 version: 1
 machines:
-  - name: opencloud
+  - name: kagu
   - name: vps-paris-1
 projects: []
 services:
   - id: svc_ID
-    machine: opencloud
+    machine: kagu
     name: backup
     nature: infra
     origin: binary

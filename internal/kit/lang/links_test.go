@@ -46,7 +46,7 @@ func TestLoad_NoMenuPathWrittenByHand(t *testing.T) {
 		t.Fatal(err)
 	}
 	handWritten := regexp.MustCompile(`›|(Paramètres|Settings|Alertes|Alerts|Services|Machines) → `)
-	// Les chemins d'un logiciel tiers (Element, OPNsense) ne sont pas ceux d'openCloud.
+	// Les chemins d'un logiciel tiers (Element, OPNsense) ne sont pas ceux de Kagu.
 	thirdParty := regexp.MustCompile(`Element|OPNsense|Proxmox`)
 	for _, code := range Codes() {
 		catalog := catalogs[code]

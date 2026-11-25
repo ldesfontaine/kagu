@@ -36,10 +36,10 @@ func TestGuardCommand_RunsCurrentAndReturnsItsExitCode(t *testing.T) {
 	}
 	witness := filepath.Join(t.TempDir(), "args")
 	body := "#!" + shell + "\nprintf '%s' \"$*\" > " + witness + "\nexit 3\n"
-	if err := os.WriteFile(filepath.Join(bin, "opencloud-v0.0.1"), []byte(body), 0o700); err != nil { // #nosec G306 -- un binaire factice de test
+	if err := os.WriteFile(filepath.Join(bin, "kagu-v0.0.1"), []byte(body), 0o700); err != nil { // #nosec G306 -- un binaire factice de test
 		t.Fatal(err)
 	}
-	if err := os.Symlink("opencloud-v0.0.1", filepath.Join(bin, "current")); err != nil {
+	if err := os.Symlink("kagu-v0.0.1", filepath.Join(bin, "current")); err != nil {
 		t.Fatal(err)
 	}
 	err = runGuard([]string{"-state", state, "agent", "-state", state, "-ca-file", "/etc/ca.pem"})

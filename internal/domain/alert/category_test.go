@@ -37,7 +37,7 @@ func TestCategories_EveryCategoryHasAKind(t *testing.T) {
 func updateFact() alert.Fact {
 	return alert.Fact{
 		Kind: alert.KindAgentRolledBack, Severity: alert.SeverityAttention,
-		Object:    alert.Object{Kind: alert.ObjectMachine, ID: machine.LocalID, Name: "opencloud"},
+		Object:    alert.Object{Kind: alert.ObjectMachine, ID: machine.LocalID, Name: "kagu"},
 		MachineID: machine.LocalID,
 	}
 }

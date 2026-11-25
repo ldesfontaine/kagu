@@ -67,7 +67,7 @@ type certificateJSON struct {
 	Fingerprint   string    `json:"fingerprint"`
 	ChainValid    bool      `json:"chain_valid"`
 	HostnameMatch bool      `json:"hostname_match"`
-	// Vide quand la cible n'agrafe rien : openCloud ne contacte aucun
+	// Vide quand la cible n'agrafe rien : Kagu ne contacte aucun
 	// répondeur pour le savoir.
 	OCSP string `json:"ocsp"`
 }

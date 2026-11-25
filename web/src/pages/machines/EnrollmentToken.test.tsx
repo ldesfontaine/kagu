@@ -7,7 +7,7 @@ vi.mock("../../i18n/context", () => ({ useT: () => (key: string) => key }));
 
 const token = {
   name: "pve1",
-  token: "oc_secret",
+  token: "kg_secret",
   steps: [
     { id: "prepare" as const, command: "préparer" },
     { id: "enroll" as const, command: "installer" },
@@ -41,7 +41,7 @@ test("chaque étape est un titre, une ligne et un seul bloc ; le jeton n'est aff
     expect(markup).toContain(`machine.install_${id}_text`);
   }
   expect(markup).not.toContain("machine.install_binary_title");
-  expect(markup).not.toContain("oc_secret");
+  expect(markup).not.toContain("kg_secret");
   expect(markup.indexOf("préparer")).toBeLessThan(markup.indexOf("installer"));
   expect(markup.indexOf("installer")).toBeLessThan(markup.indexOf("cat &gt; unité"));
 });

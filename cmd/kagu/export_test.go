@@ -17,13 +17,13 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 )
 
-const exportedYAML = "# Annuaire\nversion: 1\nmachines:\n  - name: opencloud\n"
+const exportedYAML = "# Annuaire\nversion: 1\nmachines:\n  - name: kagu\n"
 
 // shortDir crée un dossier au chemin court : le chemin d'une socket Unix ne
 // dépasse pas 107 octets, et t.TempDir() porte le nom du test.
 func shortDir(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "oc")
+	dir, err := os.MkdirTemp("", "kg")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestExportCommand_WritesTheFile(t *testing.T) {
 		t.Fatalf("stdout: %q", out.String())
 	}
 
-	target := filepath.Join(shortDir(t), "opencloud.yaml")
+	target := filepath.Join(shortDir(t), "kagu.yaml")
 	if err := os.WriteFile(target, []byte("ancien contenu"), 0o644); err != nil {
 		t.Fatal(err)
 	}

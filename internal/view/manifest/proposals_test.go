@@ -31,8 +31,8 @@ func (b *bench) undeclaredGroup(t *testing.T, kind directory.IgnoreKind, value s
 func TestPrune_UnlistedIgnoredKeyIsNamedInThePlanBeforeTheProposalComesBack(t *testing.T) {
 	b, data := seeded(t)
 	b.seedUndeclared(t)
-	data = replaceOnce(t, data, "  - machine: opencloud\n    container_name: portainer\n", "")
-	const named = "delete ignored/opencloud/container_name:portainer"
+	data = replaceOnce(t, data, "  - machine: kagu\n    container_name: portainer\n", "")
+	const named = "delete ignored/kagu/container_name:portainer"
 
 	group, found := b.undeclaredGroup(t, directory.IgnoreContainerName, "portainer")
 	if !found || !group.Ignored {
@@ -45,7 +45,7 @@ func TestPrune_UnlistedIgnoredKeyIsNamedInThePlanBeforeTheProposalComesBack(t *t
 		t.Fatalf("no prune, no deletion: %v", changeLabels(plan))
 	}
 	if !slices.ContainsFunc(plan.Unmanaged, func(ref manifest.Ref) bool {
-		return ref.Kind == manifest.KindIgnored && ref.Name == "opencloud/container_name:portainer"
+		return ref.Kind == manifest.KindIgnored && ref.Name == "kagu/container_name:portainer"
 	}) {
 		t.Fatalf("the key is said outside the file: %+v", plan.Unmanaged)
 	}

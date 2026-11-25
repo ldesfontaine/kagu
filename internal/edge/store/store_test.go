@@ -108,7 +108,7 @@ func TestOpen_AppliesMigrationsOnceAndSurvivesReopen(t *testing.T) {
 	}
 }
 
-// Une base d'avant les agents garde la ligne de la machine openCloud, sans
+// Une base d'avant les agents garde la ligne de la machine Kagu, sans
 // agent : l'agent que le service reconnaît comme celui du serveur arrive
 // sous LocalID et la reprend, nom, date et historique compris. Tant qu'il
 // est actif, un second est refusé et le jeton reste valable.
@@ -116,15 +116,15 @@ func TestEnroll_UnderLocalID_AdoptsTheRowLeftWithoutAgent(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
-	exec(t, db, `INSERT INTO machines (id, name, hostname, created_at) VALUES (?, 'opencloud', 'old-host', 1)`, machine.LocalID)
+	exec(t, db, `INSERT INTO machines (id, name, hostname, created_at) VALUES (?, 'kagu', 'old-host', 1)`, machine.LocalID)
 	local := candidate(t)
 	local.ID = machine.LocalID
-	token := issueToken(t, db, "oc-host", "", now)
+	token := issueToken(t, db, "kg-host", "", now)
 	adopted, err := db.Enroll(ctx, ident.HashToken(token), local, newAgent(t, now), now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if adopted.ID != machine.LocalID || adopted.Name != "opencloud" || adopted.Hostname != "vps" || !adopted.CreatedAt.Equal(time.Unix(1, 0)) || !adopted.Agent.IsActive() {
+	if adopted.ID != machine.LocalID || adopted.Name != "kagu" || adopted.Hostname != "vps" || !adopted.CreatedAt.Equal(time.Unix(1, 0)) || !adopted.Agent.IsActive() {
 		t.Fatalf("adopted %+v", adopted)
 	}
 	twin := issueToken(t, db, "twin", "", now)
@@ -136,21 +136,21 @@ func TestEnroll_UnderLocalID_AdoptsTheRowLeftWithoutAgent(t *testing.T) {
 	}
 	// Sans ligne, l'agent du serveur la crée, au nom du jeton.
 	fresh := openTestDB(t)
-	created, err := fresh.Enroll(ctx, ident.HashToken(issueToken(t, fresh, "oc-host", "", now)), local, newAgent(t, now), now)
-	if err != nil || created.ID != machine.LocalID || created.Name != "oc-host" {
+	created, err := fresh.Enroll(ctx, ident.HashToken(issueToken(t, fresh, "kg-host", "", now)), local, newAgent(t, now), now)
+	if err != nil || created.ID != machine.LocalID || created.Name != "kg-host" {
 		t.Fatalf("created %+v %v", created, err)
 	}
 }
 
 // Sur une base d'avant les agents, la ligne offerte pour la machine
-// openCloud est un ré-enrôlement de sa ligne : elle garde son nom.
+// Kagu est un ré-enrôlement de sa ligne : elle garde son nom.
 func TestOfferLocalEnrollment_OnAnUpgradedBase_ReenrollsTheExistingRow(t *testing.T) {
 	db := openTestDB(t)
-	exec(t, db, `INSERT INTO machines (id, name, created_at) VALUES (?, 'opencloud', 1)`, machine.LocalID)
+	exec(t, db, `INSERT INTO machines (id, name, created_at) VALUES (?, 'kagu', 1)`, machine.LocalID)
 	machines := machine.New(db, machine.NewSessions(), slog.New(slog.NewTextHandler(io.Discard, nil)))
-	machines.SetServerHost("sha256:server", "oc-host")
+	machines.SetServerHost("sha256:server", "kg-host")
 	_, token, err := machines.OfferLocalEnrollment(context.Background())
-	if err != nil || token.MachineID != machine.LocalID || token.Name != "opencloud" {
+	if err != nil || token.MachineID != machine.LocalID || token.Name != "kagu" {
 		t.Fatalf("offer %+v %v", token, err)
 	}
 }
@@ -190,7 +190,7 @@ func TestEnroll_ClassifiesEveryFailure(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(1_800_000_000, 0)
 
-	if _, err := db.Enroll(ctx, ident.HashToken("oc_nope"), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrTokenNotFound) {
+	if _, err := db.Enroll(ctx, ident.HashToken("kg_nope"), candidate(t), newAgent(t, now), now); !errors.Is(err, machine.ErrTokenNotFound) {
 		t.Errorf("unknown: %v", err)
 	}
 	expired := issueToken(t, db, "old", "", now.Add(-2*time.Hour))
@@ -533,10 +533,10 @@ func TestRecordConnection_KeepsTheAccountAndReplacesTheReasons(t *testing.T) {
 		return got.Agent
 	}
 	first := connect(machine.Connection{
-		Capabilities: rights, Account: &machine.Account{UID: 998, Name: "opencloud-agent"},
+		Capabilities: rights, Account: &machine.Account{UID: 998, Name: "kagu-agent"},
 		Unavailable: map[string]string{agentpolicy.CapabilityDockerDeploy: "docker_denied", agentpolicy.CapabilityBackupReceive: "path_denied"},
 	}, now.Add(time.Minute))
-	if first.RunAs == nil || *first.RunAs != (machine.Account{UID: 998, Name: "opencloud-agent"}) {
+	if first.RunAs == nil || *first.RunAs != (machine.Account{UID: 998, Name: "kagu-agent"}) {
 		t.Fatalf("account %+v", first.RunAs)
 	}
 	if first.UnavailableReason(agentpolicy.CapabilityDockerDeploy) != "docker_denied" || first.UnavailableReason(agentpolicy.CapabilityBackupReceive) != "path_denied" ||

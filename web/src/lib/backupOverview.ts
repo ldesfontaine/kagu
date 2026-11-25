@@ -312,7 +312,7 @@ export function verdictOf(sources: readonly BackupSource[]): BackupVerdict {
   return { tone, total: sources.length, protectedCount: statuses.filter(isProtected).length, attention, failed, first };
 }
 
-// Rien n'est sauvegardé, ni par openCloud, ni vu chez Proxmox.
+// Rien n'est sauvegardé, ni par Kagu, ni vu chez Proxmox.
 export function isNothingSaved(overview: Pick<BackupOverview, "sources">): boolean {
   return overview.sources.every((source) => source.protections.length === 0);
 }

@@ -29,7 +29,7 @@ func TestAccountOf_NamesTheAccountOnlyWhenTheNameCanTravel(t *testing.T) {
 		want   machine.Account
 	}{
 		"root":                    {0, lookupAs("root", "/root"), machine.Account{UID: 0, Name: "root"}},
-		"a service account":       {998, lookupAs("opencloud-agent", "/var/lib/opencloud-agent"), machine.Account{UID: 998, Name: "opencloud-agent"}},
+		"a service account":       {998, lookupAs("kagu-agent", "/var/lib/kagu-agent"), machine.Account{UID: 998, Name: "kagu-agent"}},
 		"an unknown account":      {4000, lookupFails, machine.Account{UID: 4000}},
 		"a capitalised name":      {1001, lookupAs("Lucas", "/home/Lucas"), machine.Account{UID: 1001}},
 		"a dotted name":           {1002, lookupAs("jean.dupont", "/home/jean"), machine.Account{UID: 1002}},
@@ -115,7 +115,7 @@ func TestComposeEnvironment_CarriesTheHomeOfTheAccount(t *testing.T) {
 		}
 	}
 	// Le trousseau de Compose est celui de la vérification des images.
-	if environment := composeEnvironment("/var/lib/svc", "/etc/opencloud/docker"); !has(environment, "DOCKER_CONFIG=/etc/opencloud/docker") {
+	if environment := composeEnvironment("/var/lib/svc", "/etc/kagu/docker"); !has(environment, "DOCKER_CONFIG=/etc/kagu/docker") {
 		t.Errorf("DOCKER_CONFIG did not reach Compose: %v", environment)
 	}
 	for _, item := range composeEnvironment("/var/lib/svc", "") {

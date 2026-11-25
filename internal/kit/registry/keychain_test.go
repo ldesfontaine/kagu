@@ -9,7 +9,7 @@ import (
 // dossier personnel, pas celui de root par défaut.
 func TestConfigPath_FollowsTheHomeOfTheAccount(t *testing.T) {
 	t.Setenv("DOCKER_CONFIG", "")
-	if got, want := ConfigPath("/home/opencloud"), filepath.Join("/home/opencloud", ".docker", "config.json"); got != want {
+	if got, want := ConfigPath("/home/kagu"), filepath.Join("/home/kagu", ".docker", "config.json"); got != want {
 		t.Errorf("a home: %q, want %q", got, want)
 	}
 	if got, want := ConfigPath("/root"), filepath.Join("/root", ".docker", "config.json"); got != want {
@@ -22,11 +22,11 @@ func TestConfigPath_FollowsTheHomeOfTheAccount(t *testing.T) {
 }
 
 func TestConfigPath_DockerConfigWinsOverTheHome(t *testing.T) {
-	t.Setenv("DOCKER_CONFIG", "/etc/opencloud/docker")
-	if got, want := ConfigPath("/home/opencloud"), "/etc/opencloud/docker/config.json"; got != want {
+	t.Setenv("DOCKER_CONFIG", "/etc/kagu/docker")
+	if got, want := ConfigPath("/home/kagu"), "/etc/kagu/docker/config.json"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
-	if got, want := ConfigPath(""), "/etc/opencloud/docker/config.json"; got != want {
+	if got, want := ConfigPath(""), "/etc/kagu/docker/config.json"; got != want {
 		t.Errorf("without a home: got %q, want %q", got, want)
 	}
 }

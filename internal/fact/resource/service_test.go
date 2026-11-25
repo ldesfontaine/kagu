@@ -34,7 +34,7 @@ func (b *bench) ResourcesChanged(machineID string) {
 }
 
 // Le service se teste sur la vraie base SQLite, temporaire, avec la machine
-// openCloud en place et une horloge qu'on avance à la main.
+// Kagu en place et une horloge qu'on avance à la main.
 func newBench(t *testing.T) *bench {
 	t.Helper()
 	db := storetest.Open(t)

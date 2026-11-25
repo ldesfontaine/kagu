@@ -22,7 +22,7 @@ le tenir à jour, le sauvegarder. Ce que fait chaque pièce, et pourquoi :
 > compte, propriétaires, modes, agent lancé sous le compte, sa connexion au
 > serveur, puis les refus que donnent un groupe `docker` absent ou un dossier
 > resté à root) ; l'unité passe `systemd-analyze verify`. **Non essayé** :
-> le démarrage de l'unité elle-même sous `User=opencloud-agent` (pas de systemd
+> le démarrage de l'unité elle-même sous `User=kagu-agent` (pas de systemd
 > en PID 1 dans cet essai) et un déploiement Compose sous ce compte.
 
 ## Sommaire
@@ -40,7 +40,7 @@ le tenir à jour, le sauvegarder. Ce que fait chaque pièce, et pourquoi :
 11. [Déclarer un hôte Proxmox](#déclarer-un-hôte-proxmox)
 12. [Mettre à jour](#mettre-à-jour) (dont [revenir en arrière automatiquement](#revenir-en-arrière-automatiquement), [migrer l'agent](#migrer-lagent-vers-le-retour-arrière-automatique) et [passer un agent en root sous son compte](#passer-un-agent-installé-en-root-sous-son-compte))
 13. [Sauvegarder et restaurer](#sauvegarder-et-restaurer)
-14. [Sauvegarder des VM Proxmox](#sauvegarder-des-vm-proxmox) (dont [restaurer une VM sans Kagu](#une-vm-proxmox-sans-opencloud))
+14. [Sauvegarder des VM Proxmox](#sauvegarder-des-vm-proxmox) (dont [restaurer une VM sans Kagu](#une-vm-proxmox-sans-kagu))
 15. [Désinstaller](#désinstaller)
 16. [Dépannage](#dépannage)
 
@@ -48,10 +48,10 @@ Les fichiers d'exemple sont dans [`docs/installation/`](installation/) :
 
 | Fichier | Où il va |
 | --- | --- |
-| [`config.toml`](installation/config.toml) | `/etc/opencloud/config.toml`, toutes les clés commentées |
-| [`opencloud.service`](installation/opencloud.service) | `/etc/systemd/system/`, le serveur |
-| [`opencloud-agent.service`](installation/opencloud-agent.service) | `/etc/systemd/system/` de chaque machine, la machine Kagu comprise : le lanceur stable, qui lance l'agent sous le compte `opencloud-agent` |
-| [`traefik-opencloud.yml`](installation/traefik-opencloud.yml) | Le dossier de configuration dynamique de Traefik |
+| [`config.toml`](installation/config.toml) | `/etc/kagu/config.toml`, toutes les clés commentées |
+| [`kagu.service`](installation/kagu.service) | `/etc/systemd/system/`, le serveur |
+| [`kagu-agent.service`](installation/kagu-agent.service) | `/etc/systemd/system/` de chaque machine, la machine Kagu comprise : le lanceur stable, qui lance l'agent sous le compte `kagu-agent` |
+| [`traefik-kagu.yml`](installation/traefik-kagu.yml) | Le dossier de configuration dynamique de Traefik |
 | [`compose.traefik.yml`](installation/compose.traefik.yml) | Extrait Compose d'un Traefik en conteneur qui joint Kagu sur l'hôte |
 | [`compose.mcp-maison.yml`](installation/compose.mcp-maison.yml) | `/srv/workspace/mcp-maison/compose.yml`, mcp-maison pour [brancher un agent IA](#brancher-un-agent-ia) |
 
@@ -83,10 +83,10 @@ jusqu'ici. Elle ne se vérifie que par ses sommes :
 
 ```sh
 base=https://github.com/ldesfontaine/kagu/releases/download/v0.0.1
-curl -fLO "$base/opencloud-linux-amd64" -fLO "$base/SHA256SUMS"
+curl -fLO "$base/kagu-linux-amd64" -fLO "$base/SHA256SUMS"
 sha256sum -c --ignore-missing SHA256SUMS
-mv opencloud-linux-amd64 opencloud && chmod +x opencloud
-./opencloud version        # opencloud v0.0.1 (<commit>)
+mv kagu-linux-amd64 kagu && chmod +x kagu
+./kagu version        # kagu v0.0.1 (<commit>)
 ```
 
 La vérification par signature commence à la première version taguée par le
@@ -96,11 +96,11 @@ Pour une version signée, `vX.Y.Z` :
 
 ```sh
 base=https://github.com/ldesfontaine/kagu/releases/download/vX.Y.Z
-curl -fLO "$base/opencloud-linux-amd64" -fLO "$base/SHA256SUMS" -fLO "$base/SHA256SUMS.minisig"
-chmod +x opencloud-linux-amd64
-./opencloud-linux-amd64 release verify opencloud-linux-amd64
-# ok vX.Y.Z opencloud-linux-amd64 sha256:<somme>
-mv opencloud-linux-amd64 opencloud
+curl -fLO "$base/kagu-linux-amd64" -fLO "$base/SHA256SUMS" -fLO "$base/SHA256SUMS.minisig"
+chmod +x kagu-linux-amd64
+./kagu-linux-amd64 release verify kagu-linux-amd64
+# ok vX.Y.Z kagu-linux-amd64 sha256:<somme>
+mv kagu-linux-amd64 kagu
 ```
 
 `release verify` cherche `SHA256SUMS` et `SHA256SUMS.minisig` à côté du
@@ -116,7 +116,7 @@ GitHub :
 ```sh
 minisign -Vm SHA256SUMS -P <clé publique des versions>
 sha256sum -c --ignore-missing SHA256SUMS
-gh attestation verify opencloud-linux-amd64 -R ldesfontaine/kagu
+gh attestation verify kagu-linux-amd64 -R ldesfontaine/kagu
 ```
 
 La clé publique des versions sera publiée ici le jour de la première version
@@ -128,17 +128,17 @@ Sur un poste avec Go et Node :
 
 ```sh
 git clone https://github.com/ldesfontaine/kagu.git
-cd opencloud
-make build                 # npm ci, compile l'interface, puis bin/opencloud
-./bin/opencloud version    # opencloud v0.0.1 (<commit>)
+cd kagu
+make build                 # npm ci, compile l'interface, puis bin/kagu
+./bin/kagu version    # kagu v0.0.1 (<commit>)
 ```
 
 Un seul binaire sert de serveur (`serve`) et d'agent (`agent`). Pour une
 machine arm64 (Raspberry Pi, Ampere…), la compilation croisée :
 
 ```sh
-GOARCH=arm64 make build    # bin/opencloud est alors un binaire arm64
-mv bin/opencloud bin/opencloud-arm64
+GOARCH=arm64 make build    # bin/kagu est alors un binaire arm64
+mv bin/kagu bin/kagu-arm64
 make build                 # refaire le binaire amd64
 ```
 
@@ -149,68 +149,68 @@ Les sous-commandes :
 
 | Commande | Rôle |
 | --- | --- |
-| `opencloud serve -config <chemin>` | Le serveur web. `-config` vaut `/etc/opencloud/config.toml` par défaut |
-| `opencloud agent [options]` | L'agent d'une machine, voir [Ajouter une machine](#ajouter-une-machine) |
-| `opencloud auth status\|disable -config <chemin>` | L'état de l'authentification, ou la couper (mot de passe perdu) : l'interface revient à sa première configuration |
-| `opencloud secrets forget -config <chemin>` | Clé de chiffrement perdue : repart d'une clé neuve et oublie les secrets qu'elle chiffrait, voir [Clé perdue](#clé-perdue) |
-| `opencloud secrets rotate -config <chemin>` | Change la clé de chiffrement et rescelle chaque secret avec la neuve, serveur arrêté, voir [Faire tourner les clés](#faire-tourner-les-clés) |
-| `opencloud secrets server-key -config <chemin>` | Imprime l'empreinte (`SHA256:…`) de la clé qui signe les ordres, serveur en marche ou non : c'est elle qu'on compare à ce que `agent trust` imprime sur une machine |
-| `opencloud secrets rotate-server-key -config <chemin>` | Tire une clé neuve pour signer les ordres ; la précédente reste valable le temps que root la pose sur chaque machine. Refusée tant qu'une machine a un agent plus ancien que le serveur, voir [Faire tourner les clés](#faire-tourner-les-clés) |
-| `opencloud secrets finish-server-key [-force] -config <chemin>` | Retire la clé précédente une fois chaque agent passé à la neuve |
-| `opencloud export [-config <chemin>] [-o <fichier>] [-propose]` | Écrit l'annuaire en YAML (sortie standard, ou le fichier en 0600), avec `-propose` y ajoute ce que les conteneurs non déclarés laissent deviner, voir [Exporter l'annuaire](#exporter-lannuaire) |
-| `opencloud apply [-config <chemin>] [-prune] [-yes] [-dry-run] <fichier>` | Applique un fichier YAML à l'annuaire, après avoir montré le plan et demandé confirmation, voir [Appliquer un fichier](#appliquer-un-fichier) |
-| `opencloud release verify <fichier>` | Vérifie qu'un fichier appartient à une version signée, voir [Télécharger](#télécharger) |
-| `opencloud release import <dossier> [-config <chemin>]` | Range une version vérifiée dans la bibliothèque du serveur, pour mettre à jour les agents depuis la fiche, voir [Mettre à jour les agents depuis Kagu](#mettre-à-jour-les-agents-depuis-opencloud) |
-| `opencloud backup restore -key <clé.age> -state <dossier> <sauvegarde.tar.age>` | Restaure une sauvegarde chiffrée **de la base**, hors ligne, voir [Restaurer une sauvegarde chiffrée](#restaurer-une-sauvegarde-chiffrée). Une VM Proxmox se restaure sans cette commande, voir [Restaurer une VM sans Kagu](#une-vm-proxmox-sans-opencloud) |
-| `opencloud version` | La version et le commit |
+| `kagu serve -config <chemin>` | Le serveur web. `-config` vaut `/etc/kagu/config.toml` par défaut |
+| `kagu agent [options]` | L'agent d'une machine, voir [Ajouter une machine](#ajouter-une-machine) |
+| `kagu auth status\|disable -config <chemin>` | L'état de l'authentification, ou la couper (mot de passe perdu) : l'interface revient à sa première configuration |
+| `kagu secrets forget -config <chemin>` | Clé de chiffrement perdue : repart d'une clé neuve et oublie les secrets qu'elle chiffrait, voir [Clé perdue](#clé-perdue) |
+| `kagu secrets rotate -config <chemin>` | Change la clé de chiffrement et rescelle chaque secret avec la neuve, serveur arrêté, voir [Faire tourner les clés](#faire-tourner-les-clés) |
+| `kagu secrets server-key -config <chemin>` | Imprime l'empreinte (`SHA256:…`) de la clé qui signe les ordres, serveur en marche ou non : c'est elle qu'on compare à ce que `agent trust` imprime sur une machine |
+| `kagu secrets rotate-server-key -config <chemin>` | Tire une clé neuve pour signer les ordres ; la précédente reste valable le temps que root la pose sur chaque machine. Refusée tant qu'une machine a un agent plus ancien que le serveur, voir [Faire tourner les clés](#faire-tourner-les-clés) |
+| `kagu secrets finish-server-key [-force] -config <chemin>` | Retire la clé précédente une fois chaque agent passé à la neuve |
+| `kagu export [-config <chemin>] [-o <fichier>] [-propose]` | Écrit l'annuaire en YAML (sortie standard, ou le fichier en 0600), avec `-propose` y ajoute ce que les conteneurs non déclarés laissent deviner, voir [Exporter l'annuaire](#exporter-lannuaire) |
+| `kagu apply [-config <chemin>] [-prune] [-yes] [-dry-run] <fichier>` | Applique un fichier YAML à l'annuaire, après avoir montré le plan et demandé confirmation, voir [Appliquer un fichier](#appliquer-un-fichier) |
+| `kagu release verify <fichier>` | Vérifie qu'un fichier appartient à une version signée, voir [Télécharger](#télécharger) |
+| `kagu release import <dossier> [-config <chemin>]` | Range une version vérifiée dans la bibliothèque du serveur, pour mettre à jour les agents depuis la fiche, voir [Mettre à jour les agents depuis Kagu](#mettre-à-jour-les-agents-depuis-kagu) |
+| `kagu backup restore -key <clé.age> -state <dossier> <sauvegarde.tar.age>` | Restaure une sauvegarde chiffrée **de la base**, hors ligne, voir [Restaurer une sauvegarde chiffrée](#restaurer-une-sauvegarde-chiffrée). Une VM Proxmox se restaure sans cette commande, voir [Restaurer une VM sans Kagu](#une-vm-proxmox-sans-kagu) |
+| `kagu version` | La version et le commit |
 
 ## Installer le serveur
 
 Sur le VPS, en root. Un Debian minimal n'a pas `sudo` : les commandes
 « sous le compte du service » passent par `runuser`, toujours présent. La
-machine Kagu reçoit **deux unités** : le serveur (`opencloud.service`),
-et son agent (`opencloud-agent.service`), comme toute machine. Le serveur ne
+machine Kagu reçoit **deux unités** : le serveur (`kagu.service`),
+et son agent (`kagu-agent.service`), comme toute machine. Le serveur ne
 lit rien de sa machine : sans son agent, elle ne se voit pas.
 
 ```sh
 # Le binaire, le même pour le serveur et l'agent
-install -m 0755 opencloud /usr/local/bin/opencloud
+install -m 0755 kagu /usr/local/bin/kagu
 
 # Un compte système, sans shell. Il n'a besoin ni de root ni du groupe
 # docker : c'est l'agent (son propre compte, plus bas) qui lit Docker.
-useradd --system --home-dir /var/lib/opencloud --shell /usr/sbin/nologin opencloud
+useradd --system --home-dir /var/lib/kagu --shell /usr/sbin/nologin kagu
 # Le compte de l'agent de cette machine, avant l'unité du serveur : elle porte
 # son groupe (SupplementaryGroups) et ne démarre pas sans lui. La préparation
 # de l'agent, plus bas, le recrée sans effet.
-useradd --system --home-dir /var/lib/opencloud-agent --shell /usr/sbin/nologin opencloud-agent
+useradd --system --home-dir /var/lib/kagu-agent --shell /usr/sbin/nologin kagu-agent
 
 # La configuration, lisible par le service seulement
-install -d -m 0750 -o root -g opencloud /etc/opencloud
-install -m 0640 -o root -g opencloud docs/installation/config.toml /etc/opencloud/config.toml
-"${EDITOR:-nano}" /etc/opencloud/config.toml   # public_url, listen, trusted_proxies
+install -d -m 0750 -o root -g kagu /etc/kagu
+install -m 0640 -o root -g kagu docs/installation/config.toml /etc/kagu/config.toml
+"${EDITOR:-nano}" /etc/kagu/config.toml   # public_url, listen, trusted_proxies
 
 # Le service
-install -m 0644 docs/installation/opencloud.service /etc/systemd/system/opencloud.service
+install -m 0644 docs/installation/kagu.service /etc/systemd/system/kagu.service
 systemctl daemon-reload
-systemctl enable --now opencloud
-journalctl -u opencloud -f
+systemctl enable --now kagu
+journalctl -u kagu -f
 ```
 
-L'unité crée `/var/lib/opencloud` en `0700` (`StateDirectory=`) et
-`/run/opencloud` en `0755` (`RuntimeDirectory=`), et lance `serve` sous
-`opencloud`, avec le groupe `opencloud-agent` en plus : `serve` le donne à
-`/run/opencloud/agent.sock`, la socket de l'agent de cette machine
+L'unité crée `/var/lib/kagu` en `0700` (`StateDirectory=`) et
+`/run/kagu` en `0755` (`RuntimeDirectory=`), et lance `serve` sous
+`kagu`, avec le groupe `kagu-agent` en plus : `serve` le donne à
+`/run/kagu/agent.sock`, la socket de l'agent de cette machine
 ([Fonctionnement](projet/22-fonctionnement.md)). Une installation d'avant qui
 n'a pas encore ce compte le crée (`useradd` ci-dessus), puis
-`systemctl daemon-reload && systemctl restart opencloud` ; sans lui, l'unité
+`systemctl daemon-reload && systemctl restart kagu` ; sans lui, l'unité
 ne démarre pas (`216/GROUP` au journal). Une installation d'avant mettait le compte dans le
-groupe `docker` : `gpasswd -d opencloud docker` le retire, et l'unité n'a
+groupe `docker` : `gpasswd -d kagu docker` le retire, et l'unité n'a
 plus de `SupplementaryGroups=docker`.
 
 Au démarrage, le journal dit `listening` avec l'adresse, le répertoire
 d'état et la version. Tant qu'aucun compte n'existe, une ligne le rappelle
 (`WARN`, « première configuration en attente ») : la page n'accepte rien
-sans le code que `sudo opencloud admin setup-code` tire. Créez le compte tout
+sans le code que `sudo kagu admin setup-code` tire. Créez le compte tout
 de suite : [Authentification](#authentification). Tant que la
 machine Kagu n'a jamais eu d'agent, une autre ligne dit qu'un jeton
 d'enrôlement l'attend (`enrollment token waiting for the agent of this
@@ -219,52 +219,52 @@ machine`, le texte dans la langue de l'interface, **jamais le jeton**).
 **L'agent de la machine Kagu, dès la première étape.** Le compte créé,
 l'écran de première configuration montre la ligne qui l'installe, avec le
 droit d'observer seul, et au-dessus d'elle **la préparation** : le compte
-`opencloud-agent`, son dossier et son binaire. Jouez les deux **sur cette
+`kagu-agent`, son dossier et son binaire. Jouez les deux **sur cette
 machine**, en root, puis installez l'unité de l'agent. La préparation prend le
-binaire du serveur, `/usr/local/bin/opencloud` (v0.0.1 : la version que
-`opencloud version` affiche) :
+binaire du serveur, `/usr/local/bin/kagu` (v0.0.1 : la version que
+`kagu version` affiche) :
 
 ```sh
 # La préparation (une fois) : le compte, son dossier, son binaire
-useradd --system --home-dir /var/lib/opencloud-agent --shell /usr/sbin/nologin opencloud-agent
-getent group docker >/dev/null && usermod -aG docker opencloud-agent
-install -d -m 0700 -o opencloud-agent -g opencloud-agent /var/lib/opencloud-agent
-runuser -u opencloud-agent -- install -d -m 0700 /var/lib/opencloud-agent/bin
-runuser -u opencloud-agent -- install -m 0755 /usr/local/bin/opencloud /var/lib/opencloud-agent/bin/opencloud-v0.0.1 && runuser -u opencloud-agent -- ln -sfn opencloud-v0.0.1 /var/lib/opencloud-agent/bin/current
+useradd --system --home-dir /var/lib/kagu-agent --shell /usr/sbin/nologin kagu-agent
+getent group docker >/dev/null && usermod -aG docker kagu-agent
+install -d -m 0700 -o kagu-agent -g kagu-agent /var/lib/kagu-agent
+runuser -u kagu-agent -- install -d -m 0700 /var/lib/kagu-agent/bin
+runuser -u kagu-agent -- install -m 0755 /usr/local/bin/kagu /var/lib/kagu-agent/bin/kagu-v0.0.1 && runuser -u kagu-agent -- ln -sfn kagu-v0.0.1 /var/lib/kagu-agent/bin/current
 # Le lanceur stable que l'unité lance (à root, hors de bin/) : il ramène l'agent à la version précédente si une mise à jour ne tient pas
-install -d -m 0755 -o root -g root /usr/local/lib/opencloud-agent
-install -m 0755 -o root -g root /usr/local/bin/opencloud /usr/local/lib/opencloud-agent/opencloud-guard
+install -d -m 0755 -o root -g root /usr/local/lib/kagu-agent
+install -m 0755 -o root -g root /usr/local/bin/kagu /usr/local/lib/kagu-agent/kagu-guard
 
 # La ligne d'installation de l'écran ; « connected » au journal : Ctrl-C
-printf '%s\n' 'oc_…' | sudo -u opencloud-agent /var/lib/opencloud-agent/bin/current agent -server https://opencloud.example.org
+printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://kagu.example.org
 
-install -m 0644 docs/installation/opencloud-agent.service /etc/systemd/system/opencloud-agent.service
+install -m 0644 docs/installation/kagu-agent.service /etc/systemd/system/kagu-agent.service
 systemctl daemon-reload
-systemctl enable --now opencloud-agent
+systemctl enable --now kagu-agent
 ```
 
 Sans `sudo` (Debian minimal), la ligne d'installation devient
-`… | runuser -u opencloud-agent -- /var/lib/opencloud-agent/bin/current agent -server https://…`.
+`… | runuser -u kagu-agent -- /var/lib/kagu-agent/bin/current agent -server https://…`.
 Ces commandes sont détaillées, une à une, dans [Ajouter une
 machine](#ajouter-une-machine) ; **le groupe `docker` équivaut à root**
 ([ce que cela donne](#le-groupe-docker-équivaut-à-root)).
 
 **L'état de l'agent est hors du dossier du serveur**, sur cette machine comme
-sur les autres : `/var/lib/opencloud-agent`, à `opencloud-agent` en `0700`,
-alors que `/var/lib/opencloud` appartient au compte `opencloud`, qui n'a ainsi
+sur les autres : `/var/lib/kagu-agent`, à `kagu-agent` en `0700`,
+alors que `/var/lib/kagu` appartient au compte `kagu`, qui n'a ainsi
 aucune prise sur la clé et les droits de l'agent. À son démarrage, l'agent
 vérifie que son état et les dossiers au-dessus appartiennent à root (ou à lui)
 et que personne d'autre ne peut les modifier ; sinon il le dit au journal
 (`state dir is not safe`) et ne garde que `observe` jusqu'à ce que ce soit
 corrigé. Il se met à jour depuis sa fiche comme les autres machines ([Mettre à
-jour les agents depuis Kagu](#mettre-à-jour-les-agents-depuis-opencloud)).
+jour les agents depuis Kagu](#mettre-à-jour-les-agents-depuis-kagu)).
 Sur toutes les machines, la machine Kagu comprise, **il n'y a pas de
-lien `/usr/local/bin/opencloud` vers `bin/current`** : ce lien serait lancé par
+lien `/usr/local/bin/kagu` vers `bin/current`** : ce lien serait lancé par
 root, et le compte de l'agent peut remplacer le binaire qu'il vise (une
 escalade sur une machine sans Docker). Ici de plus,
-`/usr/local/bin/opencloud` est le binaire du serveur, que rien ne met à jour
-seul. Pour lancer `opencloud version` sur l'agent, sous son compte, jamais en
-root : `runuser -u opencloud-agent -- /var/lib/opencloud-agent/bin/current version`.
+`/usr/local/bin/kagu` est le binaire du serveur, que rien ne met à jour
+seul. Pour lancer `kagu version` sur l'agent, sous son compte, jamais en
+root : `runuser -u kagu-agent -- /var/lib/kagu-agent/bin/current version`.
 
 L'agent présente l'empreinte de la machine : c'est celle du serveur, il
 devient **la machine Kagu** (identifiant `local`). La ligne vaut 1 h ;
@@ -282,27 +282,27 @@ root](#garder-lagent-en-root).
 **Les commandes `auth` et `secrets` se lancent sous le compte du service** :
 
 ```sh
-runuser -u opencloud -- opencloud auth status -config /etc/opencloud/config.toml
+runuser -u kagu -- kagu auth status -config /etc/kagu/config.toml
 ```
 
-Lancées en root, elles peuvent créer `opencloud.db-wal` (ou `secret.key`) au
+Lancées en root, elles peuvent créer `kagu.db-wal` (ou `secret.key`) au
 nom de root si le service est arrêté, et `serve` ne pourrait plus écrire dans
 sa base. `export` et `apply` font exception : elles n'ouvrent pas la base,
 elles parlent au serveur qui tourne par sa socket, et peuvent se lancer en
 root (voir [Exporter l'annuaire](#exporter-lannuaire)). `admin` passe par la
-même socket et se lance **en root seulement** (`sudo opencloud admin …`,
-voir [Accès perdu](#accès-perdu--sudo-opencloud-admin)).
+même socket et se lance **en root seulement** (`sudo kagu admin …`,
+voir [Accès perdu](#accès-perdu--sudo-kagu-admin)).
 
 ## Configuration
 
-Fichier TOML, par défaut `/etc/opencloud/config.toml`. Le fichier complet et
+Fichier TOML, par défaut `/etc/kagu/config.toml`. Le fichier complet et
 commenté : [`installation/config.toml`](installation/config.toml).
 
 | Clé | Défaut | Rôle |
 | --- | --- | --- |
 | `listen` | `127.0.0.1:8080` | Adresse d'écoute, `hôte:port`, en HTTP. Le seul port de Kagu. Hors de la boucle locale, exige `public_url` en `https://` et `trusted_proxies` |
-| `state_dir` | `/var/lib/opencloud` | La base `opencloud.db` (et `-wal`, `-shm`), réglages de l'interface compris, et le cache `lifecycle.json`. Créé en `0700` s'il manque ; ouvert au groupe ou aux autres, `serve` refuse de démarrer (`chmod 700 <state_dir>`) |
-| `public_url` | vide | L'adresse publique, par exemple `https://opencloud.example.org`. Voir ci-dessous |
+| `state_dir` | `/var/lib/kagu` | La base `kagu.db` (et `-wal`, `-shm`), réglages de l'interface compris, et le cache `lifecycle.json`. Créé en `0700` s'il manque ; ouvert au groupe ou aux autres, `serve` refuse de démarrer (`chmod 700 <state_dir>`) |
+| `public_url` | vide | L'adresse publique, par exemple `https://kagu.example.org`. Voir ci-dessous |
 | `trusted_proxies` | `[]` | Les mandataires dont les en-têtes `X-Forwarded-*` sont crus, en CIDR |
 | `forward_secret_file` | vide | Mode `forward` : le fichier d'une ligne qui porte le secret partagé avec le mandataire (32 caractères au moins, illisible pour les autres comptes). Illisible, trop court ou trop ouvert, il arrête le démarrage. Voir [Derrière un SSO qui authentifie](#derrière-un-sso-qui-authentifie) |
 | `forward_users` | vide | Mode `forward` : les identités admises, par exemple `["lucas"]` ; toute autre répond `403`. Vide : toute identité que le SSO transmet. Voir [Qui peut entrer](#qui-peut-entrer) |
@@ -324,10 +324,10 @@ Elle sert à deux choses.
    requête (et de `X-Forwarded-Host` / `-Proto` d'un mandataire de
    confiance). Si l'adresse paraît locale, la page du jeton et celle de la
    tâche posent une **note neutre** avec la ligne à écrire :
-   la forme attendue en exemple (`public_url = "https://opencloud.exemple.fr"`,
+   la forme attendue en exemple (`public_url = "https://kagu.exemple.fr"`,
    non copiable : l'adresse publique réelle est à mettre dans
-   `/etc/opencloud/config.toml`), puis `sudo systemctl restart
-   opencloud.service`. Un essai local n'est pas une erreur. La note ne devient **rouge** que si la page est lue par une adresse
+   `/etc/kagu/config.toml`), puis `sudo systemctl restart
+   kagu.service`. Un essai local n'est pas une erreur. La note ne devient **rouge** que si la page est lue par une adresse
    publique alors que `public_url` est locale : la ligne, cette fois à
    copier, porte l'adresse de la page.
 2. **Reconnaître le nom de l'interface.** Toute requête sur `/api/…` doit
@@ -383,19 +383,19 @@ et Kagu voit la vraie adresse des clients. Un essai antérieur avec
 Kagu tourne sur l'hôte, pas dans un conteneur : les **labels Docker ne
 s'appliquent pas** à lui. On le déclare dans la configuration dynamique de
 Traefik (provider `file`) :
-[`installation/traefik-opencloud.yml`](installation/traefik-opencloud.yml).
+[`installation/traefik-kagu.yml`](installation/traefik-kagu.yml).
 
 ```yaml
 http:
   routers:
-    opencloud:
-      rule: "Host(`opencloud.example.org`)"
+    kagu:
+      rule: "Host(`kagu.example.org`)"
       entryPoints: ["websecure"]
-      service: opencloud
+      service: kagu
       tls:
         certResolver: letsencrypt
   services:
-    opencloud:
+    kagu:
       loadBalancer:
         servers:
           - url: "http://host.docker.internal:8080"   # ou http://127.0.0.1:8080 en mode host
@@ -457,7 +457,7 @@ de sortie dit ce que l'agent a vu).
 
 Ce délai est un réglage de l'**entrée**, donc de la configuration **statique**
 de Traefik : il ne se pose pas dans
-[`traefik-opencloud.yml`](installation/traefik-opencloud.yml) (configuration
+[`traefik-kagu.yml`](installation/traefik-kagu.yml) (configuration
 dynamique), qui le rappelle en commentaire. Dans le fichier statique :
 
 ```yaml
@@ -516,7 +516,7 @@ Kagu, en root (la commande parle au serveur par la socket de `state_dir` ;
 le serveur doit tourner) :
 
 ```sh
-sudo opencloud admin setup-code -config /etc/opencloud/config.toml
+sudo kagu admin setup-code -config /etc/kagu/config.toml
 # Code de première configuration : 12345678
 ```
 
@@ -565,7 +565,7 @@ déconnecter ». Changer le mot de passe ferme toutes les autres sessions.
 `native`, même identifiant, même mot de passe. Le navigateur affiche la page
 de connexion : retapez le même mot de passe. Les jetons d'API ne changent pas.
 
-### Accès perdu : `sudo opencloud admin`
+### Accès perdu : `sudo kagu admin`
 
 Mot de passe perdu, SSO en panne, passage d'un compte au SSO : tout se fait
 sur la machine Kagu, **en root**, serveur en marche. La commande parle à
@@ -576,14 +576,14 @@ configuration.
 
 | Geste | Effet |
 | --- | --- |
-| `sudo opencloud admin setup-code` | Tire le code de première configuration (ci-dessus). Refusé une fois le compte créé |
-| `sudo opencloud admin reset-password` | Demande le nouveau mot de passe deux fois, sur le terminal, sans écho (jamais sur l'entrée standard). Ferme **toutes** les sessions ; les jetons d'API restent. Refusé en mode `forward` (pas de mot de passe) et sans compte |
-| `sudo opencloud admin auth-mode native -username <nom>` | Passe à la connexion par compte (mot de passe demandé deux fois). Ferme toutes les sessions |
-| `sudo opencloud admin auth-mode forward [-header Remote-User]` | Passe derrière le SSO, ou change l'en-tête. Ferme toutes les sessions |
-| `sudo opencloud admin sessions close-all` | Ferme toutes les sessions |
-| `sudo opencloud admin tokens revoke-all` | Révoque tous les jetons d'API |
+| `sudo kagu admin setup-code` | Tire le code de première configuration (ci-dessus). Refusé une fois le compte créé |
+| `sudo kagu admin reset-password` | Demande le nouveau mot de passe deux fois, sur le terminal, sans écho (jamais sur l'entrée standard). Ferme **toutes** les sessions ; les jetons d'API restent. Refusé en mode `forward` (pas de mot de passe) et sans compte |
+| `sudo kagu admin auth-mode native -username <nom>` | Passe à la connexion par compte (mot de passe demandé deux fois). Ferme toutes les sessions |
+| `sudo kagu admin auth-mode forward [-header Remote-User]` | Passe derrière le SSO, ou change l'en-tête. Ferme toutes les sessions |
+| `sudo kagu admin sessions close-all` | Ferme toutes les sessions |
+| `sudo kagu admin tokens revoke-all` | Révoque tous les jetons d'API |
 
-Chaque geste accepte `-config /etc/opencloud/config.toml`. Serveur arrêté :
+Chaque geste accepte `-config /etc/kagu/config.toml`. Serveur arrêté :
 « le serveur ne tourne pas ». Un autre compte que root : « Réservé à root »,
 avant toute saisie ; le serveur refuse de toute façon (`403`) tout pair
 dont l'uid n'est pas 0. `serve` suit à la requête suivante, sans
@@ -593,7 +593,7 @@ redémarrer. Au journal d'audit, sous `uid:0` : tous les gestes sauf
 La contrepartie : qui perd root sur la machine Kagu n'a plus de secours, et
 `auth-mode forward` ne vérifie pas que le SSO pose l'en-tête. S'il ne le pose
 pas, l'interface refuse tout le monde ; `auth-mode native` rend un compte.
-`opencloud auth status` (sous le compte du service) dit le mode en cours.
+`kagu auth status` (sous le compte du service) dit le mode en cours.
 
 ### Derrière un SSO qui authentifie
 
@@ -613,7 +613,7 @@ Le secret partagé ferme ce cas, et il est recommandé dans tous les autres.
 
 | Prérequis | Pourquoi |
 | --- | --- |
-| **Un secret partagé** (`forward_secret_file`), que le mandataire pose dans l'en-tête `X-OpenCloud-Proxy-Secret` | Il prouve que la requête est passée par le mandataire. **Obligatoire** si `trusted_proxies` couvre la boucle locale : Kagu refuse alors d'activer le mode `forward` (`auth.forward_secret_required`). Sans lui, tout processus local est l'opérateur |
+| **Un secret partagé** (`forward_secret_file`), que le mandataire pose dans l'en-tête `X-Kagu-Proxy-Secret` | Il prouve que la requête est passée par le mandataire. **Obligatoire** si `trusted_proxies` couvre la boucle locale : Kagu refuse alors d'activer le mode `forward` (`auth.forward_secret_required`). Sans lui, tout processus local est l'opérateur |
 | `trusted_proxies` = l'adresse du mandataire **seul**, en `/32` (par exemple `["172.30.0.2/32"]`), pas le sous-réseau | Tout pair de cette liste est cru sur parole : avec un `/24`, un voisin du réseau écrirait l'en-tête lui-même |
 | Le mandataire **écrase** l'en-tête envoyé par le client | Sinon un visiteur envoie `Remote-User: admin`. Traefik `forwardAuth` avec `authResponseHeaders: ["Remote-User"]` remplace la valeur du client par celle d'Authelia |
 | Deux Traefik en chaîne : `trusted_proxies` vise celui qui joint Kagu, l'en-tête est nettoyé par celui qui appelle Authelia | Le second ne doit être joignable que par le premier : sinon on le contourne, en-tête forgé compris |
@@ -623,11 +623,11 @@ Le secret partagé ferme ce cas, et il est recommandé dans tous les autres.
 et pas par les autres, puis déclarez-le.
 
 ```sh
-openssl rand -hex 32 > /etc/opencloud/forward.secret
-chown root:opencloud /etc/opencloud/forward.secret
-chmod 0640 /etc/opencloud/forward.secret
-# config.toml : forward_secret_file = "/etc/opencloud/forward.secret"
-systemctl restart opencloud
+openssl rand -hex 32 > /etc/kagu/forward.secret
+chown root:kagu /etc/kagu/forward.secret
+chmod 0640 /etc/kagu/forward.secret
+# config.toml : forward_secret_file = "/etc/kagu/forward.secret"
+systemctl restart kagu
 ```
 
 Au démarrage, un fichier illisible, de moins de 32 caractères, de plus d'une
@@ -640,8 +640,8 @@ lisible. Une requête qui ne porte pas exactement une fois le secret répond
 
 Les middlewares Traefik : Authelia authentifie, puis le second pose le
 secret. `customRequestHeaders` **remplace** la valeur que le client enverrait,
-il ne s'ajoute pas. Ajoutez les deux au routeur `opencloud` de
-[`traefik-opencloud.yml`](installation/traefik-opencloud.yml) (pas un second
+il ne s'ajoute pas. Ajoutez les deux au routeur `kagu` de
+[`traefik-kagu.yml`](installation/traefik-kagu.yml) (pas un second
 routeur du même nom), **`authelia` d'abord** : `forwardAuth` transmet à
 Authelia les en-têtes de la requête, et dans l'autre ordre le secret partirait
 avec. Middleware Authelia déclaré par des labels Docker : `authelia@docker`.
@@ -658,21 +658,21 @@ http:
       forwardAuth:
         address: "http://authelia:9091/api/authz/forward-auth"
         authResponseHeaders: ["Remote-User", "Remote-Groups", "Remote-Email", "Remote-Name"]
-    opencloud-proxy-secret:
+    kagu-proxy-secret:
       headers:
         customRequestHeaders:
-          X-OpenCloud-Proxy-Secret: "<le contenu de /etc/opencloud/forward.secret>"
+          X-Kagu-Proxy-Secret: "<le contenu de /etc/kagu/forward.secret>"
   routers:
-    opencloud:
-      # … rule, entryPoints, service, tls comme dans traefik-opencloud.yml
-      middlewares: ["authelia", "opencloud-proxy-secret"]
+    kagu:
+      # … rule, entryPoints, service, tls comme dans traefik-kagu.yml
+      middlewares: ["authelia", "kagu-proxy-secret"]
 ```
 
 **Activer** : ouvrez Kagu par son nom public, connectez-vous à
 Authelia, puis, sur l'écran de première configuration, Mode « SSO en amont
 (Authelia, Authentik…) ». Une installation qui a déjà un compte y passe
-sur la machine, en root : `sudo opencloud admin auth-mode forward` (voir
-[Accès perdu](#accès-perdu--sudo-opencloud-admin)), sans le garde-fou de
+sur la machine, en root : `sudo kagu admin auth-mode forward` (voir
+[Accès perdu](#accès-perdu--sudo-kagu-admin)), sans le garde-fou de
 l'en-tête que l'écran applique. Le corps de l'API est
 `{"mode":"forward","header":"Remote-User"}` sur
 `POST /api/auth/setup`. Comme pour un compte, activer révoque tous les
@@ -690,12 +690,12 @@ Le SSO dit qui est l'utilisateur ; `forward_users` dit lesquels Kagu
 admet, une seconde serrure derrière les règles d'Authelia :
 
 ```toml
-# /etc/opencloud/config.toml
+# /etc/kagu/config.toml
 forward_users = ["lucas"]
 ```
 
 ```sh
-systemctl restart opencloud   # la liste est relue au démarrage seulement
+systemctl restart kagu   # la liste est relue au démarrage seulement
 ```
 
 | Cas | Réponse |
@@ -713,14 +713,14 @@ comparaison. Une liste fausse (entrée vide, espace en bord, doublon, plus
 de 64 entrées ou de 64 caractères) arrête le démarrage avec la ligne en
 cause. Activer le mode `forward` depuis une identité hors liste est refusé
 (`auth.forward_user_not_listed`) : on ne s'enferme pas en activant.
-`opencloud auth status` affiche la liste que la commande lit.
+`kagu auth status` affiche la liste que la commande lit.
 
 **Enfermé dehors par la liste** (une liste posée après l'activation, sans
 votre identité ou avec une faute de casse) : la sortie est la même que
 l'entrée. La page `403` et le `WARN` disent l'identité reçue ; corrigez
-`forward_users` dans `/etc/opencloud/config.toml` (ou videz-la), puis
-`systemctl restart opencloud`. Ou, sans redémarrer, revenez à un compte :
-`sudo opencloud admin auth-mode native -username <nom>`.
+`forward_users` dans `/etc/kagu/config.toml` (ou videz-la), puis
+`systemctl restart kagu`. Ou, sans redémarrer, revenez à un compte :
+`sudo kagu admin auth-mode native -username <nom>`.
 
 La contrepartie : retirer quelqu'un de la liste ne révoque pas les jetons
 d'API qu'il a tirés (Paramètres → Agent IA → Jetons d'API), et les groupes d'Authelia
@@ -733,14 +733,14 @@ d'API qu'il a tirés (Paramètres → Agent IA → Jetons d'API), et les groupes
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: admin' http://127.0.0.1:8080/api/machines
 # 401
 # de même avec un faux secret
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: admin' -H 'X-OpenCloud-Proxy-Secret: faux' http://127.0.0.1:8080/api/machines
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: admin' -H 'X-Kagu-Proxy-Secret: faux' http://127.0.0.1:8080/api/machines
 # 401
 # depuis un autre conteneur du même réseau, en-tête forgé : refusé
 docker run --rm --network <réseau> curlimages/curl -s -o /dev/null -w '%{http_code}\n' \
   -H 'Remote-User: admin' http://172.30.0.1:8080/api/machines
 # 401
 # par le nom public, sans session Authelia, en-tête forgé : redirigé vers Authelia, jamais 200
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: admin' https://opencloud.example.org/api/machines
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: admin' https://kagu.example.org/api/machines
 ```
 
 Avec `forward_users`, une identité hors liste est refusée en `403`, une
@@ -749,19 +749,19 @@ l'adresse et le secret) :
 
 ```sh
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: intrus' \
-  -H "X-OpenCloud-Proxy-Secret: $(cat /etc/opencloud/forward.secret)" http://127.0.0.1:8080/api/machines
+  -H "X-Kagu-Proxy-Secret: $(cat /etc/kagu/forward.secret)" http://127.0.0.1:8080/api/machines
 # 403
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: lucas' \
-  -H "X-OpenCloud-Proxy-Secret: $(cat /etc/opencloud/forward.secret)" http://127.0.0.1:8080/api/machines
+  -H "X-Kagu-Proxy-Secret: $(cat /etc/kagu/forward.secret)" http://127.0.0.1:8080/api/machines
 # 200
 ```
 
 **SSO ou mandataire en panne ou mal réglé** : revenez à un compte, sur la
-machine, en root ([Accès perdu](#accès-perdu--sudo-opencloud-admin)).
+machine, en root ([Accès perdu](#accès-perdu--sudo-kagu-admin)).
 
 ```sh
-sudo opencloud admin auth-mode native -username <nom> -config /etc/opencloud/config.toml
-runuser -u opencloud -- opencloud auth status -config /etc/opencloud/config.toml
+sudo kagu admin auth-mode native -username <nom> -config /etc/kagu/config.toml
+runuser -u kagu -- kagu auth status -config /etc/kagu/config.toml
 ```
 
 La contrepartie : tout repose sur `trusted_proxies` juste, sur un
@@ -805,7 +805,7 @@ destinataire », « chiffrement refusé avec le relais ».
 
 Le relais vit dans la base, **mot de passe compris, chiffré** avec les
 autres secrets saisis dans l'interface (voir
-[Sauvegarder et restaurer](#sauvegarder-et-restaurer)) : `opencloud.db` est
+[Sauvegarder et restaurer](#sauvegarder-et-restaurer)) : `kagu.db` est
 sous `state_dir`, en `0700` ; l'interface et l'API ne le réaffichent jamais.
 
 ## Brancher un agent IA
@@ -825,21 +825,21 @@ client MCP. Chaque personne s'y connecte par l'IdP OIDC de l'opérateur
 | Le port 3000 libre sur la machine | mcp-maison y est publié (`MCP_HOST`), à côté de Kagu |
 
 **1. Le jeton.** Paramètres → **Agent IA** → **Jetons d'API** → nom « mcp-maison », échéance →
-**Créer**. Trois lignes s'affichent une fois : `MCP_HOST`, `OPENCLOUD_URL`
+**Créer**. Trois lignes s'affichent une fois : `MCP_HOST`, `KAGU_URL`
 (tirés de `listen` : mcp-maison joint Kagu en direct, jamais par Traefik
-ni le SSO, qui arrêterait le jeton) et `OPENCLOUD_TOKEN`.
+ni le SSO, qui arrêterait le jeton) et `KAGU_TOKEN`.
 
 Le jeton ne sert qu'à **mcp-maison** : un autre client (Claude Code sur votre
 poste, un script) a le sien. Il vit dans le `.env` de mcp-maison, sur la
 machine Kagu, lisible par root seul (`0600`). Pour le faire tourner :
-créez-en un neuf, remplacez la ligne `OPENCLOUD_TOKEN`, `docker compose up -d`,
+créez-en un neuf, remplacez la ligne `KAGU_TOKEN`, `docker compose up -d`,
 révoquez l'ancien.
 
 mcp-maison est dans un conteneur : il joint Kagu par l'IP du pont
 `docker0` (`host-gateway`), pas par `127.0.0.1`. **`listen` doit donc viser
-cette IP** (`172.17.0.1:8080` par défaut). La page tire `OPENCLOUD_URL` de
+cette IP** (`172.17.0.1:8080` par défaut). La page tire `KAGU_URL` de
 `listen` : si elle affiche encore `127.0.0.1`, `listen` n'a pas été changé.
-Changez-le (`config.toml`, puis `systemctl restart opencloud`) et recréez le
+Changez-le (`config.toml`, puis `systemctl restart kagu`) et recréez le
 jeton ; ne corrigez pas la ligne à la main. Le prix : Kagu
 n'écoute plus sur la boucle locale seule, mais sur le pont, que joignent les
 conteneurs de la machine ; le jeton les en protège, pas le réseau.
@@ -879,8 +879,8 @@ Le `.env` :
 ```sh
 # Les trois lignes de Kagu (Paramètres → Agent IA → Jetons d'API), montrées une fois
 MCP_HOST=172.17.0.1
-OPENCLOUD_URL=http://172.17.0.1:8080
-OPENCLOUD_TOKEN=
+KAGU_URL=http://172.17.0.1:8080
+KAGU_TOKEN=
 # mcp-maison derrière Traefik, sous son propre nom
 MCP_PUBLIC_URL=https://mcp.example.org
 ALLOWED_HOSTS=mcp.example.org
@@ -900,7 +900,7 @@ everyone: [core:ping, core:whoami]
 users:
   # L'identifiant chez l'IdP (whoami le montre). Authelia ne laisse pas une
   # personne changer le sien ; ailleurs, préférez groups.
-  admin: [opencloud:read, core:audit]
+  admin: [kagu:read, core:audit]
 ```
 
 **L'image est épinglée.** `compose.mcp-maison.yml` nomme une version de
@@ -926,11 +926,11 @@ sed -i 's|^\( *image:\).*|\1 mcp-maison:0b55aac|' compose.yml
 
 ```sh
 docker compose up -d && docker compose ps     # mcp : healthy
-curl -s http://172.17.0.1:3000/health           # des outils opencloud_*, skippedGroups vide
+curl -s http://172.17.0.1:3000/health           # des outils kagu_*, skippedGroups vide
 ```
 
-Dans `/etc/opencloud/config.toml` : `mcp_url = "http://172.17.0.1:3000"` (l'hôte
-de `MCP_HOST`), puis `systemctl restart opencloud`. Paramètres → **Agent IA** →
+Dans `/etc/kagu/config.toml` : `mcp_url = "http://172.17.0.1:3000"` (l'hôte
+de `MCP_HOST`), puis `systemctl restart kagu`. Paramètres → **Agent IA** →
 **Vérifier** : « Joignable », la version, le nombre d'outils. Sous **Jetons
 d'API**, le jeton montre son dernier usage.
 
@@ -947,18 +947,18 @@ le port 3000 de mcp-maison, et lui seul le joint.
 | En conteneur | `172.17.0.1:8080` | `http://host.docker.internal:3000` |
 | Sur une autre machine | l'IP privée de la machine Kagu | `http://<cette IP>:3000` |
 
-mcp-maison accepte `OPENCLOUD_URL` en `http://` sur la boucle locale
+mcp-maison accepte `KAGU_URL` en `http://` sur la boucle locale
 (`localhost`, `127.0.0.1`, `[::1]`) et vers une IP privée RFC 1918 (`10.0.0.0/8`,
 `172.16.0.0/12`, dont `172.17.0.1`, `192.168.0.0/16`) : les trois lignes
 marchent. Un nom ou une IP publique en `http://` lui fait ignorer son groupe
-`opencloud` (`groupe "opencloud" non chargé : … https:// attendu` à son
+`kagu` (`groupe "kagu" non chargé : … https:// attendu` à son
 journal, « Sans ses outils Kagu » sous Paramètres → Agent IA). L'hôte de
-`OPENCLOUD_URL` reste jugé par Kagu : une IP, `localhost` ou le nom de
+`KAGU_URL` reste jugé par Kagu : une IP, `localhost` ou le nom de
 `public_url` ; un nom de conteneur ou `host.docker.internal` reçoivent
 `403 {"error":"bad_host"}`.
 
 Le routeur, dans la configuration dynamique de Traefik (comme
-[`traefik-opencloud.yml`](installation/traefik-opencloud.yml), sans
+[`traefik-kagu.yml`](installation/traefik-kagu.yml), sans
 `middlewares` ni `buffering` : `/mcp` est un flux) :
 
 ```yaml
@@ -979,7 +979,7 @@ http:
 
 **6. Claude.** claude.ai : Paramètres → Connecteurs → ajouter un connecteur
 personnalisé, `https://mcp.example.org/mcp`, sans identifiant ni secret.
-Claude Code : `claude mcp add --transport http opencloud https://mcp.example.org/mcp`,
+Claude Code : `claude mcp add --transport http kagu https://mcp.example.org/mcp`,
 puis `/mcp` pour se connecter.
 
 **Ce que l'agent lit.** Machines, services, tâches, sondes, alertes, pages de
@@ -995,7 +995,7 @@ api_token.verb_forbidden`). Vous pouvez aussi **limiter un jeton à certaines ma
 un débit borné et chaque geste est journalisé avec le jeton et la personne
 pour qui l'agent appelle. Ni suppression de machine, ni déploiement, ni réglage. Le
 détail, les refus et le journal d'audit :
-[22-fonctionnement.md](projet/22-fonctionnement.md#comment-un-agent-ia-lit-opencloud).
+[22-fonctionnement.md](projet/22-fonctionnement.md#comment-un-agent-ia-lit-kagu).
 
 ## Ajouter une machine
 
@@ -1015,7 +1015,7 @@ par défaut (`probe.lan` coché, voir ci-dessous), la ligne d'enrôlement porte
 `-rights` :
 
 ```sh
-printf '%s\n' 'oc_…' | sudo -u opencloud-agent /var/lib/opencloud-agent/bin/current agent -server https://opencloud.example.org -rights observe,probe.lan
+printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://kagu.example.org -rights observe,probe.lan
 ```
 
 Les droits : `observe` (toujours, la case est grisée), sonder le réseau
@@ -1032,7 +1032,7 @@ dossiers (un à huit chemins absolus, séparés par des virgules). Au-delà de
 `observe`, la commande les porte en clair, à lire avant de coller :
 
 ```sh
-printf '%s\n' 'oc_…' | sudo -u opencloud-agent /var/lib/opencloud-agent/bin/current agent -server https://opencloud.example.org -rights observe,probe.lan,agent.update,files.write=/srv/workspace
+printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://kagu.example.org -rights observe,probe.lan,agent.update,files.write=/srv/workspace
 ```
 
 Pour un hôte Proxmox qui produit ses sauvegardes, `-rights` porte
@@ -1069,14 +1069,14 @@ Kagu, et elle a déjà un agent actif ») et le jeton reste valable pour
 une autre machine : pour remplacer son agent, Ré-enrôler sur sa fiche.
 
 Connecté en root sans `sudo` (Debian minimal) : remplacez `sudo -u
-opencloud-agent` par `runuser -u opencloud-agent --`, le reste de la ligne ne
-change pas. À la main, sur un terminal, `sudo -u opencloud-agent
-/var/lib/opencloud-agent/bin/current agent -server https://…` seul demande le
+kagu-agent` par `runuser -u kagu-agent --`, le reste de la ligne ne
+change pas. À la main, sur un terminal, `sudo -u kagu-agent
+/var/lib/kagu-agent/bin/current agent -server https://…` seul demande le
 jeton (« Jeton d'enrôlement : ») et le lit sur la ligne suivante ; il s'affiche
 à la saisie.
 
-La ligne lance le binaire de l'état de l'agent, pas `opencloud` : il n'y a pas
-de lien `/usr/local/bin/opencloud` sur une machine installée ainsi (la machine
+La ligne lance le binaire de l'état de l'agent, pas `kagu` : il n'y a pas
+de lien `/usr/local/bin/kagu` sur une machine installée ainsi (la machine
 Kagu non plus). Un lien lancé par root vers un fichier que le compte de
 l'agent peut remplacer lui livrerait root.
 
@@ -1087,7 +1087,7 @@ l'interface est en anglais.
 ### 2. Le binaire et le compte
 
 ```sh
-scp bin/opencloud root@machine:/tmp/opencloud          # bin/opencloud-arm64 pour arm64
+scp bin/kagu root@machine:/tmp/kagu          # bin/kagu-arm64 pour arm64
 ```
 
 Puis, **sur la machine, en root**, la préparation que la page du jeton affiche
@@ -1096,28 +1096,28 @@ au-dessus de la ligne d'installation. Pour un agent qui déploie
 la version v0.0.1 donne :
 
 ```sh
-useradd --system --home-dir /var/lib/opencloud-agent --shell /usr/sbin/nologin opencloud-agent
-getent group docker >/dev/null && usermod -aG docker opencloud-agent
-install -d -m 0700 -o opencloud-agent -g opencloud-agent /var/lib/opencloud-agent
-runuser -u opencloud-agent -- install -d -m 0700 /var/lib/opencloud-agent/bin
-runuser -u opencloud-agent -- install -m 0755 /tmp/opencloud /var/lib/opencloud-agent/bin/opencloud-v0.0.1 && runuser -u opencloud-agent -- ln -sfn opencloud-v0.0.1 /var/lib/opencloud-agent/bin/current
-install -d -m 0755 -o root -g root /usr/local/lib/opencloud-agent
-install -m 0755 -o root -g root /tmp/opencloud /usr/local/lib/opencloud-agent/opencloud-guard
-test ! -L /srv/workspace && install -d -m 0755 -o opencloud-agent -g opencloud-agent /srv/workspace # docker.deploy
-test ! -L /srv/backups && install -d -m 0700 -o opencloud-agent -g opencloud-agent /srv/backups # backup.receive
+useradd --system --home-dir /var/lib/kagu-agent --shell /usr/sbin/nologin kagu-agent
+getent group docker >/dev/null && usermod -aG docker kagu-agent
+install -d -m 0700 -o kagu-agent -g kagu-agent /var/lib/kagu-agent
+runuser -u kagu-agent -- install -d -m 0700 /var/lib/kagu-agent/bin
+runuser -u kagu-agent -- install -m 0755 /tmp/kagu /var/lib/kagu-agent/bin/kagu-v0.0.1 && runuser -u kagu-agent -- ln -sfn kagu-v0.0.1 /var/lib/kagu-agent/bin/current
+install -d -m 0755 -o root -g root /usr/local/lib/kagu-agent
+install -m 0755 -o root -g root /tmp/kagu /usr/local/lib/kagu-agent/kagu-guard
+test ! -L /srv/workspace && install -d -m 0755 -o kagu-agent -g kagu-agent /srv/workspace # docker.deploy
+test ! -L /srv/backups && install -d -m 0700 -o kagu-agent -g kagu-agent /srv/backups # backup.receive
 ```
 
-- **Le compte** `opencloud-agent` : un compte système sans shell, qui n'a pas de
+- **Le compte** `kagu-agent` : un compte système sans shell, qui n'a pas de
   mot de passe. Son dossier personnel est l'état de l'agent (`useradd` ne le
   crée pas : c'est `install -d` qui le fait, au bon propriétaire) ; Docker et
   Compose y rangent leur configuration (`.docker/`), donc un `docker login` se
-  fait sous ce compte (`runuser -u opencloud-agent -- docker login <registre>`).
+  fait sous ce compte (`runuser -u kagu-agent -- docker login <registre>`).
 - **Le groupe `docker`**, s'il existe sur la machine. Sans Docker, la ligne ne
   fait rien et le compte reste sans privilège. Installez Docker **avant** la
-  préparation, ou rejouez `usermod -aG docker opencloud-agent` après, puis
-  `systemctl restart opencloud-agent` : un groupe se lit au démarrage du
+  préparation, ou rejouez `usermod -aG docker kagu-agent` après, puis
+  `systemctl restart kagu-agent` : un groupe se lit au démarrage du
   processus.
-- **Le lanceur stable** (`/usr/local/lib/opencloud-agent/opencloud-guard`) est
+- **Le lanceur stable** (`/usr/local/lib/kagu-agent/kagu-guard`) est
   une copie du même binaire, posée par root hors de `bin/` : l'unité lance
   *lui*, et lui lance `bin/current` sous le compte de l'agent. C'est ce qui
   ramène l'agent à la version précédente si une mise à jour ne tient pas
@@ -1128,10 +1128,10 @@ test ! -L /srv/backups && install -d -m 0700 -o opencloud-agent -g opencloud-age
   seul (voir [Mettre à jour](#mettre-à-jour)). `v0.0.1` est la version du
   serveur : l'agent doit parler son protocole. Le lien n'est posé que si
   `install` a réussi, pour ne jamais viser un fichier absent. **Pas de lien
-  `/usr/local/bin/opencloud`.** `/tmp/opencloud` doit être lisible par le
-  compte (`chmod 0755 /tmp/opencloud` si `install` répond `Permission denied`).
+  `/usr/local/bin/kagu`.** `/tmp/kagu` doit être lisible par le
+  compte (`chmod 0755 /tmp/kagu` si `install` répond `Permission denied`).
 - **Root ne touche rien de ce que le compte possède.** `bin/`, le binaire et
-  le lien se font sous le compte (`runuser -u opencloud-agent --`), et root ne
+  le lien se font sous le compte (`runuser -u kagu-agent --`), et root ne
   donne un dossier de droit qu'après avoir vérifié qu'il n'est pas un lien
   (`test ! -L`) : `install -d` suit un lien et donne sa cible. Sur une machine
   déjà préparée, un agent compromis aurait pu remplacer `bin/` par un lien vers
@@ -1149,10 +1149,10 @@ test ! -L /srv/backups && install -d -m 0700 -o opencloud-agent -g opencloud-age
   (`path_denied`) : ne créez pas le dossier à sa place en root.
 - **Sur une machine déjà préparée** (un second jeton, un ré-enrôlement,
   un changement de droits), jouez-la l'agent arrêté (`systemctl stop
-  opencloud-agent`, comme le ré-enrôlement le demande) : `useradd` répond que le
+  kagu-agent`, comme le ré-enrôlement le demande) : `useradd` répond que le
   compte existe, ignorez cette erreur, les lignes suivantes ne dépendent pas
   de lui. Pour la **machine Kagu**, le binaire
-  est celui du serveur (`/usr/local/bin/opencloud`) et non `/tmp/opencloud` ;
+  est celui du serveur (`/usr/local/bin/kagu`) et non `/tmp/kagu` ;
   la page le sait.
 
 #### Le groupe `docker` équivaut à root
@@ -1176,26 +1176,26 @@ n'est pas fait ; il le sera si l'usage le demande.
 
 Le droit `backup.produce=proxmox-vzdump` laisse l'agent d'un hôte Proxmox
 produire la sauvegarde d'une VM ou d'un conteneur avec `vzdump`. L'agent reste
-sous `opencloud-agent` ; `vzdump` demande root, et l'unité de l'agent
+sous `kagu-agent` ; `vzdump` demande root, et l'unité de l'agent
 (`ProtectSystem=strict`, `PrivateTmp`, `NoNewPrivileges=true`) ne laisse ni lancer
 `sudo`, ni écrire là où `vzdump` écrit (`/run`, `/var/log/vzdump`, les stockages).
 La préparation de la page du
 jeton ajoute donc, **après les lignes du compte**, une ligne par geste :
 
 ```sh
-runuser -u opencloud-agent -- install -d -m 0700 /var/lib/opencloud-agent/produce
-printf '%s\n' '#!/bin/sh' '# Kagu : vzdump hors du bac à sable de l agent, sur ordre de l agent.' 'exec /usr/bin/systemd-run --pipe --wait --collect --quiet /usr/bin/vzdump "$@"' | install -m 0755 -o root -g root /dev/stdin /usr/local/sbin/opencloud-vzdump
-printf '%s\n' 'opencloud-agent ALL=(root) NOPASSWD: /usr/local/sbin/opencloud-vzdump' | install -m 0440 -o root -g root /dev/stdin /etc/sudoers.d/.opencloud-agent.tmp && visudo -cf /etc/sudoers.d/.opencloud-agent.tmp && mv /etc/sudoers.d/.opencloud-agent.tmp /etc/sudoers.d/opencloud-agent || { rm -f /etc/sudoers.d/.opencloud-agent.tmp; false; }
-install -d -m 0755 /etc/systemd/system/opencloud-agent.service.d
-printf '%s\n' '[Service]' 'NoNewPrivileges=false' | install -m 0644 /dev/stdin /etc/systemd/system/opencloud-agent.service.d/produce.conf
+runuser -u kagu-agent -- install -d -m 0700 /var/lib/kagu-agent/produce
+printf '%s\n' '#!/bin/sh' '# Kagu : vzdump hors du bac à sable de l agent, sur ordre de l agent.' 'exec /usr/bin/systemd-run --pipe --wait --collect --quiet /usr/bin/vzdump "$@"' | install -m 0755 -o root -g root /dev/stdin /usr/local/sbin/kagu-vzdump
+printf '%s\n' 'kagu-agent ALL=(root) NOPASSWD: /usr/local/sbin/kagu-vzdump' | install -m 0440 -o root -g root /dev/stdin /etc/sudoers.d/.kagu-agent.tmp && visudo -cf /etc/sudoers.d/.kagu-agent.tmp && mv /etc/sudoers.d/.kagu-agent.tmp /etc/sudoers.d/kagu-agent || { rm -f /etc/sudoers.d/.kagu-agent.tmp; false; }
+install -d -m 0755 /etc/systemd/system/kagu-agent.service.d
+printf '%s\n' '[Service]' 'NoNewPrivileges=false' | install -m 0644 /dev/stdin /etc/systemd/system/kagu-agent.service.d/produce.conf
 systemctl daemon-reload
 ```
 
 | Geste | Pourquoi |
 | --- | --- |
 | `produce/` dans l'état, au compte, `0700` | Là où l'agent range l'archive pendant qu'il la chiffre ; à lui, comme le reste de son état |
-| Le script `/usr/local/sbin/opencloud-vzdump`, à root | `exec systemd-run --pipe --wait --collect --quiet /usr/bin/vzdump "$@"` : `vzdump` tourne dans une **unité transitoire**, donc **hors** du bac à sable de l'agent (il voit `/run/qemu-server`, `/var/log/vzdump`, les stockages) ; `--pipe` relie sa sortie standard à l'agent, qui la lit avec `--stdout` |
-| La règle `sudoers.d`, à root, `0440` | Le compte lance ce script, **seulement lui**, sans mot de passe. Une règle fausse bloquerait `sudo` pour toute la machine : la ligne l'écrit d'abord sous `.opencloud-agent.tmp` (un nom à point, que `sudo` ne lit pas), la fait juger par `visudo -cf`, et ne la renomme qu'alors. Si l'un des trois échoue, le fichier provisoire part, rien n'est posé et la ligne sort en erreur |
+| Le script `/usr/local/sbin/kagu-vzdump`, à root | `exec systemd-run --pipe --wait --collect --quiet /usr/bin/vzdump "$@"` : `vzdump` tourne dans une **unité transitoire**, donc **hors** du bac à sable de l'agent (il voit `/run/qemu-server`, `/var/log/vzdump`, les stockages) ; `--pipe` relie sa sortie standard à l'agent, qui la lit avec `--stdout` |
+| La règle `sudoers.d`, à root, `0440` | Le compte lance ce script, **seulement lui**, sans mot de passe. Une règle fausse bloquerait `sudo` pour toute la machine : la ligne l'écrit d'abord sous `.kagu-agent.tmp` (un nom à point, que `sudo` ne lit pas), la fait juger par `visudo -cf`, et ne la renomme qu'alors. Si l'un des trois échoue, le fichier provisoire part, rien n'est posé et la ligne sort en erreur |
 | Le drop-in `produce.conf` | Avec `NoNewPrivileges=true`, le bit setuid de `sudo` est ignoré et la règle ne sert à rien. `NoNewPrivileges=false` est **le seul desserrement** de l'unité ; les autres protections restent |
 
 **Ce que ça vaut en sécurité.** La règle ne nomme que le script, mais `vzdump`
@@ -1233,14 +1233,14 @@ premier lancement ; une valeur mal écrite arrête l'agent avant l'enrôlement, 
 consommer le jeton.
 
 **Ensuite**, une seule commande, **en root** sur la machine : elle écrit la
-politique de l'agent (`/etc/opencloud-agent/policy.toml`) sans toucher à ses
+politique de l'agent (`/etc/kagu-agent/policy.toml`) sans toucher à ses
 droits, note le changement au journal du système
-(`journalctl -t opencloud-agent`), et l'agent la prend en compte à l'ordre
+(`journalctl -t kagu-agent`), et l'agent la prend en compte à l'ordre
 suivant, sans redémarrage. Sur une machine installée avant la politique, elle
 refuse sans rien écrire et donne la ligne à lancer d'abord, une fois :
 
 ```sh
-sudo opencloud agent policy migrate
+sudo kagu agent policy migrate
 ```
 
 Elle recopie à l'identique les droits, les ancres et la clé du serveur
@@ -1250,15 +1250,15 @@ Tant qu'elle n'est pas lancée, la fiche de la machine (onglet Agent) dit
 « Droits non protégés » et donne la même ligne.
 
 ```sh
-sudo opencloud agent trust list
+sudo kagu agent trust list
 ```
 
-Cette commande tourne en root : elle se lance depuis `/usr/local/bin/opencloud`,
+Cette commande tourne en root : elle se lance depuis `/usr/local/bin/kagu`,
 jamais depuis `bin/current`, que le compte de l'agent peut remplacer. Sur la
 machine Kagu, c'est le binaire du serveur. Sur une autre machine, posez-le une
 fois, en root, depuis une version vérifiée ([Télécharger](#télécharger)), à
-la même version que l'agent : `install -m 0755 -o root -g root opencloud
-/usr/local/bin/opencloud`. Sans `sudo` (Proxmox), lancez la ligne en root sans
+la même version que l'agent : `install -m 0755 -o root -g root kagu
+/usr/local/bin/kagu`. Sans `sudo` (Proxmox), lancez la ligne en root sans
 le préfixe. Les lignes `grant` que l'écran donnera suivent la même forme.
 
 `add <type> <valeur>` et `remove <type> <valeur>` complètent `list` ; le type est
@@ -1279,7 +1279,7 @@ La même commande change la **clé du serveur** que l'agent accepte (voir
 
 `<clé>` est la clé publique en base64 que donne Kagu. Les deux impriment
 l'empreinte de l'ancienne et de la neuve : comparez la neuve à
-`opencloud secrets server-key` lancé sur la machine Kagu, jamais à un écran.
+`kagu secrets server-key` lancé sur la machine Kagu, jamais à un écran.
 `list` montre aussi l'empreinte des clés acceptées.
 
 Coût : chaque nouvelle VM à sauvegarder, chaque clé de trousseau changée et chaque
@@ -1294,10 +1294,10 @@ répond « indisponible » (fiche de la machine, journal `rights not exercisable
 avec `sudo_missing` (pas de `sudo`), `producer_missing` (le script de root ou
 `/usr/bin/vzdump` manque : rejouez la préparation) ou `sudo_denied` (la règle
 manque, ou l'unité n'a pas son drop-in : rejouez la préparation, puis
-`systemctl restart opencloud-agent`, car le drop-in ne se lit qu'au démarrage de
+`systemctl restart kagu-agent`, car le drop-in ne se lit qu'au démarrage de
 l'unité). Pour **retirer** le droit : ré-enrôlez sans la case, puis supprimez
-`/etc/sudoers.d/opencloud-agent`, `/usr/local/sbin/opencloud-vzdump` et
-`/etc/systemd/system/opencloud-agent.service.d/produce.conf`, et
+`/etc/sudoers.d/kagu-agent`, `/usr/local/sbin/kagu-vzdump` et
+`/etc/systemd/system/kagu-agent.service.d/produce.conf`, et
 `systemctl daemon-reload`.
 
 ### 3. Le premier lancement : l'enrôlement
@@ -1305,16 +1305,16 @@ l'unité). Pour **retirer** le droit : ré-enrôlez sans la case, puis supprimez
 Sur la machine, en root, la ligne affichée, une fois la préparation jouée :
 
 ```sh
-printf '%s\n' 'oc_…' | sudo -u opencloud-agent /var/lib/opencloud-agent/bin/current agent -server https://opencloud.example.org
+printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://kagu.example.org
 ```
 
 L'agent tire une clé Ed25519, s'enrôle, écrit
-`/var/lib/opencloud-agent/identity.json` en `0600` (au compte `opencloud-agent`),
+`/var/lib/kagu-agent/identity.json` en `0600` (au compte `kagu-agent`),
 puis se connecte. Le journal dit sous quel compte il tourne
-(`agent running as`, avec `opencloud-agent`). La
+(`agent running as`, avec `kagu-agent`). La
 réponse de l'enrôlement porte la **clé publique de Kagu** : l'agent
 l'épingle dans `identity.json` et n'exécutera que les ordres qu'elle signe.
-`sudo opencloud agent policy migrate` la passe ensuite, avec les droits et les
+`sudo kagu agent policy migrate` la passe ensuite, avec les droits et les
 ancres, dans la politique, à root ([Les ancres de
 confiance](#les-ancres-de-confiance)).
 Le journal la nomme (`"server_key":"SHA256:…"`) : c'est l'empreinte que
@@ -1329,7 +1329,7 @@ relais.
 | `-lang` | Oui | Langue des messages de l'agent, `fr` ou `en` |
 | `-rights` | Oui | Droits cochés dans l'interface ; sans lui, `observe` seul. Un droit mal écrit est refusé avant l'enrôlement (code 2), le jeton reste valable |
 | `-root-dir` | Oui | Racine des services que l'agent déploie (`docker.deploy`, `docker.update`), `/srv/workspace` par défaut, premier lancement seulement. Un chemin absolu et propre. Chaque service s'y écrit dans `<racine>/<projet>/` |
-| `-state` | Non | Répertoire d'état, `/var/lib/opencloud-agent` par défaut |
+| `-state` | Non | Répertoire d'état, `/var/lib/kagu-agent` par défaut |
 | `-allow-plain` | **Non** | Accepte `http://` vers un serveur distant |
 | `-docker-socket` | **Non** | Socket Docker, `/var/run/docker.sock` par défaut |
 | `-ca-file` | **Non** | Autorité interne pour les sondes de cette machine |
@@ -1340,17 +1340,17 @@ dans l'unité systemd.
 ### 4. Le service
 
 ```sh
-install -m 0644 opencloud-agent.service /etc/systemd/system/opencloud-agent.service
+install -m 0644 kagu-agent.service /etc/systemd/system/kagu-agent.service
 systemctl daemon-reload
-systemctl enable --now opencloud-agent
-journalctl -u opencloud-agent -f
+systemctl enable --now kagu-agent
+journalctl -u kagu-agent -f
 ```
 
-L'unité ([`opencloud-agent.service`](installation/opencloud-agent.service))
-lance le lanceur stable (`/usr/local/lib/opencloud-agent/opencloud-guard guard
--state /var/lib/opencloud-agent agent -state /var/lib/opencloud-agent`) sous
-`opencloud-agent` (`User=` et `Group=`), sans `-server` ni jeton ; lui lance
-`/var/lib/opencloud-agent/bin/current` avec la fin de la ligne : l'agent relit son identité (`identity loaded`) et se
+L'unité ([`kagu-agent.service`](installation/kagu-agent.service))
+lance le lanceur stable (`/usr/local/lib/kagu-agent/kagu-guard guard
+-state /var/lib/kagu-agent agent -state /var/lib/kagu-agent`) sous
+`kagu-agent` (`User=` et `Group=`), sans `-server` ni jeton ; lui lance
+`/var/lib/kagu-agent/bin/current` avec la fin de la ligne : l'agent relit son identité (`identity loaded`) et se
 connecte. Il lit `/proc`, les volumes montés et, par le groupe `docker`, la
 socket Docker. Il n'y a pas de `SupplementaryGroups=docker` dans l'unité :
 systemd lit les groupes du compte au démarrage (un groupe absent empêcherait
@@ -1358,7 +1358,7 @@ l'unité de démarrer sur une machine sans Docker). `StateDirectory=` crée l'é
 au nom du compte et **reprend le propriétaire de tout ce qu'il contient** s'il
 diffère : c'est voulu.
 
-Le journal doit dire `agent running as` avec `opencloud-agent`, puis
+Le journal doit dire `agent running as` avec `kagu-agent`, puis
 `identity loaded` et `connected`, et **pas** `state dir is not safe` ni
 `rights not exercisable` (un droit coché que le compte ne peut pas exercer : la
 fiche de la machine le dit aussi, [Dépannage](#dépannage)).
@@ -1377,10 +1377,10 @@ cible restic) demande un fichier de plus : l'unité n'écrit que dans son état
 l'étape 2) :
 
 ```sh
-mkdir -p /etc/systemd/system/opencloud-agent.service.d
-printf '[Service]\nReadWritePaths=-/srv/backups\n' > /etc/systemd/system/opencloud-agent.service.d/droits.conf
+mkdir -p /etc/systemd/system/kagu-agent.service.d
+printf '[Service]\nReadWritePaths=-/srv/backups\n' > /etc/systemd/system/kagu-agent.service.d/droits.conf
 systemctl daemon-reload
-systemctl restart opencloud-agent
+systemctl restart kagu-agent
 ```
 
 Le `-` devant le chemin laisse l'unité démarrer si le dossier manque (sans
@@ -1389,7 +1389,7 @@ lui, systemd refuse). Sans ce fichier, l'agent accepte l'ordre, ne peut pas
 l'agent, ou manque, c'est `path_denied`.
 
 **Sur une machine qui a sa politique** (`agent policy migrate` passé),
-`sudo opencloud agent grant <droit>` ou `grant --set observe|manage|root` fait
+`sudo kagu agent grant <droit>` ou `grant --set observe|manage|root` fait
 tout cela lui-même : il met le compte dans le groupe `docker` quand un droit le
 demande (et dit qu'il vaut root ; sans Docker, il le dit et pose le reste),
 crée les dossiers au compte de l'agent, réécrit `droits.conf` en entier, puis
@@ -1421,7 +1421,7 @@ demande deux choses sur la machine, et une dans l'unité :
   `-root-dir`) : la préparation la crée au nom du compte de l'agent (sans quoi
   il ne peut pas y écrire : `path_denied`). L'unité doit l'autoriser, et systemd
   refuse de démarrer sur un chemin absent. Si elle existe, elle doit être vide
-  ou porter le fichier témoin `.opencloud` (`root_not_ours` sinon : l'agent
+  ou porter le fichier témoin `.kagu` (`root_not_ours` sinon : l'agent
   n'écrit pas dans un dossier qui n'est pas à lui).
 - **Compose pour tous les comptes** : le greffon `docker compose` doit être
   installé pour le système (`/usr/libexec/docker/cli-plugins` ou
@@ -1429,10 +1429,10 @@ demande deux choses sur la machine, et une dans l'unité :
   `/root/.docker/cli-plugins`, que le compte de l'agent ne lit pas.
 
 ```sh
-mkdir -p /etc/systemd/system/opencloud-agent.service.d
-printf '[Service]\nReadWritePaths=-/srv/workspace\n' > /etc/systemd/system/opencloud-agent.service.d/droits.conf
+mkdir -p /etc/systemd/system/kagu-agent.service.d
+printf '[Service]\nReadWritePaths=-/srv/workspace\n' > /etc/systemd/system/kagu-agent.service.d/droits.conf
 systemctl daemon-reload
-systemctl restart opencloud-agent
+systemctl restart kagu-agent
 ```
 
 Avec la sauvegarde, une seule ligne `ReadWritePaths=` liste les deux dossiers,
@@ -1441,7 +1441,7 @@ chaque déploiement** : ne le retouchez pas à la main. Les dossiers `data/<unit
 sont créés en `0755`, **au compte de l'agent** : si le conteneur tourne sous un
 autre utilisateur, donnez-lui le dossier (`chown`, en root) avant le premier
 lancement. Les identifiants d'un registre privé se posent sous le compte
-(`runuser -u opencloud-agent -- docker login <registre>`) : ceux de
+(`runuser -u kagu-agent -- docker login <registre>`) : ceux de
 `/root/.docker/config.json` ne lui servent pas.
 
 Une coupure de réseau ou un redémarrage de `serve` ne l'arrête pas : il se
@@ -1462,23 +1462,23 @@ Possible, pour qui y tient : l'agent n'a alors pas besoin du groupe `docker`
 pour lire la socket, ni de dossiers à son nom, et lit tout ce que root lit. Sa
 contrepartie est simple : **un agent compromis a la machine**, sans passer par
 Docker. N'utilisez pas la préparation de l'étape 2 (elle créerait un état au
-compte `opencloud-agent`, qu'un agent root refuserait : `state dir is not
+compte `kagu-agent`, qu'un agent root refuserait : `state dir is not
 safe`) ; sur une machine neuve :
 
 ```sh
-# Le binaire (copié en /tmp/opencloud, étape 2) et l'état, à root
-install -d -m 0700 /var/lib/opencloud-agent /var/lib/opencloud-agent/bin
-install -m 0755 /tmp/opencloud /var/lib/opencloud-agent/bin/opencloud-v0.0.1 && ln -sfn opencloud-v0.0.1 /var/lib/opencloud-agent/bin/current
+# Le binaire (copié en /tmp/kagu, étape 2) et l'état, à root
+install -d -m 0700 /var/lib/kagu-agent /var/lib/kagu-agent/bin
+install -m 0755 /tmp/kagu /var/lib/kagu-agent/bin/kagu-v0.0.1 && ln -sfn kagu-v0.0.1 /var/lib/kagu-agent/bin/current
 # Les dossiers des droits, à root (les mêmes qu'à l'étape 2, sans « -o … -g … »)
 install -d -m 0755 /srv/workspace
-# L'enrôlement : la ligne de l'écran, sans « -u opencloud-agent »
-printf '%s\n' 'oc_…' | sudo /var/lib/opencloud-agent/bin/current agent -server https://opencloud.example.org
+# L'enrôlement : la ligne de l'écran, sans « -u kagu-agent »
+printf '%s\n' 'kg_…' | sudo /var/lib/kagu-agent/bin/current agent -server https://kagu.example.org
 # L'unité, et son drop-in qui la remet à root
-install -m 0644 docs/installation/opencloud-agent.service /etc/systemd/system/opencloud-agent.service
-mkdir -p /etc/systemd/system/opencloud-agent.service.d
-printf '[Service]\nUser=\nGroup=\n' > /etc/systemd/system/opencloud-agent.service.d/root.conf
+install -m 0644 docs/installation/kagu-agent.service /etc/systemd/system/kagu-agent.service
+mkdir -p /etc/systemd/system/kagu-agent.service.d
+printf '[Service]\nUser=\nGroup=\n' > /etc/systemd/system/kagu-agent.service.d/root.conf
 systemctl daemon-reload
-systemctl enable --now opencloud-agent
+systemctl enable --now kagu-agent
 ```
 
 `User=` et `Group=` vides défont ceux de l'unité : elle tourne en root. L'état
@@ -1486,7 +1486,7 @@ passe à root par `StateDirectory=`, qui reprend le propriétaire de tout ce qu'
 contient : repasser plus tard au compte dédié (retirer `root.conf`, suivre
 [Passer un agent installé en root sous son
 compte](#passer-un-agent-installé-en-root-sous-son-compte)) repasse tout d'un
-coup à `opencloud-agent`. Le journal dit `agent running as` avec `root`, et la
+coup à `kagu-agent`. Le journal dit `agent running as` avec `root`, et la
 fiche de la machine « Compte : root ».
 
 ### Sans domaine : `-pin`
@@ -1502,7 +1502,7 @@ openssl x509 -in cert.pem -noout -fingerprint -sha256 | cut -d= -f2 | tr -d :
 openssl s_client -connect 203.0.113.10:443 </dev/null 2>/dev/null \
   | openssl x509 -outform DER | sha256sum | cut -d' ' -f1
 
-printf '%s\n' 'oc_…' | sudo -u opencloud-agent /var/lib/opencloud-agent/bin/current agent -server https://203.0.113.10 -pin <empreinte>
+printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://203.0.113.10 -pin <empreinte>
 ```
 
 L'empreinte s'écrit en hexadécimal, majuscules ou minuscules, préfixe
@@ -1544,18 +1544,18 @@ un hôte Proxmox se lit ». La machine doit d'abord être ajoutée à Kagu
 
 **1. Créer le jeton dans Proxmox.** Interface web de Proxmox, *Datacenter* :
 
-1. *Permissions › Users › Add* : l'utilisateur `opencloud`, domaine
-   *Proxmox VE authentication server* (`opencloud@pve`). Il n'a pas besoin de mot
+1. *Permissions › Users › Add* : l'utilisateur `kagu`, domaine
+   *Proxmox VE authentication server* (`kagu@pve`). Il n'a pas besoin de mot
    de passe : il ne se connecte jamais.
-2. *Permissions › API Tokens › Add* : utilisateur `opencloud@pve`, nom du jeton
-   `lecture` (l'identifiant complet est `opencloud@pve!lecture`).
+2. *Permissions › API Tokens › Add* : utilisateur `kagu@pve`, nom du jeton
+   `lecture` (l'identifiant complet est `kagu@pve!lecture`).
    Proxmox n'affiche le **secret** qu'une fois : copiez-le tout de suite.
    **Décochez *Privilege Separation*** : le jeton a alors les droits de
    l'utilisateur. Si vous la laissez cochée, le jeton n'a aucun droit tant qu'on
    ne lui en donne pas lui-même (étape suivante, sur le jeton).
 3. *Permissions › Add › User Permission* (ou *API Token Permission* si
-   *Privilege Separation* est cochée) : chemin `/`, l'utilisateur `opencloud@pve`
-   (ou le jeton `opencloud@pve!lecture`), rôle **`PVEAuditor`**, *Propagate*
+   *Privilege Separation* est cochée) : chemin `/`, l'utilisateur `kagu@pve`
+   (ou le jeton `kagu@pve!lecture`), rôle **`PVEAuditor`**, *Propagate*
    coché. Ce rôle ne donne que `Sys.Audit`, `VM.Audit`, `Datastore.Audit` et
    leurs semblables : lire, jamais modifier.
 
@@ -1568,12 +1568,12 @@ droit ouvre.
 La même chose en ligne de commande, sur l'hôte Proxmox :
 
 ```sh
-pveum user add opencloud@pve
-pveum acl modify / --users opencloud@pve --roles PVEAuditor
-pveum user token add opencloud@pve lecture --privsep 0
+pveum user add kagu@pve
+pveum acl modify / --users kagu@pve --roles PVEAuditor
+pveum user token add kagu@pve lecture --privsep 0
 ```
 
-La dernière commande affiche `full-tokenid` (`opencloud@pve!lecture`) et
+La dernière commande affiche `full-tokenid` (`kagu@pve!lecture`) et
 `value` : le secret, à copier maintenant.
 
 **2. Ouvrir le pare-feu.** La machine **Kagu** (celle du serveur, pas
@@ -1605,7 +1605,7 @@ carte *Hyperviseur Proxmox* → **Déclarer un hôte Proxmox** :
 | Champ | Valeur |
 | --- | --- |
 | Adresse de l'API | `https://pve.lan:8006` : le schéma `https`, le nom ou l'IP, le port ; pas de chemin |
-| Identifiant du jeton | `opencloud@pve!lecture` |
+| Identifiant du jeton | `kagu@pve!lecture` |
 | Secret du jeton | Le secret copié à l'étape 1 |
 | Empreinte du certificat | Celle de l'étape 3, ou vide |
 
@@ -1644,7 +1644,7 @@ Les notes de chaque version (à faire en mettant à jour, changements qui
 cassent) sont dans [`versions/`](versions/README.md).
 
 Il n'y a ni paquet ni dépôt : on remplace le binaire, après l'avoir vérifié
-(`opencloud release verify`, voir « Télécharger »). Les migrations de la
+(`kagu release verify`, voir « Télécharger »). Les migrations de la
 base s'appliquent **seules au démarrage**, dans l'ordre, chacune dans sa
 transaction, notées dans `schema_migrations`. Pas de commande à lancer, pas
 de retour arrière : **sauvegardez avant**. Un binaire qui trouve une
@@ -1655,7 +1655,7 @@ l'ancien binaire **et** la copie `avant-maj.db`.
 La v0.0.1 part d'un schéma unique (`migrations/001_schema.sql`) : une base
 créée avant lui (les migrations `002` à `034` d'avant le 21 octobre 2026) est
 refusée de même. Il n'y a pas de montée : arrêtez `serve`, déplacez
-`opencloud.db` (et ses fichiers `-wal`, `-shm`), relancez ; la base repart
+`kagu.db` (et ses fichiers `-wal`, `-shm`), relancez ; la base repart
 vide, et chaque machine se ré-enrôle (supprimer son `identity.json`, relancer
 la ligne d'installation).
 
@@ -1664,24 +1664,24 @@ la ligne d'installation).
 git pull && make build
 
 # Sur le serveur : sauvegarder, puis remplacer et redémarrer
-runuser -u opencloud -- sqlite3 /var/lib/opencloud/opencloud.db ".backup '/var/lib/opencloud/avant-maj.db'"
-install -m 0755 opencloud /usr/local/bin/opencloud
-systemctl restart opencloud
+runuser -u kagu -- sqlite3 /var/lib/kagu/kagu.db ".backup '/var/lib/kagu/avant-maj.db'"
+install -m 0755 kagu /usr/local/bin/kagu
+systemctl restart kagu
 
 # L'agent a son binaire dans son état (bin/), sur la machine Kagu comme
 # ailleurs : depuis la fiche (voir plus bas), ou à la main, sous son compte
-# (bin/ est à lui : root n'y écrit pas). Ailleurs, le binaire copié en /tmp/opencloud.
-runuser -u opencloud-agent -- install -m 0755 /usr/local/bin/opencloud /var/lib/opencloud-agent/bin/opencloud-v0.0.1
-runuser -u opencloud-agent -- ln -sfn opencloud-v0.0.1 /var/lib/opencloud-agent/bin/current
-systemctl restart opencloud-agent
+# (bin/ est à lui : root n'y écrit pas). Ailleurs, le binaire copié en /tmp/kagu.
+runuser -u kagu-agent -- install -m 0755 /usr/local/bin/kagu /var/lib/kagu-agent/bin/kagu-v0.0.1
+runuser -u kagu-agent -- ln -sfn kagu-v0.0.1 /var/lib/kagu-agent/bin/current
+systemctl restart kagu-agent
 ```
 
 `install` remplace le binaire pendant que le service tourne (vérifié ici) ;
 le nouveau prend effet au redémarrage. `v0.0.1` est la version installée
-(`opencloud version`). Un agent gardé en root ([Garder l'agent en
-root](#garder-lagent-en-root)) : les mêmes lignes sans `runuser -u opencloud-agent --`. Sur une machine
+(`kagu version`). Un agent gardé en root ([Garder l'agent en
+root](#garder-lagent-en-root)) : les mêmes lignes sans `runuser -u kagu-agent --`. Sur une machine
 que l'agent met à jour seul, le binaire de `bin/` n'a pas de lien
-`/usr/local/bin/opencloud`. Sur la machine Kagu, `/usr/local/bin/opencloud`
+`/usr/local/bin/kagu`. Sur la machine Kagu, `/usr/local/bin/kagu`
 est le binaire du serveur (le premier `install` ci-dessus) : la copie de
 l'agent est à part, dans `bin/`.
 
@@ -1712,9 +1712,9 @@ fiche**, sans y entrer. Le serveur n'envoie que **sa propre version**, signée :
 ```sh
 # Sur le serveur : télécharger la version (Télécharger, ci-dessus), la vérifier,
 # puis l'importer dans la bibliothèque de versions du serveur
-# Le dossier doit être lisible par le compte opencloud (/tmp/v0.6.0, pas /root/…)
-opencloud release verify opencloud-linux-amd64          # dans le dossier de la version
-runuser -u opencloud -- opencloud release import /tmp/v0.6.0
+# Le dossier doit être lisible par le compte kagu (/tmp/v0.6.0, pas /root/…)
+kagu release verify kagu-linux-amd64          # dans le dossier de la version
+runuser -u kagu -- kagu release import /tmp/v0.6.0
 ```
 
 Il faut un binaire qui embarque la clé de version (la première version
@@ -1723,7 +1723,7 @@ agents est coupée (`no_releases`), et chaque machine se met à jour à la main
 comme ci-dessus.
 
 `release import <dossier>` lit le dossier d'une version publiée
-(`SHA256SUMS`, `SHA256SUMS.minisig` et les binaires `opencloud-linux-*`),
+(`SHA256SUMS`, `SHA256SUMS.minisig` et les binaires `kagu-linux-*`),
 vérifie tout avec la clé embarquée, puis le range sous `releases/` dans l'état
 de Kagu. Il refuse le dossier entier au moindre écart (signature, binaire
 manquant ou différent de la somme signée) et ne laisse rien en route ; le
@@ -1735,7 +1735,7 @@ l'agent**. Le bouton n'apparaît que si l'agent est en ligne, a le droit
 `agent.update`, et si sa version n'est pas celle du serveur ; sinon la fiche
 en donne la raison (version plus récente, rien d'importé pour cette
 architecture, droit manquant…). L'agent télécharge le binaire, **revérifie
-lui-même la signature avec sa propre clé**, l'éprouve (`opencloud version`),
+lui-même la signature avec sa propre clé**, l'éprouve (`kagu version`),
 écrit le marqueur d'attente de confirmation, bascule le lien `bin/current`, puis
 s'arrête avec le code 3 : systemd relance le lanceur. L'ordre devient « fait »
 quand l'agent revient en annonçant la nouvelle version **et** que le serveur
@@ -1750,8 +1750,8 @@ portent le chemin des ordres : proxy, VPN…) viennent après les autres. Le
 serveur n'en lance aucune tout seul ; on s'arrête au premier échec.
 
 **Un agent installé avant le 22 octobre 2026** a son état dans
-`/var/lib/opencloud/agent`, et le plus ancien lance encore
-`/usr/local/bin/opencloud` : sans `bin/current` l'agent refuse l'ordre
+`/var/lib/kagu/agent`, et le plus ancien lance encore
+`/usr/local/bin/kagu` : sans `bin/current` l'agent refuse l'ordre
 (`not_self_updatable`). Une fois par machine, [le déplacement de son
 état](#déplacer-létat-de-lagent-installé-avant-le-22-octobre-2026) règle les
 deux d'un coup.
@@ -1772,12 +1772,12 @@ droit de plus que l'agent (aucun `sudo`, aucun root permanent).
 | La version précédente échoue aussi | **Une seule** remise en état : le lanceur s'arrête (code 2), le marqueur dit l'échec, le journal local le crie | Run en échec (`rollback_failed`), alerte **danger**, dès qu'un agent revient |
 
 Ce que ça coûte : un second processus par agent (le lanceur, quelques Mio), une
-copie figée du binaire dans `/usr/local/lib/opencloud-agent/` qu'il faut
+copie figée du binaire dans `/usr/local/lib/kagu-agent/` qu'il faut
 reposer à la main si le lanceur change, et une étape de migration par agent
 déjà installé. Une machine éteinte plus de trois minutes juste après la
 bascule revient à la précédente à son démarrage.
 
-Le journal de l'unité (`journalctl -u opencloud-agent`) dit chaque décision :
+Le journal de l'unité (`journalctl -u kagu-agent`) dit chaque décision :
 `update not confirmed in time`, `update refused, returned to the previous
 version`, `the previous version fails too, giving up`.
 
@@ -1790,9 +1790,9 @@ version précédente (`no_previous`) ou si elle est celle qui tourne
 (`previous_identical`). Sans l'interface, sur la machine :
 
 ```sh
-sudo -u opencloud-agent ln -sfn opencloud-v0.2.0 /var/lib/opencloud-agent/bin/current   # la précédente
-sudo rm -f /var/lib/opencloud-agent/update.json                                         # plus rien à confirmer
-sudo systemctl restart opencloud-agent
+sudo -u kagu-agent ln -sfn kagu-v0.2.0 /var/lib/kagu-agent/bin/current   # la précédente
+sudo rm -f /var/lib/kagu-agent/update.json                                         # plus rien à confirmer
+sudo systemctl restart kagu-agent
 ```
 
 ### Migrer l'agent vers le retour arrière automatique
@@ -1803,7 +1803,7 @@ action.rollback_unavailable`) et sa fiche dit « Cette machine doit être migré
 avant d'être mise à jour », avec les lignes ci-dessous (l'interface les produit,
 `GET /api/agent-migration`). **Une fois par machine**, depuis un compte non
 root qui a `sudo`. Prérequis : l'unité est celle de ce dépôt, avec son
-`ExecStart=/var/lib/opencloud-agent/bin/current agent …` (voir [Déplacer
+`ExecStart=/var/lib/kagu-agent/bin/current agent …` (voir [Déplacer
 l'état](#déplacer-létat-de-lagent-installé-avant-le-22-octobre-2026) sinon).
 
 La fiche de la machine (onglet Agent) donne ce bloc à coller, **téléchargement
@@ -1811,46 +1811,46 @@ et vérification de la somme SHA-256 du binaire compris** : rien n'est à copier
 d'avance. Elle le propose **en root, sans `sudo`** quand la machine est un hôte
 Proxmox VE (Debian sans `sudo`) ou que son agent dit que `sudo` manque ; l'autre
 variante, avec `sudo`, reste au choix. Les lignes, avec `sudo` (en root, retirez
-`sudo` et remplacez `sudo -u opencloud-agent` par `runuser -u opencloud-agent --`) :
+`sudo` et remplacez `sudo -u kagu-agent` par `runuser -u kagu-agent --`) :
 
 ```sh
-# Sur la machine : le binaire de cette version, vérifié, dans /tmp/opencloud
+# Sur la machine : le binaire de cette version, vérifié, dans /tmp/kagu
 (cd "$(mktemp -d)" &&
 base=https://github.com/ldesfontaine/kagu/releases/download/v0.6.0 &&
 arch=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') &&
-curl -fLO "$base/opencloud-linux-$arch" -fLO "$base/SHA256SUMS" &&
+curl -fLO "$base/kagu-linux-$arch" -fLO "$base/SHA256SUMS" &&
 sha256sum -c --ignore-missing SHA256SUMS &&
-install -m 0755 "opencloud-linux-$arch" /tmp/opencloud)
-sudo systemctl stop opencloud-agent.service
-sudo install -d -m 0755 -o root -g root /usr/local/lib/opencloud-agent
-sudo install -m 0755 -o root -g root /tmp/opencloud /usr/local/lib/opencloud-agent/opencloud-guard
-sudo -u opencloud-agent install -m 0755 /tmp/opencloud /var/lib/opencloud-agent/bin/opencloud-v0.0.1
-sudo -u opencloud-agent ln -sfn opencloud-v0.0.1 /var/lib/opencloud-agent/bin/current
-sudo sed -i 's|^ExecStart=/var/lib/opencloud-agent/bin/current |ExecStart=/usr/local/lib/opencloud-agent/opencloud-guard guard -state /var/lib/opencloud-agent |' /etc/systemd/system/opencloud-agent.service
-systemctl cat opencloud-agent.service | grep '^ExecStart='
+install -m 0755 "kagu-linux-$arch" /tmp/kagu)
+sudo systemctl stop kagu-agent.service
+sudo install -d -m 0755 -o root -g root /usr/local/lib/kagu-agent
+sudo install -m 0755 -o root -g root /tmp/kagu /usr/local/lib/kagu-agent/kagu-guard
+sudo -u kagu-agent install -m 0755 /tmp/kagu /var/lib/kagu-agent/bin/kagu-v0.0.1
+sudo -u kagu-agent ln -sfn kagu-v0.0.1 /var/lib/kagu-agent/bin/current
+sudo sed -i 's|^ExecStart=/var/lib/kagu-agent/bin/current |ExecStart=/usr/local/lib/kagu-agent/kagu-guard guard -state /var/lib/kagu-agent |' /etc/systemd/system/kagu-agent.service
+systemctl cat kagu-agent.service | grep '^ExecStart='
 sudo systemctl daemon-reload
-sudo systemctl start opencloud-agent.service
+sudo systemctl start kagu-agent.service
 ```
 
-(`v0.0.1` : le numéro que `opencloud version` affiche pour ce binaire.) La
+(`v0.0.1` : le numéro que `kagu version` affiche pour ce binaire.) La
 ligne `sed` garde les options de l'agent (`-ca-file`, `-allow-plain`…) ; la
 rejouer ne change rien. N'ajoutez **pas** de lien `bin/previous` à la main : il
 naît à la première mise à jour.
 
-**Vérifier.** `systemctl cat opencloud-agent.service | grep '^ExecStart='` doit
-montrer `…/opencloud-guard guard -state … agent -state …` (une seule ligne, sinon
-un drop-in redéfinit `ExecStart=`) ; `journalctl -u opencloud-agent -n 20` doit
+**Vérifier.** `systemctl cat kagu-agent.service | grep '^ExecStart='` doit
+montrer `…/kagu-guard guard -state … agent -state …` (une seule ligne, sinon
+un drop-in redéfinit `ExecStart=`) ; `journalctl -u kagu-agent -n 20` doit
 dire `agent starting` puis `connected` ; la fiche de la machine dit « Retour
 arrière automatique : Oui ».
 
 **Annuler la migration.**
 
 ```sh
-sudo systemctl stop opencloud-agent.service
-sudo sed -i 's|^ExecStart=/usr/local/lib/opencloud-agent/opencloud-guard guard -state /var/lib/opencloud-agent |ExecStart=/var/lib/opencloud-agent/bin/current |' /etc/systemd/system/opencloud-agent.service
+sudo systemctl stop kagu-agent.service
+sudo sed -i 's|^ExecStart=/usr/local/lib/kagu-agent/kagu-guard guard -state /var/lib/kagu-agent |ExecStart=/var/lib/kagu-agent/bin/current |' /etc/systemd/system/kagu-agent.service
 sudo systemctl daemon-reload
-sudo systemctl start opencloud-agent.service
-sudo rm -r /usr/local/lib/opencloud-agent
+sudo systemctl start kagu-agent.service
+sudo rm -r /usr/local/lib/kagu-agent
 ```
 
 L'agent redevient comme avant : plus de retour arrière, donc plus de mise à
@@ -1869,7 +1869,7 @@ l'**hôte** doit connaître l'ordre `backup.produce` (un agent plus ancien le
 refuse, `unknown_kind` : « plus ancien que Kagu ») : mettez-le à jour comme
 les autres. L'agent de la **destination** doit être en **v0.2.0 ou plus** :
 avant, `backup.prune` ignore le préfixe du plan et n'élague que
-`opencloud-…`, donc un plan de VM y élaguerait les sauvegardes de la **base**
+`kagu-…`, donc un plan de VM y élaguerait les sauvegardes de la **base**
 avec son propre nombre à garder. Le serveur le refuse avant tout ordre
 (`backup.destination_agent_outdated`, qui vaut aussi pour une version qui ne se
 lit pas, comme `dev`) ; le plan de la base, lui, part vers n'importe quel agent.
@@ -1895,7 +1895,7 @@ d'installation sur la machine, `identity.json` supprimé) pour qu'il reçoive
 la clé.
 
 **Le protocole 2 (#146) se passe d'un coup.** Chaque requête de l'agent
-annonce sa version (`OpenCloud-Agent-Protocol: 2`) et le serveur refuse
+annonce sa version (`Kagu-Agent-Protocol: 2`) et le serveur refuse
 toute autre : il n'y a **pas de négociation**. La preuve de l'agent a changé
 (plus de défi à demander, `/agent/challenge` n'existe plus) : un agent
 d'avant ne se connecte plus à un serveur à jour, et inversement. Mettez à
@@ -1904,7 +1904,7 @@ l'identité se garde. Entre les deux, la machine est hors ligne. Au sein
 d'un même protocole, rien n'empêche un agent plus récent que le serveur,
 mais ce cas n'est pas garanti. La colonne Agent de la
 page Machines affiche la version de chaque agent ; tant qu'elle reste
-`v0.0.1`, elle ne distingue pas deux builds. `opencloud version` sur la
+`v0.0.1`, elle ne distingue pas deux builds. `kagu version` sur la
 machine donne le commit.
 
 **mcp-maison** se met à jour à part : remplacez la ligne `image:` de son
@@ -1913,11 +1913,11 @@ de Kagu, puis `docker compose pull && docker compose up -d`.
 
 ### Déplacer l'état de l'agent (installé avant le 22 octobre 2026)
 
-Avant cette date, l'état de l'agent était dans `/var/lib/opencloud/agent`. Sur
-la machine Kagu, ce dossier est sous celui du compte `opencloud`, qui
+Avant cette date, l'état de l'agent était dans `/var/lib/kagu/agent`. Sur
+la machine Kagu, ce dossier est sous celui du compte `kagu`, qui
 pouvait donc le renommer ou remplacer `identity.json` (les droits de l'agent,
 la clé du serveur qu'il a épinglée). L'état vit maintenant dans
-`/var/lib/opencloud-agent`, à root en `0700` (puis au compte `opencloud-agent`,
+`/var/lib/kagu-agent`, à root en `0700` (puis au compte `kagu-agent`,
 [plus bas](#passer-un-agent-installé-en-root-sous-son-compte)). **Une fois par
 machine, en root.** L'identité, la clé, les droits et le rang des ordres sont gardés : pas
 de ré-enrôlement. Sur la machine Kagu, le nouveau binaire voit tant que
@@ -1928,20 +1928,20 @@ les retrouve au redémarrage suivant le déplacement. Sur les autres machines,
 l'ancien dossier était à root : rien ne se coupe, mais le déplacement reste à
 faire.
 
-Si le compte `opencloud` du serveur a pu être compromis avant le déplacement,
+Si le compte `kagu` du serveur a pu être compromis avant le déplacement,
 ne gardez pas l'ancien état : ré-enrôlez la machine (fiche › **Ré-enrôler**).
 
 ```sh
-systemctl cat opencloud-agent | grep '^ExecStart='   # notez les options de la ligne
-systemctl stop opencloud-agent
-test -d /var/lib/opencloud/agent && test ! -L /var/lib/opencloud/agent && test ! -e /var/lib/opencloud-agent \
-  && mv /var/lib/opencloud/agent /var/lib/opencloud-agent \
-  && chown root:root /var/lib/opencloud-agent && chmod 0700 /var/lib/opencloud-agent
-find /var/lib/opencloud-agent ! -user root     # ne doit rien afficher
+systemctl cat kagu-agent | grep '^ExecStart='   # notez les options de la ligne
+systemctl stop kagu-agent
+test -d /var/lib/kagu/agent && test ! -L /var/lib/kagu/agent && test ! -e /var/lib/kagu-agent \
+  && mv /var/lib/kagu/agent /var/lib/kagu-agent \
+  && chown root:root /var/lib/kagu-agent && chmod 0700 /var/lib/kagu-agent
+find /var/lib/kagu-agent ! -user root     # ne doit rien afficher
 ```
 
 Sur une machine déjà passée sous son compte dédié, l'état est à
-`opencloud-agent` : `find … ! -user opencloud-agent` ne doit rien afficher.
+`kagu-agent` : `find … ! -user kagu-agent` ne doit rien afficher.
 
 Les `test` arrêtent la ligne si l'ancien état est un lien (`chown` et `chmod`
 suivraient sa cible, qu'un autre compte aurait choisie) ou si le nouveau
@@ -1951,33 +1951,33 @@ deux cas, ne gardez pas l'ancien état : ré-enrôlez la machine. L'agent le
 refuserait de toute façon (`identity.json` d'un autre compte : `state dir is
 not safe`).
 
-Puis le binaire de l'agent, `v0.0.1` étant ce que `opencloud version` affiche.
+Puis le binaire de l'agent, `v0.0.1` étant ce que `kagu version` affiche.
 Les liens de `bin/` sont relatifs : ils ont suivi le déplacement.
 
 - **Une autre machine, dont l'agent lançait déjà `…/bin/current`** : le lien
-  `/usr/local/bin/opencloud`, qui visait l'ancien chemin, doit viser le
+  `/usr/local/bin/kagu`, qui visait l'ancien chemin, doit viser le
   nouveau.
 
   ```sh
-  ln -sfn /var/lib/opencloud-agent/bin/current /usr/local/bin/opencloud
+  ln -sfn /var/lib/kagu-agent/bin/current /usr/local/bin/kagu
   ```
 
-- **Une autre machine, dont l'agent lançait `/usr/local/bin/opencloud`** (pas
+- **Une autre machine, dont l'agent lançait `/usr/local/bin/kagu`** (pas
   de `bin/`) :
 
   ```sh
-  install -D -m 0755 /usr/local/bin/opencloud /var/lib/opencloud-agent/bin/opencloud-v0.0.1
-  ln -sfn opencloud-v0.0.1 /var/lib/opencloud-agent/bin/current
-  ln -sfn /var/lib/opencloud-agent/bin/current /usr/local/bin/opencloud
+  install -D -m 0755 /usr/local/bin/kagu /var/lib/kagu-agent/bin/kagu-v0.0.1
+  ln -sfn kagu-v0.0.1 /var/lib/kagu-agent/bin/current
+  ln -sfn /var/lib/kagu-agent/bin/current /usr/local/bin/kagu
   ```
 
 - **La machine Kagu** : sa copie du binaire dans `bin/`, **sans** le lien
-  `/usr/local/bin/opencloud` (c'est le binaire du serveur), et plus de drop-in.
+  `/usr/local/bin/kagu` (c'est le binaire du serveur), et plus de drop-in.
 
   ```sh
-  install -D -m 0755 /usr/local/bin/opencloud /var/lib/opencloud-agent/bin/opencloud-v0.0.1
-  ln -sfn opencloud-v0.0.1 /var/lib/opencloud-agent/bin/current
-  rm /etc/systemd/system/opencloud-agent.service.d/machine-opencloud.conf
+  install -D -m 0755 /usr/local/bin/kagu /var/lib/kagu-agent/bin/kagu-v0.0.1
+  ln -sfn kagu-v0.0.1 /var/lib/kagu-agent/bin/current
+  rm /etc/systemd/system/kagu-agent.service.d/machine-kagu.conf
   ```
 
 Enfin la nouvelle unité (`-state` et `ExecStart` y sont déjà ceux du nouveau
@@ -1985,90 +1985,90 @@ chemin), sans la démarrer encore. **Elle lance le lanceur stable** : posez-le
 d'abord (une copie du binaire, à root), sans quoi l'unité ne démarre pas :
 
 ```sh
-install -d -m 0755 -o root -g root /usr/local/lib/opencloud-agent
-install -m 0755 -o root -g root /var/lib/opencloud-agent/bin/opencloud-v0.0.1 /usr/local/lib/opencloud-agent/opencloud-guard
-install -m 0644 docs/installation/opencloud-agent.service /etc/systemd/system/opencloud-agent.service
+install -d -m 0755 -o root -g root /usr/local/lib/kagu-agent
+install -m 0755 -o root -g root /var/lib/kagu-agent/bin/kagu-v0.0.1 /usr/local/lib/kagu-agent/kagu-guard
+install -m 0644 docs/installation/kagu-agent.service /etc/systemd/system/kagu-agent.service
 # Les options notées au début (-allow-plain, -ca-file, -docker-socket), en fin de ligne, par exemple :
-sed -i 's|^ExecStart=.*|& -ca-file /etc/ssl/ca-interne.pem|' /etc/systemd/system/opencloud-agent.service
-systemctl cat opencloud-agent | grep '^ExecStart='   # le nouveau chemin, et les mêmes options qu'avant
+sed -i 's|^ExecStart=.*|& -ca-file /etc/ssl/ca-interne.pem|' /etc/systemd/system/kagu-agent.service
+systemctl cat kagu-agent | grep '^ExecStart='   # le nouveau chemin, et les mêmes options qu'avant
 systemctl daemon-reload
 ```
 
-**Cette unité lance l'agent sous `opencloud-agent`** : son état est encore à
+**Cette unité lance l'agent sous `kagu-agent`** : son état est encore à
 root, il le refuserait (code 2, `agent.state_denied`). Ne la démarrez pas
 avant d'avoir suivi [Passer un agent installé en root sous son
 compte](#passer-un-agent-installé-en-root-sous-son-compte) (à partir de
 `useradd`) ou, pour garder root, [Garder l'agent en
 root](#garder-lagent-en-root) (le drop-in `root.conf`, puis `systemctl start
-opencloud-agent` et `journalctl -u opencloud-agent -n 20` : `identity loaded`,
+kagu-agent` et `journalctl -u kagu-agent -n 20` : `identity loaded`,
 `connected`, pas de `state dir is not safe`). Sans option sur l'ancienne ligne,
 sautez le `sed`. Un autre
 drop-in qui redéfinit `ExecStart=` (le `grep` en montre alors plusieurs) se
 corrige de la même façon : son chemin devient
-`/var/lib/opencloud-agent/bin/current … -state /var/lib/opencloud-agent`. Les drop-ins `droits.conf`
+`/var/lib/kagu-agent/bin/current … -state /var/lib/kagu-agent`. Les drop-ins `droits.conf`
 (`ReadWritePaths=` d'un droit qui écrit ailleurs) restent valables. Ailleurs
-que sur la machine Kagu, `/var/lib/opencloud` est maintenant vide :
-`rmdir /var/lib/opencloud` (il refuse s'il reste quelque chose).
+que sur la machine Kagu, `/var/lib/kagu` est maintenant vide :
+`rmdir /var/lib/kagu` (il refuse s'il reste quelque chose).
 
 ### Passer un agent installé en root sous son compte
 
 Une machine dont l'agent a été installé avant le 22 octobre 2026 tourne en
 root. L'installation recommandée est maintenant le compte dédié
-`opencloud-agent` (voir [le groupe `docker` équivaut à
+`kagu-agent` (voir [le groupe `docker` équivaut à
 root](#le-groupe-docker-équivaut-à-root) pour ce que cela change et ne change
 pas). **Une fois par machine, en root, la machine Kagu comprise.** À faire
 après [Déplacer l'état de l'agent](#déplacer-létat-de-lagent-installé-avant-le-22-octobre-2026)
-si l'état est encore dans `/var/lib/opencloud/agent`. L'identité, les droits et
+si l'état est encore dans `/var/lib/kagu/agent`. L'identité, les droits et
 le rang des ordres sont gardés : **pas de ré-enrôlement**. Pour rester en root :
 [Garder l'agent en root](#garder-lagent-en-root).
 
 ```sh
-systemctl cat opencloud-agent | grep '^ExecStart='   # notez les options (-allow-plain, -ca-file, -docker-socket)
-systemctl stop opencloud-agent
+systemctl cat kagu-agent | grep '^ExecStart='   # notez les options (-allow-plain, -ca-file, -docker-socket)
+systemctl stop kagu-agent
 
 # Le compte, et son groupe docker s'il y a Docker (rejouée : « already exists », ignorez)
-useradd --system --home-dir /var/lib/opencloud-agent --shell /usr/sbin/nologin opencloud-agent
-getent group docker >/dev/null && usermod -aG docker opencloud-agent
+useradd --system --home-dir /var/lib/kagu-agent --shell /usr/sbin/nologin kagu-agent
+getent group docker >/dev/null && usermod -aG docker kagu-agent
 
 # Son état : tout ce qu'il contient devient au compte
-test ! -L /var/lib/opencloud-agent && chown -hR opencloud-agent:opencloud-agent /var/lib/opencloud-agent
+test ! -L /var/lib/kagu-agent && chown -hR kagu-agent:kagu-agent /var/lib/kagu-agent
 
 # La racine des services, si docker.deploy ou docker.update : sans -R
 # (une racine de -root-dir : son chemin à la place de /srv/workspace)
-test -d /srv/workspace && test ! -L /srv/workspace && chown -h opencloud-agent:opencloud-agent /srv/workspace
-test -e /srv/workspace/.opencloud && chown -h opencloud-agent:opencloud-agent /srv/workspace/.opencloud
+test -d /srv/workspace && test ! -L /srv/workspace && chown -h kagu-agent:kagu-agent /srv/workspace
+test -e /srv/workspace/.kagu && chown -h kagu-agent:kagu-agent /srv/workspace/.kagu
 # Chaque service déployé par Kagu (ls /srv/workspace) : blog et site2 ici.
 # Un service qui est un lien est sauté : chown passerait par lui.
 for project in blog site2; do
   dir="/srv/workspace/$project"
   test -d "$dir" && test ! -L "$dir" || continue
-  chown -h opencloud-agent:opencloud-agent "$dir" "$dir/compose.yml"
-  test -e "$dir/.env" && chown -h opencloud-agent:opencloud-agent "$dir/.env"
-  test -d "$dir/data" && chown -h opencloud-agent:opencloud-agent "$dir/data"
+  chown -h kagu-agent:kagu-agent "$dir" "$dir/compose.yml"
+  test -e "$dir/.env" && chown -h kagu-agent:kagu-agent "$dir/.env"
+  test -d "$dir/data" && chown -h kagu-agent:kagu-agent "$dir/data"
 done
 
 # Le dossier des sauvegardes (backup.receive) : tout ce qu'il contient vient de l'agent
-test ! -L /srv/backups && chown -hR opencloud-agent:opencloud-agent /srv/backups
+test ! -L /srv/backups && chown -hR kagu-agent:kagu-agent /srv/backups
 # Chaque dossier de files.write : le dossier lui-même, pas son contenu
-test ! -L /opt/site && chown -h opencloud-agent:opencloud-agent /opt/site
+test ! -L /opt/site && chown -h kagu-agent:kagu-agent /opt/site
 
-# Le lien /usr/local/bin/opencloud qui mène dans l'état de l'agent, s'il existe (jamais le binaire du serveur)
-case "$(readlink -f /usr/local/bin/opencloud)" in /var/lib/opencloud-agent/*) rm /usr/local/bin/opencloud ;; esac
+# Le lien /usr/local/bin/kagu qui mène dans l'état de l'agent, s'il existe (jamais le binaire du serveur)
+case "$(readlink -f /usr/local/bin/kagu)" in /var/lib/kagu-agent/*) rm /usr/local/bin/kagu ;; esac
 
 # Le lanceur stable que l'unité lance, s'il n'est pas posé (« Migrer l'agent »)
-test -x /usr/local/lib/opencloud-agent/opencloud-guard || { install -d -m 0755 -o root -g root /usr/local/lib/opencloud-agent && install -m 0755 -o root -g root /var/lib/opencloud-agent/bin/current /usr/local/lib/opencloud-agent/opencloud-guard; }
+test -x /usr/local/lib/kagu-agent/kagu-guard || { install -d -m 0755 -o root -g root /usr/local/lib/kagu-agent && install -m 0755 -o root -g root /var/lib/kagu-agent/bin/current /usr/local/lib/kagu-agent/kagu-guard; }
 
 # L'unité (sous le compte). S'il y avait des options à reporter, décommentez le sed
-install -m 0644 docs/installation/opencloud-agent.service /etc/systemd/system/opencloud-agent.service
-# sed -i 's|^ExecStart=.*|& -ca-file /etc/ssl/ca-interne.pem|' /etc/systemd/system/opencloud-agent.service
-systemctl cat opencloud-agent | grep '^ExecStart='
-systemctl daemon-reload && systemctl start opencloud-agent
-journalctl -u opencloud-agent -n 20
+install -m 0644 docs/installation/kagu-agent.service /etc/systemd/system/kagu-agent.service
+# sed -i 's|^ExecStart=.*|& -ca-file /etc/ssl/ca-interne.pem|' /etc/systemd/system/kagu-agent.service
+systemctl cat kagu-agent | grep '^ExecStart='
+systemctl daemon-reload && systemctl start kagu-agent
+journalctl -u kagu-agent -n 20
 ```
 
-Le journal doit dire `agent running as` avec `opencloud-agent`, puis `identity
+Le journal doit dire `agent running as` avec `kagu-agent`, puis `identity
 loaded` et `connected`, et **pas** `state dir is not safe` ni `rights not
-exercisable`. La fiche de la machine dit « Compte : opencloud-agent » et aucun
+exercisable`. La fiche de la machine dit « Compte : kagu-agent » et aucun
 droit n'y est « indisponible ». Adaptez la liste à l'agent : les noms de la
 boucle `for` sont vos services, un `chown` par dossier de `files.write`, rien
 pour un droit que l'agent n'a pas.
@@ -2090,26 +2090,26 @@ pour masquer sa sortie). `data/<unité>` reste à qui il est. Si votre
 `compose.yml` lit d'autres fichiers du dossier du service (`env_file:`,
 `include:`), le compte de l'agent doit pouvoir les lire.
 
-**Pourquoi le lien `/usr/local/bin/opencloud` s'en va.** Root qui lancerait
-`opencloud` exécuterait `bin/current`, que le compte de l'agent peut
+**Pourquoi le lien `/usr/local/bin/kagu` s'en va.** Root qui lancerait
+`kagu` exécuterait `bin/current`, que le compte de l'agent peut
 remplacer : sur une machine sans Docker, une escalade. Le test du `readlink`
 ne retire qu'un lien qui mène dans l'état de l'agent ; sur la machine
-Kagu, `/usr/local/bin/opencloud` est un fichier, le binaire du serveur, et
+Kagu, `/usr/local/bin/kagu` est un fichier, le binaire du serveur, et
 il reste. Pour une commande sur le binaire de l'agent, sous son compte :
-`runuser -u opencloud-agent -- /var/lib/opencloud-agent/bin/current version`.
+`runuser -u kagu-agent -- /var/lib/kagu-agent/bin/current version`.
 
 **Les identifiants d'un registre privé** se refont sous le compte :
-`runuser -u opencloud-agent -- docker login <registre>`. Ceux de
+`runuser -u kagu-agent -- docker login <registre>`. Ceux de
 `/root/.docker/config.json` ne lui servent pas, et un `credsStore` de root ne se
 copie pas. Le greffon `docker compose` doit être installé pour le système, pas
 dans `/root/.docker/cli-plugins`.
 
 **Revenir en root** : le drop-in de [Garder l'agent en
 root](#garder-lagent-en-root), `systemctl daemon-reload && systemctl restart
-opencloud-agent`. `StateDirectory=` repasse l'état à root, récursivement ; les
-dossiers des droits (services, sauvegardes) restent au compte `opencloud-agent`,
+kagu-agent`. `StateDirectory=` repasse l'état à root, récursivement ; les
+dossiers des droits (services, sauvegardes) restent au compte `kagu-agent`,
 que root lit et écrit sans difficulté. Pour ne rien laisser au compte : les
-mêmes `chown -h`, à `root:root`, puis `userdel opencloud-agent`.
+mêmes `chown -h`, à `root:root`, puis `userdel kagu-agent`.
 
 ## Sauvegarder et restaurer
 
@@ -2133,8 +2133,8 @@ garde aucune copie. Trois gestes, dans l'ordre :
    suite.
 
 Sur la destination, chaque sauvegarde est un fichier
-`opencloud-AAAAMMJJ-HHMMSS.tar.age`, à côté de
-`opencloud-key-<empreinte>.age`, la clé privée **scellée par la phrase**.
+`kagu-AAAAMMJJ-HHMMSS.tar.age`, à côté de
+`kagu-key-<empreinte>.age`, la clé privée **scellée par la phrase**.
 L'agent vérifie ce qu'il a écrit (taille, somme, en-tête `age`) et la page dit
 l'état du dernier ordre ; il ne déchiffre rien, il n'a pas la clé. Les clés
 déposées ne sont jamais effacées par l'élagage. Remplacer la clé ne rend pas
@@ -2154,11 +2154,11 @@ déploiement.
 
 | Où | Quoi | Perte |
 | --- | --- | --- |
-| Serveur, `state_dir` | `opencloud.db` (avec `-wal` et `-shm` tant qu'il tourne) | Tout : machines, historique, sondes, tâches, alertes, page de statut, réglages de l'interface (langue, seuils des alertes, rappel des alertes de danger, relais d'e-mails mot de passe compris, fin de support), jetons d'API et authentification, et le journal d'audit (Journal : qui a fait quoi, un an), que les canaux « Recevoir le journal » (Paramètres → Notifications → Canaux) reçoivent aussi : cochez-en un, une base effacée n'efface plus la trace. `opencloud admin` s'y inscrit sous l'uid du pair de la socket (`uid:0`), `opencloud secrets forget` sous le compte qui la lance |
+| Serveur, `state_dir` | `kagu.db` (avec `-wal` et `-shm` tant qu'il tourne) | Tout : machines, historique, sondes, tâches, alertes, page de statut, réglages de l'interface (langue, seuils des alertes, rappel des alertes de danger, relais d'e-mails mot de passe compris, fin de support), jetons d'API et authentification, et le journal d'audit (Journal : qui a fait quoi, un an), que les canaux « Recevoir le journal » (Paramètres → Notifications → Canaux) reçoivent aussi : cochez-en un, une base effacée n'efface plus la trace. `kagu admin` s'y inscrit sous l'uid du pair de la socket (`uid:0`), `kagu secrets forget` sous le compte qui la lance |
 | Serveur, `state_dir` | `secret.key` | La clé des secrets de la base : sans elle, la base garde ses données mais perd le mot de passe du relais, l'URL et le secret des canaux, les URL de ping, les jetons des hôtes Proxmox, les mots de passe des dépôts restic (voir [Clé perdue](#clé-perdue)) |
 | Serveur, `state_dir` | `server.key` | La clé qui signe les ordres aux agents, tirée au premier démarrage : chaque agent accepte sa moitié publique. Sans elle, `serve` en tire une neuve et **chaque agent refuse les ordres** (`bad_signature`) jusqu'à ce que root y colle `trust set server-key` ([Faire tourner les clés](#faire-tourner-les-clés)) ; l'observation continue. Qui l'a commande toutes les machines : même soin que `secret.key` |
-| Serveur | `/etc/opencloud/config.toml` | La configuration |
-| Chaque machine | `/var/lib/opencloud-agent/identity.json` | Sa clé : il faudra ré-enrôler |
+| Serveur | `/etc/kagu/config.toml` | La configuration |
+| Chaque machine | `/var/lib/kagu-agent/identity.json` | Sa clé : il faudra ré-enrôler |
 | La machine Kagu, si mcp-maison y est | `/srv/workspace/mcp-maison/` : `.env`, `data/mcp/` | Le `.env` (jeton d'API, secret de l'application chez l'IdP), les droits, la base OAuth et le journal de mcp-maison : on les refait, mais chaque personne se reconnecte |
 
 **La base chiffre ses secrets** : les jetons de ping, l'URL et le secret des
@@ -2166,7 +2166,7 @@ canaux d'alerte (un webhook Discord, Slack ou ntfy porte son jeton dans
 l'URL), le mot de passe du relais d'e-mails et le secret du jeton de chaque
 hôte Proxmox sont chiffrés (AES-256-GCM) avec
 la clé de `secret.key`. Les jetons d'enrôlement, les jetons d'API et le mot de
-passe de l'interface y sont hachés. Une copie de `opencloud.db` seule ne livre
+passe de l'interface y sont hachés. Une copie de `kagu.db` seule ne livre
 donc plus ces secrets.
 
 **La clé est à côté de la base, pas dedans.** Elle protège une copie de la
@@ -2186,21 +2186,21 @@ intérêt). La sauvegarde à chaud ci-dessous ne la contient pas ; la sauvegarde
 à froid (`tar` du dossier) l'inclut, protégez-la comme un secret.
 
 ```sh
-cat /var/lib/opencloud/secret.key /var/lib/opencloud/server.key
+cat /var/lib/kagu/secret.key /var/lib/kagu/server.key
 ```
 
 `server.key` se garde de même, une fois, à part : elle ne change pas non
 plus, sauf rotation (sauvegardez-la après `finish-server-key`).
 
-La base est en mode WAL : copier `opencloud.db` seul pendant que `serve`
+La base est en mode WAL : copier `kagu.db` seul pendant que `serve`
 tourne donne une copie incomplète. Deux façons sûres.
 
 **À chaud**, avec le client `sqlite3` (`apt install sqlite3`), sous le
 compte du service :
 
 ```sh
-runuser -u opencloud -- sqlite3 /var/lib/opencloud/opencloud.db \
-  ".backup '/var/lib/opencloud/opencloud-$(date +%F).db'"
+runuser -u kagu -- sqlite3 /var/lib/kagu/kagu.db \
+  ".backup '/var/lib/kagu/kagu-$(date +%F).db'"
 ```
 
 Vérifié avec le client `sqlite3` 3.45, service en marche : copie
@@ -2209,22 +2209,22 @@ cohérente, `PRAGMA integrity_check` à `ok`, puis restaurée comme ci-dessous.
 **À froid** :
 
 ```sh
-systemctl stop opencloud
-tar -C /var/lib -czf /root/opencloud-$(date +%F).tar.gz opencloud
-systemctl start opencloud
+systemctl stop kagu
+tar -C /var/lib -czf /root/kagu-$(date +%F).tar.gz kagu
+systemctl start kagu
 ```
 
 ### Exporter l'annuaire
 
-`opencloud export` écrit l'annuaire déclaré (projets, services, sondes,
+`kagu export` écrit l'annuaire déclaré (projets, services, sondes,
 tâches, clés ignorées) en YAML, à relire, versionner dans Git ou comparer :
 
 ```sh
-opencloud export -config /etc/opencloud/config.toml > opencloud.yaml
+kagu export -config /etc/kagu/config.toml > kagu.yaml
 ```
 
 La commande n'ouvre pas la base : lancée en root ou sous le compte du service
-(`runuser -u opencloud -- opencloud export …`), elle ne crée donc pas de
+(`runuser -u kagu -- kagu export …`), elle ne crée donc pas de
 fichier `-wal` au nom de root. Le fichier écrit se place où votre compte peut
 écrire : avec `-o` sous le compte du service, le dossier doit lui appartenir
 (il échoue sinon) ; la redirection `>` écrit avec vos droits. `-o` écrit en
@@ -2239,7 +2239,7 @@ et il tourne sans elle. `state_dir` ouvert au groupe ou aux autres : `serve`
 **ne démarre pas** et dit `chmod 700 <state_dir>`. Le coût : un `serve` qui
 tournait avec un `state_dir` trop ouvert s'arrête à la mise à jour ; ce qu'on
 y gagne, c'est que le secours de root ([Accès
-perdu](#accès-perdu--sudo-opencloud-admin)) ne manque jamais en silence. La
+perdu](#accès-perdu--sudo-kagu-admin)) ne manque jamais en silence. La
 socket sert l'annuaire au compte du service ou à root, et les gestes
 `admin` à root seul : l'uid du pair, lu par le noyau (`SO_PEERCRED`), jamais
 son groupe. Le bouton « Exporter » de l'onglet Annuaire donne le même
@@ -2248,10 +2248,10 @@ fichier.
 **Ce n'est pas une sauvegarde.** Le fichier ne contient ni historique, ni
 mesures, ni canaux, ni pages de statut, ni réglages, et aucun secret : un jeton
 de tâche s'y lit `token: {secret: kept}`, pas sa valeur. Il ne remplace ni
-`opencloud.db` ni `secret.key`. La socket n'est pas à sauvegarder : `serve` la
+`kagu.db` ni `secret.key`. La socket n'est pas à sauvegarder : `serve` la
 recrée. L'unité systemd ne change pas.
 
-**Avec propositions.** `opencloud export -propose` ajoute à la fin du fichier
+**Avec propositions.** `kagu export -propose` ajoute à la fin du fichier
 ce que les conteneurs non déclarés laissent deviner : un service par projet
 Compose ou par conteneur, sans `id`, précédé d'un commentaire « Proposé depuis
 des conteneurs non déclarés : relisez avant apply », et les unités qui manquent
@@ -2260,8 +2260,8 @@ ce qui doit l'être, puis passez par `apply` comme pour tout fichier ; sans
 `-propose`, le fichier est celui d'avant.
 
 ```sh
-opencloud export -config /etc/opencloud/config.toml -propose > propose.yaml
-opencloud apply -config /etc/opencloud/config.toml -dry-run propose.yaml
+kagu export -config /etc/kagu/config.toml -propose > propose.yaml
+kagu apply -config /etc/kagu/config.toml -dry-run propose.yaml
 ```
 
 Un conteneur dont le label vise une unité qui n'existe pas, ou dont le label
@@ -2270,7 +2270,7 @@ est mal formé (« label orphelin ») n'est pas proposé : on corrige le label.
 ### Étiqueter un conteneur
 
 Un conteneur se rattache à une unité déclarée par deux labels, sans projet
-Compose ni nom à garder. Le préfixe est celui du produit (`opencloud.` ici) ;
+Compose ni nom à garder. Le préfixe est celui du produit (`kagu.` ici) ;
 l'identifiant du service se lit dans l'export (`svc_…`, ligne `id`),
 et l'unité porte le nom que le service lui donne :
 
@@ -2279,8 +2279,8 @@ services:
   app:
     image: nginx:1.27
     labels:
-      opencloud.service: svc_0123456789abcdef
-      opencloud.unit: app
+      kagu.service: svc_0123456789abcdef
+      kagu.unit: app
 ```
 
 Le label ne crée rien : le service et l'unité doivent déjà être déclarés **sur
@@ -2288,7 +2288,7 @@ la machine où tourne le conteneur**, et l'unité doit être un conteneur (pas u
 binaire). Sinon le conteneur reste non déclaré, avec le motif (« label
 orphelin ») sur sa fiche et dans la liste des non déclarés, et ne se rattache
 ni par son projet Compose ni par son nom. Un label mal écrit en fait autant :
-une clé en majuscules (`opencloud.Service`), une valeur de plus de 255 octets ou
+une clé en majuscules (`kagu.Service`), une valeur de plus de 255 octets ou
 qui contient un caractère de contrôle, un identifiant qui n'est pas de la forme
 `svc_` suivi de 16 hexadécimaux, un nom d'unité illisible. Le motif dit « mal
 formé : clé en minuscules, valeur de 255 octets au plus » ; corrigez le label. L'agent ne transmet au serveur que
@@ -2297,19 +2297,19 @@ restent sur la machine.
 
 ### Appliquer un fichier
 
-`opencloud apply` rejoue un fichier comme celui de `export` : ce que vous
+`kagu apply` rejoue un fichier comme celui de `export` : ce que vous
 y avez changé (une version, le nom d'une sonde, un service ajouté) est écrit
 dans l'annuaire, **par les mêmes gestes que l'interface**, pour que les
 agents reçoivent leurs sondes et que le rattachement des conteneurs se refasse.
 
 ```sh
-opencloud apply -config /etc/opencloud/config.toml opencloud.yaml
+kagu apply -config /etc/kagu/config.toml kagu.yaml
 ```
 
 La commande montre d'abord le plan, puis demande confirmation :
 
 ```
-Plan pour opencloud.yaml (sha256:1a2b3c4d…)
+Plan pour kagu.yaml (sha256:1a2b3c4d…)
   + projet docs
   ~ service app-1/wiki (svc_7f3k…)
       units[app].version : 2.4.0 → 2.4.1
@@ -2345,7 +2345,7 @@ Appliquer ces changements ? [o/N]
 - **Le journal.** Chaque fichier appliqué laisse une ligne (qui, quand, quelle
   empreinte, le plan, comment ça s'est fini), lisible sous Services, Annuaire,
   « Journal des fichiers ». Elle ne contient ni le fichier ni aucun secret, et
-  elle est dans `opencloud.db` : la sauvegarde de la base la garde.
+  elle est dans `kagu.db` : la sauvegarde de la base la garde.
 - **Codes de sortie** : `0` appliqué ou rien à changer, `2` fichier refusé,
   plan non confirmé ou option inconnue, `1` erreur (serveur absent, application
   arrêtée, annuaire changé sous `-yes`).
@@ -2353,17 +2353,17 @@ Appliquer ces changements ? [o/N]
 ### Restaurer
 
 ```sh
-systemctl stop opencloud
-rm -f /var/lib/opencloud/opencloud.db-wal /var/lib/opencloud/opencloud.db-shm
-install -m 0600 -o opencloud -g opencloud opencloud-2026-10-10.db /var/lib/opencloud/opencloud.db
-systemctl start opencloud
+systemctl stop kagu
+rm -f /var/lib/kagu/kagu.db-wal /var/lib/kagu/kagu.db-shm
+install -m 0600 -o kagu -g kagu kagu-2026-10-10.db /var/lib/kagu/kagu.db
+systemctl start kagu
 ```
 
-Posez aussi la clé avec la base, en `0600` pour `opencloud` : sans elle, le
+Posez aussi la clé avec la base, en `0600` pour `kagu` : sans elle, le
 serveur refuse de démarrer (la base contient des secrets chiffrés).
 
 ```sh
-install -m 0600 -o opencloud -g opencloud secret.key /var/lib/opencloud/secret.key
+install -m 0600 -o kagu -g kagu secret.key /var/lib/kagu/secret.key
 ```
 
 La clé doit être celle de la base restaurée. Une sauvegarde à froid (`tar`)
@@ -2371,7 +2371,7 @@ rend les deux ensemble. Posez `server.key` de même : avec la clé d'avant, les
 agents reprennent les ordres sans rien faire ; sans elle, ré-enrôlez-les.
 
 ```sh
-install -m 0600 -o opencloud -g opencloud server.key /var/lib/opencloud/server.key
+install -m 0600 -o kagu -g kagu server.key /var/lib/kagu/server.key
 ```
 
 Retirez les `-wal` et `-shm` de l'ancienne base avant de poser la copie :
@@ -2386,30 +2386,30 @@ reconnectent seuls. Une machine enrôlée après la sauvegarde est refusée
 
 Hors ligne, `serve` arrêté, sur n'importe quelle machine qui a le binaire et
 les deux fichiers de la destination : l'archive
-`opencloud-AAAAMMJJ-HHMMSS.tar.age` et la clé `opencloud-key-<empreinte>.age`
+`kagu-AAAAMMJJ-HHMMSS.tar.age` et la clé `kagu-key-<empreinte>.age`
 de la **même** sauvegarde.
 
-Plusieurs `opencloud-key-<empreinte>.<n>.age` à côté de la clé : la destination
+Plusieurs `kagu-key-<empreinte>.<n>.age` à côté de la clé : la destination
 a reçu, sous la même empreinte, une clé qui différait de celle qu'elle gardait
 (anomalie, ligne `WARN` dans le journal de l'agent). Elle les garde toutes ; la
 bonne est celle que **votre** phrase ouvre.
 
 ```sh
-systemctl stop opencloud
-opencloud backup restore -key opencloud-key-0123456789abcdef.age \
-  -state /var/lib/opencloud opencloud-20261021-030000.tar.age
+systemctl stop kagu
+kagu backup restore -key kagu-key-0123456789abcdef.age \
+  -state /var/lib/kagu kagu-20261021-030000.tar.age
 ```
 
 La phrase de passe se lit sur l'entrée standard (une ligne, jamais en
 argument ; elle s'affiche à la frappe si l'entrée est un terminal). Le dossier
 `-state` doit être **vide ou absent** (créé en `0700`) : la commande ne
-restaure jamais par-dessus une base. Elle écrit `opencloud.db`, `secret.key` et
+restaure jamais par-dessus une base. Elle écrit `kagu.db`, `secret.key` et
 `server.key` en `0600`, rien d'autre, et rien n'apparaît sous son nom définitif
 tant que l'archive n'est pas lue jusqu'au bout. Puis :
 
 ```sh
-chown -R opencloud:opencloud /var/lib/opencloud
-systemctl start opencloud
+chown -R kagu:kagu /var/lib/kagu
+systemctl start kagu
 ```
 
 Les agents se reconnectent seuls : `server.key` est celle d'avant, ils n'ont
@@ -2418,9 +2418,9 @@ rien à ré-enrôler.
 **Sans Kagu**, avec l'outil [`age`](https://age-encryption.org) seul :
 
 ```sh
-age -d -o cle.txt opencloud-key-0123456789abcdef.age          # demande la phrase
-age -d -i cle.txt opencloud-20261021-030000.tar.age | tar -x   # opencloud.db, secret.key, server.key
-install -m 0600 -o opencloud -g opencloud opencloud.db secret.key server.key /var/lib/opencloud/
+age -d -o cle.txt kagu-key-0123456789abcdef.age          # demande la phrase
+age -d -i cle.txt kagu-20261021-030000.tar.age | tar -x   # kagu.db, secret.key, server.key
+install -m 0600 -o kagu -g kagu kagu.db secret.key server.key /var/lib/kagu/
 shred -u cle.txt
 ```
 
@@ -2431,13 +2431,13 @@ shred -u cle.txt
 Une VM sauvegardée par un [plan](#sauvegarder-des-vm-proxmox) se restaure sans
 Kagu, ni serveur ni base : il faut l'archive
 `pve-vm-5012-AAAAMMJJ-HHMMSS.tar.age` (le sujet du plan, `-vm-`, le numéro de
-la VM, la date en UTC), la clé `opencloud-key-<empreinte>.age` **de la même
+la VM, la date en UTC), la clé `kagu-key-<empreinte>.age` **de la même
 sauvegarde**, la phrase de passe, et un hôte Proxmox pour la dernière étape. La
 clé se descelle comme ci-dessus ; l'archive est un `tar` d'une seule entrée,
 l'archive de `vzdump` :
 
 ```sh
-age -d -o cle.txt opencloud-key-0123456789abcdef.age                # demande la phrase
+age -d -o cle.txt kagu-key-0123456789abcdef.age                # demande la phrase
 age -d -i cle.txt pve-vm-5012-20261024-030000.tar.age | tar -x      # vzdump-qemu-5012-2026_10_24-03_00_00.vma.zst
 shred -u cle.txt
 ```
@@ -2458,14 +2458,14 @@ numéro pour restaurer à côté.
 
 ### Clé perdue
 
-Sans `secret.key`, le serveur refuse de démarrer : « `opencloud.db` contient
+Sans `secret.key`, le serveur refuse de démarrer : « `kagu.db` contient
 des secrets chiffrés mais `secret.key` est absent de `state_dir` ». Si la clé
 est introuvable (aucune copie, aucune sauvegarde à froid), il n'y a pas de
 moyen de relire ces secrets. La sortie de secours, serveur arrêté :
 
 ```sh
-runuser -u opencloud -- opencloud secrets forget -config /etc/opencloud/config.toml
-systemctl start opencloud
+runuser -u kagu -- kagu secrets forget -config /etc/kagu/config.toml
+systemctl start kagu
 ```
 
 Elle écrit une clé neuve et **efface ce que l'ancienne chiffrait** :
@@ -2493,9 +2493,9 @@ s'il répond sur sa socket de contrôle ; lancé sans elle, elle ne le voit
 pas) :
 
 ```sh
-systemctl stop opencloud
-runuser -u opencloud -- opencloud secrets rotate -config /etc/opencloud/config.toml
-systemctl start opencloud
+systemctl stop kagu
+runuser -u kagu -- kagu secrets rotate -config /etc/kagu/config.toml
+systemctl start kagu
 ```
 
 Elle tire une clé neuve, la pose devant l'ancienne dans `secret.key`,
@@ -2510,13 +2510,13 @@ perdu, aucune URL de ping ne change. Sauvegardez la clé neuve.
 les agents :
 
 ```sh
-runuser -u opencloud -- opencloud secrets rotate-server-key -config /etc/opencloud/config.toml
-systemctl restart opencloud
+runuser -u kagu -- kagu secrets rotate-server-key -config /etc/kagu/config.toml
+systemctl restart kagu
 # Sur chaque machine, en root, la ligne que la commande a donnée :
-sudo opencloud agent trust set server-key <clé publique base64>
+sudo kagu agent trust set server-key <clé publique base64>
 # Quand chaque agent accepte la neuve :
-runuser -u opencloud -- opencloud secrets finish-server-key -config /etc/opencloud/config.toml
-systemctl restart opencloud
+runuser -u kagu -- kagu secrets finish-server-key -config /etc/kagu/config.toml
+systemctl restart kagu
 ```
 
 La première **refuse** tant qu'une machine enrôlée a un agent plus ancien que
@@ -2528,7 +2528,7 @@ puis relancez. Ensuite, elle tire une clé neuve, garde la précédente dans
 valables : Kagu signe chaque ordre avec la clé que l'agent dit accepter.
 **Aucun ordre ne livre la neuve** : root la pose sur chaque machine. La ligne
 imprime l'empreinte de la neuve : comparez-la à
-`opencloud secrets server-key` lancé sur la machine Kagu, jamais à un écran.
+`kagu secrets server-key` lancé sur la machine Kagu, jamais à un écran.
 La fiche d'une machine restée sur la précédente (carte « Ordres ») donne la
 même ligne à copier. Sur une machine sans politique, la ligne refuse sans
 rien écrire et donne `policy migrate` à lancer d'abord.
@@ -2553,7 +2553,7 @@ Facultatif. Les VM et les conteneurs d'un hôte Proxmox VE se sauvegardent
 chaque nuit, ou à la demande, **par Kagu** : un plan de la page
 Sauvegardes dit quelle machine produit, quelles VM, et vers quelle
 destination. La restauration, elle, se fait [**sans
-Kagu**](#une-vm-proxmox-sans-opencloud).
+Kagu**](#une-vm-proxmox-sans-kagu).
 
 **Le principe.** Trois acteurs, une VM à la fois :
 
@@ -2587,7 +2587,7 @@ En root sur l'hôte : jouez la préparation, puis suivez
 [Ré-enrôler, retirer](#ré-enrôler-retirer) (arrêter le service, supprimer
 `identity.json`, coller la ligne, qui porte alors
 `backup.produce=proxmox-vzdump` dans `-rights`), et terminez par
-`systemctl restart opencloud-agent` : le drop-in ne se lit qu'au démarrage de
+`systemctl restart kagu-agent` : le drop-in ne se lit qu'au démarrage de
 l'unité.
 
 La fiche de la machine montre le droit sans la mention « Droits cochés mais
@@ -2621,7 +2621,7 @@ jour](#mettre-à-jour)).
 | Champ | Valeur |
 | --- | --- |
 | Source | « Ce qu'une machine produit » |
-| Nom du plan | Le **sujet** du plan, par exemple `pve` : minuscules, chiffres et tirets, 40 au plus. Il préfixe les fichiers du plan sur la destination, et ne change plus une fois le plan créé. `database` et `opencloud` sont réservés ; un sujet ne finit pas par `-vm-` suivi de chiffres (`backup.plan_invalid`) |
+| Nom du plan | Le **sujet** du plan, par exemple `pve` : minuscules, chiffres et tirets, 40 au plus. Il préfixe les fichiers du plan sur la destination, et ne change plus une fois le plan créé. `database` et `kagu` sont réservés ; un sujet ne finit pas par `-vm-` suivi de chiffres (`backup.plan_invalid`) |
 | Libellé | Facultatif : ce que la page affiche à la place du sujet |
 | Machine | L'hôte Proxmox |
 | Producteur | « Proxmox (vzdump) » |
@@ -2657,19 +2657,19 @@ Sur la destination, pour la VM 5012 du plan `pve` (dates en UTC) :
 ```sh
 ls -l /srv/backups
 # pve-vm-5012-20261024-030000.tar.age     l'archive, chiffrée
-# opencloud-key-0123456789abcdef.age      la clé privée, scellée par la phrase
+# kagu-key-0123456789abcdef.age      la clé privée, scellée par la phrase
 ```
 
 L'élagage ne touche que `pve-vm-5012-AAAAMMJJ-HHMMSS.tar.age` : jamais une clé,
 jamais une autre VM, jamais la base. Un test de restauration, de temps en
 temps, sur un numéro libre, vaut mieux que de croire la page :
-[restaurer une VM](#une-vm-proxmox-sans-opencloud).
+[restaurer une VM](#une-vm-proxmox-sans-kagu).
 
 ### L'espace disque, le temps
 
 | Où | Combien |
 | --- | --- |
-| L'hôte, sous `/var/lib/opencloud-agent/produce/` (le disque de l'état de l'agent, pas un stockage Proxmox : `vzdump` écrit sur sa sortie standard) | **Deux fois** la plus grosse VM, une fois compressée : le flux de `vzdump` (`zstd`) et l'archive chiffrée existent ensemble avant l'envoi. Prenez la taille d'une sauvegarde `.vma.zst` déjà faite par Proxmox. L'agent refuse de commencer sous 1 Gio libre (`disk_full`), et vide `produce/` à la fin de chaque ordre et à son démarrage |
+| L'hôte, sous `/var/lib/kagu-agent/produce/` (le disque de l'état de l'agent, pas un stockage Proxmox : `vzdump` écrit sur sa sortie standard) | **Deux fois** la plus grosse VM, une fois compressée : le flux de `vzdump` (`zstd`) et l'archive chiffrée existent ensemble avant l'envoi. Prenez la taille d'une sauvegarde `.vma.zst` déjà faite par Proxmox. L'agent refuse de commencer sous 1 Gio libre (`disk_full`), et vide `produce/` à la fin de chaque ordre et à son démarrage |
 | La machine Kagu, sous `state_dir/outgoing/` | **Une** archive à la fois : la plus grosse archive chiffrée, plus 1 Gio de marge. Une archive ne dépasse pas 64 Gio (`parcel_too_large`) ; sans la place, le serveur répond `disk_full` à l'envoi |
 | La destination | `keep` archives par VM, plus la clé scellée de chaque sauvegarde |
 
@@ -2687,17 +2687,17 @@ une machine.
 
 ```sh
 # D'abord, dans l'interface : Machines → la machine → Retirer
-systemctl disable --now opencloud-agent
-rm /etc/systemd/system/opencloud-agent.service && systemctl daemon-reload
-rm -rf /etc/systemd/system/opencloud-agent.service.d          # droits.conf, root.conf, s'il y en a
-rm -f /usr/local/bin/opencloud                                  # un lien d'une installation d'avant, s'il existe
-rm -r /var/lib/opencloud-agent
-rm -r /usr/local/lib/opencloud-agent                            # le lanceur stable
-userdel opencloud-agent
+systemctl disable --now kagu-agent
+rm /etc/systemd/system/kagu-agent.service && systemctl daemon-reload
+rm -rf /etc/systemd/system/kagu-agent.service.d          # droits.conf, root.conf, s'il y en a
+rm -f /usr/local/bin/kagu                                  # un lien d'une installation d'avant, s'il existe
+rm -r /var/lib/kagu-agent
+rm -r /usr/local/lib/kagu-agent                            # le lanceur stable
+userdel kagu-agent
 ```
 
 Les dossiers des droits (`/srv/workspace`, les sauvegardes reçues, ceux de
-`files.write`) restent, au numéro du compte `opencloud-agent` que `userdel`
+`files.write`) restent, au numéro du compte `kagu-agent` que `userdel`
 retire : ils n'ont plus de propriétaire nommé, et un compte créé plus tard
 pourrait reprendre ce numéro, donc ces dossiers. Rangez-les ou supprimez-les à
 la main (`chown root:root`, ou `rm -r`).
@@ -2706,12 +2706,12 @@ la main (`chown root:root`, ou `rm -r`).
 machine :
 
 ```sh
-systemctl disable --now opencloud opencloud-agent
-rm /etc/systemd/system/opencloud.service /etc/systemd/system/opencloud-agent.service && systemctl daemon-reload
-rm /usr/local/bin/opencloud
-rm -r /etc/opencloud /var/lib/opencloud /var/lib/opencloud-agent /usr/local/lib/opencloud-agent
-userdel opencloud
-userdel opencloud-agent
+systemctl disable --now kagu kagu-agent
+rm /etc/systemd/system/kagu.service /etc/systemd/system/kagu-agent.service && systemctl daemon-reload
+rm /usr/local/bin/kagu
+rm -r /etc/kagu /var/lib/kagu /var/lib/kagu-agent /usr/local/lib/kagu-agent
+userdel kagu
+userdel kagu-agent
 # et le fichier Kagu de la configuration dynamique de Traefik
 ```
 
@@ -2732,21 +2732,21 @@ Les messages sont ceux que le binaire écrit, tels quels.
 | Agent : « Jeton refusé : il a déjà servi. Un jeton n'enrôle qu'une machine, créez-en un nouveau. » | Jeton déjà consommé | Un nouveau jeton (Ajouter une machine, ou Ré-enrôler) |
 | Agent : « Jeton refusé : il a expiré. » / « Kagu ne le connaît pas. » | Plus d'1 h, ou jeton annulé, ou mauvais serveur | Un nouveau jeton ; vérifier `-server` |
 | Agent : « Jeton d'enrôlement absent : envoyez-le sur l'entrée standard… » | Premier lancement avec `-server` mais sans jeton sur l'entrée (lancé par systemd, ou `printf` oublié) | Coller la commande d'installation telle que Kagu l'affiche |
-| Agent : `state dir is not safe, writing rights are off` au démarrage, et la fiche montre des droits rapportés (`observe`) différents de ceux cochés | Le dossier d'état, ou un dossier au-dessus, appartient à un autre compte que root et que celui de l'agent, ou peut être modifié par d'autres (le journal nomme le dossier, son propriétaire et son mode). Par sécurité l'agent ne garde que `observe` ; ses droits restent dans `identity.json` | Corriger le dossier nommé (`chown` à root ou à `opencloud-agent`, `chmod go-w`), ou, pour un agent installé avant le 22 octobre 2026, [déplacer l'état](#déplacer-létat-de-lagent-installé-avant-le-22-octobre-2026) ; puis `systemctl restart opencloud-agent` |
-| Agent, au démarrage, code 2 : « Le compte « … » ne peut pas ouvrir le dossier d'état de l'agent (…) : il doit en être propriétaire… » (`agent.state_denied`) | Le compte qui lance l'agent (celui de l'unité, `User=`) ne possède pas son dossier d'état, ou ne peut pas le créer : systemd ne relance pas un refus | Donner l'état à ce compte (`sudo chown -R <compte> <dossier d'état>`, la commande est dans le message), puis `systemctl restart opencloud-agent` |
+| Agent : `state dir is not safe, writing rights are off` au démarrage, et la fiche montre des droits rapportés (`observe`) différents de ceux cochés | Le dossier d'état, ou un dossier au-dessus, appartient à un autre compte que root et que celui de l'agent, ou peut être modifié par d'autres (le journal nomme le dossier, son propriétaire et son mode). Par sécurité l'agent ne garde que `observe` ; ses droits restent dans `identity.json` | Corriger le dossier nommé (`chown` à root ou à `kagu-agent`, `chmod go-w`), ou, pour un agent installé avant le 22 octobre 2026, [déplacer l'état](#déplacer-létat-de-lagent-installé-avant-le-22-octobre-2026) ; puis `systemctl restart kagu-agent` |
+| Agent, au démarrage, code 2 : « Le compte « … » ne peut pas ouvrir le dossier d'état de l'agent (…) : il doit en être propriétaire… » (`agent.state_denied`) | Le compte qui lance l'agent (celui de l'unité, `User=`) ne possède pas son dossier d'état, ou ne peut pas le créer : systemd ne relance pas un refus | Donner l'état à ce compte (`sudo chown -R <compte> <dossier d'état>`, la commande est dans le message), puis `systemctl restart kagu-agent` |
 | Agent : « Cette machine n'est pas enrôlée. Lancez la commande d'installation donnée par Kagu. » | Service lancé avant l'enrôlement, ou `-state` différent | Faire le premier lancement avec le même `-state` |
 | Agent : « Kagu ne reconnaît plus cette machine : elle a été retirée ou ré-enrôlée ailleurs. » | Machine retirée, ou restauration d'une base plus ancienne | Ré-enrôler |
 | Agent : « Certificat refusé : ce n'est pas celui dont l'empreinte a été épinglée… » | Le certificat de Kagu a changé, ou quelqu'un s'interpose | Vérifier l'empreinte, puis ré-enrôler avec la nouvelle |
-| Agent : « Kagu ne parle pas la version du protocole de cet agent… » ; la machine reste hors ligne | Agent et serveur de deux protocoles différents (un seul des deux mis à jour) | Installer sur la machine le même binaire que sur la machine Kagu, puis `systemctl restart opencloud-agent` |
-| `secrets rotate` : « un serveur tourne sur ce state_dir » | La rotation de `secret.key` demande le serveur arrêté | `systemctl stop opencloud`, relancer la commande, redémarrer |
+| Agent : « Kagu ne parle pas la version du protocole de cet agent… » ; la machine reste hors ligne | Agent et serveur de deux protocoles différents (un seul des deux mis à jour) | Installer sur la machine le même binaire que sur la machine Kagu, puis `systemctl restart kagu-agent` |
+| `secrets rotate` : « un serveur tourne sur ce state_dir » | La rotation de `secret.key` demande le serveur arrêté | `systemctl stop kagu`, relancer la commande, redémarrer |
 | `secrets rotate-server-key` : « rotation refusée : ces machines ont un agent plus ancien que ce serveur » | Un agent est à un protocole plus ancien, ou ne s'est pas reconnecté depuis la mise à jour du serveur (protocole inconnu) | Mettre à jour l'agent de chaque machine nommée, attendre sa reconnexion, relancer ; aucune option ne passe outre |
 | `secrets finish-server-key` : « ces machines ont encore la clé précédente » | Root n'y a pas collé la ligne `trust set server-key` depuis la rotation | Coller sur chaque machine la ligne que le refus donne, ou `-force` puis la coller |
 | Agent : `tls: failed to verify certificate` | Certificat auto-signé sans `-pin` | `-pin`, ou un certificat reconnu |
-| « L'agent n'a pas le droit de lire la socket Docker de cette machine. » (`docker_denied`) | Le compte de l'agent n'est pas dans le groupe `docker`, ou y a été mis après le démarrage de l'agent : un groupe se lit au démarrage du processus | `usermod -aG docker opencloud-agent` puis `systemctl restart opencloud-agent`. Le groupe `docker` équivaut à root ([ce que cela donne](#le-groupe-docker-équivaut-à-root)) ; sinon, [garder l'agent en root](#garder-lagent-en-root) |
-| Agent : `WARN rights not exercisable` au journal, un droit « indisponible » sur la fiche de la machine, un ordre « Refusé » avec la même raison | Un droit coché que le compte de l'agent ne peut pas exercer : `docker_denied` (socket fermée au compte, ligne ci-dessus), `docker_missing` (pas de Docker, ou pas de `/usr/bin/docker`), `path_denied` (le dossier du droit, ou celui qui le contient, n'appartient pas au compte : la préparation ne l'a pas créé, ou une machine passée sous le compte n'a pas eu son `chown`), `path_unwritable` (l'unité ne l'ouvre pas : `ReadWritePaths=`), `not_self_updatable` (`bin/` n'appartient pas au compte) ; pour `backup.produce`, `sudo_missing` (pas de `sudo`), `producer_missing` (le script de root, ou `/usr/bin/vzdump`, manque) et `sudo_denied` (la règle `sudoers` manque, ou l'unité n'a pas son drop-in `produce.conf`) ; pour `restic.docker`, `docker_denied`, `docker_missing` (socket Docker et binaire `docker`) et `restic_missing` ; pour `restic.target`, `restic.produce`, `restic.verify`, `restic.browse` et `restic.restore`, `rest_server_missing` (la cible seule) et `restic_missing` (le binaire n'est ni dans le PATH de l'agent ni au chemin déclaré par `-rest-server` ou `-restic` : l'agent ne télécharge rien) | `path_denied` : `chown -h opencloud-agent:opencloud-agent <dossier>` ([Passer un agent installé en root sous son compte](#passer-un-agent-installé-en-root-sous-son-compte) dit lesquels), puis `systemctl restart opencloud-agent` ; `path_unwritable` : le drop-in `droits.conf` ; `not_self_updatable` : `chown -hR opencloud-agent:opencloud-agent /var/lib/opencloud-agent` ; `sudo_missing` : `apt install sudo` ; `producer_missing` et `sudo_denied` : rejouer la préparation de la page du jeton (les six lignes de [`backup.produce` équivaut à root](#backupproduce-équivaut-à-root)), puis `systemctl restart opencloud-agent`, car le drop-in ne se lit qu'au démarrage de l'unité ; `rest_server_missing`, `restic_missing` : installer le binaire (paquet de la distribution ou version publiée, somme vérifiée par l'opérateur), puis `systemctl restart opencloud-agent` |
+| « L'agent n'a pas le droit de lire la socket Docker de cette machine. » (`docker_denied`) | Le compte de l'agent n'est pas dans le groupe `docker`, ou y a été mis après le démarrage de l'agent : un groupe se lit au démarrage du processus | `usermod -aG docker kagu-agent` puis `systemctl restart kagu-agent`. Le groupe `docker` équivaut à root ([ce que cela donne](#le-groupe-docker-équivaut-à-root)) ; sinon, [garder l'agent en root](#garder-lagent-en-root) |
+| Agent : `WARN rights not exercisable` au journal, un droit « indisponible » sur la fiche de la machine, un ordre « Refusé » avec la même raison | Un droit coché que le compte de l'agent ne peut pas exercer : `docker_denied` (socket fermée au compte, ligne ci-dessus), `docker_missing` (pas de Docker, ou pas de `/usr/bin/docker`), `path_denied` (le dossier du droit, ou celui qui le contient, n'appartient pas au compte : la préparation ne l'a pas créé, ou une machine passée sous le compte n'a pas eu son `chown`), `path_unwritable` (l'unité ne l'ouvre pas : `ReadWritePaths=`), `not_self_updatable` (`bin/` n'appartient pas au compte) ; pour `backup.produce`, `sudo_missing` (pas de `sudo`), `producer_missing` (le script de root, ou `/usr/bin/vzdump`, manque) et `sudo_denied` (la règle `sudoers` manque, ou l'unité n'a pas son drop-in `produce.conf`) ; pour `restic.docker`, `docker_denied`, `docker_missing` (socket Docker et binaire `docker`) et `restic_missing` ; pour `restic.target`, `restic.produce`, `restic.verify`, `restic.browse` et `restic.restore`, `rest_server_missing` (la cible seule) et `restic_missing` (le binaire n'est ni dans le PATH de l'agent ni au chemin déclaré par `-rest-server` ou `-restic` : l'agent ne télécharge rien) | `path_denied` : `chown -h kagu-agent:kagu-agent <dossier>` ([Passer un agent installé en root sous son compte](#passer-un-agent-installé-en-root-sous-son-compte) dit lesquels), puis `systemctl restart kagu-agent` ; `path_unwritable` : le drop-in `droits.conf` ; `not_self_updatable` : `chown -hR kagu-agent:kagu-agent /var/lib/kagu-agent` ; `sudo_missing` : `apt install sudo` ; `producer_missing` et `sudo_denied` : rejouer la préparation de la page du jeton (les six lignes de [`backup.produce` équivaut à root](#backupproduce-équivaut-à-root)), puis `systemctl restart kagu-agent`, car le drop-in ne se lit qu'au démarrage de l'unité ; `rest_server_missing`, `restic_missing` : installer le binaire (paquet de la distribution ou version publiée, somme vérifiée par l'opérateur), puis `systemctl restart kagu-agent` |
 | Un plan de VM : « La VM 5012 n'a pas été sauvegardée : Le producteur de sauvegarde a échoué… » (`backup.target_failed:5012:producer_failed`) | `vzdump` a échoué sur la VM, ou n'a rien écrit. La carte du plan ne montre **pas** sa sortie d'erreur : seule une raison fermée y figure | Fiche de la **machine source** (l'hôte) › Ordres › l'ordre « Produire une sauvegarde » en échec : les dernières lignes de la sortie d'erreur de `vzdump` y sont (VM verrouillée, stockage, numéro inconnu…). Rien n'a été envoyé |
 | Même plan : `upload_failed` | L'archive n'est pas arrivée sur la machine Kagu. Le plus courant : Traefik coupe un envoi plus long que son `readTimeout` (60 s par défaut en v3). Sinon la ligne `upload:` de l'ordre donne le code du serveur (`parcel_too_large`, `disk_full`) | [Régler le `readTimeout` de l'entrée](#les-envois-darchives), puis relancer ; pour `disk_full` côté serveur, libérer le disque de `state_dir` (1 Gio libre de plus que l'archive) |
-| Même plan : `disk_full` | L'**hôte** a moins de 1 Gio libre sous `/var/lib/opencloud-agent`, ou n'a pas la place pour l'archive : `produce/` en garde deux copies (le flux de `vzdump` et l'archive chiffrée) | Libérer le disque de l'état de l'agent ([l'espace disque](#lespace-disque-le-temps)), puis relancer |
+| Même plan : `disk_full` | L'**hôte** a moins de 1 Gio libre sous `/var/lib/kagu-agent`, ou n'a pas la place pour l'archive : `produce/` en garde deux copies (le flux de `vzdump` et l'archive chiffrée) | Libérer le disque de l'état de l'agent ([l'espace disque](#lespace-disque-le-temps)), puis relancer |
 | Un plan de VM refuse de partir : `backup.destination_agent_outdated`, `backup.source_offline`, `backup.source_right_missing`, `backup.selector_needs_list`, `backup.run_in_progress` | La destination est plus ancienne que v0.2.0 ; l'hôte est hors ligne ; son agent n'a pas `backup.produce=proxmox-vzdump` ; `all` sans hôte Proxmox relevé ; un autre passage court | [Mettre à jour](#mettre-à-jour) la destination ; l'hôte en ligne ; [donner le droit](#1-le-droit-backupproduce-sur-lhôte) ; [déclarer l'hôte](#déclarer-un-hôte-proxmox) ou écrire les numéros ; attendre la fin du passage |
 | « Docker n'est pas présent sur cette machine. » alors qu'il tourne | `-docker-socket` ne vise pas la bonne socket | Corriger le chemin dans l'unité de l'agent |
 | La machine Kagu reste hors ligne, sans mesures | Son agent n'est pas installé (installation d'avant les agents, ou ligne de la première configuration pas jouée) | Machines → la machine Kagu → Ré-enrôler, et jouer la ligne sur elle |
@@ -2754,13 +2754,13 @@ Les messages sont ceux que le binaire écrit, tels quels.
 | `serve: listen "0.0.0.0:8080" is not a loopback address and no HTTPS proxy is declared…` | `listen` hors de la boucle locale sans mandataire HTTPS (R-CNX-5) | `listen = "127.0.0.1:8080"` et le tunnel SSH ; ou, derrière Traefik, `public_url = "https://…"` et `trusted_proxies` |
 | `serve: listen tcp 172.17.0.1:8080: bind: cannot assign requested address` | `docker0` pas encore là au démarrage | L'unité redémarre seule ; vérifier `After=docker.service` |
 | `serve: listen tcp …: bind: address already in use` | Un autre processus tient le port | `ss -ltnp` ; changer `listen` |
-| Le serveur refuse de démarrer : « opencloud.db contient des secrets chiffrés mais secret.key est absent de state_dir… » | La clé n'a pas été restaurée avec la base | La poser (voir Restaurer) ; perdue : voir [Clé perdue](#clé-perdue) |
-| « secret.key est lisible par d'autres comptes » | Le fichier a un mode plus large que `0600` | `chmod 600 /var/lib/opencloud/secret.key`, propriétaire le compte du service |
-| Paramètres → Agent IA : « Sans ses outils Kagu » ; `groupe "opencloud" non chargé` au journal de mcp-maison | `OPENCLOUD_URL` ou `OPENCLOUD_TOKEN` du `.env` de mcp-maison manque ou est refusé | Recopier les lignes de Paramètres → Agent IA → Jetons d'API (un jeton neuf au besoin), puis `docker compose up -d` |
+| Le serveur refuse de démarrer : « kagu.db contient des secrets chiffrés mais secret.key est absent de state_dir… » | La clé n'a pas été restaurée avec la base | La poser (voir Restaurer) ; perdue : voir [Clé perdue](#clé-perdue) |
+| « secret.key est lisible par d'autres comptes » | Le fichier a un mode plus large que `0600` | `chmod 600 /var/lib/kagu/secret.key`, propriétaire le compte du service |
+| Paramètres → Agent IA : « Sans ses outils Kagu » ; `groupe "kagu" non chargé` au journal de mcp-maison | `KAGU_URL` ou `KAGU_TOKEN` du `.env` de mcp-maison manque ou est refusé | Recopier les lignes de Paramètres → Agent IA → Jetons d'API (un jeton neuf au besoin), puis `docker compose up -d` |
 | mcp-maison : `401 api_token.invalid` | Le jeton est révoqué, échu, ou recréé à la création du compte | Un jeton neuf sous Paramètres → Agent IA → Jetons d'API, dans le `.env` |
-| mcp-maison : `403 bad_host` | `OPENCLOUD_URL` vise un nom que `public_url` ne reconnaît pas | Mettre l'adresse IP de `listen` dans `OPENCLOUD_URL` |
-| mcp-maison : `groupe "opencloud" non chargé : OPENCLOUD_URL: https:// attendu (http:// : boucle locale ou IP privée seulement)` | `OPENCLOUD_URL` en `http://` sur un nom ou une IP publique | `OPENCLOUD_URL=http://<l'IP de listen>:<port>` (boucle locale ou IP privée), ou `https://` |
+| mcp-maison : `403 bad_host` | `KAGU_URL` vise un nom que `public_url` ne reconnaît pas | Mettre l'adresse IP de `listen` dans `KAGU_URL` |
+| mcp-maison : `groupe "kagu" non chargé : KAGU_URL: https:// attendu (http:// : boucle locale ou IP privée seulement)` | `KAGU_URL` en `http://` sur un nom ou une IP publique | `KAGU_URL=http://<l'IP de listen>:<port>` (boucle locale ou IP privée), ou `https://` |
 | Mode `forward` : toute l'interface répond `401 {"error":"api_token.invalid"}` | Le mandataire transmet un `Authorization: Bearer` à Kagu (oauth2-proxy avec `--pass-authorization-header` ou `--set-authorization-header`) : un Bearer est jugé comme un jeton d'API, avant l'en-tête d'identité | Ne pas transmettre `Authorization` à Kagu ; seul l'en-tête d'identité compte |
-| Le navigateur redemande le mot de passe à chaque fois, ou `429` | Mauvais identifiants, puis limite des échecs ; ou file de vérification pleine (des tentatives anonymes en cours) | Attendre `Retry-After` et réessayer ; mot de passe perdu : `sudo opencloud admin reset-password` |
-| `sudo: command not found` | Debian minimal, installé sans `sudo` | En root, `runuser -u opencloud-agent -- …` à la place de `sudo -u opencloud-agent …` (la ligne d'installation de l'agent) ; sous le compte du serveur, `runuser -u opencloud -- …` |
+| Le navigateur redemande le mot de passe à chaque fois, ou `429` | Mauvais identifiants, puis limite des échecs ; ou file de vérification pleine (des tentatives anonymes en cours) | Attendre `Retry-After` et réessayer ; mot de passe perdu : `sudo kagu admin reset-password` |
+| `sudo: command not found` | Debian minimal, installé sans `sudo` | En root, `runuser -u kagu-agent -- …` à la place de `sudo -u kagu-agent …` (la ligne d'installation de l'agent) ; sous le compte du serveur, `runuser -u kagu -- …` |
 | Tous les utilisateurs bloqués ensemble en `429` | `trusted_proxies` absent : tout le monde a l'adresse de Traefik | Déclarer Traefik dans `trusted_proxies` |

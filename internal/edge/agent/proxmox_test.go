@@ -30,7 +30,7 @@ const (
 	pveTestNode   = "pve1"
 )
 
-var pveSnapshotName = regexp.MustCompile(`^oc-20261021-120000$`)
+var pveSnapshotName = regexp.MustCompile(`^kg-20261021-120000$`)
 
 // fakeGuest est un invité du faux Proxmox.
 type fakeGuest struct {
@@ -61,7 +61,7 @@ func newFakePVE(t *testing.T) *fakePVE {
 	t.Helper()
 	api := &fakePVE{taskMode: "ok", guests: []*fakeGuest{
 		{vmid: 105, kind: "qemu", status: "stopped"},
-		{vmid: 106, kind: "qemu", status: "running", snapshots: []string{"avant-migration", "oc-20261021-120000"}},
+		{vmid: 106, kind: "qemu", status: "running", snapshots: []string{"avant-migration", "kg-20261021-120000"}},
 		{vmid: 107, kind: "qemu", status: "stopped", template: 1},
 		{vmid: 200, kind: "lxc", status: "running"},
 	}}
@@ -311,7 +311,7 @@ func TestProxmoxShutdown_AsksForACleanShutdownNeverAForcedOne(t *testing.T) {
 func TestProxmoxSnapshot_NamesItItselfWithoutMemoryNorDescription(t *testing.T) {
 	rig := newProxmoxRig(t, "proxmox.snapshot")
 	final := expectResult(t, rig.run(t, agentwire.KindProxmoxSnapshot, guestParams(200, "lxc")), agentwire.ActionSucceeded, "")
-	if got := lines(final.Output); got[len(got)-1] != "snapshot lxc/200 oc-20261021-120000" {
+	if got := lines(final.Output); got[len(got)-1] != "snapshot lxc/200 kg-20261021-120000" {
 		t.Fatalf("output %q", got)
 	}
 	rig.pve.mu.Lock()
@@ -330,18 +330,18 @@ func TestProxmoxSnapshot_NamesItItselfWithoutMemoryNorDescription(t *testing.T) 
 func TestProxmoxSnapshotDelete_DeletesItsOwnSnapshotOnly(t *testing.T) {
 	rig := newProxmoxRig(t, "proxmox.snapshot")
 	params := guestParams(106, "qemu")
-	params.Snapshot = "oc-20261021-120000"
+	params.Snapshot = "kg-20261021-120000"
 	final := expectResult(t, rig.run(t, agentwire.KindProxmoxSnapshotDelete, params), agentwire.ActionSucceeded, "")
-	if got := lines(final.Output); got[len(got)-1] != "snapshot_deleted qemu/106 oc-20261021-120000" {
+	if got := lines(final.Output); got[len(got)-1] != "snapshot_deleted qemu/106 kg-20261021-120000" {
 		t.Fatalf("output %q", got)
 	}
-	if got := writes(rig.pve.callsMade()); len(got) != 1 || got[0] != "DELETE /api2/json/nodes/pve1/qemu/106/snapshot/oc-20261021-120000" {
+	if got := writes(rig.pve.callsMade()); len(got) != 1 || got[0] != "DELETE /api2/json/nodes/pve1/qemu/106/snapshot/kg-20261021-120000" {
 		t.Fatalf("writes %q", got)
 	}
 }
 
 func TestProxmoxSnapshotDelete_RefusesAnySnapshotItDidNotCreate(t *testing.T) {
-	for _, name := range []string{"avant-migration", "oc-manuel", "oc-20261021-120000/../../x", "OC-20261021-120000", "", "current"} {
+	for _, name := range []string{"avant-migration", "kg-manuel", "kg-20261021-120000/../../x", "KG-20261021-120000", "", "current"} {
 		rig := newProxmoxRig(t, "proxmox.snapshot")
 		params := guestParams(106, "qemu")
 		params.Snapshot = name
@@ -355,7 +355,7 @@ func TestProxmoxSnapshotDelete_RefusesAnySnapshotItDidNotCreate(t *testing.T) {
 func TestProxmoxSnapshotDelete_RefusesAnOwnSnapshotThatIsNotThere(t *testing.T) {
 	rig := newProxmoxRig(t, "proxmox.snapshot")
 	params := guestParams(105, "qemu")
-	params.Snapshot = "oc-20261021-120000"
+	params.Snapshot = "kg-20261021-120000"
 	expectResult(t, rig.run(t, agentwire.KindProxmoxSnapshotDelete, params), agentwire.ActionRefused, agentwire.ReasonProxmoxSnapshotMissing)
 	if got := writes(rig.pve.callsMade()); len(got) != 0 {
 		t.Fatalf("writes %q", got)
@@ -419,8 +419,8 @@ func TestProxmoxOrders_RefuseParametersThatAreNotStrict(t *testing.T) {
 		"a vmid below 100":            {agentwire.KindProxmoxStart, guestParams(5, "qemu")},
 		"a vmid as text":              {agentwire.KindProxmoxStart, map[string]any{"vmid": "105", "type": "qemu"}},
 		"an unknown type":             {agentwire.KindProxmoxStart, guestParams(105, "kvm")},
-		"a snapshot name to a start":  {agentwire.KindProxmoxStart, agentwire.ProxmoxGuestParams{VMID: 105, Type: "qemu", Snapshot: "oc-20261021-120000"}},
-		"a snapshot name to creation": {agentwire.KindProxmoxSnapshot, agentwire.ProxmoxGuestParams{VMID: 105, Type: "qemu", Snapshot: "oc-20261021-120000"}},
+		"a snapshot name to a start":  {agentwire.KindProxmoxStart, agentwire.ProxmoxGuestParams{VMID: 105, Type: "qemu", Snapshot: "kg-20261021-120000"}},
+		"a snapshot name to creation": {agentwire.KindProxmoxSnapshot, agentwire.ProxmoxGuestParams{VMID: 105, Type: "qemu", Snapshot: "kg-20261021-120000"}},
 	}
 	for name, c := range cases {
 		results := rig.run(t, c.kind, c.params)
@@ -563,7 +563,7 @@ func TestProxmoxOrders_AnApiThatDoesNotAnswerIsUnreachable(t *testing.T) {
 func TestProxmoxOrders_OnlyTheFourGesturesEverReachProxmox(t *testing.T) {
 	rig := newProxmoxRig(t, "proxmox.power", "proxmox.snapshot")
 	deleteParams := guestParams(106, "qemu")
-	deleteParams.Snapshot = "oc-20261021-120000"
+	deleteParams.Snapshot = "kg-20261021-120000"
 	rig.run(t, agentwire.KindProxmoxStart, guestParams(105, "qemu"))
 	rig.run(t, agentwire.KindProxmoxShutdown, guestParams(106, "qemu"))
 	rig.run(t, agentwire.KindProxmoxSnapshot, guestParams(200, "lxc"))
@@ -572,7 +572,7 @@ func TestProxmoxOrders_OnlyTheFourGesturesEverReachProxmox(t *testing.T) {
 	rig.run(t, agentwire.KindProxmoxStart, guestParams(105, "qemu"))
 	allowed := regexp.MustCompile(`^(GET /api2/json/(cluster/resources\?type=vm|nodes/pve1/(qemu|lxc)/\d+/(status/current|snapshot)|nodes/pve1/tasks/[^/]+/status)` +
 		`|POST /api2/json/nodes/pve1/(qemu|lxc)/\d+/(status/(start|shutdown)|snapshot)` +
-		`|DELETE /api2/json/nodes/pve1/(qemu|lxc)/\d+/snapshot/oc-\d{8}-\d{6})$`)
+		`|DELETE /api2/json/nodes/pve1/(qemu|lxc)/\d+/snapshot/kg-\d{8}-\d{6})$`)
 	for _, call := range rig.pve.callsMade() {
 		if !allowed.MatchString(call) {
 			t.Errorf("a call outside the four gestures: %s", call)

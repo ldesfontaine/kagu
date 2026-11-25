@@ -284,7 +284,7 @@ func TestCreateDestination_RefusesAPathOutsideTheReportedRight(t *testing.T) {
 	_, err = b.backups.CreateDestination(operator(), backup.DestinationDefinition{Name: "store-1", MachineID: "inconnue", Path: "/srv/backups"})
 	requireRefusal(t, err, machine.ErrUnknown)
 
-	if _, err := b.backups.CreateDestination(operator(), backup.DestinationDefinition{Name: "store-1", MachineID: machineID, Path: "/srv/backups/opencloud"}); err != nil {
+	if _, err := b.backups.CreateDestination(operator(), backup.DestinationDefinition{Name: "store-1", MachineID: machineID, Path: "/srv/backups/kagu"}); err != nil {
 		t.Fatalf("a subfolder of the right: %v", err)
 	}
 	_, err = b.backups.CreateDestination(operator(), backup.DestinationDefinition{Name: "store-1", MachineID: machineID, Path: "/srv/backups"})
@@ -351,7 +351,7 @@ func TestRun_StagesAnEncryptedArchiveAndSendsReceiveThenPrune(t *testing.T) {
 		t.Fatalf("archive kind %q, want the database", receive.Archive)
 	}
 	var prune agentwire.BackupPruneParams
-	if err := json.Unmarshal(b.commands.orders[1].Params, &prune); err != nil || prune.Path != "/srv/backups" || prune.Prefix != "opencloud" || prune.Keep != 3 {
+	if err := json.Unmarshal(b.commands.orders[1].Params, &prune); err != nil || prune.Path != "/srv/backups" || prune.Prefix != "kagu" || prune.Keep != 3 {
 		t.Fatalf("prune %+v %v", prune, err)
 	}
 

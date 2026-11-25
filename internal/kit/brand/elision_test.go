@@ -15,7 +15,7 @@ import (
 var elidedBeforeProductName = regexp.MustCompile(
 	`[A-Za-zÀ-ÿ]['’]\s*(?:"\s*\+\s*)?(?:` +
 		`\{product\}|\{\{product\}\}|brand\.ProductName|productName\(\)|\$\{[^}]*[pP]roduct[^}]*\}|` +
-		`Kagu|opencloud)`)
+		`Kagu|kagu)`)
 
 // Les catalogues, le Go de production et le front, tests exclus : un test
 // peut citer l'erreur à titre d'exemple.

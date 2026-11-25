@@ -44,7 +44,7 @@ const releaseUsage = `Usage : {command} release <sous-commande>
 // #nosec G101 -- le nom d'un secret, pas sa valeur.
 const keygenAdvice = "Posez la clé privée dans le secret RELEASE_SIGNING_KEY de l'environnement release (jamais un secret du dépôt), gardez-en une copie dans votre coffre, puis collez la clé publique dans CurrentPublicKey (internal/kit/release/key.go)."
 
-// opencloud release : vérifier une version téléchargée, ou en signer une.
+// kagu release : vérifier une version téléchargée, ou en signer une.
 // Les clés de confiance sont celles que le binaire embarque ; les tests en
 // injectent.
 func runRelease(args []string) error {

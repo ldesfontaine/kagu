@@ -102,7 +102,7 @@ func (ts *testServer) seedJobs(t *testing.T) string {
 // Deux sondes pour des réponses parlantes : l'une sur le site de la
 // machine distante, qui vise le service déclaré de l'annuaire, déjà sondée trois fois et dégradée par un certificat
 // d'autorité interne qui approche de sa fin, l'autre sur la base, portée
-// par la machine openCloud et encore neuve. Une seule a donc un agrégat
+// par la machine Kagu et encore neuve. Une seule a donc un agrégat
 // journalier.
 func (ts *testServer) seedProbes(t *testing.T, declaredServiceID string) string {
 	t.Helper()
@@ -124,7 +124,7 @@ func (ts *testServer) seedProbes(t *testing.T, declaredServiceID string) string 
 	// chaîne remonte à une autorité que cette machine ne connaît pas, et
 	// l'échéance approche. Les deux faits se lisent séparément.
 	certificate := &probe.Certificate{
-		Subject: "cloud.exemple.fr", Issuer: "openCloud dev",
+		Subject: "cloud.exemple.fr", Issuer: "Kagu dev",
 		NotBefore: testNow.Add(-78 * 24 * time.Hour), NotAfter: testNow.Add(12 * 24 * time.Hour),
 		Fingerprint: strings.Repeat("e", 64),
 		ChainValid:  false, HostnameMatch: true,
@@ -157,7 +157,7 @@ func testReading(at time.Time, cpu float64) sampler.Reading {
 	}
 }
 
-// La machine openCloud a mesuré à l'instant ; la machine distante a une
+// La machine Kagu a mesuré à l'instant ; la machine distante a une
 // lecture trop vieille pour valoir « maintenant ».
 func (ts *testServer) seedResources(t *testing.T) {
 	t.Helper()
@@ -176,7 +176,7 @@ func (ts *testServer) seedResources(t *testing.T) {
 // et sur le réseau interne du projet, avec un correctif publié sur le
 // registre ; sa base sur ce réseau seul, avec son port publié sur la
 // boucle locale, arrêtée sur un crash, dont le tag a été reconstruit ; et
-// sur la machine openCloud, un Docker absent.
+// sur la machine Kagu, un Docker absent.
 func (ts *testServer) seedContainers(t *testing.T) string {
 	t.Helper()
 	ctx := context.Background()
@@ -238,8 +238,8 @@ func (ts *testServer) seedContainers(t *testing.T) string {
 var (
 	pingToken  = regexp.MustCompile(`hb_[a-z2-7]{26}`)
 	shortID    = regexp.MustCompile(`"(id|machine_id|page_id)":"[0-9a-f]{16}"`)
-	tokenMask  = regexp.MustCompile(`oc[k]?_[a-z2-7]{6}…`)
-	tokenValue = regexp.MustCompile(`oc[k]?_[a-z2-7]{20,}`)
+	tokenMask  = regexp.MustCompile(`kg[k]?_[a-z2-7]{6}…`)
+	tokenValue = regexp.MustCompile(`kg[k]?_[a-z2-7]{20,}`)
 	// Les jours d'une sonde sont rangés sous son identifiant, en clé.
 	probeKey = regexp.MustCompile(`"[0-9a-f]{16}":\[`)
 	// Les identifiants de l'annuaire et des agents sont tirés à chaque
@@ -255,11 +255,11 @@ var (
 func normalize(body string) string {
 	body = pingToken.ReplaceAllString(body, "hb_TOKEN")
 	body = shortID.ReplaceAllString(body, `"$1":"ID"`)
-	body = tokenMask.ReplaceAllString(body, "oc_MASKED…")
+	body = tokenMask.ReplaceAllString(body, "kg_MASKED…")
 	body = probeKey.ReplaceAllString(body, `"ID":[`)
 	body = directoryID.ReplaceAllString(body, `"${1}_ID"`)
 	body = yamlInJSONDirectoryID.ReplaceAllString(body, "${1}_ID")
-	return tokenValue.ReplaceAllString(body, "oc_TOKEN")
+	return tokenValue.ReplaceAllString(body, "kg_TOKEN")
 }
 
 // Chaque lecture de l'API est figée dans testdata/*.golden.json ;
@@ -268,7 +268,7 @@ func TestAPI_ReadsMatchGoldenFiles(t *testing.T) {
 	server := newTestServer(t)
 	server.enroll(t, "vps-paris-1", remoteID)
 	// L'agent de la machine distante vient de signaler : ses conteneurs sont
-	// observés. La machine openCloud, elle, n'a jamais signalé.
+	// observés. La machine Kagu, elle, n'a jamais signalé.
 	server.signaledAt(t, remoteID, testNow)
 	if _, _, err := server.machines.CreateToken(context.Background(), "vps-lyon-2", machine.RoleGeneric, nil); err != nil {
 		t.Fatal(err)
@@ -428,7 +428,7 @@ func TestAPI_Writes_WithoutJSONContentType_AreRefusedEvenWithoutBody(t *testing.
 	}
 }
 
-// Un nom qui pointe soudain sur openCloud (DNS rebinding) arrive avec un
+// Un nom qui pointe soudain sur Kagu (DNS rebinding) arrive avec un
 // Host qui n'est pas le nôtre : refusé sous /api, avec une ligne de journal
 // qui dit quoi régler. Les autres routes ne sont pas concernées.
 func TestHost_UnknownIsRefusedOnTheAPI(t *testing.T) {

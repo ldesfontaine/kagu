@@ -40,7 +40,7 @@ func TestMachine_LostAfterTheDelay_BackOnConnect_GoneOnRemove(t *testing.T) {
 	f := newFixture(t)
 	f.channel(t, "ops", alert.SeverityAttention, true)
 	ctx := context.Background()
-	// La machine openCloud du banc n'a jamais donné signe de vie : sans
+	// La machine Kagu du banc n'a jamais donné signe de vie : sans
 	// agent actif, elle ne se perd pas, et ne compte pas ici.
 	if err := f.machines.Remove(ctx, machine.LocalID, machine.RemoveOptions{KeepHistory: true}); err != nil {
 		t.Fatal(err)
@@ -384,7 +384,7 @@ func TestProbe_CertificateExpiryAndTrustAreTwoAlerts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	untrusted := &probe.Certificate{Subject: "cloud.exemple.fr", Issuer: "openCloud dev", NotBefore: f.clock.Add(-30 * 24 * time.Hour), NotAfter: f.clock.Add(12 * 24 * time.Hour), Fingerprint: strings.Repeat("e", 64), HostnameMatch: true}
+	untrusted := &probe.Certificate{Subject: "cloud.exemple.fr", Issuer: "Kagu dev", NotBefore: f.clock.Add(-30 * 24 * time.Hour), NotAfter: f.clock.Add(12 * 24 * time.Hour), Fingerprint: strings.Repeat("e", 64), HostnameMatch: true}
 	record(untrusted)
 	if f.kinds(t) != "cert_untrusted:attention,cert_expiring:attention" {
 		t.Fatalf("kinds %q", f.kinds(t))

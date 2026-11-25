@@ -105,9 +105,9 @@ func TestRemove_IsHeldBackByItsPlanThenPassesOnceDetached(t *testing.T) {
 	}
 }
 
-// La machine openCloud se retire comme les autres, par son plan : elle
+// La machine Kagu se retire comme les autres, par son plan : elle
 // emporte son agent.
-func TestRemove_TheOpenCloudMachineGoesLikeAnyOther(t *testing.T) {
+func TestRemove_TheKaguMachineGoesLikeAnyOther(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	db := storetest.Open(t)
 	machines := machine.New(db, machine.NewSessions(), logger)

@@ -80,10 +80,10 @@ test("une tâche : un nom, un intervalle, Créer ; la note de l'adresse locale e
   const note = page.locator(".note-neutral", { hasText: label("public_url.example_label") });
   await expect(note).toBeVisible();
   // La forme attendue est un exemple : aucune ligne à copier, donc un seul bouton Copier, celui de la relance.
-  await expect(note.locator(".public-url-example")).toContainText('public_url = "https://opencloud.exemple.fr"');
+  await expect(note.locator(".public-url-example")).toContainText('public_url = "https://kagu.exemple.fr"');
   await expect(note.getByRole("button", { name: label("machine.copy") })).toHaveCount(1);
   await expect(note.locator(".token-box")).toHaveCount(1);
-  await expect(note.locator(".token-box")).toContainText("sudo systemctl restart opencloud.service");
+  await expect(note.locator(".token-box")).toContainText("sudo systemctl restart kagu.service");
   await expect(page.locator(".note-danger")).toHaveCount(0);
   expect(findings.unknown()).toEqual([]);
 });
@@ -97,7 +97,7 @@ test("un canal : où partent les alertes en un écran, lesquelles sous Réglages
   const settings = dialog.locator("details.fold").first();
   await expect(settings.locator(":scope > summary .fold-hint")).toContainText(/dès .+, avec les résolutions/);
   await dialog.locator("#channel-name").fill("salon essai u3");
-  await dialog.locator("#channel-url").fill("https://hooks.exemple.fr/oc");
+  await dialog.locator("#channel-url").fill("https://hooks.exemple.fr/kagu");
   await settings.locator(":scope > summary").click();
   await dialog.getByLabel(label("channel.enabled_label")).uncheck();
   await expect(settings.locator(":scope > summary .fold-hint")).toContainText(label("channel.hint_disabled"));

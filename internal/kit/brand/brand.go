@@ -1,5 +1,7 @@
 package brand
 
+import "strings"
+
 // A. Affichage.
 
 // ProductName est le nom que voit l'opérateur. Renommer le produit
@@ -12,9 +14,8 @@ const ProductName = "Kagu"
 
 // ID est la forme technique du nom : chemins, fichiers, noms d'unités. Le
 // changer déplace tous les chemins ci-dessous ; une installation existante
-// devra migrer son fichier de configuration, sa base et l'état de ses
-// agents.
-const ID = "opencloud"
+// ne se relit pas, elle se réinstalle (aucune double lecture).
+const ID = "kagu"
 
 const (
 	ConfigDir  = "/etc/" + ID
@@ -60,7 +61,7 @@ const (
 	AgentCurrentLink  = "current"
 	AgentBinaryPrefix = ID + "-"
 	// Le binaire que la ligne d'installation et l'unité lancent. Ce n'est pas
-	// /usr/local/bin/opencloud : ce lien, root le lancerait, et le compte de
+	// /usr/local/bin/kagu : ce lien, root le lancerait, et le compte de
 	// l'agent peut remplacer ce qu'il vise.
 	AgentCurrentPath = AgentStateDir + "/" + AgentBinDir + "/" + AgentCurrentLink
 	// Le lien vers le binaire d'avant la dernière bascule : ce à quoi l'agent
@@ -75,11 +76,10 @@ const (
 	AgentGuardBinary     = ID + "-guard"
 	// Le lanceur stable : une copie du binaire posée une fois par root, hors
 	// de bin/, que l'agent ne se met jamais à jour lui-même. L'unité lance
-	// lui, et lui lance bin/current ; il dit à l'agent qu'il est là par cette
-	// variable d'environnement.
+	// lui, et lui lance bin/current ; il dit à l'agent qu'il est là par
+	// AgentGuardEnv.
 	AgentGuardDir  = "/usr/local/lib/" + ID + "-agent"
 	AgentGuardPath = AgentGuardDir + "/" + AgentGuardBinary
-	AgentGuardEnv  = "OPENCLOUD_AGENT_GUARD"
 	// Là où l'agent range ce qu'il produit (backup.produce), dans son état : à
 	// lui, 0700.
 	AgentProduceDir = "produce"
@@ -97,7 +97,7 @@ const (
 	AgentProxmoxFile = "proxmox.json"
 	// Ce que l'opérateur crée dans Proxmox pour ce jeton : un rôle réduit, un
 	// compte qui ne sert qu'à cela, le nom du jeton.
-	ProxmoxRole      = "OpenCloudAgent"
+	ProxmoxRole      = ProductName + "Agent"
 	ProxmoxUser      = ID + "-agent@pve"
 	ProxmoxTokenName = "agent"
 	// Les instantanés que l'agent crée portent ce préfixe : il ne supprime que
@@ -117,9 +117,20 @@ const (
 	MatrixTransactionPrefix = ID + "-"
 )
 
+// EnvPrefix précède les variables d'environnement qui portent le nom : ID en
+// capitales, qu'une constante ne sait pas calculer.
+var EnvPrefix = strings.ToUpper(ID) + "_"
+
+// AgentGuardEnv est la variable par laquelle le lanceur stable dit à l'agent
+// qu'il est là.
+var AgentGuardEnv = EnvPrefix + "AGENT_GUARD"
+
+// repositoryURL est le dépôt publié, qui porte le nom du produit.
+const repositoryURL = "https://github.com/ldesfontaine/" + ID
+
 // Les fichiers d'une version publiée, et le commentaire de sa signature.
 const (
-	ReleaseBaseURL          = "https://github.com/ldesfontaine/kagu/releases/download"
+	ReleaseBaseURL          = repositoryURL + "/releases/download"
 	ReleaseBinaryPrefix     = ID + "-linux-"
 	ReleaseSumsFile         = "SHA256SUMS"
 	ReleaseSignatureFile    = ReleaseSumsFile + ".minisig"
@@ -144,7 +155,7 @@ const OrderSignatureDomain = ID + "-order/v2\x00"
 const LabelPrefix = ID + "."
 
 // InstallDocURL est la page d'installation, que l'unité de l'agent cite.
-const InstallDocURL = "https://github.com/ldesfontaine/kagu/blob/dev/docs/installation.md"
+const InstallDocURL = repositoryURL + "/blob/dev/docs/installation.md"
 
 // AgentUnit est l'unité de l'agent : la page d'un droit qui écrit hors de
 // l'état dit à l'opérateur laquelle compléter (ReadWritePaths).
@@ -163,10 +174,9 @@ const ServerUnit = ID + ".service"
 // pas n'est pas à Kagu, l'agent n'y écrit rien.
 const WorkspaceMarker = "." + ID
 
-// Command est le nom du binaire. Littéral et non dérivé de ID : il suit le
-// Makefile (-o bin/…), qu'un changement de ID ne renomme pas ; le répertoire
-// cmd/kagu ne le nomme pas.
-const Command = "opencloud"
+// Command est le nom du binaire : le Makefile le construit sous ce nom
+// (-o bin/…), qu'il faut changer avec ID.
+const Command = ID
 
 // Les User-Agent envoyés aux services externes. Ils suivent le nom affiché :
 // un tiers qui filtrait sur l'ancien nom voit le nouveau.
@@ -178,11 +188,11 @@ const (
 
 // C. Empreinte du protocole.
 //
-// Littéraux figés, qui ne dérivent ni de ProductName ni de ID. Les changer
-// casse les agents installés, les récepteurs de webhooks et les jetons déjà
-// émis : il faudrait d'abord une transition qui accepte les deux formes.
+// Dérivés du nom comme le reste, sans double lecture : les changer casse les
+// agents installés, les récepteurs de webhooks et les jetons déjà émis. Un
+// changement de nom se fait en réinstallant (décision du 12 novembre).
 const (
-	HeaderPrefix           = "OpenCloud-"
+	HeaderPrefix           = ProductName + "-"
 	WebhookEventHeader     = HeaderPrefix + "Event"
 	WebhookSignatureHeader = HeaderPrefix + "Signature"
 	// L'en-tête où le mandataire d'authentification pose le secret qu'il
@@ -192,31 +202,30 @@ const (
 	// L'étiquette de l'enveloppe v1, que lit un agent du protocole 2 : gardée
 	// pour le seul agent.update qui le met à jour, elle disparaît à la version
 	// suivante.
-	LegacyOrderSignatureDomain = "opencloud-order/v1\x00"
+	LegacyOrderSignatureDomain = ID + "-order/v1\x00"
 	// Précède ce que l'agent signe pour ouvrir son flux (protocole 2) : la
 	// preuve ne vaut pour rien d'autre.
-	AgentProofDomain = "opencloud-agent-proof/v2\x00"
+	AgentProofDomain = ID + "-agent-proof/v2\x00"
 )
 
 // Les préfixes de jetons : reconnaissables dans un journal ou un
 // presse-papier, jamais confondus entre eux (le jeton de ping, hb_, n'est
 // pas une marque et reste dans internal/domain/heartbeat).
 const (
-	TokenPrefix           = "oc"
+	TokenPrefix           = "kg"
 	EnrollmentTokenScheme = TokenPrefix + "_"  // #nosec G101 -- un préfixe, pas un secret.
 	APITokenScheme        = TokenPrefix + "k_" // #nosec G101 -- un préfixe, pas un secret.
 )
 
-// Les cookies de session de l'opérateur (A2, R-A2-3). Le nom porte le produit
-// en minuscules, pas ID : il est neuf, rien d'installé ne le connaît. Le
-// préfixe __Host- oblige le navigateur à ne l'accepter que Secure, sans
-// Domain, sur Path=/ ; le cookie local, sans Secure, sert le tunnel SSH en
-// HTTP sur la boucle locale.
+// Les cookies de session de l'opérateur (A2, R-A2-3). Le préfixe __Host-
+// oblige le navigateur à ne l'accepter que Secure, sans Domain, sur Path=/ ;
+// le cookie local, sans Secure, sert le tunnel SSH en HTTP sur la boucle
+// locale.
 const (
-	SessionCookie      = "__Host-kagu_session"
-	LocalSessionCookie = "kagu_session_local"
+	SessionCookie      = "__Host-" + ID + "_session"
+	LocalSessionCookie = ID + "_session_local"
 )
 
 // Début de l'empreinte de l'identifiant d'une machine, pour reconnaître
 // un agent installé sur la machine du serveur.
-const HostFingerprintPrefix = "opencloud-host:"
+const HostFingerprintPrefix = ID + "-host:"

@@ -8,7 +8,7 @@ import (
 )
 
 // Ce que le composant machine constate : une machine perdue, revenue,
-// retirée. La machine openCloud comme les autres : c'est son agent qui se
+// retirée. La machine Kagu comme les autres : c'est son agent qui se
 // perd.
 
 func (e *Engine) MachineLost(ctx context.Context, lost machine.Machine) {

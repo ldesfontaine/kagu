@@ -63,7 +63,7 @@ func newFixture(t *testing.T) *fixture {
 	f.SetClock(func() time.Time { return f.clock })
 	f.SetSender(f.sender)
 	f.SetWatcher(f.watcher)
-	// La machine openCloud existe toujours : les objets s'y rattachent.
+	// La machine Kagu existe toujours : les objets s'y rattachent.
 	f.machines = machine.New(db, machine.NewSessions(), logger)
 	f.machines.SetClock(func() time.Time { return f.clock })
 	f.machines.SetAlerter(f.Engine)
@@ -88,7 +88,7 @@ func (f *fixture) channel(t *testing.T, name string, minSeverity alert.Severity,
 	return channel
 }
 
-// volumeFact est le fait le plus simple : un volume de la machine openCloud.
+// volumeFact est le fait le plus simple : un volume de la machine Kagu.
 func volumeFact(severity alert.Severity, percent int) alert.Fact {
 	return alert.Fact{
 		Kind: alert.KindDiskFull, Severity: severity,

@@ -105,11 +105,11 @@ func TestOfferLocalEnrollment_LogsThatATokenWaitsButNeverTheToken(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	parts.machines.SetServerHost("sha256:server", "oc-host")
+	parts.machines.SetServerHost("sha256:server", "kg-host")
 	ctx := context.Background()
 	offerLocalEnrollment(ctx, logger, parts)
 	pending, err := parts.machines.PendingTokens(ctx)
-	if err != nil || len(pending) != 1 || pending[0].Name != "oc-host" {
+	if err != nil || len(pending) != 1 || pending[0].Name != "kg-host" {
 		t.Fatalf("pending %+v %v", pending, err)
 	}
 	if !strings.Contains(journal.String(), "enrollment token waiting") || !strings.Contains(journal.String(), "un jeton d'enrôlement attend") {

@@ -81,7 +81,7 @@ func TestImport_CopiesAVerifiedRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if artifact.Name != "opencloud-linux-arm64" || artifact.Path != "releases/v0.0.2/opencloud-linux-arm64" ||
+	if artifact.Name != "kagu-linux-arm64" || artifact.Path != "releases/v0.0.2/kagu-linux-arm64" ||
 		artifact.SumsPath != "releases/v0.0.2/SHA256SUMS" || artifact.SignaturePath != "releases/v0.0.2/SHA256SUMS.minisig" ||
 		artifact.Size != int64(len("an arm64 binary")) || artifact.Version != (Version{0, 0, 2}) {
 		t.Fatalf("artifact %+v", artifact)
@@ -131,14 +131,14 @@ func TestImport_TwiceIsHarmless_ButADifferentFileIsRefused(t *testing.T) {
 	if _, err := library.Import(fixture.dir); err != nil {
 		t.Fatal(err)
 	}
-	before, err := library.root.Stat("releases/v0.0.2/opencloud-linux-amd64")
+	before, err := library.root.Stat("releases/v0.0.2/kagu-linux-amd64")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := library.Import(fixture.dir); err != nil {
 		t.Fatalf("second import: %v", err)
 	}
-	after, err := library.root.Stat("releases/v0.0.2/opencloud-linux-amd64")
+	after, err := library.root.Stat("releases/v0.0.2/kagu-linux-amd64")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestArtifact_ReverifiesAfterImport(t *testing.T) {
 	if _, err := library.Import(fixture.dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := library.root.WriteFile("releases/v0.0.2/opencloud-linux-amd64", []byte("an amd64 binarY"), 0o640); err != nil {
+	if err := library.root.WriteFile("releases/v0.0.2/kagu-linux-amd64", []byte("an amd64 binarY"), 0o640); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := library.Artifact(Version{0, 0, 2}, "amd64"); !errors.Is(err, ErrDigestMismatch) {

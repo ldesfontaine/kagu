@@ -206,7 +206,7 @@ const (
 	ReasonRolledBackCrash   = "rolled_back_crash"
 	ReasonRollbackFailed    = "rollback_failed"
 	// Les raisons d'un déploiement : le dossier du service existe déjà ou
-	// manque ; la racine existe sans être à openCloud ; Docker ou Compose
+	// manque ; la racine existe sans être à Kagu ; Docker ou Compose
 	// manque ou est trop ancien ; le disque est plein ; Compose a échoué.
 	ReasonServiceDirExists  = "service_dir_exists"
 	ReasonServiceDirMissing = "service_dir_missing"

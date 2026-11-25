@@ -42,7 +42,7 @@ func (r *refusal) Error() string {
 	return r.message
 }
 
-// opencloud agent : le premier lancement porte -server, reçoit le jeton sur
+// kagu agent : le premier lancement porte -server, reçoit le jeton sur
 // l'entrée standard et s'enrôle ; les suivants relisent l'identité et se
 // connectent. -enroll-only s'arrête à l'identité, écrite ou déjà là.
 func runAgent(args []string) error {

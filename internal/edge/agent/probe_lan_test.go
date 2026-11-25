@@ -46,7 +46,7 @@ func probeOnLoopback(t *testing.T, rights string, narrowed bool) probe.Probe {
 
 	restarted := b.options("")
 	if narrowed {
-		restarted.UnsafeState = &UnsafeStateError{Path: "/var/lib/opencloud", UID: 999, Mode: dir0755}
+		restarted.UnsafeState = &UnsafeStateError{Path: "/var/lib/kagu", UID: 999, Mode: dir0755}
 	}
 	ctx, cancel = context.WithCancel(context.Background())
 	defer func() {

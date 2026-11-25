@@ -152,7 +152,7 @@ func TestR_A3_8_GrantLaysTheSystemPrerequisites(t *testing.T) {
 		"folder /srv/workspace 0755 " + owner,
 		"write droits.conf [Service]|ReadWritePaths=-/srv/workspace|",
 		"systemctl daemon-reload",
-		"systemctl try-restart opencloud-agent.service",
+		"systemctl try-restart kagu-agent.service",
 	}
 	if done := b.system.take(); !slices.Equal(done, want) {
 		t.Fatalf("laid %q\nwant %q", done, want)
@@ -194,7 +194,7 @@ func TestR_A3_8_GrantLaysTheSystemPrerequisites(t *testing.T) {
 		"runuser -u " + account + " -- install -d -m 0755 /srv/workspace/static",
 		"write droits.conf [Service]|ReadWritePaths=-/srv/workspace -/opt/site -/srv/workspace/static -/srv/restic|",
 		"systemctl daemon-reload",
-		"systemctl try-restart opencloud-agent.service",
+		"systemctl try-restart kagu-agent.service",
 	}
 	if done := b.system.take(); !slices.Equal(done, want) {
 		t.Fatalf("laid %q\nwant %q", done, want)
@@ -305,13 +305,13 @@ func TestR_A3_8_RevokeUndoesWhatNoLongerServes(t *testing.T) {
 	if _, err := RevokeRights(b.opts, []string{agentpolicy.CapabilityDockerUpdate, agentpolicy.CapabilityResticDocker}, accept); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"gpasswd -d " + account + " docker", "systemctl daemon-reload", "systemctl try-restart opencloud-agent.service"}
+	want := []string{"gpasswd -d " + account + " docker", "systemctl daemon-reload", "systemctl try-restart kagu-agent.service"}
 	if done := b.system.take(); !slices.Equal(done, want) {
 		t.Fatalf("revoke undid %q\nwant %q", done, want)
 	}
 	// --set observe retire files.write : plus rien ne s'écrit ailleurs.
 	b.grantSet(t, agentpolicy.SetObserve)
-	want = []string{"remove droits.conf", "systemctl daemon-reload", "systemctl try-restart opencloud-agent.service"}
+	want = []string{"remove droits.conf", "systemctl daemon-reload", "systemctl try-restart kagu-agent.service"}
 	if done := b.system.take(); !slices.Equal(done, want) {
 		t.Fatalf("set observe undid %q\nwant %q", done, want)
 	}

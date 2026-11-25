@@ -151,7 +151,7 @@ func (s blockingStatsSink) Deliver(report container.Report) {
 }
 
 // Run ne rend la main qu'une fois la mesure en cours finie : la machine
-// openCloud ferme sa base après lui.
+// Kagu ferme sa base après lui.
 func TestRun_WaitsForTheStatsInFlight(t *testing.T) {
 	daemon := newDaemon(t, true)
 	sink := blockingStatsSink{recordingSink: newSink(), delivering: make(chan struct{}, 1), release: make(chan struct{})}

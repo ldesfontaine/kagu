@@ -101,7 +101,7 @@ func TestRun_ShowsAnUnavailableRightButStillSendsTheOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.machines.Disconnect(b.session)
-	b.session, err = b.machines.Connect(context.Background(), enrolled.Machine, "192.0.2.1", "v0.0.1", rights, "998:opencloud-agent", "backup.receive=path_denied", "")
+	b.session, err = b.machines.Connect(context.Background(), enrolled.Machine, "192.0.2.1", "v0.0.1", rights, "998:kagu-agent", "backup.receive=path_denied", "")
 	if err != nil {
 		t.Fatal(err)
 	}

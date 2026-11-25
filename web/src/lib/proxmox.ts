@@ -206,7 +206,7 @@ export function proxmoxDefinitionOf(values: ProxmoxFormValues): { api_url: strin
   return { api_url: values.apiURL.trim(), token_id: values.tokenID.trim(), token_secret: values.tokenSecret, pin: values.pin.trim() };
 }
 
-// L'identifiant de la machine openCloud elle-même (machine.LocalID côté Go).
+// L'identifiant de la machine Kagu elle-même (machine.LocalID côté Go).
 const localMachineID = "local";
 
 // Pourquoi un geste ne peut pas partir : il reste au menu, grisé, avec sa raison.
@@ -256,7 +256,7 @@ export function gestureRight(verb: GuestVerb): string {
 }
 
 function gestureBlock(verb: GuestVerb, guest: ProxmoxGuest, host: GestureHost): GestureBlock | null {
-  // La VM qui héberge openCloud ne s'arrête jamais d'ici : le serveur le refuse aussi.
+  // La VM qui héberge Kagu ne s'arrête jamais d'ici : le serveur le refuse aussi.
   if (verb === "shutdown" && guest.linked_machine_id === localMachineID) {
     return { kind: "self" };
   }

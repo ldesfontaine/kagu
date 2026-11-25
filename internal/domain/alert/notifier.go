@@ -89,7 +89,7 @@ func NewNotifier(store DeliveryStore, catalogs lang.Catalogs, language func() la
 	}
 }
 
-// SetPublicURL donne l'adresse sous laquelle on lit openCloud : chaque
+// SetPublicURL donne l'adresse sous laquelle on lit Kagu : chaque
 // envoi porte alors le lien vers la fiche de son alerte.
 func (n *Notifier) SetPublicURL(publicURL string) {
 	n.publicURL = publicURL
@@ -310,7 +310,7 @@ func sign(secret string, body []byte) string {
 }
 
 // Verify dit si une signature correspond au corps ; sert aux tests et à
-// quiconque reçoit d'openCloud.
+// quiconque reçoit de Kagu.
 func Verify(secret string, body []byte, signature string) bool {
 	return hmac.Equal([]byte("sha256="+sign(secret, body)), []byte(signature))
 }

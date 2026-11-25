@@ -162,7 +162,7 @@ func newDaemon(t *testing.T, hold bool) *daemon {
 
 func serve(t *testing.T, handler http.Handler) *dockerapi.Client {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "oc")
+	dir, err := os.MkdirTemp("/tmp", "kg")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func newWatcher(client *dockerapi.Client, sink Sink) *Watcher {
 // pas ». Attendre plus longtemps ne peut que laisser passer plus de sondes.
 func TestRun_WithoutDocker_ReportsTheAbsenceOnce(t *testing.T) {
 	sink := newSink()
-	watcher := newWatcher(dockerapi.New("/tmp/none-oc.sock"), sink)
+	watcher := newWatcher(dockerapi.New("/tmp/none-kg.sock"), sink)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	stopped := make(chan struct{})

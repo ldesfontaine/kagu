@@ -79,19 +79,19 @@ const (
 // safeChain est la disposition voulue : tout à root, l'état en 0700.
 func safeChain() map[string]node {
 	return map[string]node{
-		"/":                        {0, dir0755, ""},
-		"/var":                     {0, dir0755, ""},
-		"/var/lib":                 {0, dir0755, ""},
-		"/var/lib/opencloud-agent": {0, dir0700, ""},
-		"/var/lib/opencloud":       {999, dir0755, ""},
-		"/var/lib/opencloud/agent": {0, dir0700, ""},
-		"/tmp":                     {0, fs.ModeDir | fs.ModeSticky | 0o777, ""},
-		"/tmp/state":               {1000, dir0700, ""},
-		"/home":                    {0, dir0755, ""},
-		"/home/agent":              {1000, dir0755, ""},
-		"/home/agent/state":        {1000, dir0700, ""},
-		"/srv":                     {0, dir0755, ""},
-		"/srv/state":               {0, dir0700, ""},
+		"/":                   {0, dir0755, ""},
+		"/var":                {0, dir0755, ""},
+		"/var/lib":            {0, dir0755, ""},
+		"/var/lib/kagu-agent": {0, dir0700, ""},
+		"/var/lib/kagu":       {999, dir0755, ""},
+		"/var/lib/kagu/agent": {0, dir0700, ""},
+		"/tmp":                {0, fs.ModeDir | fs.ModeSticky | 0o777, ""},
+		"/tmp/state":          {1000, dir0700, ""},
+		"/home":               {0, dir0755, ""},
+		"/home/agent":         {1000, dir0755, ""},
+		"/home/agent/state":   {1000, dir0700, ""},
+		"/srv":                {0, dir0755, ""},
+		"/srv/state":          {0, dir0700, ""},
 	}
 }
 
@@ -115,15 +115,15 @@ func requireSafe(t *testing.T, path string, chain map[string]node, euid uint32, 
 }
 
 func TestCheckChain_RootOwnedStateUnderRootDirsIsAccepted(t *testing.T) {
-	requireSafe(t, "/var/lib/opencloud-agent", safeChain(), 0, "/var/lib/opencloud-agent")
+	requireSafe(t, "/var/lib/kagu-agent", safeChain(), 0, "/var/lib/kagu-agent")
 }
 
 // Le cas qui a fait le chantier : l'état est à root, mais le dossier du
 // serveur au-dessus appartient à son compte, qui peut y renommer un dossier.
 func TestCheckChain_ParentOwnedByAnotherAccountIsRefusedAndNamed(t *testing.T) {
-	_, err := check("/var/lib/opencloud/agent", safeChain(), 0)
-	requireUnsafe(t, err, "/var/lib/opencloud", 999)
-	if message := err.Error(); !strings.Contains(message, "/var/lib/opencloud is owned by uid 999") {
+	_, err := check("/var/lib/kagu/agent", safeChain(), 0)
+	requireUnsafe(t, err, "/var/lib/kagu", 999)
+	if message := err.Error(); !strings.Contains(message, "/var/lib/kagu is owned by uid 999") {
 		t.Fatalf("message %q", message)
 	}
 }
@@ -137,7 +137,7 @@ func TestCheckChain_ParentWritableByGroupOrOthersIsRefused(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			chain := safeChain()
 			chain["/var/lib"] = node{0, mode, ""}
-			_, err := check("/var/lib/opencloud-agent", chain, 0)
+			_, err := check("/var/lib/kagu-agent", chain, 0)
 			requireUnsafe(t, err, "/var/lib", 0)
 		})
 	}
@@ -175,15 +175,15 @@ func TestCheckChain_StateOwnedByTheAgentAccountUnderRootDirsIsAccepted(t *testin
 
 func TestCheckChain_StateDirWithGroupAccessIsRefused(t *testing.T) {
 	chain := safeChain()
-	chain["/var/lib/opencloud-agent"] = node{0, fs.ModeDir | 0o770, ""}
-	_, err := check("/var/lib/opencloud-agent", chain, 0)
-	requireUnsafe(t, err, "/var/lib/opencloud-agent", 0)
+	chain["/var/lib/kagu-agent"] = node{0, fs.ModeDir | 0o770, ""}
+	_, err := check("/var/lib/kagu-agent", chain, 0)
+	requireUnsafe(t, err, "/var/lib/kagu-agent", 0)
 }
 
 func TestCheckChain_StatFailureOnAParentIsARefusal(t *testing.T) {
 	chain := safeChain()
 	delete(chain, "/var/lib")
-	_, err := check("/var/lib/opencloud-agent", chain, 0)
+	_, err := check("/var/lib/kagu-agent", chain, 0)
 	var unsafe *UnsafeStateError
 	if err == nil || errors.As(err, &unsafe) || !strings.Contains(err.Error(), "/var/lib") {
 		t.Fatalf("got %v", err)
@@ -191,36 +191,36 @@ func TestCheckChain_StatFailureOnAParentIsARefusal(t *testing.T) {
 }
 
 func TestCheckChain_RelativePathIsRefused(t *testing.T) {
-	for _, path := range []string{"var/lib/opencloud-agent", "./state", ""} {
+	for _, path := range []string{"var/lib/kagu-agent", "./state", ""} {
 		if _, err := check(path, safeChain(), 0); err == nil {
 			t.Fatalf("%q accepted", path)
 		}
 	}
 	// Un chemin absolu mais pas propre se suit comme le noyau le suit.
-	requireSafe(t, "/var/./lib//opencloud-agent/", safeChain(), 0, "/var/lib/opencloud-agent")
+	requireSafe(t, "/var/./lib//kagu-agent/", safeChain(), 0, "/var/lib/kagu-agent")
 }
 
 // Un lien symbolique a toujours le mode 0777 : seul son propriétaire compte,
 // sa cible est suivie et jugée.
 func TestCheckChain_SymlinkIsJudgedByItsOwnerAndFollowed(t *testing.T) {
 	chain := safeChain()
-	chain["/var/lib/opencloud-agent"] = node{0, link, "/srv/state"}
-	requireSafe(t, "/var/lib/opencloud-agent", chain, 0, "/srv/state")
-	chain["/var/lib/opencloud-agent"] = node{999, link, "/srv/state"}
-	_, err := check("/var/lib/opencloud-agent", chain, 0)
-	requireUnsafe(t, err, "/var/lib/opencloud-agent", 999)
+	chain["/var/lib/kagu-agent"] = node{0, link, "/srv/state"}
+	requireSafe(t, "/var/lib/kagu-agent", chain, 0, "/srv/state")
+	chain["/var/lib/kagu-agent"] = node{999, link, "/srv/state"}
+	_, err := check("/var/lib/kagu-agent", chain, 0)
+	requireUnsafe(t, err, "/var/lib/kagu-agent", 999)
 	// Un lien relatif part du dossier qui le contient.
-	chain["/var/lib/opencloud-agent"] = node{0, link, "../../srv/state"}
-	requireSafe(t, "/var/lib/opencloud-agent", chain, 0, "/srv/state")
+	chain["/var/lib/kagu-agent"] = node{0, link, "../../srv/state"}
+	requireSafe(t, "/var/lib/kagu-agent", chain, 0, "/srv/state")
 }
 
 // Un lien sûr vers un état rangé sous le dossier d'un autre compte : le
 // chemin donné est irréprochable, pas la cible.
 func TestCheckChain_TargetUnderAnotherAccountIsRefused(t *testing.T) {
 	chain := safeChain()
-	chain["/var/lib/opencloud-agent"] = node{0, link, "/var/lib/opencloud/agent"}
-	_, err := check("/var/lib/opencloud-agent", chain, 0)
-	requireUnsafe(t, err, "/var/lib/opencloud", 999)
+	chain["/var/lib/kagu-agent"] = node{0, link, "/var/lib/kagu/agent"}
+	_, err := check("/var/lib/kagu-agent", chain, 0)
+	requireUnsafe(t, err, "/var/lib/kagu", 999)
 }
 
 // Le trou d'un jugement « chemin donné + chemin résolu » : un dossier qu'on
@@ -228,20 +228,20 @@ func TestCheckChain_TargetUnderAnotherAccountIsRefused(t *testing.T) {
 // second ; aujourd'hui vers un état sûr, demain vers le sien.
 func TestCheckChain_DirCrossedBetweenTwoLinksIsJudged(t *testing.T) {
 	chain := safeChain()
-	chain["/var/lib/opencloud-agent"] = node{0, link, "/var/lib/opencloud/hop/state"}
-	chain["/var/lib/opencloud/hop"] = node{999, link, "/srv"}
-	_, err := check("/var/lib/opencloud-agent", chain, 0)
-	requireUnsafe(t, err, "/var/lib/opencloud", 999)
+	chain["/var/lib/kagu-agent"] = node{0, link, "/var/lib/kagu/hop/state"}
+	chain["/var/lib/kagu/hop"] = node{999, link, "/srv"}
+	_, err := check("/var/lib/kagu-agent", chain, 0)
+	requireUnsafe(t, err, "/var/lib/kagu", 999)
 }
 
 // « .. » après un lien remonte depuis sa cible, comme le noyau ; un
 // nettoyage à la lettre jugerait un autre dossier que celui ouvert.
 func TestCheckChain_DotDotAfterALinkClimbsFromItsTarget(t *testing.T) {
 	chain := safeChain()
-	chain["/var/lib/up"] = node{0, link, "/var/lib/opencloud/agent"}
+	chain["/var/lib/up"] = node{0, link, "/var/lib/kagu/agent"}
 	chain["/var/lib/agent"] = node{0, dir0700, ""}
 	_, err := check("/var/lib/up/../agent", chain, 0)
-	requireUnsafe(t, err, "/var/lib/opencloud", 999)
+	requireUnsafe(t, err, "/var/lib/kagu", 999)
 }
 
 func TestCheckChain_LinkLoopIsARefusal(t *testing.T) {
@@ -455,7 +455,7 @@ func TestRun_UnsafeStateKeepsObserveOnly(t *testing.T) {
 	// Redémarré sur le même état, que la commande a jugé mal gardé.
 	var logs lockedBuffer
 	narrowed := b.options("")
-	narrowed.UnsafeState = &UnsafeStateError{Path: "/var/lib/opencloud", UID: 999, Mode: dir0755}
+	narrowed.UnsafeState = &UnsafeStateError{Path: "/var/lib/kagu", UID: 999, Mode: dir0755}
 	narrowed.Logger = slog.New(slog.NewTextHandler(&logs, nil))
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
@@ -466,7 +466,7 @@ func TestRun_UnsafeStateKeepsObserveOnly(t *testing.T) {
 	if agentpolicy.FormatCapabilities(reported.Agent.Capabilities) != "observe" || !reported.Agent.CapabilitiesDiffer() {
 		t.Fatalf("reported %+v", reported.Agent)
 	}
-	if !strings.Contains(logs.String(), "state dir is not safe, writing rights are off") || !strings.Contains(logs.String(), "/var/lib/opencloud is owned by uid 999") {
+	if !strings.Contains(logs.String(), "state dir is not safe, writing rights are off") || !strings.Contains(logs.String(), "/var/lib/kagu is owned by uid 999") {
 		t.Fatalf("journal %q", logs.String())
 	}
 	// Le serveur, qui sait le droit absent, ne pousse pas l'ordre.

@@ -8,7 +8,7 @@ import { expect, test } from "./support/findings";
 // vérifié par pi ; celui de pve-nord → pi (vaultwarden, créé il y a vingt-trois
 // jours) n'a jamais été testé ; agenda n'a pas réussi depuis quatre jours ;
 // calendrier est gardé par stockage, qui n'a pas le droit restic.verify. Les services
-// sans plan (photos, carnet, la base d'openCloud) sont des sources sans plan.
+// sans plan (photos, carnet, la base de Kagu) sont des sources sans plan.
 // Chaque bouton est cliqué, chaque menu ouvert, chaque lien suivi. Les tests se
 // suivent : ils partagent le serveur.
 
@@ -56,7 +56,7 @@ test("la surveillance : chaque alerte de sauvegarde se lit sur la page, avec son
   await expect(restore).toHaveCount(2);
   await expect(restore.filter({ hasText: "pve-nord → pi" })).toContainText(label("alert.action_restore_test_stale"));
   await expect(restore.filter({ hasText: "docker1 → stockage" })).toContainText(label("alert.action_restore_test_stale_right"));
-  // Source sans plan : photos, carnet et la base d'openCloud au moins.
+  // Source sans plan : photos, carnet et la base de Kagu au moins.
   const unprotected = row(label("alert.fact_source_unprotected"));
   expect(await unprotected.count()).toBeGreaterThanOrEqual(3);
   await expect(unprotected.filter({ hasText: "photos" })).toHaveCount(1);

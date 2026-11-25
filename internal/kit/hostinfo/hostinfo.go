@@ -58,7 +58,7 @@ func HostFingerprint() string {
 
 // readHostFingerprint lit le premier identifiant de machine présent et
 // l'identifiant de démarrage, et rend l'empreinte des deux ; s'il en manque
-// un, rien : mieux vaut ne pas reconnaître la machine openCloud que prendre
+// un, rien : mieux vaut ne pas reconnaître la machine Kagu que prendre
 // une autre machine pour elle.
 func readHostFingerprint(machineIDPaths []string, bootIDPath string) string {
 	machineID := readFirstIdentifier(machineIDPaths)

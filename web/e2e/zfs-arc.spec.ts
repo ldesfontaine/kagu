@@ -3,7 +3,7 @@ import { expect, test } from "./support/findings";
 
 // La tuile mémoire d'une fiche de machine et le cache ZFS, sur les données
 // fictives : pve-ancres est un Pi en ZFS (1,2 Go utilisés, 9,2 Gio d'ARC à
-// part), la machine openCloud n'a pas ZFS (ni ligne de cache), pve-illisible
+// part), la machine Kagu n'a pas ZFS (ni ligne de cache), pve-illisible
 // n'a aucune mesure (vide), et la lecture qui échoue est un autre état.
 
 const zfsMachine = "aaaaaaaa-1111-4222-8333-444444444444";

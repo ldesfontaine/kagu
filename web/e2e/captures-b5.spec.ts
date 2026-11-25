@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { label } from "./support/catalog";
 
 // Les captures de B5 (docs/projet/refonte-ux/captures/B5-*.png) : la page
-// Sauvegardes (cartes, la base d'openCloud en ligne de plus), la matrice avec
+// Sauvegardes (cartes, la base de Kagu en ligne de plus), la matrice avec
 // son inspecteur, l'explorateur de fichiers ouvert sur un instantané, son refus
 // de droit, le menu « … » d'une carte, la tuile de la vue d'ensemble et
 // l'enrôlement avec le droit restic.browse. Données fictives seulement. Hors

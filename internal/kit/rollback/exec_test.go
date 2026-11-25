@@ -27,8 +27,8 @@ func script(t *testing.T, body string) string {
 
 func TestExecLauncher_PassesTheExitCodeAndTheGuardEnvironment(t *testing.T) {
 	witness := filepath.Join(t.TempDir(), "env")
-	path := script(t, `printf '%s' "$OPENCLOUD_AGENT_GUARD" > `+witness+`; exit 3`)
-	child, err := ExecLauncher(path, nil, []string{"OPENCLOUD_AGENT_GUARD=1"})
+	path := script(t, `printf '%s' "$KAGU_AGENT_GUARD" > `+witness+`; exit 3`)
+	child, err := ExecLauncher(path, nil, []string{"KAGU_AGENT_GUARD=1"})
 	if err != nil {
 		t.Fatal(err)
 	}

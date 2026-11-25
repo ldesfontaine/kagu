@@ -343,7 +343,7 @@ func (p *agentPass) walk(ctx context.Context, first *targetRun) action.Run {
 
 // finish attend l'archive de la cible, la remet à la destination, attend qu'elle
 // l'ait écrite, puis jette le colis : un seul vit à la fois sur la machine
-// openCloud, quelle que soit la taille des machines virtuelles. Il rend l'ordre
+// Kagu, quelle que soit la taille des machines virtuelles. Il rend l'ordre
 // de réception.
 func (p *agentPass) finish(ctx context.Context, current *targetRun) (action.Run, error) {
 	defer current.upload.Discard()
@@ -382,7 +382,7 @@ func (p *agentPass) finish(ctx context.Context, current *targetRun) (action.Run,
 // holdsOnlyTheTarget dit si le colis porte exactement ce que la cible livre :
 // une archive de son préfixe, et la clé scellée que le serveur y a déposée.
 // La source téléverse les noms qu'elle veut : un agent compromis glisserait
-// « opencloud-2099… » ou l'archive d'une autre machine virtuelle, que la
+// « kagu-2099… » ou l'archive d'une autre machine virtuelle, que la
 // destination écrirait, et l'élagage de ces préfixes chasserait alors les
 // vraies sauvegardes. Un colis qui porte autre chose ne part pas.
 func holdsOnlyTheTarget(files []agentwire.ParcelFile, prefix, keyName string) bool {

@@ -22,7 +22,7 @@ const readings: Reading[] = ["keys", "machines"];
 // L'onglet « Accès SSH » de Machines : qui peut se connecter à quoi. Deux
 // lectures des mêmes relevés, par clé (où entre-t-elle ?) et par machine (qui
 // entre chez elle ?). Lecture seule : retirer une clé reste un geste sur la
-// machine, hors d'openCloud.
+// machine, hors de Kagu.
 export function SSHAccess() {
   const t = useT();
   const matrix = useSSHKeyMatrix();

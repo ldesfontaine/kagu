@@ -91,7 +91,7 @@ function KeyringDialog({ replacing }: { replacing: boolean }) {
 }
 
 // Après la création : noter la phrase de passe maintenant. Sans elle, aucune
-// archive ne se relit, et openCloud ne la garde pas.
+// archive ne se relit, et Kagu ne la garde pas.
 function KeyringCreated({ keyring, onClose }: { keyring: BackupKeyring; onClose: () => void }) {
   const t = useT();
   return (

@@ -163,7 +163,7 @@ func TestMute_PlannedWindowWaitsForItsStart(t *testing.T) {
 		Target:   alert.Target{Kind: alert.TargetMachine, ID: machine.LocalID},
 		StartsAt: f.clock.Add(time.Hour), Duration: time.Hour,
 	})
-	if planned.Target.Name != "opencloud" || !planned.StartsAt.Equal(f.clock.Add(time.Hour)) {
+	if planned.Target.Name != "kagu" || !planned.StartsAt.Equal(f.clock.Add(time.Hour)) {
 		t.Fatalf("planned %+v", planned)
 	}
 	f.Open(ctx, volumeFact(alert.SeverityAttention, 86))
@@ -190,7 +190,7 @@ func TestMute_DoesNotTakeTheMachineShare(t *testing.T) {
 	f.advance(2 * time.Minute)
 	f.Open(ctx, alert.Fact{
 		Kind: alert.KindMachineLost, Severity: alert.SeverityDanger,
-		Object: alert.Object{Kind: alert.ObjectMachine, ID: machine.LocalID, Name: "opencloud"}, MachineID: machine.LocalID,
+		Object: alert.Object{Kind: alert.ObjectMachine, ID: machine.LocalID, Name: "kagu"}, MachineID: machine.LocalID,
 	})
 	if f.sender.events() != "opened:ops" {
 		t.Fatalf("events %q", f.sender.events())

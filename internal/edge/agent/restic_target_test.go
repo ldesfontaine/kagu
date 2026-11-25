@@ -40,8 +40,8 @@ const (
 // Les variables qui font du binaire de test un faux rest-server (voir
 // TestFakeRestServerProcess) : les deux fifos de la poignée de main.
 const (
-	fakeReadyEnv = "OPENCLOUD_FAKE_REST_READY"
-	fakeHupEnv   = "OPENCLOUD_FAKE_REST_HUP"
+	fakeReadyEnv = "KAGU_FAKE_REST_READY"
+	fakeHupEnv   = "KAGU_FAKE_REST_HUP"
 )
 
 // fakeRestServer écrit un faux rest-server : il dit sa version, et sinon

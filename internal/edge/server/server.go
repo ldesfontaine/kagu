@@ -561,7 +561,7 @@ type Options struct {
 	// PublicLive est le bus des visiteurs de la page de statut : à part,
 	// pour que leurs connexions ne comptent pas parmi les onglets.
 	PublicLive Live
-	// Adresse publique d'openCloud pour la commande d'installation ; vide :
+	// Adresse publique de Kagu pour la commande d'installation ; vide :
 	// déduite de la requête.
 	PublicURL      string
 	TrustedProxies []netip.Prefix

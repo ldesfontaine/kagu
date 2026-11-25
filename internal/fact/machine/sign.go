@@ -49,7 +49,7 @@ func NewNonce() []byte {
 // (protocole 2) et que le serveur vérifie : l'étiquette de domaine, l'aléa
 // tiré par l'agent, l'identifiant de la machine précédé de sa longueur,
 // l'horodatage big-endian. Les deux côtés passent par cette fonction, jamais
-// par une copie. L'identifiant est pris tel quel : la machine openCloud
+// par une copie. L'identifiant est pris tel quel : la machine Kagu
 // (« local ») signe comme les autres.
 func SignedPayload(nonce []byte, machineID string, timestamp int64) ([]byte, error) {
 	if len(nonce) != NonceSize {
@@ -92,7 +92,7 @@ func idBytes(machineID string) ([]byte, error) {
 }
 
 // ValidateID juge l'identifiant que l'agent a tiré. « local » n'y passe pas :
-// l'agent de la machine openCloud envoie aussi le sien, le serveur pose
+// l'agent de la machine Kagu envoie aussi le sien, le serveur pose
 // LocalID après (machineIDFor).
 func ValidateID(machineID string) error {
 	_, err := idBytes(machineID)

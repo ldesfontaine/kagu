@@ -22,10 +22,10 @@ import (
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
-// Le contrat avec mcp-maison (main @ 0b55aac, src/tools/opencloud) : ses
+// Le contrat avec mcp-maison (main @ 0b55aac, src/tools/kagu) : ses
 // appels, rejoués tels qu'il les fait (client.ts : Authorization: Bearer,
 // Accept: application/json, ses deux en-têtes d'identité, le Host de
-// OPENCLOUD_URL), et les champs que tools.ts, api-types.ts et shape.ts lisent
+// KAGU_URL), et les champs que tools.ts, api-types.ts et shape.ts lisent
 // dans chaque réponse : les routes sont /api/session, /api/counts, machines,
 // conteneurs (et leurs journaux), l'annuaire (services, écarts, export), les
 // tâches, les sondes, le statut (pages, composants, incidents), les alertes,
@@ -198,7 +198,7 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 		return out
 	}
 
-	// opencloud_overview : { version, ...counts }. La version vient de
+	// kagu_overview : { version, ...counts }. La version vient de
 	// /api/session ; un compteur nommé « version » l'écraserait.
 	session := read("/api/session", nil)
 	check("session", session, "version")
@@ -210,7 +210,7 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 		t.Errorf("counts: %v, un objet de compteurs sans « version » attendu", counts)
 	}
 
-	// opencloud_machines : liste, fiche, réseau.
+	// kagu_machines : liste, fiche, réseau.
 	machines := read("/api/machines", nil)
 	requireNonEmpty(t, "machines", machines, "machines")
 	check("machines", machines, prefixed("machines[].", machineFields)...)
@@ -222,7 +222,7 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 		"containers[].id", "containers[].name", "containers[].state", "containers[].ports", "containers[].exposure",
 		"groups[].name", "groups[].internal", "groups[].members[]", "edges[].from", "edges[].to", "edges[].kind")
 
-	// opencloud_containers : liste, fiche.
+	// kagu_containers : liste, fiche.
 	containers := read("/api/containers", nil)
 	requireNonEmpty(t, "containers", containers, "containers")
 	check("containers", containers, prefixed("containers[].", containerRow)...)
@@ -233,7 +233,7 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 	check("container", detail, "engine?.version", "engine?.present", "directory?.declared", "directory?.service_name", "directory?.unit_name",
 		"transitions[].at", "transitions[].action", "transitions[].new_state", "transitions[].new_health", "transitions[].exit_code")
 
-	// opencloud_container_logs : un tirage unique, que l'agent sert.
+	// kagu_container_logs : un tirage unique, que l'agent sert.
 	t.Run("logs", func(t *testing.T) {
 		resp, session, agentStream, cancel := openStream(t, server, enrolled.ID, private)
 		defer resp.Body.Close()
@@ -267,7 +267,7 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 		check("logs", logs, "lines[].at", "lines[].stream", "lines[].text")
 	})
 
-	// opencloud_directory : la liste, et l'export lu par getText malgré
+	// kagu_directory : la liste, et l'export lu par getText malgré
 	// Accept: application/json.
 	services := read("/api/directory/services", nil)
 	requireNonEmpty(t, "services", services, "services")
@@ -295,7 +295,7 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 		t.Fatalf("export is not the YAML file: %v\n%s", err, exported.Body.String())
 	}
 
-	// opencloud_jobs : liste, fiche (sans ping_url ni snippets).
+	// kagu_jobs : liste, fiche (sans ping_url ni snippets).
 	jobs := read("/api/jobs", nil)
 	requireNonEmpty(t, "jobs", jobs, "jobs")
 	check("jobs", jobs, prefixed("jobs[].", jobFields)...)
@@ -303,7 +303,7 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 		"runs[].started_at", "runs[].duration_ms", "runs[].exit_code", "runs[].outcome",
 		"pings[].kind", "pings[].received_at", "pings[].exit_code")...)
 
-	// opencloud_probes : liste avec ses jours, fiche avec ses fenêtres.
+	// kagu_probes : liste avec ses jours, fiche avec ses fenêtres.
 	probes := read("/api/probes", nil)
 	requireNonEmpty(t, "probes", probes, "probes")
 	check("probes", probes, append(prefixed("probes[].", probeFields), "days{}")...)
@@ -319,11 +319,11 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 		"probe.certificate?", "uptime[].window", "uptime[].total", "uptime[].success",
 		"results[].checked_at", "results[].outcome", "results[].duration_ms", "results[].code", "results[].reason")...)
 
-	// opencloud_status : incidents d'une page, fiche et composants, liste.
+	// kagu_status : incidents d'une page, fiche et composants, liste.
 	// Un incident dont la cible n'est dans aucun composant a des composants
 	// vides : un tableau, jamais null (shapeIncidents les parcourt).
 	if _, err := server.status.OpenIncident(context.Background(), status.IncidentDefinition{
-		Title: "Disque de la machine openCloud", Impact: status.ImpactDegraded, Status: status.StatusInvestigating,
+		Title: "Disque de la machine Kagu", Impact: status.ImpactDegraded, Status: status.StatusInvestigating,
 		Targets: []status.MemberRef{{Kind: status.KindMachine, ID: machine.LocalID}},
 	}); err != nil {
 		t.Fatal(err)
@@ -358,7 +358,7 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 	requireNonEmpty(t, "projects", projects, "projects")
 	check("projects", projects, prefixed("projects[].", projectFields)...)
 
-	// opencloud_alerts : canaux, fiche, liste.
+	// kagu_alerts : canaux, fiche, liste.
 	channels := read("/api/alerts/channels", nil)
 	requireNonEmpty(t, "channels", channels, "channels")
 	check("channels", channels, prefixed("channels[].", []string{"id", "name", "format", "url", "min_severity", "notify_resolve", "enabled", "plain"})...)
@@ -368,14 +368,14 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 	requireNonEmpty(t, "alerts", alerts, "alerts")
 	check("alerts", alerts, append(prefixed("alerts[].", alertFields), "counts.open", "counts.unacknowledged")...)
 
-	// opencloud_audit : la page par défaut, puis filtrée comme l'outil le fait.
+	// kagu_audit : la page par défaut, puis filtrée comme l'outil le fait.
 	events := read("/api/audit", url.Values{"limit": {"20"}})
 	requireNonEmpty(t, "audit", events, "events")
 	check("audit", events, "next_before", "events[].id", "events[].at", "events[].actor_kind", "events[].actor_name",
 		"events[].action", "events[].object_id", "events[].object_name", "events[].details")
 	read("/api/audit", url.Values{"limit": {"20"}, "before": {"999999"}, "object_kind": {"probe"}, "object_id": {probeID}})
 
-	// opencloud_actions : tous, puis une machine.
+	// kagu_actions : tous, puis une machine.
 	runs := read("/api/actions", url.Values{"limit": {"10"}})
 	requireNonEmpty(t, "actions", runs, "runs")
 	check("actions", runs, prefixed("runs[].", []string{"id", "kind", "machine_name", "state", "reason", "requested_by", "requested_at", "finished_at", "params", "output[].line"})...)
@@ -391,7 +391,7 @@ func TestAPIToken_ReplaysMCPMaisonCalls(t *testing.T) {
 		{bearer, "/api/jobs/" + url.PathEscape("a/b"), http.StatusBadRequest, codeEncodedSlash},
 		{bearer, "/api/machines/" + url.PathEscape("x/network"), http.StatusBadRequest, codeEncodedSlash},
 		{bearer, "/api/settings/api-tokens", http.StatusForbidden, codeAPITokenRouteForbidden},
-		{"ock_" + strings.Repeat("9", 52), "/api/counts", http.StatusUnauthorized, codeAPITokenInvalid},
+		{"kgk_" + strings.Repeat("9", 52), "/api/counts", http.StatusUnauthorized, codeAPITokenInvalid},
 	} {
 		got := mcpMaisonCall(server.Server, refusal.bearer, refusal.path, nil)
 		if got.Code != refusal.status || errorCode(t, got) != refusal.key {
@@ -495,7 +495,7 @@ func TestAPIToken_DirectoryGapsNeverReturnNullArrays(t *testing.T) {
 	}
 }
 
-// Le support d'un système, que opencloud_machines (fiche) lit quand la fin
+// Le support d'un système, que kagu_machines (fiche) lit quand la fin
 // de support est activée : lifecycle est absent sinon, et l'outil le teste.
 func TestAPIToken_MachineLifecycleIsWhatMCPMaisonReads(t *testing.T) {
 	server := newTestServer(t)
@@ -527,7 +527,7 @@ func TestAPIToken_MachineLifecycleIsWhatMCPMaisonReads(t *testing.T) {
 // corps court sans le jeton.
 func TestAPIToken_RateLimitAnswerIsWhatMCPMaisonReads(t *testing.T) {
 	server := newTestServer(t)
-	wrong := "ock_" + strings.Repeat("7", 52)
+	wrong := "kgk_" + strings.Repeat("7", 52)
 	var got *httptest.ResponseRecorder
 	for range authAttemptBurst + 1 {
 		got = mcpMaisonCall(server.Server, wrong, "/api/counts", nil)
@@ -631,7 +631,7 @@ func TestAPIToken_NeverLogged(t *testing.T) {
 	var journal bytes.Buffer
 	server.logger = slog.New(slog.NewTextHandler(&journal, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	good := server.issueAPIToken(t, "mcp-maison")
-	wrong := "ock_" + strings.Repeat("5", 52)
+	wrong := "kgk_" + strings.Repeat("5", 52)
 	for _, call := range []struct{ bearer, path string }{
 		{good, "/api/counts"}, {good, "/api/settings/mcp"}, {wrong, "/api/counts"}, {wrong, "/api/settings/mcp"},
 	} {

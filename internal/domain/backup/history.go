@@ -28,7 +28,7 @@ const (
 	DefaultRunsLimit = 50
 )
 
-// SourceDatabaseKey est la clé de la source « base d'openCloud » ; vide dans
+// SourceDatabaseKey est la clé de la source « base de Kagu » ; vide dans
 // l'historique, la source dit que le plan entier est refusé avant toute cible.
 const SourceDatabaseKey = "database"
 

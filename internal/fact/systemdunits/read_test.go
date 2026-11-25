@@ -11,7 +11,7 @@ import (
 
 const listing = `  ssh.service                       loaded    active   running OpenBSD Secure Shell server
   forgejo.service                   loaded    active   running Forgejo (Beyond coding. We Forge.)
-  opencloud-agent.service           loaded    failed   failed  openCloud agent
+  kagu-agent.service           loaded    failed   failed  Kagu agent
   cron.service                      loaded    inactive dead    Regular background program processing daemon
 ● apt-daily.service                 not-found inactive dead    apt-daily.service
   masked-thing.service              masked    inactive dead    masked-thing.service
@@ -30,7 +30,7 @@ func TestParse_KeepsNameAndStatesOnly(t *testing.T) {
 	for _, unit := range report.Units {
 		names = append(names, unit.Name)
 	}
-	want := "cron.service,forgejo.service,getty@tty1.service,masked-thing.service,odd.service,opencloud-agent.service,ssh.service"
+	want := "cron.service,forgejo.service,getty@tty1.service,kagu-agent.service,masked-thing.service,odd.service,ssh.service"
 	if got := strings.Join(names, ","); got != want {
 		t.Errorf("unités %q, attendu %q", got, want)
 	}
@@ -41,7 +41,7 @@ func TestParse_KeepsNameAndStatesOnly(t *testing.T) {
 	if got := byName["forgejo.service"]; got != (Unit{Name: "forgejo.service", Load: LoadLoaded, Active: ActiveActive, Sub: SubRunning}) {
 		t.Errorf("forgejo : %+v", got)
 	}
-	if got := byName["opencloud-agent.service"]; got.Active != ActiveFailed || got.Sub != SubFailed {
+	if got := byName["kagu-agent.service"]; got.Active != ActiveFailed || got.Sub != SubFailed {
 		t.Errorf("agent : %+v", got)
 	}
 	if got := byName["odd.service"]; got.Sub != Other {
@@ -152,12 +152,12 @@ func TestRead_SeededSecret_NeverInTheReport(t *testing.T) {
 
 func TestExec_PassesNoEnvironmentOfTheAgent(t *testing.T) {
 	const secret = "hunter2-S3CR3T-token"
-	t.Setenv("OPENCLOUD_TEST_SECRET", secret)
+	t.Setenv("KAGU_TEST_SECRET", secret)
 	output, err := Exec(context.Background(), "env")
 	if err != nil {
 		t.Skip("env indisponible :", err)
 	}
-	if strings.Contains(string(output), secret) || strings.Contains(string(output), "OPENCLOUD_TEST_SECRET") {
+	if strings.Contains(string(output), secret) || strings.Contains(string(output), "KAGU_TEST_SECRET") {
 		t.Errorf("l'environnement de l'agent est passé à la commande : %s", output)
 	}
 }

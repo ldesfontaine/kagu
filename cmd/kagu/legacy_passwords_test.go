@@ -34,7 +34,7 @@ func (c *countingCompactor) Compact(context.Context) error {
 	return c.err
 }
 
-// openWithLegacyProbe rend une base où la machine openCloud existe et où une
+// openWithLegacyProbe rend une base où la machine Kagu existe et où une
 // sonde porte encore « hunter2zz » dans sa cible.
 func openWithLegacyProbe(t *testing.T, logger *slog.Logger) (string, *store.DB) {
 	t.Helper()

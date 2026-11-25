@@ -29,7 +29,7 @@ func GuardInstallLines(source string) []string {
 }
 
 // ReleaseDownloadLines télécharge le binaire de la version {number} publiée,
-// vérifie sa somme SHA-256 contre SHA256SUMS et le pose dans /tmp/opencloud :
+// vérifie sa somme SHA-256 contre SHA256SUMS et le pose dans /tmp/kagu :
 // là où la préparation et la migration le prennent. Un bloc, joué en root ; il
 // s'arrête au premier échec (réseau, 404, somme fausse) sans rien poser.
 // L'architecture est celle de la machine (uname -m). La signature d'une version

@@ -33,7 +33,7 @@ func fakeDaemon(t *testing.T, handler http.Handler) *Client {
 // Une socket Unix a un chemin court : t.TempDir peut dépasser la limite.
 func shortTempDir(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "oc")
+	dir, err := os.MkdirTemp("/tmp", "kg")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestListContainers_ReadsTheFixture(t *testing.T) {
 		t.Fatalf("len = %d", len(list))
 	}
 	first := list[0]
-	if first.Name() != "opencloud-fixture" || first.State != "running" || first.Image != "alpine:3.20" {
+	if first.Name() != "kagu-fixture" || first.State != "running" || first.Image != "alpine:3.20" {
 		t.Fatalf("first = %+v", first)
 	}
 	if first.Labels[LabelComposeProject] != "fixture" || first.Labels[LabelComposeService] != "web" || first.IsOneOff() {
@@ -187,7 +187,7 @@ func TestInspect_RunningAndExited(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if running.ShortName() != "opencloud-fixture" || running.State.Status != "running" || running.Config.Image != "alpine:3.20" || running.HasHealthcheck() || running.Config.Tty {
+	if running.ShortName() != "kagu-fixture" || running.State.Status != "running" || running.Config.Image != "alpine:3.20" || running.HasHealthcheck() || running.Config.Tty {
 		t.Fatalf("running = %+v", running)
 	}
 	if ParseTime(running.State.StartedAt).IsZero() || !ParseTime(running.State.FinishedAt).IsZero() {
@@ -368,7 +368,7 @@ func TestEvents_DieCarriesTheExitCode(t *testing.T) {
 			t.Fatal("die not found")
 		}
 		if event.Action == "die" {
-			if event.ExitCode() != 137 || event.Actor.Attributes["name"] != "opencloud-fixture" {
+			if event.ExitCode() != 137 || event.Actor.Attributes["name"] != "kagu-fixture" {
 				t.Fatalf("die = %+v", event)
 			}
 			return

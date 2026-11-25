@@ -58,8 +58,8 @@ func TestAgentUpdates_ThePlanIsReadableByAReadTokenAndRecommendsAnOrder(t *testi
 	if first.Version != "v0.0.2" || first.Target != "v0.0.3" || first.UpToDate || !first.RollbackCapable || !first.Online || first.BlockedReason != "" {
 		t.Fatalf("first %+v", first)
 	}
-	// La machine openCloud, dont l'agent ne s'est pas connecté, n'a pas de rang : la raison est dite.
-	if third.Name != "opencloud" || third.Order != nil || third.BlockedReason != "offline" || third.RollbackCapable {
+	// La machine Kagu, dont l'agent ne s'est pas connecté, n'a pas de rang : la raison est dite.
+	if third.Name != "kagu" || third.Order != nil || third.BlockedReason != "offline" || third.RollbackCapable {
 		t.Fatalf("third %+v", third)
 	}
 	goldentest.Compare(t, filepath.Join("testdata", "agent_updates.golden.json"), normalize(got.Body.String()))
@@ -114,7 +114,7 @@ func TestAgentUpdates_SayWhatAnOlderAgentMissesAndANewerImport(t *testing.T) {
 	}
 
 	importRelease("v0.0.4")
-	if plan := readPlan(); plan.ImportedAhead != "v0.0.4" || plan.UpgradeLine != "sudo opencloud upgrade" {
+	if plan := readPlan(); plan.ImportedAhead != "v0.0.4" || plan.UpgradeLine != "sudo kagu upgrade" {
 		t.Fatalf("a newer import: %+v", plan)
 	}
 }

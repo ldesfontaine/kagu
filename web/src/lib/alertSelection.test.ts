@@ -14,7 +14,7 @@ function alert(id: number, overrides: Partial<Alert> = {}): Alert {
     muted: false,
     object: { kind: "volume", id: `local:/v${id}`, name: `/v${id}` },
     machine_id: "local",
-    machine_name: "opencloud",
+    machine_name: "kagu",
     service_id: "",
     details: {},
     opened_at: "2026-10-10T09:00:00Z",
@@ -35,7 +35,7 @@ describe("groupByMachine", () => {
     ]);
     expect(groups.map((group) => [group.machineName, group.alerts.map((found) => found.id)])).toEqual([
       ["vps-b", [1, 3]],
-      ["opencloud", [2]],
+      ["kagu", [2]],
       ["", [4]],
     ]);
   });

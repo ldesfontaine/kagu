@@ -7,7 +7,7 @@ import { expect, test } from "./support/findings";
 // distante, l'application « nextcloud » (deux unités) et sa base « cloud-db »
 // (le depends_on de Compose est leur lien d'ordre, déclaré par l'outil), un lien d'un outil
 // vers un conteneur disparu et non revu depuis dix jours, et, écrit par
-// l'opérateur, un lien du proxy caddy (machine openCloud) vers l'application.
+// l'opérateur, un lien du proxy caddy (machine Kagu) vers l'application.
 // Les tests se suivent et partagent cet état ; le fichier passe avant le
 // parcours générique (ordre alphabétique).
 test.describe.configure({ mode: "serial" });

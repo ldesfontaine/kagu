@@ -66,7 +66,7 @@ type HTTPSource struct {
 }
 
 // NewHTTPSource compose par egress.Dial, comme tout ce qui sort
-// d'openCloud : l'adresse de métadonnées d'un hébergeur reste hors
+// de Kagu : l'adresse de métadonnées d'un hébergeur reste hors
 // d'atteinte, redirection comprise.
 func NewHTTPSource() *HTTPSource {
 	transport := &http.Transport{

@@ -53,7 +53,7 @@ func TestMachineModules_RoleAndObservedFacts(t *testing.T) {
 		('seen', 'seen', 'generic', 1), ('vm', 'vm', 'generic', 1), ('declared', 'declared', 'generic', 1)`)
 	exec(t, db, `INSERT INTO ssh_reports (machine_id, reported_at) VALUES ('seen', 1)`)
 	exec(t, db, `INSERT INTO machine_proxmox (machine_id, api_url, token_id, token_secret, verified_at, created_at)
-		VALUES ('declared', 'https://pve.lan:8006', 'oc@pve!r', 'x', 1, 1)`)
+		VALUES ('declared', 'https://pve.lan:8006', 'kagu@pve!r', 'x', 1, 1)`)
 	exec(t, db, `INSERT INTO proxmox_guests (machine_id, vmid, kind, node, linked_machine_id) VALUES ('declared', 100, 'qemu', 'n1', 'vm')`)
 
 	got, err := db.MachineModules(ctx)
@@ -200,7 +200,7 @@ func TestMigration024_DeducesTheRoleFromTheFacts(t *testing.T) {
 		('declared', 'declared', 1), ('seen-pve', 'seen-pve', 1), ('both', 'both', 1), ('dock', 'dock', 1),
 		('no-docker', 'no-docker', 1), ('plain', 'plain', 1)`)
 	exec(t, db, `INSERT INTO machine_proxmox (machine_id, api_url, token_id, token_secret, verified_at, created_at)
-		VALUES ('declared', 'https://pve.lan:8006', 'oc@pve!r', 'x', 1, 1)`)
+		VALUES ('declared', 'https://pve.lan:8006', 'kagu@pve!r', 'x', 1, 1)`)
 	exec(t, db, `INSERT INTO machine_roles (machine_id, role, version) VALUES ('seen-pve', 'proxmox_ve', '8.2'), ('both', 'proxmox_ve', '')`)
 	exec(t, db, `INSERT INTO machine_engines (machine_id, present, checked_at) VALUES
 		('both', 1, 1), ('dock', 1, 1), ('no-docker', 0, 1)`)

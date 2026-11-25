@@ -14,17 +14,17 @@ import (
 // qui n'a rien de commun avec ce paquet : la compatibilité ne se prouve pas
 // avec soi-même. Les clés privées ne sont jamais écrites ici.
 const (
-	vectorSums = "3f1c0e5a7b0c4f4d8e2a9b6c1d7e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e  opencloud-linux-amd64\n" +
-		"9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b  opencloud-linux-arm64\n"
-	vectorPublicKey      = "RWQoyFu5HrOe4lYlrd5JyPz8VGMODuhoMhFTQ4Pn9oyS+d1WuxTgQr2C"                                             // gitleaks:allow
+	vectorSums = "3f1c0e5a7b0c4f4d8e2a9b6c1d7e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e  kagu-linux-amd64\n" +
+		"9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b  kagu-linux-arm64\n"
+	vectorPublicKey      = "RWRKMfrLegoEUX8PE47y8L+HWD8bi50GnPy1tPj/BfVMqtaWNYtXOJE7"                                             // gitleaks:allow
 	vectorOtherPublicKey = "RWSAcGD7RKg7cDFHD0vM4oCuy2VdfIeKzzOOWF92ZrTKzwhB14pTlF7Q"                                             // gitleaks:allow
-	vectorSignatureLine  = "RUQoyFu5HrOe4jY85hMC3943NcSZaKu2GCeoT4AnrJTyps6NhJ0Td9gHYEGyBzHMq60nCGjqPCDfgHXE8tKwDVc5d0008pCvQws=" // gitleaks:allow
-	vectorGlobalLine     = "FRUKBtKroX7ed1D4dCNr2aSIhSMagAOGJoQZOG4kWP2zjqWwqLfkSbbERz1+08GJMLYnGFXtUDcgK9yorRXnBQ=="             // gitleaks:allow
+	vectorSignatureLine  = "RURKMfrLegoEUQZU6zP/0P3JBY2vexxbBLfPYdit5MGDOPxWg8mSQhqgN/7+T2fhclkjdJ/jAH3Wk4FRP9zRsPH4Ky8lCfnQ3gA=" // gitleaks:allow
+	vectorGlobalLine     = "P29iGW8aihXFL9IlccIZ0e+AUFayOiJGfPxHkRl2yN9H5GuxUGb6LswUJ3hM+xvqNEPqp4GIJqh/EiIJeNinCQ=="             // gitleaks:allow
 	vectorComment        = "timestamp:1792540800\tfile:SHA256SUMS\tversion:v0.0.2"
 )
 
 func vectorSignature() string {
-	return "untrusted comment: signature from opencloud release key\n" +
+	return "untrusted comment: signature from kagu release key\n" +
 		vectorSignatureLine + "\n" +
 		"trusted comment: " + vectorComment + "\n" +
 		vectorGlobalLine + "\n"

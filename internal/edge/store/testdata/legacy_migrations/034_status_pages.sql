@@ -42,7 +42,7 @@ WHERE EXISTS (SELECT 1 FROM status_components)
 CREATE TABLE status_components_new (
     id         TEXT PRIMARY KEY,
     page_id    TEXT NOT NULL REFERENCES status_pages (id) ON DELETE CASCADE,
-    -- Le nom que le visiteur lit ; le seul mot d'openCloud qui sort en public.
+    -- Le nom que le visiteur lit ; le seul mot de Kagu qui sort en public.
     name       TEXT NOT NULL,
     -- L'ordre d'affichage sur sa page, à la main.
     position   INTEGER NOT NULL DEFAULT 0,

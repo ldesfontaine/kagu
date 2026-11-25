@@ -19,7 +19,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
-// opencloud agent rights | grant <droit>[=valeur]… [--for <durée>|permanent]
+// kagu agent rights | grant <droit>[=valeur]… [--for <durée>|permanent]
 // | grant --set observe|manage|root | grant --pending | revoke <droit>… : la politique de
 // l'agent (fiche A3), root seul. grant et revoke disent ce qui change, et ce
 // qu'ils font aussi sur le système, demandent [o/N] (R-A3-15), écrivent la

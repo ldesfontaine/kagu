@@ -54,7 +54,7 @@ func (f *fakeUnits) callCount() int {
 	return f.calls
 }
 
-// declareUnit écrit un service déclaré sur la machine openCloud, avec une
+// declareUnit écrit un service déclaré sur la machine Kagu, avec une
 // seule unité : c'est ce que la clé étrangère de la fiche attend.
 func (b *bench) declareUnit(t *testing.T, name string) string {
 	t.Helper()

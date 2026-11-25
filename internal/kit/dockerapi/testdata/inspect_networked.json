@@ -169,8 +169,8 @@
             "com.docker.compose.image": "sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e",
             "com.docker.compose.oneoff": "False",
             "com.docker.compose.project": "ocfix",
-            "com.docker.compose.project.config_files": "/tmp/claude-1000/-home-lucas-Documents-dev-opencloud/8c87a136-ab3f-4e96-aa4e-2e9d87e85962/scratchpad/ocfix/compose.yaml",
-            "com.docker.compose.project.working_dir": "/tmp/claude-1000/-home-lucas-Documents-dev-opencloud/8c87a136-ab3f-4e96-aa4e-2e9d87e85962/scratchpad/ocfix",
+            "com.docker.compose.project.config_files": "/tmp/claude-1000/-home-lucas-Documents-dev-kagu/8c87a136-ab3f-4e96-aa4e-2e9d87e85962/scratchpad/ocfix/compose.yaml",
+            "com.docker.compose.project.working_dir": "/tmp/claude-1000/-home-lucas-Documents-dev-kagu/8c87a136-ab3f-4e96-aa4e-2e9d87e85962/scratchpad/ocfix",
             "com.docker.compose.service": "web",
             "com.docker.compose.version": "5.5.1"
         }

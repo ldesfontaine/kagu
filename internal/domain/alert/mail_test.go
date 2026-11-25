@@ -44,7 +44,7 @@ func TestNotifier_EmailChannel_DeliversTheAlertTextWithItsLink(t *testing.T) {
 	f := newFixture(t)
 	relay := smtptest.Start(t, smtptest.Options{Username: "ops", Password: "app-password", StartTLS: true})
 	notifier := f.mailNotifier(t, relay, "app-password")
-	notifier.SetPublicURL("https://oc.example.fr")
+	notifier.SetPublicURL("https://kagu.example.fr")
 	channel := f.emailChannel(t, "lucas@exemple.fr; astreinte@exemple.fr, lucas@exemple.fr")
 	if channel.URL != "" || channel.Secret != "" || channel.Destination != "lucas@exemple.fr, astreinte@exemple.fr" {
 		t.Fatalf("an email channel keeps only its recipients: %+v", channel)

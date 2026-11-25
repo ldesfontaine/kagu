@@ -17,7 +17,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
-// opencloud agent trust list | add <type> <valeur> | remove <type> <valeur>
+// kagu agent trust list | add <type> <valeur> | remove <type> <valeur>
 // | set server-key <clé> | add server-key <clé> -keep-old <durée> : les ancres
 // de confiance locales de l'agent (internal/fact/anchor) et la clé du serveur
 // qu'il accepte, dans sa politique. Seule voie qui les change après

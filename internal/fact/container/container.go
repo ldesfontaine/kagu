@@ -114,7 +114,7 @@ const (
 	MinSampleSpacing = SampleInterval / 2
 )
 
-// Les deux suffixes de label qu'openCloud lit, après le préfixe de la
+// Les deux suffixes de label que Kagu lit, après le préfixe de la
 // marque. Des suffixes, jamais le nom du produit.
 const (
 	LabelService = "service"
@@ -208,7 +208,7 @@ type Container struct {
 	Privileged  bool
 	Networks    []Attachment
 	DependsOn   []Dependency
-	// Les labels que le conteneur porte et qu'openCloud lit. Ils désignent
+	// Les labels que le conteneur porte et que Kagu lit. Ils désignent
 	// une unité ; ils ne déclarent rien.
 	Labels      Labels
 	CreatedAt   time.Time
@@ -227,7 +227,7 @@ type Container struct {
 	DeclaredServiceID string
 }
 
-// Labels sont les labels <préfixe>.* que le conteneur porte et qu'openCloud
+// Labels sont les labels <préfixe>.* que le conteneur porte et que Kagu
 // lit : l'identifiant du service déclaré et le nom de son unité. Ils
 // désignent une unité ; ils ne déclarent rien.
 type Labels struct {

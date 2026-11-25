@@ -223,7 +223,7 @@ func TestOfferUpdate_Reasons(t *testing.T) {
 			b := newUpdateBench(t, updateOptions{rights: withRight, agentVersion: "v0.0.1", arch: "amd64"})
 			b.publishBoth(t, "v0.0.2")
 			b.service.SetReleases(b.library, "v0.0.2")
-			damage(t, b, "releases/v0.0.2/opencloud-linux-amd64")
+			damage(t, b, "releases/v0.0.2/kagu-linux-amd64")
 			return b
 		}},
 	}
@@ -307,7 +307,7 @@ func TestUpdateAgent_SendsTheVerifiedBinaryOfItsArch(t *testing.T) {
 	if json.Unmarshal(b.pusher.sent[0].Order.Body, &body) != nil || json.Unmarshal(body.Params, &params) != nil {
 		t.Fatalf("order %s", b.pusher.sent[0].Order.Body)
 	}
-	if params.Version != "v0.0.2" || params.Binary != "opencloud-linux-arm64" || len(params.Files) != 3 {
+	if params.Version != "v0.0.2" || params.Binary != "kagu-linux-arm64" || len(params.Files) != 3 {
 		t.Fatalf("params %+v", params)
 	}
 	if string(run.Params) != string(body.Params) {
@@ -316,7 +316,7 @@ func TestUpdateAgent_SendsTheVerifiedBinaryOfItsArch(t *testing.T) {
 	// Chaque fichier du colis a la somme que l'ordre signe, et l'agent peut le
 	// télécharger : c'est ceux de la version importée.
 	wantContent := map[string]string{
-		"opencloud-linux-arm64": "the arm64 binary of v0.0.2",
+		"kagu-linux-arm64": "the arm64 binary of v0.0.2",
 	}
 	for _, file := range params.Files {
 		opened, size, err := b.service.OpenParcel(machineID, params.Parcel, file.Name)
@@ -334,11 +334,11 @@ func TestUpdateAgent_SendsTheVerifiedBinaryOfItsArch(t *testing.T) {
 		}
 	}
 	names := []string{params.Files[0].Name, params.Files[1].Name, params.Files[2].Name}
-	if names[0] != brand.ReleaseSumsFile || names[1] != brand.ReleaseSignatureFile || names[2] != "opencloud-linux-arm64" {
+	if names[0] != brand.ReleaseSumsFile || names[1] != brand.ReleaseSignatureFile || names[2] != "kagu-linux-arm64" {
 		t.Fatalf("files %v", names)
 	}
 	// Le parcel n'est lisible que par la machine à laquelle il est destiné.
-	if _, _, err := b.service.OpenParcel("another-machine", params.Parcel, "opencloud-linux-arm64"); !errors.Is(err, action.ErrParcelNotFound) {
+	if _, _, err := b.service.OpenParcel("another-machine", params.Parcel, "kagu-linux-arm64"); !errors.Is(err, action.ErrParcelNotFound) {
 		t.Fatalf("another machine: %v", err)
 	}
 	// La bibliothèque n'a pas bougé : emprunter n'efface rien.
@@ -351,7 +351,7 @@ func TestUpdateAgent_RefusesWhenTheImportedFileChanged(t *testing.T) {
 	b := newUpdateBench(t, updateOptions{rights: "observe,agent.update", agentVersion: "v0.0.1", arch: "amd64"})
 	b.publishBoth(t, "v0.0.2")
 	b.service.SetReleases(b.library, "v0.0.2")
-	damage(t, b, "releases/v0.0.2/opencloud-linux-amd64")
+	damage(t, b, "releases/v0.0.2/kagu-linux-amd64")
 
 	if _, err := b.service.UpdateAgent(operator(), machineID); !errors.Is(err, action.ErrUpdateUnavailable) {
 		t.Fatalf("a changed binary: %v", err)

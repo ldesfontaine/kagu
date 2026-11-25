@@ -7,7 +7,7 @@ import { expect, test } from "./support/findings";
 
 // Les alertes de ressources (#489), sur les données fictives : la machine
 // distante est restée à 100 % de processeur sur plus d'une fenêtre (une alerte
-// de danger, non lue) et sa mémoire a des seuils à elle ; la machine openCloud
+// de danger, non lue) et sa mémoire a des seuils à elle ; la machine Kagu
 // suit partout le réglage global. Chaque écran touché est cliqué : la boîte
 // d'alertes (« Lu / Non lu »), Paramètres › Notifications (seuils et rappel), la
 // fiche d'une machine (sa surcharge), la fenêtre « Faire taire » ouverte depuis

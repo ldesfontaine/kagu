@@ -45,7 +45,7 @@ import (
 
 // components sont les composants que serve construit, déjà branchés entre
 // eux : un composant ajouté se branche ici, une fois. Ce qui ne vaut que
-// pour serve (le direct, les boucles, les commandeurs, la machine openCloud)
+// pour serve (le direct, les boucles, les commandeurs, la machine Kagu)
 // reste dans serve.go.
 type components struct {
 	db        *store.DB
@@ -223,7 +223,7 @@ func buildComponents(cfg config.Config, stateDir *os.Root, db *store.DB, logger 
 	deployer := deploy.New(db, declared, machines, db, db, actions, logger)
 	actions.SetServiceUpdates(deployer)
 	// La fin de support : activée tant que l'opérateur ne la coupe pas sous
-	// Paramètres. La machine openCloud lit endoflife.date une fois par jour,
+	// Paramètres. La machine Kagu lit endoflife.date une fois par jour,
 	// deux au plus, pour les produits des images présentes et les systèmes
 	// des machines : c'est une boucle de serve.
 	support := lifecycle.New(containers.Images, machines.Systems, lifecycle.NewFileCache(stateDir), lifecycle.NewHTTPSource(), preferences.CurrentLifecycleEnabled, logger)

@@ -61,7 +61,7 @@ func TestR_B1_7_EnrollOnlyEnrollsThroughTheUnixSocketAndExits(t *testing.T) {
 			MachineID: "m-local", AgentID: "a-local", Name: "local", ServerKey: base64.StdEncoding.EncodeToString(serverKey),
 		})
 	}))
-	options := b.options("oc_local")
+	options := b.options("kg_local")
 	options.Server = "unix:" + socket
 	options.EnrollOnly = true
 
@@ -144,17 +144,17 @@ func TestRun_EnrollsAndStreamsThroughTheUnixSocket(t *testing.T) {
 // Le serveur se joint par http://, https:// ou unix:<chemin absolu>, rien
 // d'autre : un chemin relatif dépendrait du dossier de lancement.
 func TestNewClient_RefusesAnUnknownScheme(t *testing.T) {
-	for _, server := range []string{"example.com", "ftp://example.com", "file:///run/opencloud/agent.sock", "unix", "UNIX:/run/opencloud/agent.sock", "tcp://127.0.0.1:8080", ""} {
+	for _, server := range []string{"example.com", "ftp://example.com", "file:///run/kagu/agent.sock", "unix", "UNIX:/run/kagu/agent.sock", "tcp://127.0.0.1:8080", ""} {
 		if _, err := NewClient(server, "", "v", true); err == nil {
 			t.Errorf("%q accepted", server)
 		}
 	}
-	for _, server := range []string{"unix:", "unix:agent.sock", "unix:./agent.sock", "unix:run/opencloud/agent.sock", "unix:../agent.sock"} {
+	for _, server := range []string{"unix:", "unix:agent.sock", "unix:./agent.sock", "unix:run/kagu/agent.sock", "unix:../agent.sock"} {
 		if _, err := NewClient(server, "", "v", true); !errors.Is(err, ErrSocketNotAbsolute) {
 			t.Errorf("%q: %v", server, err)
 		}
 	}
-	if _, err := NewClient("unix:/run/opencloud/agent.sock", "", "v", false); err != nil {
+	if _, err := NewClient("unix:/run/kagu/agent.sock", "", "v", false); err != nil {
 		t.Errorf("absolute socket refused: %v", err)
 	}
 }

@@ -36,7 +36,7 @@ type Identity struct {
 	PrivateKey []byte `json:"private_key"`
 	Server     string `json:"server"`
 	Pin        string `json:"pin,omitempty"`
-	// Langue de l'opérateur, choisie sur openCloud au moment de l'installation.
+	// Langue de l'opérateur, choisie sur Kagu au moment de l'installation.
 	Language   lang.Code `json:"language,omitempty"`
 	EnrolledAt time.Time `json:"enrolled_at"`
 	// Les droits cochés par l'opérateur, écrits par la ligne d'installation

@@ -35,8 +35,8 @@ test("Ajouter une machine : cinq étapes, un bloc chacune, le jeton une seule fo
 
   // Le jeton n'est que dans la commande de l'enrôlement.
   const text = (await dialog.innerText()).replace(/\s+/g, " ");
-  expect(text.match(/oc_[a-z0-9_]{8,}/g)?.length).toBe(1);
-  await expect(items.nth(2).locator(".token-box")).toContainText("oc_");
+  expect(text.match(/kg_[a-z0-9_]{8,}/g)?.length).toBe(1);
+  await expect(items.nth(2).locator(".token-box")).toContainText("kg_");
   // Les lignes longues passent à la ligne : rien ne déborde du bloc.
   const overflowing = await dialog.locator(".token-box pre").evaluateAll((blocks) => blocks.filter((block) => block.scrollWidth > block.clientWidth).length);
   expect(overflowing).toBe(0);
@@ -74,7 +74,7 @@ test("Hôte Proxmox sans sudo : l'installation et la migration se collent en roo
   expect(blocks).not.toMatch(/\bsudo\b/);
   expect(blocks).toContain("curl -fLO");
   expect(blocks).toContain("sha256sum -c --ignore-missing SHA256SUMS");
-  expect(blocks).toContain("runuser -u opencloud-agent --");
+  expect(blocks).toContain("runuser -u kagu-agent --");
   await dialog.getByRole("button", { name: label("wizard.next") }).click();
   await dialog.locator(".modal-foot").getByRole("button", { name: label("modal.close") }).click();
 
@@ -96,11 +96,11 @@ test("Hôte Proxmox sans sudo : l'installation et la migration se collent en roo
   let block = await migration.locator(".token-box pre").innerText();
   expect(block).not.toMatch(/\bsudo\b/);
   expect(block).toContain("sha256sum -c --ignore-missing SHA256SUMS");
-  expect(block).toContain("runuser -u opencloud-agent -- install");
+  expect(block).toContain("runuser -u kagu-agent -- install");
   // L'autre variante reste au choix.
   await migration.getByRole("button", { name: label("machine.agent_migration_sudo") }).click();
   block = await migration.locator(".token-box pre").innerText();
-  expect(block).toContain("sudo systemctl stop opencloud-agent.service");
+  expect(block).toContain("sudo systemctl stop kagu-agent.service");
   expect(findings.unknown()).toEqual([]);
 });
 
@@ -157,7 +157,7 @@ test("Première configuration : le compte créé, les étapes de l'agent se coll
   await expect(page.locator("main")).not.toContainText(/documentation d'installation|voir la documentation/i);
   // Chaque bloc a son bouton « Copier » ; le jeton n'est que dans l'enrôlement.
   await expect(page.getByRole("button", { name: label("machine.copy") })).toHaveCount(3);
-  expect(((await page.locator("main").innerText()).match(/oc_exemple_de_jeton/g) ?? []).length).toBe(1);
+  expect(((await page.locator("main").innerText()).match(/kg_exemple_de_jeton/g) ?? []).length).toBe(1);
   await items.first().getByRole("checkbox").check();
   await page.getByRole("button", { name: label("auth.setup_continue") }).click();
   expect(findings.unknown()).toEqual([]);

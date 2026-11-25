@@ -128,7 +128,7 @@ const (
 	// s'arrête.
 	CodeRevoked = "revoked"
 	// CodeLocalAgentActive : l'agent s'enrôle depuis la machine du serveur
-	// par un jeton de machine neuve, et la machine openCloud a déjà un agent
+	// par un jeton de machine neuve, et la machine Kagu a déjà un agent
 	// actif. Le jeton n'est pas consommé.
 	CodeLocalAgentActive = "local_agent_active"
 )
@@ -142,7 +142,7 @@ type EnrollRequest struct {
 	Arch         string `json:"arch"`
 	AgentVersion string `json:"agent_version"`
 	// L'empreinte de la machine : celle du serveur fait de l'agent celui de
-	// la machine openCloud. Absente chez un agent plus vieux ou sur une
+	// la machine Kagu. Absente chez un agent plus vieux ou sur une
 	// machine sans identifiant : pas de rapprochement.
 	HostFingerprint string `json:"host_fingerprint,omitempty"`
 }

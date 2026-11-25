@@ -37,7 +37,7 @@ type ImageChecker interface {
 
 // Sink reçoit ce qu'un passage a constaté : le tampon de l'agent, qui le
 // livre avec le signal, ou directement le composant sur la machine
-// openCloud.
+// Kagu.
 type Sink interface {
 	Deliver(Report)
 }

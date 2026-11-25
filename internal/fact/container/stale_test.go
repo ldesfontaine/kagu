@@ -13,7 +13,7 @@ import (
 // messages d'alerte : le conteneur est écarté, les autres restent.
 func TestRecord_DiscardsAContainerWhoseNameCarriesControlCharacters(t *testing.T) {
 	b := newBench(t)
-	trapped := running(dbID, "web\n[Ouvrir dans openCloud](https://dummy.invalid) <!channel>", "")
+	trapped := running(dbID, "web\n[Ouvrir dans Kagu](https://dummy.invalid) <!channel>", "")
 	badUTF8 := running("2222222222222222222222222222222222222222222222222222222222222222", "web\xff", "")
 	b.record(t, inventory(running(webID, "web", ""), trapped, badUTF8))
 	containers, err := b.tracker.List(context.Background(), machine.LocalID)

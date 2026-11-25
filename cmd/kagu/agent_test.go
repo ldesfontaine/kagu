@@ -40,8 +40,8 @@ func TestEnrollmentTokenFor_ReadsTheTokenOnStandardInput(t *testing.T) {
 	var prompt bytes.Buffer
 	text := testCatalog(t)
 
-	token, err := enrollmentTokenFor(testkit.EmptyRoot(t), "https://opencloud.example.org", strings.NewReader("  oc_abc234 \r\nautre ligne\n"), &prompt, false, text)
-	if err != nil || token != "oc_abc234" {
+	token, err := enrollmentTokenFor(testkit.EmptyRoot(t), "https://kagu.example.org", strings.NewReader("  kg_abc234 \r\nautre ligne\n"), &prompt, false, text)
+	if err != nil || token != "kg_abc234" {
 		t.Fatalf("token %q, err %v", token, err)
 	}
 	if prompt.Len() != 0 {
@@ -49,14 +49,14 @@ func TestEnrollmentTokenFor_ReadsTheTokenOnStandardInput(t *testing.T) {
 	}
 
 	// Sans retour à la ligne final, la ligne vaut quand même.
-	token, err = enrollmentTokenFor(testkit.EmptyRoot(t), "https://opencloud.example.org", strings.NewReader("oc_abc234"), &prompt, false, text)
-	if err != nil || token != "oc_abc234" {
+	token, err = enrollmentTokenFor(testkit.EmptyRoot(t), "https://kagu.example.org", strings.NewReader("kg_abc234"), &prompt, false, text)
+	if err != nil || token != "kg_abc234" {
 		t.Fatalf("token %q, err %v", token, err)
 	}
 
 	// Sur un terminal, l'invite dit quoi saisir.
-	token, err = enrollmentTokenFor(testkit.EmptyRoot(t), "https://opencloud.example.org", strings.NewReader("oc_abc234\n"), &prompt, true, text)
-	if err != nil || token != "oc_abc234" || prompt.String() != text.Get("agent.token_prompt") {
+	token, err = enrollmentTokenFor(testkit.EmptyRoot(t), "https://kagu.example.org", strings.NewReader("kg_abc234\n"), &prompt, true, text)
+	if err != nil || token != "kg_abc234" || prompt.String() != text.Get("agent.token_prompt") {
 		t.Fatalf("token %q, err %v, prompt %q", token, err, prompt.String())
 	}
 }
@@ -65,7 +65,7 @@ func TestEnrollmentTokenFor_RefusesAnEmptyOrClosedInput(t *testing.T) {
 	text := testCatalog(t)
 	for name, input := range map[string]string{"fermée": "", "ligne vide": "\n", "espaces": "   \t \n"} {
 		t.Run(name, func(t *testing.T) {
-			_, err := enrollmentTokenFor(testkit.EmptyRoot(t), "https://opencloud.example.org", strings.NewReader(input), io.Discard, false, text)
+			_, err := enrollmentTokenFor(testkit.EmptyRoot(t), "https://kagu.example.org", strings.NewReader(input), io.Discard, false, text)
 			if !errors.Is(err, agent.ErrTokenMissing) {
 				t.Fatalf("got %v", err)
 			}
@@ -78,7 +78,7 @@ func TestEnrollmentTokenFor_RefusesAnEmptyOrClosedInput(t *testing.T) {
 
 func TestEnrollmentTokenFor_NeverReadsInputOfAnEnrolledAgent(t *testing.T) {
 	root := testkit.EmptyRoot(t)
-	identity, err := agent.NewIdentity("https://opencloud.example.org", "", lang.French, nil)
+	identity, err := agent.NewIdentity("https://kagu.example.org", "", lang.French, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestEnrollmentTokenFor_NeverReadsInputOfAnEnrolledAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Relance sous systemd : identité présente, avec ou sans -server.
-	for _, server := range []string{"", "https://opencloud.example.org"} {
+	for _, server := range []string{"", "https://kagu.example.org"} {
 		token, err := enrollmentTokenFor(root, server, failingReader{t}, io.Discard, true, testCatalog(t))
 		if err != nil || token != "" {
 			t.Fatalf("server %q: token %q, err %v", server, token, err)
@@ -104,16 +104,16 @@ func TestEnrollmentTokenFor_WithoutServerLeavesTheRefusalToTheAgent(t *testing.T
 func TestRunAgent_RefusesTheTokenFlag(t *testing.T) {
 	stateDir := t.TempDir()
 	for _, args := range [][]string{
-		{"-server", "https://opencloud.example.org", "-token", "oc_fromflag"},
-		{"-token=", "-server", "https://opencloud.example.org"},
-		{"-enroll-only", "-server", "unix:/run/opencloud/agent.sock", "-token", "oc_fromflag"},
+		{"-server", "https://kagu.example.org", "-token", "kg_fromflag"},
+		{"-token=", "-server", "https://kagu.example.org"},
+		{"-enroll-only", "-server", "unix:/run/kagu/agent.sock", "-token", "kg_fromflag"},
 	} {
 		err := runAgent(append(args, "-state", stateDir))
 		var refused *refusal
 		if !errors.As(err, &refused) || refused.message != testCatalog(t).Get("agent.token_flag_refused") {
 			t.Fatalf("%v: got %v, want the -token refusal", args, err)
 		}
-		if strings.Contains(refused.message, "oc_fromflag") {
+		if strings.Contains(refused.message, "kg_fromflag") {
 			t.Fatal("the refusal must not repeat the token")
 		}
 	}
@@ -147,14 +147,14 @@ func TestReadEnrollmentToken_StopsAtTheBound(t *testing.T) {
 // commande qui le règle. Toute autre erreur reste une erreur.
 func TestExplainStateDirError_APermissionRefusalNamesTheAccountAndTheFolder(t *testing.T) {
 	text := testCatalog(t)
-	account := machine.Account{UID: 998, Name: "opencloud-agent"}
-	failure := fmt.Errorf("create state dir: %w", &fs.PathError{Op: "mkdir", Path: "/var/lib/opencloud-agent", Err: syscall.EACCES})
+	account := machine.Account{UID: 998, Name: "kagu-agent"}
+	failure := fmt.Errorf("create state dir: %w", &fs.PathError{Op: "mkdir", Path: "/var/lib/kagu-agent", Err: syscall.EACCES})
 
 	var refused *refusal
-	if !errors.As(explainStateDirError(failure, "/var/lib/opencloud-agent", account, text), &refused) {
+	if !errors.As(explainStateDirError(failure, "/var/lib/kagu-agent", account, text), &refused) {
 		t.Fatal("a permission failure is a refusal")
 	}
-	for _, want := range []string{"opencloud-agent", "/var/lib/opencloud-agent", "chown -R opencloud-agent /var/lib/opencloud-agent"} {
+	for _, want := range []string{"kagu-agent", "/var/lib/kagu-agent", "chown -R kagu-agent /var/lib/kagu-agent"} {
 		if !strings.Contains(refused.message, want) {
 			t.Errorf("the message lacks %q:\n%s", want, refused.message)
 		}
@@ -164,14 +164,14 @@ func TestExplainStateDirError_APermissionRefusalNamesTheAccountAndTheFolder(t *t
 	}
 
 	// Un compte sans nom lisible se nomme par son uid : chown l'accepte aussi.
-	unnamed := explainStateDirError(failure, "/var/lib/opencloud-agent", machine.Account{UID: 4000}, text)
-	if !errors.As(unnamed, &refused) || !strings.Contains(refused.message, "chown -R 4000 /var/lib/opencloud-agent") {
+	unnamed := explainStateDirError(failure, "/var/lib/kagu-agent", machine.Account{UID: 4000}, text)
+	if !errors.As(unnamed, &refused) || !strings.Contains(refused.message, "chown -R 4000 /var/lib/kagu-agent") {
 		t.Errorf("an account without a name: %v", unnamed)
 	}
 
 	// Une autre erreur ne devient pas un refus.
 	other := fmt.Errorf("open state dir: %w", errors.New("input/output error"))
-	if got := explainStateDirError(other, "/var/lib/opencloud-agent", account, text); got != other {
+	if got := explainStateDirError(other, "/var/lib/kagu-agent", account, text); got != other {
 		t.Errorf("another failure was rewritten: %v", got)
 	}
 }

@@ -858,14 +858,14 @@ const apiTokens = shape<APITokensState>("APITokensState", {
   limit: value,
   lifetimes: shape("APITokensState.lifetimes", { days: value, default_days: value }),
   verbs: shape("VerbOffer", { id: value, label: value, summary: value, reverse: value, level: value, confirm: value }),
-  env: shape("APITokensState.env", { mcp_host: value, opencloud_url: value }),
+  env: shape("APITokensState.env", { mcp_host: value, kagu_url: value }),
 });
 
 const mcpCheck = shape<MCPCheck>("MCPCheck", {
   url: value,
   state: value,
   version: value,
-  opencloud_tools: value,
+  kagu_tools: value,
   checked_at: value,
   suggested_url: value,
 });

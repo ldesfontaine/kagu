@@ -10,7 +10,7 @@ import (
 )
 
 // Le préfixe des jetons : reconnaissable dans un journal ou un
-// presse-papier, jamais confondu avec un jeton d'enrôlement (oc_) ni de
+// presse-papier, jamais confondu avec un jeton d'enrôlement (kg_) ni de
 // ping (hb_).
 const scheme = brand.APITokenScheme
 

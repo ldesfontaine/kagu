@@ -40,9 +40,9 @@ func (c *fakeCommander) count() int {
 	return len(c.commands)
 }
 
-// La machine openCloud n'a plus de source en processus : son journal se
+// La machine Kagu n'a plus de source en processus : son journal se
 // demande à son agent, comme pour toute machine.
-func TestRelay_TheOpenCloudMachineAsksItsAgentLikeAnyOther(t *testing.T) {
+func TestRelay_TheKaguMachineAsksItsAgentLikeAnyOther(t *testing.T) {
 	relay := NewRelay()
 	commander := &fakeCommander{}
 	relay.SetCommander(commander)

@@ -28,7 +28,7 @@ export interface BackupDestination {
   created_at: string;
 }
 
-// database : la base de la machine openCloud ; agent : ce qu'un agent produit
+// database : la base de la machine Kagu ; agent : ce qu'un agent produit
 // sur sa machine.
 export type BackupSourceKind = "database" | "agent";
 
@@ -91,13 +91,13 @@ export interface PlanRequest {
 // que chaque machine peut faire. Des faits : instants ISO, octets, mots
 // fermés ; l'écran compose ses phrases. Sujets du direct : voir topicsOf.
 
-// database : la base de la machine openCloud ; vm, lxc : un invité Proxmox ;
+// database : la base de la machine Kagu ; vm, lxc : un invité Proxmox ;
 // service : un service Compose déclaré ; docker_volume : un volume nommé ;
 // firewall : la configuration d'un pare-feu déclaré, lue par le serveur.
 type OverviewSourceKind = "database" | "vm" | "lxc" | "service" | "docker_volume" | "firewall";
 
 // observed : une tâche vzdump que Proxmox mène de lui-même ; archive : un plan
-// d'archives chiffrées d'openCloud ; restic : une sauvegarde restic d'openCloud.
+// d'archives chiffrées de Kagu ; restic : une sauvegarde restic de Kagu.
 type ProtectionOrigin = "observed" | "archive" | "restic";
 
 type ProtectionState = "ok" | "late" | "failed" | "refused" | "running" | "never" | "unknown";
@@ -271,7 +271,7 @@ interface BackupTargetFacts {
   holds: string[];
 }
 
-// L'état d'un rest-server d'openCloud : « pending » tant que son agent n'a rien
+// L'état d'un rest-server de Kagu : « pending » tant que son agent n'a rien
 // rapporté (restic.targetPending) ; les trois autres viennent de l'agent
 // (agentwire.ResticTargetRunning, Stopped, Error). Pour error, reason dit
 // pourquoi (binary_missing : rest-server manque).

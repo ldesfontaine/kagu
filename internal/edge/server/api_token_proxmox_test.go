@@ -122,7 +122,7 @@ func TestR_A4_4_SnapshotDeleteFromATokenLeavesARequest(t *testing.T) {
 	bearer, token := server.issueWriteToken(t, "agent", "proxmox.vm.snapshot_delete")
 	before := server.latestAuditID(t)
 
-	got := postGuestVerb(server, bearer, stoppedVMID, "snapshot-delete", `{"snapshot":"oc-20261021-120000"}`)
+	got := postGuestVerb(server, bearer, stoppedVMID, "snapshot-delete", `{"snapshot":"kg-20261021-120000"}`)
 
 	if got.Code != http.StatusAccepted {
 		t.Fatalf("snapshot-delete: %d %s", got.Code, got.Body.String())
@@ -145,7 +145,7 @@ func TestR_A4_4_SnapshotDeleteFromATokenLeavesARequest(t *testing.T) {
 		t.Fatalf("confirm: %d %s", confirmed.Code, confirmed.Body.String())
 	}
 	runs, err := server.db.ListActionRuns(context.Background(), action.Query{MachineID: pveID, Limit: 10})
-	if err != nil || len(runs) != 1 || runs[0].Kind != agentwire.KindProxmoxSnapshotDelete || !strings.Contains(string(runs[0].Params), "oc-20261021-120000") {
+	if err != nil || len(runs) != 1 || runs[0].Kind != agentwire.KindProxmoxSnapshotDelete || !strings.Contains(string(runs[0].Params), "kg-20261021-120000") {
 		t.Fatalf("runs after confirmation %+v %v", runs, err)
 	}
 }
@@ -179,7 +179,7 @@ func TestProxmoxVerbs_ATokenWithoutTheVerbIsRefused(t *testing.T) {
 	for _, c := range []struct{ vmid, gesture, body string }{
 		{stoppedVMID, "start", "{}"},
 		{runningVMID, "snapshot", "{}"},
-		{stoppedVMID, "snapshot-delete", `{"snapshot":"oc-20261021-120000"}`},
+		{stoppedVMID, "snapshot-delete", `{"snapshot":"kg-20261021-120000"}`},
 	} {
 		got := postGuestVerb(server, bearer, c.vmid, c.gesture, c.body)
 		if got.Code != http.StatusForbidden || errorCode(t, got) != codeAPITokenVerbForbidden {
@@ -393,7 +393,7 @@ func TestTokenVerbs_TheOperatorAndAnUnknownTokenAreRefused(t *testing.T) {
 	if got := callAPI(server.Server, http.MethodGet, "/api/token/verbs", nil); got.Code != http.StatusForbidden || errorCode(t, got) != codeAPITokenOnly {
 		t.Fatalf("operator: %d %s", got.Code, got.Body.String())
 	}
-	if got := callBearerWith(server.Server, http.MethodGet, "/api/token/verbs", "ock_inconnu", ""); got.Code != http.StatusUnauthorized {
+	if got := callBearerWith(server.Server, http.MethodGet, "/api/token/verbs", "kgk_inconnu", ""); got.Code != http.StatusUnauthorized {
 		t.Fatalf("unknown token: %d", got.Code)
 	}
 }

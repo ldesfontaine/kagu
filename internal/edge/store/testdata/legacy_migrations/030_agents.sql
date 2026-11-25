@@ -5,7 +5,7 @@
 -- machine reste. Révoquer pose revoked_at : l'agent est refusé, la machine
 -- garde son historique et ses services.
 --
--- La machine perd aussi son genre (kind) : la machine openCloud se reconnaît
+-- La machine perd aussi son genre (kind) : la machine Kagu se reconnaît
 -- à son identifiant stable, 'local', et rien d'autre.
 --
 -- Comme toutes, cette migration tourne hors clés étrangères
@@ -81,7 +81,7 @@ INSERT INTO machines_new (id, name, hostname, address, os, arch, created_at)
 SELECT id, name, hostname, address, os, arch, created_at FROM machines;
 
 -- Chaque machine enrôlée reçoit l'agent qu'elle avait : sa clé, sa version,
--- son dernier signe de vie. La machine openCloud n'avait pas de clé : elle
+-- son dernier signe de vie. La machine Kagu n'avait pas de clé : elle
 -- n'a pas d'agent.
 INSERT INTO agents (id, machine_id, public_key, version, enrolled_at, last_seen_at)
 SELECT 'agt_' || lower(hex(randomblob(8))), id, public_key, agent_version, enrolled_at, last_seen_at

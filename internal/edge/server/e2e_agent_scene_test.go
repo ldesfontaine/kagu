@@ -26,7 +26,7 @@ const e2eAgentScenePath = "/__e2e/agent-update-scene"
 //     v0.0.1, est à jour et annonce tout.
 //   - imported : v0.0.2 importée au-dessus : le bandeau.
 //   - behind : le serveur en v0.0.2, v0.0.3 importée ; tous les agents en
-//     retard, vps-paris-1 sans docker.deploy, la machine openCloud sans
+//     retard, vps-paris-1 sans docker.deploy, la machine Kagu sans
 //     quatre genres.
 //   - reset : plus de bibliothèque, les genres de chacun rendus.
 type e2eAgentScene struct {

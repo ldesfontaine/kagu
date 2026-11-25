@@ -96,10 +96,10 @@ func TestForwardAuditEvent_DeliversToTheReceivingChannel(t *testing.T) {
 		body.Audit.Object != "api" || body.Audit.Details["kind"] != "http" || !strings.HasPrefix(body.Title, "Journal · ") {
 		t.Fatalf("body %+v", body)
 	}
-	if !alert.Verify(auditTestSecret, paused.body, paused.headers.Get("OpenCloud-Signature")) {
-		t.Fatalf("signature %q does not match the body", paused.headers.Get("OpenCloud-Signature"))
+	if !alert.Verify(auditTestSecret, paused.body, paused.headers.Get("Kagu-Signature")) {
+		t.Fatalf("signature %q does not match the body", paused.headers.Get("Kagu-Signature"))
 	}
-	if paused.headers.Get("OpenCloud-Event") != "audit" {
+	if paused.headers.Get("Kagu-Event") != "audit" {
 		t.Fatalf("headers %v", paused.headers)
 	}
 	waittest.Until(t, "the delivery to be noted delivered", func() bool {
@@ -214,7 +214,7 @@ func TestRenderAudit_EveryFormatSaysActorActionAndObject(t *testing.T) {
 	catalog := catalogs.For(lang.French)
 	for _, format := range alert.Formats() {
 		t.Run(string(format), func(t *testing.T) {
-			body, err := alert.RenderAudit(catalog, format, events[0], f.clock, "https://oc.example.fr/journal")
+			body, err := alert.RenderAudit(catalog, format, events[0], f.clock, "https://kagu.example.fr/journal")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -304,7 +304,7 @@ func TestMatrixTransactionID_AuditNeverEqualsAnAlertDelivery(t *testing.T) {
 	}
 	audits := 0
 	for _, send := range sends {
-		if strings.Contains(send.path, "/opencloud-audit-1-") {
+		if strings.Contains(send.path, "/kagu-audit-1-") {
 			audits++
 		}
 	}

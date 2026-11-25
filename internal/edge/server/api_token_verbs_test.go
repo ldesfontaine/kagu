@@ -219,7 +219,7 @@ func TestVerbs_ReadTokenOnAPostIsRouteForbidden(t *testing.T) {
 // Un jeton inconnu sur la route d'un verbe répond 401 comme ailleurs.
 func TestVerbs_UnknownTokenOnAVerbRouteIs401(t *testing.T) {
 	server := newTestServer(t)
-	got := callBearerWith(server.Server, http.MethodPost, "/api/probes/x/actions/pause", "ock_inconnu", "")
+	got := callBearerWith(server.Server, http.MethodPost, "/api/probes/x/actions/pause", "kgk_inconnu", "")
 	if got.Code != http.StatusUnauthorized {
 		t.Fatalf("%d %s", got.Code, got.Body.String())
 	}
@@ -333,7 +333,7 @@ func TestVerbs_RateLimitIsPerTokenAndSeparateFromAuthFailures(t *testing.T) {
 	// L'inverse : les échecs d'authentification d'une adresse ne touchent pas
 	// le seau d'un jeton.
 	for range authAttemptBurst + 1 {
-		callBearerWith(server.Server, http.MethodGet, "/api/counts", "ock_faux", "198.51.100.7")
+		callBearerWith(server.Server, http.MethodGet, "/api/counts", "kgk_faux", "198.51.100.7")
 	}
 	if got := callBearerWith(server.Server, http.MethodPost, "/api/probes/absent/actions/pause", other, "", ""); got.Code == http.StatusTooManyRequests {
 		t.Fatalf("auth failures drained a token bucket")

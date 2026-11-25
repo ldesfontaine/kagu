@@ -20,7 +20,7 @@ const (
 	KindLXC      = "lxc"
 	KindVolume   = "docker_volume"
 
-	// Les genres de cible : une destination d'openCloud (une machine avec agent
+	// Les genres de cible : une destination de Kagu (une machine avec agent
 	// et un dossier), ou un stockage que Proxmox accepte pour ses sauvegardes.
 	TargetDestination = "destination"
 	TargetStorage     = "storage"
@@ -94,7 +94,7 @@ type LatestRuns struct {
 	LastOK map[string]RunRecord
 }
 
-// Coverage dit quel plan d'openCloud couvre une source, et où il l'envoie.
+// Coverage dit quel plan de Kagu couvre une source, et où il l'envoie.
 type Coverage struct {
 	Subject         string
 	PlanName        string
@@ -108,7 +108,7 @@ type Coverage struct {
 	NextAt time.Time
 }
 
-// Source est ce qui peut être sauvegardé : la base d'openCloud, une VM ou un
+// Source est ce qui peut être sauvegardé : la base de Kagu, une VM ou un
 // LXC d'un hôte Proxmox, un volume Docker d'une machine.
 type Source struct {
 	Key         string
@@ -123,21 +123,21 @@ type Source struct {
 	// Pour un volume : son pilote et les conteneurs qui le montent.
 	Driver string
 	UsedBy []string
-	// Les plans d'openCloud qui la couvrent aujourd'hui.
+	// Les plans de Kagu qui la couvrent aujourd'hui.
 	CoveredBy []Coverage
 	// Ce que les stockages de Proxmox gardent d'elle, hors des plans
-	// d'openCloud ; nil pour une source qui n'est pas un invité, ou rien vu.
+	// de Kagu ; nil pour une source qui n'est pas un invité, ou rien vu.
 	Observed *ObservedArchives
 	// Vrai quand Observed est nil faute de droit de lecture, non faute d'archive.
 	ObservedUnknown bool
-	// La dernière exécution d'un plan d'openCloud sur cette source, et la
+	// La dernière exécution d'un plan de Kagu sur cette source, et la
 	// dernière réussie ; nil tant qu'aucune n'a eu lieu.
 	LastRun *RunRecord
 	LastOK  *RunRecord
 }
 
 // Target est un endroit où une sauvegarde peut aller. Une destination
-// d'openCloud et un stockage de Proxmox peuvent être le même endroit physique :
+// de Kagu et un stockage de Proxmox peuvent être le même endroit physique :
 // l'inventaire ne les fusionne pas, rien ne dit qu'ils le sont.
 type Target struct {
 	Key  string
@@ -157,7 +157,7 @@ type Target struct {
 	Used   int64
 	Avail  int64
 	Active bool
-	// Les plans d'openCloud qui envoient vers cette destination.
+	// Les plans de Kagu qui envoient vers cette destination.
 	Plans []string
 }
 
@@ -171,7 +171,7 @@ type Inventory struct {
 
 // Inventory calcule l'inventaire des sources et des cibles. Les sources que
 // rien ne sauvegarde viennent en tête, puis celles que seul Proxmox sauvegarde,
-// puis celles qu'un plan d'openCloud couvre.
+// puis celles qu'un plan de Kagu couvre.
 func (s *Service) Inventory(ctx context.Context) (Inventory, error) {
 	plans, err := s.store.ListBackupPlans(ctx)
 	if err != nil {
@@ -231,7 +231,7 @@ func (s *Service) Inventory(ctx context.Context) (Inventory, error) {
 }
 
 // protectionOf ordonne les sources : 0 rien ne la sauvegarde, 1 seul Proxmox la
-// sauvegarde (hors d'openCloud), 2 un plan d'openCloud la couvre.
+// sauvegarde (hors de Kagu), 2 un plan de Kagu la couvre.
 func protectionOf(source Source) int {
 	switch {
 	case len(source.CoveredBy) > 0:
@@ -256,7 +256,7 @@ func (s *Service) databaseSource(ctx context.Context) Source {
 }
 
 // firewallSources : un pare-feu déclaré est une source, lue par le serveur sur
-// la machine openCloud.
+// la machine Kagu.
 func (s *Service) firewallSources(ctx context.Context) ([]Source, error) {
 	if s.firewalls == nil {
 		return nil, nil
@@ -299,7 +299,7 @@ func volumeSource(volume ObservedVolume) Source {
 	}
 }
 
-// coverageOf rend les plans d'openCloud qui couvrent la source aujourd'hui : le
+// coverageOf rend les plans de Kagu qui couvrent la source aujourd'hui : le
 // plan de la base pour la base, un plan machine pour les invités de l'hôte
 // qu'il nomme, tous pour « all », ceux de la liste sinon. Aucun producteur ne
 // sauvegarde encore un volume Docker.
@@ -334,7 +334,7 @@ func planCovers(plan Plan, source Source) bool {
 	return false
 }
 
-// targets assemble les cibles : les destinations d'openCloud, puis les
+// targets assemble les cibles : les destinations de Kagu, puis les
 // stockages de Proxmox qui acceptent des sauvegardes.
 func (s *Service) targets(ctx context.Context, destinations []Destination, storages []ObservedStorage, plans []Plan) []Target {
 	targets := make([]Target, 0, len(destinations)+len(storages))

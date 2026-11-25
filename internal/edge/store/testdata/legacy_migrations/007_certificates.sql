@@ -19,7 +19,7 @@ ALTER TABLE probes ADD COLUMN cert_hostname_match INTEGER NOT NULL DEFAULT 0;
 
 -- Ce que l'agrafe OCSP remise pendant la poignée de main a dit :
 -- « good », « revoked », « unknown ». Vide : la cible n'agrafe rien, et
--- openCloud ne contacte aucun répondeur pour le savoir.
+-- Kagu ne contacte aucun répondeur pour le savoir.
 ALTER TABLE probes ADD COLUMN cert_ocsp TEXT NOT NULL DEFAULT '';
 
 -- La vue d'ensemble lit l'échéance la plus proche à chaque page.

@@ -162,7 +162,7 @@ func (p *Proxy) forward(r *http.Request, repoPath string) (*http.Response, error
 	}
 	// L'hôte est celui du serveur, fixé à la configuration ; seuls le chemin et la
 	// requête viennent de restic, déjà jugés par Allow.
-	return p.config.Client.Do(outbound) // #nosec G704 -- hôte fixe : le serveur d'openCloud.
+	return p.config.Client.Do(outbound) // #nosec G704 -- hôte fixe : le serveur de Kagu.
 }
 
 func (p *Proxy) sign(header http.Header) error {

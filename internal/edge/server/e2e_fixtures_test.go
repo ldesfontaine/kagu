@@ -41,7 +41,7 @@ import (
 
 // e2eAddrEnv porte l'adresse d'écoute du serveur du parcours navigateur
 // (web/e2e). Sans elle, le test passe son tour : seul `make e2e` le lance.
-const e2eAddrEnv = "OPENCLOUD_E2E_ADDR"
+const e2eAddrEnv = "KAGU_E2E_ADDR"
 
 // TestE2EFixtureServer sert le vrai serveur sur des données fictives, celles
 // des bancs de test, jusqu'au signal d'arrêt. Le parcours navigateur
@@ -105,7 +105,7 @@ func seedE2E(t *testing.T, ts *testServer) {
 
 // seedE2EVirtualized fait rapporter « machine virtuelle » aux deux machines,
 // sans hôte connu : la distante, jointe par une adresse publique, est un VPS ;
-// la machine openCloud, sur un réseau privé, une VM.
+// la machine Kagu, sur un réseau privé, une VM.
 func seedE2EVirtualized(t *testing.T, ts *testServer) {
 	t.Helper()
 	for _, id := range []string{remoteID, machine.LocalID} {
@@ -272,7 +272,7 @@ func seedE2EEdge(t *testing.T, ts *testServer) {
 
 // seedE2ESystemd montre les unités systemd : la machine distante porte Forgejo
 // (déclaré, sans port : l'invitation à le déclarer), une sauvegarde de nuit en
-// échec et des unités que personne ne déclare ; la machine openCloud n'a pas
+// échec et des unités que personne ne déclare ; la machine Kagu n'a pas
 // l'unité de Caddy, que l'annuaire déclare (absente de la machine).
 func seedE2ESystemd(t *testing.T, ts *testServer) {
 	t.Helper()
@@ -284,7 +284,7 @@ func seedE2ESystemd(t *testing.T, ts *testServer) {
 		unit("cron.service", systemdunits.ActiveActive, systemdunits.SubRunning),
 		unit("forgejo.service", systemdunits.ActiveActive, systemdunits.SubRunning),
 		unit("nightly-backup.service", systemdunits.ActiveFailed, systemdunits.SubFailed),
-		unit("opencloud-agent.service", systemdunits.ActiveActive, systemdunits.SubRunning),
+		unit("kagu-agent.service", systemdunits.ActiveActive, systemdunits.SubRunning),
 		unit("ssh.service", systemdunits.ActiveActive, systemdunits.SubRunning),
 		unit("unattended-upgrades.service", systemdunits.ActiveInactive, systemdunits.SubDead),
 	}}
@@ -318,14 +318,14 @@ func seedE2ESystemd(t *testing.T, ts *testServer) {
 // un jeton PVEAuditor : les archives ne sont pas lisibles, la fiche dit le droit
 // qui manque, les VM disent « Inconnue ». Son jeton « !complet » (même secret
 // fictif) lit aussi les archives : le parcours s'en sert pour déclarer un second
-// hôte sur la machine openCloud. La VM 5012 porte le nom d'hôte de la machine
-// openCloud : le rapprochement la lie.
+// hôte sur la machine Kagu. La VM 5012 porte le nom d'hôte de la machine
+// Kagu : le rapprochement la lie.
 func seedE2EProxmox(t *testing.T, ts *testServer) {
 	t.Helper()
 	wireProxmox(t, ts, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	api := newFakeProxmox(t)
 	api.rich, api.auditor = true, true
-	api.setGuestName("opencloud-host")
+	api.setGuestName("kagu-host")
 	if got := putProxmox(ts, remoteID, api.request(pveTokenSecret)); got.Code != http.StatusOK {
 		t.Fatalf("proxmox: %d %s", got.Code, got.Body.String())
 	}
@@ -903,7 +903,7 @@ func e2eIgnoreOrders(session *machine.Session) {
 // vingt-trois jours (vaultwarden), n'a jamais été testé ; agenda (docker1) n'a
 // pas réussi depuis quatre jours ; calendrier (docker1) est gardé par
 // stockage, qui n'a pas le droit restic.verify. Les services sans plan (photos,
-// carnet, la base d'openCloud) sont des sources sans plan. Le passage de la
+// carnet, la base de Kagu) sont des sources sans plan. Le passage de la
 // supervision ouvre les alertes. Le temps du composant restic est avancé à la
 // main, puis remis.
 func seedE2ESupervision(t *testing.T, ts *testServer, docker, pi *machine.Session) {
@@ -1086,7 +1086,7 @@ func e2eServeRestore(t *testing.T, ts *testServer, source *machine.Session) {
 
 // seedE2EZFSCache : pve-ancres est un Pi de sauvegarde en ZFS. Sa mémoire
 // utilisée est déjà corrigée (1,2 Go) ; l'ARC de 9,9 Go est montré à part.
-// La machine openCloud (sans ZFS) et pve-illisible (aucune mesure) disent les
+// La machine Kagu (sans ZFS) et pve-illisible (aucune mesure) disent les
 // deux autres états de la tuile.
 func seedE2EZFSCache(t *testing.T, ts *testServer) {
 	t.Helper()

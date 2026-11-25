@@ -140,7 +140,7 @@ func TestAlertsAPI_ChannelsAndMutesGoThroughTheComponent(t *testing.T) {
 	}))
 	defer target.Close()
 	recorder := callAPI(server.Server, http.MethodPost, "/api/alerts/channels", map[string]any{
-		"name": "ntfy maison", "url": target.URL + "/opencloud", "format": "text", "secret": "s3cret", "min_severity": "attention", "notify_resolve": true, "enabled": true,
+		"name": "ntfy maison", "url": target.URL + "/kagu", "format": "text", "secret": "s3cret", "min_severity": "attention", "notify_resolve": true, "enabled": true,
 	})
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("create: %d %s", recorder.Code, recorder.Body.String())
@@ -157,14 +157,14 @@ func TestAlertsAPI_ChannelsAndMutesGoThroughTheComponent(t *testing.T) {
 		t.Fatalf("test: %d %+v", recorder.Code, outcome)
 	}
 	request := <-received
-	if request.Header.Get("OpenCloud-Event") != "test" || !alert.Verify("s3cret", body, request.Header.Get("OpenCloud-Signature")) || request.Header.Get("Title") == "" {
+	if request.Header.Get("Kagu-Event") != "test" || !alert.Verify("s3cret", body, request.Header.Get("Kagu-Signature")) || request.Header.Get("Title") == "" {
 		t.Fatalf("test request headers %v", request.Header)
 	}
 	if !strings.Contains(string(body), brand.ProductName) {
 		t.Fatalf("test body %q", body)
 	}
 	recorder = callAPI(server.Server, http.MethodPut, "/api/alerts/channels/"+itoa(channel.ID), map[string]any{
-		"name": "ntfy maison", "url": target.URL + "/opencloud", "format": "text", "min_severity": "danger", "notify_resolve": false, "enabled": false,
+		"name": "ntfy maison", "url": target.URL + "/kagu", "format": "text", "min_severity": "danger", "notify_resolve": false, "enabled": false,
 	})
 	decodeAPI(t, recorder, &channel)
 	if recorder.Code != http.StatusOK || !channel.HasSecret || channel.Enabled || channel.MinSeverity != "danger" {
@@ -188,7 +188,7 @@ func TestAlertsAPI_ChannelsAndMutesGoThroughTheComponent(t *testing.T) {
 	}
 	var mute muteJSON
 	decodeAPI(t, recorder, &mute)
-	if !mute.Active || mute.Target.Name != "opencloud" || !mute.EndsAt.Equal(testNow.Add(time.Hour)) || mute.CreatedByKind != "operator" {
+	if !mute.Active || mute.Target.Name != "kagu" || !mute.EndsAt.Equal(testNow.Add(time.Hour)) || mute.CreatedByKind != "operator" {
 		t.Fatalf("mute %+v", mute)
 	}
 	// Planifiée : la fenêtre commence à l'heure dite, pas avant.

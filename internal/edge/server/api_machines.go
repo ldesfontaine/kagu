@@ -660,7 +660,7 @@ func (s *Server) writeToken(w http.ResponseWriter, r *http.Request, token machin
 // pas sudo, qu'un hôte Proxmox n'a pas. Les
 // droits, eux, ne sont pas un secret : ils restent lisibles dans la ligne,
 // et leur forme (lettres, chiffres, « . _ - / = : , ») passe sans guillemets.
-// Le binaire est celui de l'état de l'agent, pas /usr/local/bin/opencloud : un
+// Le binaire est celui de l'état de l'agent, pas /usr/local/bin/kagu : un
 // lien root vers un fichier que le compte de l'agent peut remplacer serait une
 // escalade sur une machine sans Docker.
 func installCommand(publicURL, token string, code lang.Code, capabilities []agentpolicy.Capability, anchors map[string][]string) string {
@@ -844,7 +844,7 @@ func (s *Server) reenrollMachine(w http.ResponseWriter, r *http.Request) {
 	s.writeToken(w, r, token, cleartext, installTarget{local: token.MachineID == machine.LocalID, reenroll: true, anchors: request.Anchors})
 }
 
-// La ligne d'installation de l'agent de la machine openCloud, tant qu'elle
+// La ligne d'installation de l'agent de la machine Kagu, tant qu'elle
 // n'en a jamais eu : l'écran de première configuration la montre, une fois
 // le compte créé. 409 machine.local_enrolled ensuite.
 func (s *Server) offerLocalEnrollment(w http.ResponseWriter, r *http.Request) {

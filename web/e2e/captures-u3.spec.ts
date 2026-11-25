@@ -66,7 +66,7 @@ const shots: Shot[] = [
     ready: "dialog[open] #channel-name",
     open: async (page) => {
       await page.locator("#channel-name").fill("salon ops");
-      await page.locator("#channel-url").fill("https://hooks.exemple.fr/oc");
+      await page.locator("#channel-url").fill("https://hooks.exemple.fr/kagu");
       await openSettings(page);
     },
   },

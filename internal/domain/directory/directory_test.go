@@ -45,7 +45,7 @@ func (b *bench) changeCount() int {
 }
 
 // L'annuaire se teste sur la vraie base SQLite, temporaire, avec la machine
-// openCloud et une machine enrôlée en place.
+// Kagu et une machine enrôlée en place.
 func newBench(t *testing.T) *bench {
 	t.Helper()
 	db := storetest.Open(t)
