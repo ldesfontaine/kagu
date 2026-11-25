@@ -179,6 +179,10 @@ install -m 0755 opencloud /usr/local/bin/opencloud
 # Un compte système, sans shell. Il n'a besoin ni de root ni du groupe
 # docker : c'est l'agent (son propre compte, plus bas) qui lit Docker.
 useradd --system --home-dir /var/lib/opencloud --shell /usr/sbin/nologin opencloud
+# Le compte de l'agent de cette machine, avant l'unité du serveur : elle porte
+# son groupe (SupplementaryGroups) et ne démarre pas sans lui. La préparation
+# de l'agent, plus bas, le recrée sans effet.
+useradd --system --home-dir /var/lib/opencloud-agent --shell /usr/sbin/nologin opencloud-agent
 
 # La configuration, lisible par le service seulement
 install -d -m 0750 -o root -g opencloud /etc/opencloud
@@ -192,8 +196,14 @@ systemctl enable --now opencloud
 journalctl -u opencloud -f
 ```
 
-L'unité crée `/var/lib/opencloud` en `0700` (`StateDirectory=`) et lance
-`serve` sous `opencloud`. Une installation d'avant mettait le compte dans le
+L'unité crée `/var/lib/opencloud` en `0700` (`StateDirectory=`) et
+`/run/opencloud` en `0755` (`RuntimeDirectory=`), et lance `serve` sous
+`opencloud`, avec le groupe `opencloud-agent` en plus : `serve` le donne à
+`/run/opencloud/agent.sock`, la socket de l'agent de cette machine
+([Fonctionnement](projet/22-fonctionnement.md)). Une installation d'avant qui
+n'a pas encore ce compte le crée (`useradd` ci-dessus), puis
+`systemctl daemon-reload && systemctl restart opencloud` ; sans lui, l'unité
+ne démarre pas (`216/GROUP` au journal). Une installation d'avant mettait le compte dans le
 groupe `docker` : `gpasswd -d opencloud docker` le retire, et l'unité n'a
 plus de `SupplementaryGroups=docker`.
 

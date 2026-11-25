@@ -375,15 +375,7 @@ func (s *Server) mux() *http.ServeMux {
 		if isAPI {
 			handler = s.requireKnownHost(handler)
 		}
-		switch {
-		case isStreamRoute(route.method, route.pattern):
-			handler = liftDeadlines(handler)
-		case isTransferRoute(route.method, route.pattern):
-			handler = liftDeadlines(cutIfIdle(transferIdleTimeout, handler))
-		}
-		if bound, ok := ownBoundRoutes[route.method+" "+route.pattern]; ok {
-			handler = boundTo(bound, handler)
-		}
+		handler = boundByKind(route.method, route.pattern, handler)
 		// La garde du pair enveloppe tout le reste : rien d'une route de
 		// l'opérateur ne s'exécute pour un pair qui contourne le mandataire.
 		if isOperatorRoute(route.pattern) {
@@ -396,6 +388,22 @@ func (s *Server) mux() *http.ServeMux {
 		mux.HandleFunc(pattern, handler)
 	}
 	return mux
+}
+
+// boundByKind pose les durées d'une route selon ce qu'elle est : un flux, un
+// transfert, ou une route à sa propre borne. Le port et la socket des agents
+// locaux bornent de même les routes de l'agent.
+func boundByKind(method, pattern string, handler http.HandlerFunc) http.HandlerFunc {
+	switch {
+	case isStreamRoute(method, pattern):
+		handler = liftDeadlines(handler)
+	case isTransferRoute(method, pattern):
+		handler = liftDeadlines(cutIfIdle(transferIdleTimeout, handler))
+	}
+	if bound, ok := ownBoundRoutes[method+" "+pattern]; ok {
+		handler = boundTo(bound, handler)
+	}
+	return handler
 }
 
 func (s *Server) apiUnknown(w http.ResponseWriter, _ *http.Request) {

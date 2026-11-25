@@ -12,12 +12,20 @@ Type=simple
 # son agent (opencloud-agent.service) qui le fait.
 User=opencloud
 Group=opencloud
+# Le groupe de l'agent local, pour le seul usage de donner ce groupe à
+# /run/opencloud/agent.sock : l'agent de cette machine y ouvre la socket, et
+# serve n'y admet que son uid. Le groupe doit exister avant le démarrage.
+SupplementaryGroups=opencloud-agent
 ExecStart=/usr/local/bin/opencloud serve -config /etc/opencloud/config.toml
 Restart=on-failure
 RestartSec=5
 # Crée /var/lib/opencloud en 0700, propriété de opencloud.
 StateDirectory=opencloud
 StateDirectoryMode=0700
+# Crée /run/opencloud en 0755 à chaque démarrage, propriété de opencloud :
+# l'agent local y traverse pour joindre agent.sock (0660).
+RuntimeDirectory=opencloud
+RuntimeDirectoryMode=0755
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

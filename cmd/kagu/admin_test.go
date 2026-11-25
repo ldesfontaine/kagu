@@ -231,38 +231,14 @@ func TestAdminSessionsAndTokens_SayHowMany(t *testing.T) {
 func localServer(t *testing.T, readPeer func(net.Conn) (uint32, error)) (configPath string, db *store.DB, operator *auth.Service) {
 	t.Helper()
 	configPath, stateDir := writeShortConfig(t)
-	root, err := openStateDir(stateDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { root.Close() })
-	ctx := context.Background()
-	db, err = store.Open(ctx, root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	cfg := config.Default()
-	cfg.StateDir = stateDir
-	logger := slog.New(slog.DiscardHandler)
-	parts, err := buildComponents(cfg, root, db, logger)
-	if err != nil {
-		t.Fatal(err)
-	}
-	parts.operator.SetHashCost(bcrypt.MinCost)
-	options := parts.serverOptions(cfg)
-	options.Live = live.New()
-	options.PublicLive = live.New()
-	srv, err := server.New(options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	control := startControlSocket(logger, stateDir, srv.ControlHandler(), readPeer)
+	db, parts, srv := realServer(t, stateDir)
+	control := startControlSocket(slog.New(slog.DiscardHandler), stateDir, srv.ControlHandler(), readPeer)
 	if control == nil {
 		t.Fatal("the control socket did not open")
 	}
 	t.Cleanup(func() { _ = control.Close() })
 
+	ctx := context.Background()
 	operator = parts.operator
 	issued, err := operator.IssueSetupCode(ctx)
 	if err != nil {
@@ -280,6 +256,36 @@ func localServer(t *testing.T, readPeer func(net.Conn) (uint32, error)) (configP
 		t.Fatal(err)
 	}
 	return configPath, db, operator
+}
+
+// realServer monte le vrai serveur sur la base de state_dir, sans l'écouter.
+func realServer(t *testing.T, stateDir string) (*store.DB, *components, *server.Server) {
+	t.Helper()
+	root, err := openStateDir(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { root.Close() })
+	db, err := store.Open(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	cfg := config.Default()
+	cfg.StateDir = stateDir
+	parts, err := buildComponents(cfg, root, db, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts.operator.SetHashCost(bcrypt.MinCost)
+	options := parts.serverOptions(cfg)
+	options.Live = live.New()
+	options.PublicLive = live.New()
+	srv, err := server.New(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db, parts, srv
 }
 
 func asRootPeer(net.Conn) (uint32, error) {
