@@ -1,11 +1,12 @@
 import { useState } from "react";
 
-import { reasonText, stateTones } from "./ActionsCard";
+import { reasonText } from "./ActionsCard";
 import { inFlightStates } from "../api/actions";
 import { deployService, useDeployPlan, type DeployPlan } from "../api/directory";
 import { useAction } from "../hooks/useAction";
 import { useNow } from "../hooks/useNow";
 import { useT } from "../i18n/context";
+import { stateTones } from "../lib/actions";
 import { formatWhen } from "../lib/time";
 import { AgentGate } from "./AgentGate";
 import { Button } from "./Button";

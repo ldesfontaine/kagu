@@ -1,13 +1,13 @@
-import { pingAgent, pinnedKeyState, useMachineActions, useServerKey, type ActionRun, type ActionState } from "../api/actions";
+import { pingAgent, pinnedKeyState, useMachineActions, useServerKey, type ActionRun } from "../api/actions";
 import type { Agent } from "../api/machines";
 import { useAction } from "../hooks/useAction";
 import { useNow } from "../hooks/useNow";
 import { useT, type Translate } from "../i18n/context";
+import { stateTones } from "../lib/actions";
 import { anchorLabelKey, anchorOfReason } from "../lib/anchors";
 import { shownActorName } from "../lib/audit";
 import { capabilityLabelKey } from "../lib/machines";
 import { reenrollPath } from "../lib/rights";
-import type { Tone } from "../lib/tone";
 import { formatWhen } from "../lib/time";
 import { AgentGate } from "./AgentGate";
 import { TokenBox } from "./Copy";
@@ -17,16 +17,6 @@ import { LockedAction } from "./LockedAction";
 import { Failure } from "./Failure";
 import { Pill } from "./Pill";
 import { Table } from "./Table";
-
-export const stateTones: Record<ActionState, Tone> = {
-  queued: "neutral",
-  sent: "neutral",
-  accepted: "accent",
-  refused: "danger",
-  succeeded: "ok",
-  failed: "danger",
-  expired: "warn",
-};
 
 // Les ordres d'une machine : la clé du serveur que son agent a épinglée,
 // le bouton qui l'éprouve, et les derniers ordres avec leur état. Un ordre
