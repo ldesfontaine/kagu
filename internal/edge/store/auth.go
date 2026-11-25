@@ -97,7 +97,9 @@ func writeAuthState(ctx context.Context, to execer, state auth.State, at time.Ti
 			password_failures_hour = CASE WHEN excluded.mode = 'native' AND excluded.username = auth_settings.username
 				THEN auth_settings.password_failures_hour ELSE 0 END,
 			password_failures_window = CASE WHEN excluded.mode = 'native' AND excluded.username = auth_settings.username
-				THEN auth_settings.password_failures_window ELSE NULL END`,
+				THEN auth_settings.password_failures_window ELSE NULL END,
+			password_last_attempt = CASE WHEN excluded.mode = 'native' AND excluded.username = auth_settings.username
+				THEN auth_settings.password_last_attempt ELSE NULL END`,
 		string(state.Mode), state.Username, state.PasswordHash, state.Header, nullableTime(state.EnabledAt), at.Unix())
 	if err != nil {
 		return fmt.Errorf("save auth state: %w", err)
@@ -226,7 +228,7 @@ func (db *DB) ConsumeTOTPStep(ctx context.Context, step int64, at time.Time) (bo
 	return changed > 0, nil
 }
 
-const accountFailuresSelect = `SELECT totp_failures, totp_locked_until, password_failures_hour, password_failures_window FROM auth_settings WHERE id = 1`
+const accountFailuresSelect = `SELECT totp_failures, totp_locked_until, password_failures_hour, password_failures_window, password_last_attempt FROM auth_settings WHERE id = 1`
 
 // GetAccountFailures rend les compteurs du compte ; sans ligne, ils sont à zéro.
 func (db *DB) GetAccountFailures(ctx context.Context) (auth.AccountFailures, error) {
@@ -235,8 +237,8 @@ func (db *DB) GetAccountFailures(ctx context.Context) (auth.AccountFailures, err
 
 func scanAccountFailures(row scanner) (auth.AccountFailures, error) {
 	var failures auth.AccountFailures
-	var lockedUntil, windowStart sql.NullInt64
-	err := row.Scan(&failures.TOTP.Count, &lockedUntil, &failures.Password.Count, &windowStart)
+	var lockedUntil, windowStart, lastAttempt sql.NullInt64
+	err := row.Scan(&failures.TOTP.Count, &lockedUntil, &failures.Password.Count, &windowStart, &lastAttempt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return auth.AccountFailures{}, nil
 	}
@@ -248,6 +250,9 @@ func scanAccountFailures(row scanner) (auth.AccountFailures, error) {
 	}
 	if windowStart.Valid {
 		failures.Password.WindowStart = time.Unix(windowStart.Int64, 0)
+	}
+	if lastAttempt.Valid {
+		failures.Password.LastAttempt = time.Unix(lastAttempt.Int64, 0)
 	}
 	return failures, nil
 }
@@ -268,9 +273,11 @@ func (db *DB) ChangeAccountFailures(ctx context.Context, change func(auth.Accoun
 			return nil
 		}
 		_, writeErr := tx.ExecContext(ctx, `
-			UPDATE auth_settings SET totp_failures = ?, totp_locked_until = ?, password_failures_hour = ?, password_failures_window = ?
+			UPDATE auth_settings SET totp_failures = ?, totp_locked_until = ?, password_failures_hour = ?, password_failures_window = ?,
+				password_last_attempt = ?
 			WHERE id = 1`,
-			after.TOTP.Count, nullableTime(after.TOTP.LockedUntil), after.Password.Count, nullableTime(after.Password.WindowStart))
+			after.TOTP.Count, nullableTime(after.TOTP.LockedUntil), after.Password.Count, nullableTime(after.Password.WindowStart),
+			nullableTime(after.Password.LastAttempt))
 		if writeErr != nil {
 			return fmt.Errorf("save account failures: %w", writeErr)
 		}

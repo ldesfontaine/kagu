@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -178,6 +179,49 @@ func TestR_A2_16_TwentyWrongPasswordsSlowTheAccount(t *testing.T) {
 	now = now.Add(time.Second)
 	if got := callLoginFrom(server.Server, "198.51.100.202:4000", testPassword, ""); got.Code != http.StatusOK {
 		t.Fatalf("30 s later: %d %s", got.Code, got.Body.String())
+	}
+}
+
+// R-A2-16 : l'instant du dernier essai d'un compte ralenti est en base. Un
+// essai admis, puis serve redémarre (un service neuf sur la même base) : le
+// suivant, même juste, est refusé jusqu'aux trente secondes. L'essai tombe sur
+// une demi-seconde : la base garde la seconde, l'intervalle ne raccourcit pas.
+func TestR_A2_16_ARestartGivesNoExtraAttempt(t *testing.T) {
+	server := newFirstSetupServer(t)
+	server.enableNative(t)
+	now := testNow
+	clock := func() time.Time { return now }
+	server.operator.SetClock(clock)
+	for index := 1; index <= auth.DefaultPasswordFailuresPerHour+1; index++ {
+		callLoginFrom(server.Server, fmt.Sprintf("198.51.100.%d:4000", index), "guess", "")
+	}
+	now = now.Add(auth.DefaultPasswordPace + 500*time.Millisecond)
+	if got := callLoginFrom(server.Server, "198.51.100.100:4000", "guess", ""); got.Code != http.StatusUnauthorized || errorCode(t, got) != "auth.login_failed" {
+		t.Fatalf("the admitted try: %d %s", got.Code, got.Body.String())
+	}
+
+	ctx := context.Background()
+	restarted := auth.New(server.db, server.logger)
+	restarted.SetClock(clock)
+	restarted.SetHashCost(4)
+	state, err := server.db.GetAuthState(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	login := func(source string) error {
+		_, err := restarted.Login(ctx, state, testUsername, testPassword, "", auth.SessionClient{Address: source, Cookie: auth.CookieHost})
+		return err
+	}
+	if err := login("198.51.100.101"); !errors.Is(err, auth.ErrAccountSlowed) {
+		t.Fatalf("right after the restart: %v, want ErrAccountSlowed", err)
+	}
+	now = now.Add(auth.DefaultPasswordPace - 500*time.Millisecond)
+	if err := login("198.51.100.102"); !errors.Is(err, auth.ErrAccountSlowed) {
+		t.Fatalf("29.5 s after the admitted try: %v, want ErrAccountSlowed", err)
+	}
+	now = now.Add(time.Second)
+	if err := login("198.51.100.103"); err != nil {
+		t.Fatalf("30.5 s after the admitted try: %v", err)
 	}
 }
 
