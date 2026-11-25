@@ -85,7 +85,13 @@ test("une session perdue en cours d'usage ramène à la connexion", async ({
   // La session meurt côté serveur ; le prochain geste dans l'interface le voit.
   sessionLost = true;
   access.signedIn = false;
-  await sideMenu(page).locator('a[href="/machines"]').first().click();
+  // Une lecture en cours peut recevoir le 401 avant le clic : la porte démonte
+  // alors le menu, et le lien n'existe plus. Les deux ordres mènent à la
+  // connexion ; on attend cet état, pas le premier lien trouvé.
+  await Promise.race([
+    sideMenu(page).locator('a[href="/machines"]').first().click(),
+    loginPage(page).waitFor(),
+  ]);
   await expect(loginPage(page)).toBeVisible();
 });
 
