@@ -83,6 +83,8 @@ func SignedStreamRequest(t *testing.T, url, machineID string, private ed25519.Pr
 	// Le banc modèle un agent migré : il dit revenir seul en arrière. Un test
 	// d'agent non migré retire l'en-tête.
 	request.Header.Set(agentwire.HeaderAgentRollback, "1")
+	// Et il annonce les genres de ce binaire, comme le client.
+	request.Header.Set(agentwire.HeaderAgentOrderKinds, agentwire.AnnouncedKinds().Format())
 	return request
 }
 
@@ -136,11 +138,21 @@ func OpenStreamWithRights(t *testing.T, handler http.Handler, machineID string, 
 }
 
 // OpenStreamSpeaking ouvre le flux d'un agent qui annonce ce protocole : un
-// agent d'avant, du protocole 2.
+// agent d'avant, du protocole 2, qui n'annonce aucun genre.
 func OpenStreamSpeaking(t *testing.T, handler http.Handler, machineID string, private ed25519.PrivateKey, protocol string) (*http.Response, string, *bufio.Reader, context.CancelFunc) {
 	t.Helper()
 	return openStream(t, handler, machineID, private, func(request *http.Request) {
 		request.Header.Set(agentwire.HeaderProtocol, protocol)
+		request.Header.Del(agentwire.HeaderAgentOrderKinds)
+	})
+}
+
+// OpenStreamAnnouncing ouvre le flux d'un agent du protocole de ce binaire qui
+// annonce ces genres (« agent.ping@1 ») ; vide : aucun.
+func OpenStreamAnnouncing(t *testing.T, handler http.Handler, machineID string, private ed25519.PrivateKey, kinds string) (*http.Response, string, *bufio.Reader, context.CancelFunc) {
+	t.Helper()
+	return openStream(t, handler, machineID, private, func(request *http.Request) {
+		request.Header.Set(agentwire.HeaderAgentOrderKinds, kinds)
 	})
 }
 

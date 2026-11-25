@@ -49,6 +49,8 @@ type Store interface {
 	RecordServerKey(ctx context.Context, agentID, fingerprint string) error
 	// RecordProtocol garde le protocole annoncé par l'agent ; vide : NULL.
 	RecordProtocol(ctx context.Context, agentID, protocol string) error
+	// RecordOrderKinds garde les genres annoncés par l'agent ; nil : NULL.
+	RecordOrderKinds(ctx context.Context, agentID string, kinds OrderKinds) error
 	RecordRootDir(ctx context.Context, agentID, root string) error
 	RecordRollbackVersion(ctx context.Context, agentID string, version int) error
 	RecordServiceRollbackVersion(ctx context.Context, agentID string, version int) error
@@ -603,14 +605,15 @@ func (s *Service) NoteServerKey(ctx context.Context, agentID, fingerprint string
 // agent plus ancien ne suivrait pas. Ce qui n'est pas un numéro court
 // s'écrit vide, compté en retard.
 func (s *Service) NoteProtocol(ctx context.Context, agentID, protocol string) error {
-	if !isProtocolNumber(protocol) {
+	if !isShortNumber(protocol) {
 		protocol = ""
 	}
 	return s.store.RecordProtocol(ctx, agentID, protocol)
 }
 
-// isProtocolNumber : un à trois chiffres, sans zéro en tête.
-func isProtocolNumber(text string) bool {
+// isShortNumber : un à trois chiffres, sans zéro en tête (un protocole, le
+// numéro d'un genre annoncé).
+func isShortNumber(text string) bool {
 	if len(text) == 0 || len(text) > 3 || text[0] == '0' {
 		return false
 	}
@@ -620,6 +623,22 @@ func isProtocolNumber(text string) bool {
 		}
 	}
 	return true
+}
+
+// NoteOrderKinds garde les genres que l'agent annonce à chaque ouverture du
+// flux (R-B2-8) : le serveur ne lui signe que ceux-là. Rien (un agent du
+// protocole 2) ou une annonce illisible s'écrivent vides : aucun genre
+// annoncé.
+func (s *Service) NoteOrderKinds(ctx context.Context, agentID, announced string) error {
+	var kinds OrderKinds
+	if announced != "" {
+		parsed, err := ParseOrderKinds(announced)
+		if err != nil {
+			s.logger.Warn("agent order kinds unreadable", "agent_id", agentID, "error", err)
+		}
+		kinds = parsed
+	}
+	return s.store.RecordOrderKinds(ctx, agentID, kinds)
 }
 
 // NoteRootDir garde la racine des services que l'agent dit avoir dans son

@@ -11,6 +11,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // serverSamples sont les paramètres que le serveur fabrique pour chaque genre,
@@ -424,5 +425,24 @@ func TestStrictDecode_ReadsTheEnvelopeAndRefusesAnotherWriting(t *testing.T) {
 		if err := StrictDecode(variant, &again); !errors.Is(err, ErrNotCanonical) {
 			t.Errorf("envelope, %s: passes: %v", name, err)
 		}
+	}
+}
+
+// Ce que l'agent annonce est le registre, chaque genre à son numéro, et rien
+// d'autre ; le serveur relit l'en-tête tel que l'agent l'écrit (R-B2-8).
+func TestR_B2_8_TheAgentAnnouncesItsRegistry(t *testing.T) {
+	announced := AnnouncedKinds()
+	if len(announced) != len(OrderKinds()) {
+		t.Fatalf("%d kinds announced, %d in the registry", len(announced), len(OrderKinds()))
+	}
+	for _, kind := range OrderKinds() {
+		spec, _ := SpecOf(kind)
+		if spec.Revision < 1 || !announced.Announces(string(kind), spec.Revision) {
+			t.Errorf("%s: revision %d, announced %v", kind, spec.Revision, announced[string(kind)])
+		}
+	}
+	read, err := machine.ParseOrderKinds(announced.Format())
+	if err != nil || read.Format() != announced.Format() {
+		t.Fatalf("the server reads %v, %v", read, err)
 	}
 }

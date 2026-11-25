@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
@@ -85,6 +86,7 @@ func (b *updateBench) addMachine(t *testing.T, id, name, version string, migrate
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, b.machines, enrolled.Agent.ID)
 	t.Cleanup(func() { b.machines.Disconnect(session) })
 	if migrated {
 		if err := b.machines.NoteRollbackVersion(ctx, enrolled.Agent.ID, "1"); err != nil {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
@@ -56,6 +57,7 @@ func backupSetup(t *testing.T, server *testServer) (destinationID string) {
 	if _, err := server.machines.Connect(context.Background(), enrolled, "192.0.2.1", "v0.0.1", "backup.receive=/srv/backups", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, server.machines, enrolled.Agent.ID)
 	if got := callAPI(server.Server, http.MethodPost, "/api/backups/keyring", map[string]any{"passphrase": backupPassphrase}); got.Code != http.StatusCreated {
 		t.Fatalf("keyring: %d %s", got.Code, got.Body.String())
 	}
@@ -207,6 +209,7 @@ func TestBackups_AnAgentPlanIsListedAfterTheDatabaseAndRefusesToRunUnready(t *te
 	if _, err := server.machines.Connect(context.Background(), remote.Machine, "192.0.2.1", agentwire.PrefixSinceVersion, "backup.receive=/srv/backups", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, server.machines, remote.Machine.Agent.ID)
 	run = callAPI(server.Server, http.MethodPost, "/api/backups/plans/pve-vm/actions/run", map[string]any{})
 	if run.Code != http.StatusConflict || errorCode(t, run) != "backup.source_right_missing" {
 		t.Fatalf("run: %d %s", run.Code, run.Body.String())

@@ -11,6 +11,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/directory"
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
@@ -60,6 +61,7 @@ func (b *resticBench) reconnectSource(t *testing.T, rights string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, b.machines, status.Machine.Agent.ID)
 	b.source = session
 }
 

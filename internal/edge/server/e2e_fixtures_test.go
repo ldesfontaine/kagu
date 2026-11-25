@@ -21,6 +21,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/domain/deploy"
 	"github.com/ldesfontaine/kagu/internal/domain/directory"
 	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/firewall/opnsense/opnsensetest"
@@ -133,6 +134,7 @@ func seedE2EBackups(t *testing.T, ts *testServer) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, ts.machines, remote.Machine.Agent.ID)
 	if got := callAPI(ts.Server, http.MethodPost, "/api/backups/keyring", map[string]any{"passphrase": backupPassphrase}); got.Code != http.StatusCreated {
 		t.Fatalf("keyring: %d %s", got.Code, got.Body.String())
 	}
@@ -471,6 +473,7 @@ func seedE2EAnchors(t *testing.T, ts *testServer) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, ts.machines, enrolled.Agent.ID)
 	broken := e2eConnect(t, ts, "pve-illisible", e2eAnchorsBrokenID, rights)
 	for id, reported := range map[string]string{e2eAnchorsNoneID: "none", e2eAnchorsBrokenID: "backup.recipient=!,backup.guest=!,restic.target-cert=!"} {
 		found, err := ts.machines.Get(context.Background(), id)
@@ -765,6 +768,7 @@ func e2eConnectAs(t *testing.T, ts *testServer, name, id, system, arch, rights, 
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, ts.machines, enrolled.Agent.ID)
 	return session
 }
 
@@ -776,6 +780,7 @@ func e2eConnect(t *testing.T, ts *testServer, name, id, rights string) *machine.
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, ts.machines, enrolled.Agent.ID)
 	return session
 }
 

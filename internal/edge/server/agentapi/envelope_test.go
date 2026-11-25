@@ -40,7 +40,7 @@ func TestR_A1_9_AProtocol2AgentOnlyReceivesAgentUpdate(t *testing.T) {
 	if key, _ := refusal.KeyOf(err); !errors.Is(err, action.ErrAgentOutdated) || key != "action.agent_outdated" {
 		t.Fatalf("agent.ping to a protocol 2 agent: %v (key %q)", err, key)
 	}
-	if runs, err := b.db.ListActionRuns(ctx, action.Query{MachineID: enrolled.ID}); err != nil || len(runs) != 0 || len(sent.orders) != 0 {
+	if runs, err := b.db.ListActionRuns(ctx, action.Query{MachineID: enrolled.ID, Limit: 10}); err != nil || len(runs) != 0 || len(sent.orders) != 0 {
 		t.Fatalf("a refused order was written or sent: %v, %d sent, %v", runs, len(sent.orders), err)
 	}
 

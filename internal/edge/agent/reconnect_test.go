@@ -39,8 +39,10 @@ type fakeServer struct {
 	rights, rightsUntil []string
 	// Ce que l'agent dit valoir sur sa machine, à chaque ouverture du flux.
 	rootEquivalents []string
-	refusedSignals  []time.Time
-	acceptedSignal  int
+	// Les genres annoncés à chaque ouverture du flux.
+	orderKinds     []string
+	refusedSignals []time.Time
+	acceptedSignal int
 }
 
 func (f *fakeServer) handler() http.Handler {
@@ -61,6 +63,7 @@ func (f *fakeServer) stream(w http.ResponseWriter, r *http.Request) {
 	f.rights = append(f.rights, r.Header.Get(agentwire.HeaderAgentRights))
 	f.rightsUntil = append(f.rightsUntil, r.Header.Get(agentwire.HeaderAgentRightsUntil))
 	f.rootEquivalents = append(f.rootEquivalents, r.Header.Get(agentwire.HeaderAgentRootEquivalent))
+	f.orderKinds = append(f.orderKinds, r.Header.Get(agentwire.HeaderAgentOrderKinds))
 	count := len(f.streams)
 	refusal := f.streamRefusal
 	f.mu.Unlock()
@@ -385,5 +388,28 @@ func TestKeepConnected_SaysItsAccountAndWhatItCannotExerciseAtEachStream(t *test
 	}
 	if !strings.Contains(logs.String(), "every right can be exercised again") {
 		t.Errorf("the return to normal was not logged:\n%s", logs.String())
+	}
+}
+
+// L'agent annonce à chaque ouverture du flux les genres de son registre, en
+// un seul champ (R-B2-8).
+func TestR_B2_8_TheStreamAnnouncesTheRegistry(t *testing.T) {
+	server := &fakeServer{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := startAgentWith(t, ctx, server, &bytes.Buffer{}, nil, func(*Client, *orderRunner) {})
+	waittest.Until(t, "a first stream", func() bool {
+		streams, _, _ := server.snapshot()
+		return len(streams) >= 1
+	})
+	server.mu.Lock()
+	said := server.orderKinds[0]
+	server.mu.Unlock()
+	if said == "" || said != agentwire.AnnouncedKinds().Format() {
+		t.Errorf("the stream announced %q", said)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("agent stopped with %v", err)
 	}
 }

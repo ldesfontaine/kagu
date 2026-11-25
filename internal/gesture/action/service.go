@@ -267,7 +267,7 @@ func (s *Service) send(ctx context.Context, order ServiceOrder) (Run, error) {
 	}
 	// Lu au moment de signer : un ordre signé v2 pour un agent revenu entre-temps
 	// en protocole 2 est refusé par lui, et c'est voulu.
-	version, err := envelopeFor(s.machines.AgentProtocol(machineID), kind)
+	version, err := envelopeFor(s.machines.AgentProtocol(machineID), target.Agent.OrderKinds, spec)
 	if err != nil {
 		return Run{}, err
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/seal"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Open rend une base neuve dans un répertoire temporaire, avec une clé de
@@ -162,6 +163,16 @@ func EnrollMachine(t testing.TB, machines *machine.Service, id, name string) mac
 	t.Helper()
 	enrolled, _ := EnrollMachineWithKey(t, machines, id, name)
 	return enrolled
+}
+
+// AnnounceKinds note que l'agent annonce les genres de ce binaire, comme le
+// client à l'ouverture de son flux : un banc qui le connecte sans flux le pose,
+// sans quoi aucun ordre ne lui est signé (R-B2-8).
+func AnnounceKinds(t testing.TB, machines *machine.Service, agentID string) {
+	t.Helper()
+	if err := machines.NoteOrderKinds(context.Background(), agentID, agentwire.AnnouncedKinds().Format()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // EnrollMachineWithKey fait comme EnrollMachine et rend aussi la clé

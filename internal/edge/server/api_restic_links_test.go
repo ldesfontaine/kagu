@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -190,6 +191,7 @@ func TestRestic_AMissingBinaryIsRefusedWithWhatToInstall(t *testing.T) {
 	if _, err := bench.machines.Connect(ctx, sourceMachine.Machine, "192.0.2.21", "v0.0.1", "observe,restic.produce", "", "restic.produce=restic_missing", ""); err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, bench.machines, sourceMachine.Machine.Agent.ID)
 	setup := callAPI(bench.Server, http.MethodPost, "/api/machines/"+resticTargetID+"/actions/restic-target-setup",
 		map[string]any{"host": resticTargetHost, "port": resticTargetPort})
 	if setup.Code != http.StatusNoContent {

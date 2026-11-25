@@ -63,6 +63,10 @@ type Agent struct {
 	// Le protocole que l'agent a annoncé à sa dernière ouverture du flux
 	// (« 3 ») ; vide tant qu'il n'est pas revenu depuis qu'on le garde.
 	Protocol string
+	// Les genres que l'agent a annoncés à sa dernière ouverture du flux ; nil
+	// tant qu'il n'a rien annoncé : le serveur ne lui signe alors aucun ordre,
+	// hors agent.update vers un agent du protocole 2.
+	OrderKinds OrderKinds
 }
 
 // CanRollBack dit si l'agent revient seul à sa version d'avant quand une
