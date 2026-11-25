@@ -91,6 +91,10 @@ type Enrollment struct {
 	// Empreinte de l'identifiant de machine de l'agent ; vide, pas de
 	// contrôle.
 	HostFingerprint string
+	// L'enrôlement arrive par la socket des agents locaux. Seul le montage
+	// de cette socket le pose, jamais la requête : c'est la seule preuve que
+	// l'agent tourne sur la machine du serveur (R-B1-7).
+	ViaLocalSocket bool
 }
 
 var (

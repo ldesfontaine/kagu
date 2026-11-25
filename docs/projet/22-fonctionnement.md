@@ -276,9 +276,13 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    machine-id de son modèle : vérifié le 10 octobre 2026, deux clones
    étaient pris l'un pour l'autre et le second refusé à tort.
 3. `opencloud serve` fait la même empreinte au démarrage (`SetServerHost`).
-   C'est **la seule chose qui distingue la machine Kagu** : l'agent qui
-   présente l'empreinte du serveur s'enrôle sous l'identifiant stable de la
-   machine Kagu, `local`, et reprend sa ligne et son historique si elle
+   L'agent qui arrive **par la socket des agents locaux** avec l'empreinte du
+   serveur s'enrôle sous l'identifiant stable de la machine Kagu, `local`
+   (`machineIDFor`, R-B1-7). Par HTTPS l'empreinte ne compte pas : l'agent
+   devient une machine neuve sous l'identifiant qu'il a tiré, puisque
+   `/etc/machine-id` et `boot_id` sont lisibles de tous. Seul le montage de
+   la socket le dit à l'enrôlement (`agentapi.Handler.SocketRoutes`), jamais
+   un champ de la requête ni l'adresse source. Il reprend sa ligne et son historique si elle
    existe (une base d'avant les agents, un agent révoqué) ; sinon il la
    crée, au nom de son jeton. Tant qu'elle a un agent actif, un second
    agent qui vient de la même machine par un jeton de machine neuve est
@@ -286,8 +290,8 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    remplacer l'agent passe par Ré-enrôler, sur sa fiche. Sans empreinte
    d'un côté ou de l'autre (agent plus vieux, machine sans identifiant), pas
    de rapprochement : l'agent s'enrôle sous son propre identifiant.
-   L'empreinte n'est pas un secret fort ; elle ne sert qu'à qui tient déjà un
-   jeton, donc le droit d'enrôler une machine. Rien de l'empreinte n'est
+   L'empreinte n'est pas un secret fort : par la socket, seul le compte
+   `opencloud-agent` passe, et il tient déjà un jeton. Rien de l'empreinte n'est
    stocké. Les autres machines s'enrôlent sous l'identifiant que leur agent
    a tiré, **sous la seule forme de `machine.NewID`** (minuscules, tirets aux
    places fixes) : une autre casse ou d'autres tirets sont refusés
@@ -939,7 +943,7 @@ toujours eue : c'est par lui qu'elle garde son historique.
 | --- | --- |
 | Premier démarrage | Tant que la machine Kagu n'a **jamais** eu d'agent (pas de ligne `local`, ou une ligne sans agent), `serve` émet le jeton de son agent (`OfferLocalEnrollment`) : `observe` et `probe.lan` (ses sondes visent d'abord ses propres services), nommé d'après le nom d'hôte (sans le domaine ; un nom d'hôte qui ne fait pas un nom de machine laisse `opencloud`), un jeton de ré-enrôlement si la ligne existe. Le clair ne vit qu'en mémoire. Le journal dit, en `INFO` et dans la langue de l'interface, qu'un jeton attend pour cette machine et où trouver la ligne ; **jamais le jeton** |
 | Première configuration | Le compte créé, l'écran montre les étapes d'installation de l'agent de cette machine (`POST /api/machines/local-enrollment` : le jeton déjà émis s'il attend encore, un neuf sinon) : préparation (le compte `opencloud-agent`, son état, le binaire pris de `/usr/local/bin/opencloud`, sans lien dans `/usr/local/bin`), enrôlement, unité : la même installation que les autres machines, sans l'étape du binaire. « Ouvrir l'interface » passe à la suite. Si la ligne ne s'obtient pas, l'interface s'ouvre directement |
-| Ensuite | `409 machine.local_enrolled` dès que la machine a, ou a eu, un agent : un agent révoqué ne se réinstalle pas de lui-même. La ligne se redonne par la fiche › **Ré-enrôler**, ou par Ajouter une machine, jouée sur elle (l'empreinte la rattache à `local`) |
+| Ensuite | `409 machine.local_enrolled` dès que la machine a, ou a eu, un agent : un agent révoqué ne se réinstalle pas de lui-même. La ligne se redonne par la fiche › **Ré-enrôler**, ou par Ajouter une machine, jouée sur elle par la socket des agents locaux (`-server unix:/run/opencloud/agent.sock` : l'empreinte la rattache à `local` ; par l'adresse publique, elle devient une machine neuve) |
 | À chaque démarrage | Le jeton est émis de nouveau tant que la machine n'a jamais eu d'agent : celui d'avant, dont le clair est perdu, expire seul dans l'heure |
 | Hors ligne | Sans le flux de son agent, la machine Kagu est hors ligne, comme les autres ; tant qu'elle n'a pas d'agent actif, elle n'est jamais déclarée **perdue** |
 | Suppression | Comme les autres : archivée (agent coupé) ou effacée par son plan, qui emporte son agent. Au démarrage suivant, sans ligne `local`, le jeton est de nouveau offert |
@@ -957,10 +961,11 @@ Kagu (R-B1-7). Rien ne passe par le réseau ni par Traefik.
 | Ce qui est servi | Les routes de l'agent (`/agent/…`), et elles seules, avec les durées du port ; `/api/…`, `/control/…`, `/ping/…`, `/statut` et l'interface y répondent `404`. Enrôlement, preuve signée, ordres signés et flux sont ceux de HTTPS : seul le transport change |
 | Sans elle | Pas de compte `opencloud-agent` sur la machine, ou pas de dossier (`serve` lancé hors de l'unité) : `serve` démarre sans la socket et le dit au journal (`agent socket unavailable`). L'unité, elle, ne démarre pas sans le groupe (`216/GROUP`) : le compte de l'agent se crée avant elle |
 
-L'agent la joint par `-server unix:/run/opencloud/agent.sock`. Ce qui reste à
-venir : l'unité et la ligne d'installation de l'agent local qui la visent, et
-le rattachement à `local` par elle seule (aujourd'hui l'empreinte de la machine
-le fait encore aussi par HTTPS).
+L'agent la joint par `-server unix:/run/opencloud/agent.sock`. C'est le seul
+chemin qui rattache un agent à `local` (R-B1-7). Ce qui reste à venir :
+l'unité et la ligne d'installation de l'agent local qui la visent. D'ici là,
+la ligne de la première configuration passe par l'adresse publique et donne
+une machine neuve, pas `local`.
 
 ## Comment les modules et le rôle d'une machine décident de l'écran
 

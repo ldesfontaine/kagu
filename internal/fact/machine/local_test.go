@@ -25,8 +25,16 @@ func newMachines(t *testing.T) *machine.Service {
 	return machines
 }
 
-// enrollFrom présente un jeton comme un agent, avec l'empreinte donnée.
+// enrollFrom présente un jeton comme un agent qui arrive par la socket des
+// agents locaux, avec l'empreinte donnée.
 func enrollFrom(t *testing.T, machines *machine.Service, cleartext, fingerprint string) (machine.Machine, error) {
+	t.Helper()
+	return enrollThrough(t, machines, cleartext, fingerprint, true)
+}
+
+// enrollThrough présente un jeton comme un agent, avec l'empreinte donnée,
+// par la socket des agents locaux ou par HTTPS.
+func enrollThrough(t *testing.T, machines *machine.Service, cleartext, fingerprint string, viaLocalSocket bool) (machine.Machine, error) {
 	t.Helper()
 	public, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -38,7 +46,50 @@ func enrollFrom(t *testing.T, machines *machine.Service, cleartext, fingerprint 
 	}
 	return machines.Enroll(context.Background(), machine.Enrollment{
 		MachineID: id, PublicKey: public, Token: cleartext, HostFingerprint: fingerprint, Hostname: "oc-host",
+		ViaLocalSocket: viaLocalSocket,
 	})
+}
+
+// machineIDFor ne rattache à LocalID que l'agent venu par la socket des
+// agents locaux avec l'empreinte du serveur. Par HTTPS, la même empreinte,
+// lisible de tous sur la machine, ne compte pas : l'agent garde l'identifiant
+// qu'il a tiré (R-B1-7).
+func TestMachineIDFor_TheServerFingerprintCountsOnlyThroughTheLocalSocket(t *testing.T) {
+	cases := []struct {
+		name           string
+		fingerprint    string
+		viaLocalSocket bool
+		serverKnown    bool
+		wantLocal      bool
+	}{
+		{"socket and server fingerprint", serverFingerprint, true, true, true},
+		{"https and server fingerprint", serverFingerprint, false, true, false},
+		{"socket and another fingerprint", "sha256:other", true, true, false},
+		{"socket and no fingerprint", "", true, true, false},
+		{"socket and the server fingerprint unknown", "", true, false, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			machines := newMachines(t)
+			if !c.serverKnown {
+				machines.SetServerHost("", "oc-host.example.org")
+			}
+			cleartext, _, err := machines.CreateToken(context.Background(), "oc-host", machine.RoleGeneric, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			enrolled, err := enrollThrough(t, machines, cleartext, c.fingerprint, c.viaLocalSocket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if isLocal := enrolled.ID == machine.LocalID; isLocal != c.wantLocal {
+				t.Fatalf("enrolled under %q, want local %v", enrolled.ID, c.wantLocal)
+			}
+			if !c.wantLocal && machine.ValidateID(enrolled.ID) != nil {
+				t.Fatalf("a new machine keeps the id it drew: %q", enrolled.ID)
+			}
+		})
+	}
 }
 
 // L'agent qui présente l'empreinte de la machine du serveur devient la

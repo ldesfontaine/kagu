@@ -12,9 +12,9 @@ import (
 
 // La machine openCloud est une machine comme les autres, avec un agent comme
 // les autres. Deux choses seulement la touchent ici : l'agent qui s'enrôle
-// depuis la machine du serveur prend son identifiant stable, LocalID ; et
-// tant qu'elle n'a jamais eu d'agent, le serveur offre la ligne qui
-// l'installe, dès la première configuration.
+// par la socket des agents locaux, depuis la machine du serveur, prend son
+// identifiant stable, LocalID ; et tant qu'elle n'a jamais eu d'agent, le
+// serveur offre la ligne qui l'installe, dès la première configuration.
 
 // serverHost est la machine où tourne serve, lue au démarrage.
 type serverHost struct {
@@ -30,13 +30,14 @@ func (s *Service) SetServerHost(fingerprint, hostname string) {
 }
 
 // machineIDFor rend l'identifiant sous lequel l'agent s'enrôle : LocalID
-// s'il présente l'empreinte de la machine du serveur (c'est ainsi qu'on
-// reconnaît la machine openCloud, et qu'elle retrouve son historique),
-// sinon celui qu'il a tiré. L'empreinte est un SHA-256 de /etc/machine-id et
-// du boot_id, que seule cette machine lit ; elle ne prouve rien de plus, et
-// ne sert qu'à qui tient déjà un jeton, donc le droit d'enrôler.
+// s'il arrive par la socket des agents locaux avec l'empreinte de la machine
+// du serveur (c'est ainsi qu'on reconnaît la machine openCloud, et qu'elle
+// retrouve son historique), sinon celui qu'il a tiré. Par HTTPS l'empreinte
+// ne compte pas : c'est un SHA-256 de /etc/machine-id et du boot_id, lisibles
+// de tous ; un compte quelconque de la machine, avec un jeton de machine
+// neuve, prendrait la place de l'agent local (R-B1-7).
 func (s *Service) machineIDFor(request Enrollment) string {
-	if s.server.fingerprint != "" && request.HostFingerprint == s.server.fingerprint {
+	if request.ViaLocalSocket && s.server.fingerprint != "" && request.HostFingerprint == s.server.fingerprint {
 		return LocalID
 	}
 	return request.MachineID
@@ -54,7 +55,8 @@ type localOffer struct {
 // un neuf, avec observe et probe.lan : une sonde de la machine openCloud vise
 // d'abord ses propres services. Un jeton de ré-enrôlement si sa ligne existe
 // (une base d'avant les agents), un jeton de machine neuve, nommée d'après
-// le nom d'hôte, sinon : l'empreinte la rattache à LocalID. ErrLocalEnrolled
+// le nom d'hôte, sinon : l'agent qui l'utilise par la socket des agents
+// locaux se rattache à LocalID (machineIDFor). ErrLocalEnrolled
 // quand elle a, ou a eu, un agent : un agent révoqué ne se réinstalle pas de
 // lui-même.
 func (s *Service) OfferLocalEnrollment(ctx context.Context) (string, Token, error) {

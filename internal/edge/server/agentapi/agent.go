@@ -49,7 +49,9 @@ type agentError struct {
 	Error string `json:"error"`
 }
 
-func (h *Handler) enroll(w http.ResponseWriter, r *http.Request) {
+// enroll enrôle l'agent. viaLocalSocket vient du montage, jamais du corps :
+// sans lui, l'empreinte de la machine du serveur ne rattache pas à LocalID.
+func (h *Handler) enroll(w http.ResponseWriter, r *http.Request, viaLocalSocket bool) {
 	if !h.speaksProtocol(w, r) {
 		return
 	}
@@ -91,6 +93,7 @@ func (h *Handler) enroll(w http.ResponseWriter, r *http.Request) {
 		AgentVersion: request.AgentVersion,
 
 		HostFingerprint: request.HostFingerprint,
+		ViaLocalSocket:  viaLocalSocket,
 	})
 	if err != nil {
 		h.writeEnrollError(w, r, err)
