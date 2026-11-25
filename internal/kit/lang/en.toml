@@ -938,6 +938,10 @@ verb_2 = "Back up"
 verb_3 = "Restart"
 rules = "Numbers and identifiers in mono. States as pills, never as coloured text alone. An alert states the fact, then the cause, then what can be done."
 
+[visual.steps]
+title = "Checked steps"
+text = "A long action shows its steps as the terminal prints them: the same label for the same key."
+
 [entity]
 more = "More actions: %s"
 view = "View"
@@ -4203,3 +4207,20 @@ version_conflict = "This release is already imported with other files: a release
 nothing_to_import = "The sums file lists no binary of the release."
 folder_not_absolute = "Name the release folder by an absolute path."
 folder_unreadable = "The release folder, or one of its files, is missing or not readable by the service account. It must be outside /tmp: the service has its own /tmp."
+
+[step.enroll]
+system = "System recognised"
+docker = "Docker installed"
+restic = "restic installed"
+account = "Account {agent_account} created"
+rights = "Rights set by root"
+enrolled = "Agent enrolled"
+unit = "Agent started"
+workspace = "Services folder"
+ready = "First signal from the agent"
+
+[step_trail]
+state_running = "Running"
+state_done = "Done"
+state_failed = "Failed"
+state_skipped = "Skipped"

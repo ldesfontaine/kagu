@@ -938,6 +938,10 @@ verb_2 = "Sauvegarder"
 verb_3 = "Redémarrer"
 rules = "Les nombres et identifiants en mono. Les états en pastille, jamais en texte coloré seul. Une alerte dit le fait, puis la cause, puis ce qu'on peut faire."
 
+[visual.steps]
+title = "Étapes cochées"
+text = "Un geste long montre ses étapes comme le terminal les imprime : le même libellé pour la même clé."
+
 [entity]
 more = "Plus d'actions : %s"
 view = "Affichage"
@@ -4203,3 +4207,20 @@ version_conflict = "Cette version est déjà importée avec d'autres fichiers : 
 nothing_to_import = "Le fichier de sommes ne liste aucun binaire de la version."
 folder_not_absolute = "Le dossier de la version se nomme par un chemin absolu."
 folder_unreadable = "Le dossier de la version, ou l'un de ses fichiers, manque ou n'est pas lisible du compte du service. Il doit être hors de /tmp : le service a son propre /tmp."
+
+[step.enroll]
+system = "Système reconnu"
+docker = "Docker installé"
+restic = "restic installé"
+account = "Compte {agent_account} créé"
+rights = "Droits posés par root"
+enrolled = "Agent enrôlé"
+unit = "Agent démarré"
+workspace = "Dossier des services"
+ready = "Premier signal de l'agent"
+
+[step_trail]
+state_running = "En cours"
+state_done = "Fait"
+state_failed = "En échec"
+state_skipped = "Sautée"

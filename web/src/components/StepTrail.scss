@@ -1,0 +1,59 @@
+.step-trail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+// Une marche : le signe, le libellé, la pastille, l'heure ; le détail passe
+// dessous, aligné sur le libellé.
+.step-trail-item {
+  display: grid;
+  grid-template-columns: 20px 1fr auto auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.step-trail-mark {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.step-trail-ok .step-trail-mark {
+  color: var(--ok);
+}
+
+.step-trail-danger {
+  border-color: var(--danger);
+
+  .step-trail-mark {
+    color: var(--danger);
+  }
+}
+
+.step-trail-accent .step-trail-mark {
+  color: var(--accent);
+}
+
+.step-trail-label {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.step-trail-detail {
+  grid-column: 2 / -1;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .step-trail-at {
+    display: none;
+  }
+}

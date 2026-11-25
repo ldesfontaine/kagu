@@ -7,6 +7,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -85,6 +86,8 @@ type Run struct {
 	// Zéro tant que le run n'est pas fini.
 	FinishedAt time.Time
 	Output     []LogLine
+	// Les étapes cochées du run, dans l'ordre ; GetActionRun seul les lit.
+	Steps []step.Step
 	// Le service déclaré que l'ordre vise (un déploiement) ; vide pour un
 	// ordre qui vise la machine, et après la suppression du service.
 	ServiceID string

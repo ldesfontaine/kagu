@@ -15,6 +15,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 	"github.com/ldesfontaine/kagu/internal/kit/release"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -81,6 +82,8 @@ type Result struct {
 	State  State
 	Reason string
 	Output []LogLine
+	// Le parcours entier que l'agent rapporte ; il remplace le précédent.
+	Steps []step.Step
 	// Les dernières lignes de journal d'une montée de version revenue en
 	// arrière ; elles partent dans l'alerte et ne sont pas gardées avec le run.
 	Journal []string

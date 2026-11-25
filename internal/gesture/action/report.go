@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -94,11 +95,32 @@ func readResult(reported agentwire.ActionResult) (Result, error) {
 		}
 		output = append(output, LogLine{Stream: line.Stream, Line: line.Line})
 	}
+	steps, err := readSteps(reported.Steps)
+	if err != nil {
+		return Result{}, err
+	}
 	journal, err := readJournal(reported.Journal)
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{RunID: reported.RunID, State: state, Reason: reported.Reason, Output: output, Journal: journal}, nil
+	return Result{RunID: reported.RunID, State: state, Reason: reported.Reason, Output: output, Steps: steps, Journal: journal}, nil
+}
+
+// readSteps juge les étapes d'un run : au plus ce que le protocole porte,
+// chacune passée par step.Clean.
+func readSteps(reported []step.Step) ([]step.Step, error) {
+	if len(reported) > agentwire.MaxActionSteps {
+		return nil, fmt.Errorf("%w: %d steps", ErrReportInvalid, len(reported))
+	}
+	steps := make([]step.Step, 0, len(reported))
+	for _, one := range reported {
+		cleaned, ok := step.Clean(one)
+		if !ok {
+			return nil, fmt.Errorf("%w: step", ErrReportInvalid)
+		}
+		steps = append(steps, cleaned)
+	}
+	return steps, nil
 }
 
 // readJournal juge les lignes de journal d'une montée revenue en arrière : au

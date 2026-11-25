@@ -1,0 +1,24 @@
+{
+  "en": {
+    "step.enroll.account": "Account opencloud-agent created",
+    "step.enroll.docker": "Docker installed",
+    "step.enroll.enrolled": "Agent enrolled",
+    "step.enroll.ready": "First signal from the agent",
+    "step.enroll.restic": "restic installed",
+    "step.enroll.rights": "Rights set by root",
+    "step.enroll.system": "System recognised",
+    "step.enroll.unit": "Agent started",
+    "step.enroll.workspace": "Services folder"
+  },
+  "fr": {
+    "step.enroll.account": "Compte opencloud-agent créé",
+    "step.enroll.docker": "Docker installé",
+    "step.enroll.enrolled": "Agent enrôlé",
+    "step.enroll.ready": "Premier signal de l'agent",
+    "step.enroll.restic": "restic installé",
+    "step.enroll.rights": "Droits posés par root",
+    "step.enroll.system": "Système reconnu",
+    "step.enroll.unit": "Agent démarré",
+    "step.enroll.workspace": "Dossier des services"
+  }
+}
