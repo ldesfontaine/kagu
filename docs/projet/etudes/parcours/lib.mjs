@@ -7,12 +7,12 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(path.resolve(here, "../../../../web/package.json"));
 const { chromium } = require("@playwright/test");
 
-export const BASE = process.env.OC_URL ?? "http://127.0.0.1:18480";
-export const SHOTS = process.env.OC_SHOTS ?? path.join(here);
+export const BASE = process.env.KAGU_URL ?? "http://127.0.0.1:18480";
+export const SHOTS = process.env.KAGU_SHOTS ?? path.join(here);
 
 export async function openBrowser() {
   const browser = await chromium.launch();
-  const credentials = process.env.OC_USER ? { username: process.env.OC_USER, password: process.env.OC_PASSWORD } : undefined;
+  const credentials = process.env.KAGU_USER ? { username: process.env.KAGU_USER, password: process.env.KAGU_PASSWORD } : undefined;
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: "fr-FR", httpCredentials: credentials });
   const page = await context.newPage();
   page.setDefaultTimeout(5000);
@@ -44,16 +44,16 @@ export async function bodyText(page) {
   return (await page.locator("body").innerText()).replace(/\n{3,}/g, "\n\n");
 }
 
-// Une capture sans secret : les jetons d'enrôlement (oc_…) sont masqués dans
+// Une capture sans secret : les jetons (kg_…, kgk_…, hb_…) sont masqués dans
 // le texte de la page avant la prise de vue, et rendus après.
 export async function shot(page, file, { full = false } = {}) {
   await page.evaluate(() => {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const saved = [];
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      if (/(oc|hb)_[a-z0-9]{20,}/.test(node.nodeValue)) {
+      if (/(kgk?|hb)_[a-z0-9]{20,}/.test(node.nodeValue)) {
         saved.push([node, node.nodeValue]);
-        node.nodeValue = node.nodeValue.replace(/(oc|hb)_[a-z0-9]{20,}/g, "••••••••••••••••••••");
+        node.nodeValue = node.nodeValue.replace(/(kgk?|hb)_[a-z0-9]{20,}/g, "••••••••••••••••••••");
       }
     }
     window.__masked = saved;

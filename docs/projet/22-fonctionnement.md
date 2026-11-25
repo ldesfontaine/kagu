@@ -6085,7 +6085,8 @@ et `TokenPrefix` (`kg`), seules valeurs écrites
 `ock_`) n'est lu nulle part : un agent ou un jeton d'avant le renommage n'est
 plus reconnu, une installation d'avant se réinstalle (décision du 12
 novembre). Le test qui le tient cherche l'ancien nom dans tout le dépôt, hors
-migrations, journaux de versions, `docs/projet/` et `.github/`.
+migrations, journaux de versions, `.github/` et documents de `docs/projet/` ;
+le code rangé sous `docs/projet/` (scripts de banc) y est soumis.
 **Coût** : pas de mise à jour en place depuis une installation d'avant ;
 l'historique et les secrets d'intégration se ressaisissent.
 

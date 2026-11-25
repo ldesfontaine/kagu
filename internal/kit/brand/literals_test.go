@@ -106,21 +106,44 @@ func TestProductNameIsNotALiteral(t *testing.T) {
 	}
 }
 
-// L'ancien nom et ses schémas de jeton (« oc_ », « ock_ ») ne s'écrivent
-// nulle part, en littéral comme en commentaire, en code comme en
-// documentation, sauf là où l'histoire se garde : les migrations rejouent les
-// bases d'avant, les journaux de versions et les documents du projet racontent
-// ce qui a été, et .github est tenu par Lucas (le miroir GitHub).
-var oldName = regexp.MustCompile(`(?i)opencloud|\bock?_`)
+// L'ancien nom et son préfixe de jeton (« oc_ », « ock_ », « oc- », et
+// « (oc|… » dans une expression régulière : le motif de l'essai E04-47, plus
+// la barre) ne s'écrivent nulle part, en littéral comme en commentaire, en
+// code comme en documentation, sauf là où l'histoire se garde : les
+// migrations rejouent les bases d'avant, les journaux de versions et les
+// documents du projet racontent ce qui a été, et .github est tenu par Lucas
+// (le miroir GitHub). Le code rangé sous docs/projet (les scripts d'un banc)
+// n'est pas de l'histoire : il tourne, et un masque de jeton qui suit l'ancien
+// schéma laisse passer le nouveau en clair.
+var oldName = regexp.MustCompile(`(?i)opencloud|\bock?[0-9_:./|-]`)
 
-var historyDirs = []string{"migrations/", "docs/versions/", "docs/projet/", ".github/", "internal/edge/store/testdata/legacy/"}
+var historyDirs = []string{"migrations/", "docs/versions/", ".github/", "internal/edge/store/testdata/legacy/"}
+
+const projectDocs = "docs/projet/"
+
+var codeExtensions = []string{".go", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".sh", ".py"}
+
+func keepsHistory(relative string) bool {
+	for _, dir := range historyDirs {
+		if strings.HasPrefix(relative, dir) {
+			return true
+		}
+	}
+	if !strings.HasPrefix(relative, projectDocs) {
+		return false
+	}
+	for _, extension := range codeExtensions {
+		if strings.HasSuffix(relative, extension) {
+			return false
+		}
+	}
+	return true
+}
 
 func checkOldName(t *testing.T, path, relative string) {
 	t.Helper()
-	for _, dir := range historyDirs {
-		if strings.HasPrefix(relative, dir) {
-			return
-		}
+	if keepsHistory(relative) {
+		return
 	}
 	content, err := os.ReadFile(path) // #nosec G304 -- le parcours du dépôt par le test.
 	if err != nil {

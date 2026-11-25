@@ -76,7 +76,11 @@ Un fichier de chaînes par langue dès le départ, même s'il n'y en a qu'une.
 comptent pas. Une clé JSON qui porte le nom s'écrit par `MarshalJSON`
 (`brand.ID + "_url"`). L'ancien nom (« openCloud », `opencloud`, `oc_`,
 `ock_`) ne s'écrit plus nulle part, commentaires et documentation compris, hors
-des migrations, des journaux de versions, de `docs/projet/` et de `.github/`.
+des migrations, des journaux de versions, de `.github/` et des documents de
+`docs/projet/` (`.md`, maquettes, images). Le code rangé sous `docs/projet/`
+(`.go`, `.js`, `.mjs`, `.ts`, `.sh`…, les scripts d'un banc) est tenu comme
+le reste : un masque de jeton qui suit l'ancien schéma laisserait passer le
+nouveau en clair.
 Dans `brand`, tout nom se construit depuis `ID`, `ProductName` ou
 `TokenPrefix` (`TestBrand_EveryNameDerivesFromID`).
 
