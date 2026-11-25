@@ -558,6 +558,7 @@ function RightsSample() {
         set: "manage",
         set_lines: [],
         root_here: false,
+        prepare_line: "",
         groups: [
           { ...group, name: "see", state: "ok", rights: [right("observe", "ok"), right("probe.lan", "ok")] },
           { ...group, name: "deploy", state: "ok", worth_root: true, rights: [right("docker.deploy", "ok"), right("docker.update", "missing")] },

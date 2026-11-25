@@ -427,6 +427,7 @@ et les groupes, jamais une liste à plat de noms. Le serveur rend le bloc
 | `set` | `agentpolicy.SetOf` : les droits de jeu rapportés sont ceux d'un jeu (partout ou sur un hôte Proxmox), valeurs, droits hors jeu et droits à échéance ignorés (un jeu se pose sans échéance) ; vide sinon | Le nom du jeu (ou « Personnalisé ») et sa phrase : `rights.observe_hint`, `rights.manage_risk`, `rights.root_risk`, `rights.custom_hint` |
 | `set_lines` | `agentpolicy.GrantSetLine` des deux autres jeux (des trois en personnalisé) | Chaque ligne à coller, avec `rights.paste_shows_change` |
 | `root_here` | La machine Kagu (`machine.LocalID`) couvre « Gérer en root » (`CoversSet`) | `rights.root_here` en tête (R-DROIT-5) |
+| `prepare_line` | Un droit rapporté `docker_denied` et des droits qui forment un jeu : `GrantSetLine` de ce jeu (E03-10 : `grant` refait le plan, le groupe `docker` compris) ; vide sinon, et en personnalisé (les `set_lines` des trois jeux sont là) | Sous les droits indisponibles, avec `rights.paste_shows_change` ; `machine.capability_unavailable_docker_denied` y renvoie |
 | `groups[]` | `agentpolicy.GroupFits` : un groupe est `ok` dès qu'un de ses droits s'exerce, `unavailable` s'il en porte sans pouvoir, `unknown` avant le rapport, `missing` sinon ; `until`, l'échéance de son dernier droit exercé (aucune si l'un est sans échéance) | La coche : permis, permis jusqu'à une heure, pas permis |
 | `groups[].grant_line` | Groupe `missing` : la ligne constante `agentpolicy.PendingLine` (`sudo opencloud agent grant --pending`, R-DROIT-8) ; vide sinon | La ligne, avec `rights.paste_only_pending` et `rights.paste_shows_change` |
 | `groups[].revoke_line` | `agentpolicy.RevokeLine` des droits qu'il porte, `observe` excepté | Sous « Voir le détail » |
@@ -740,10 +741,16 @@ droit ». Elle vise `/usr/local/bin/opencloud`
 remplacer (R-DROIT-10).
 
 **Ce que `grant` et `revoke` font aussi sur le système** (R-A3-8, T03-06,
-`internal/edge/agent/prerequisites.go`). Le plan se lit avant la question et
-se dit sous « Ce que la commande fait aussi sur le système », puis se pose
-après l'écriture de la politique, dans l'ordre, par l'interface `System`
-(`HostSystem` sur la machine) :
+`internal/edge/agent/prerequisites.go`). Le plan se refait **à chaque
+`grant` et `revoke`, même quand les droits ne changent pas** (E03-10 : Docker
+installé après « Gérer », un drop-in effacé ; `trust` et `policy migrate` n'en
+font pas). Il se lit avant la question et se dit sous « Ce que la commande
+fait aussi sur le système », puis se pose après l'écriture de la politique,
+dans l'ordre, par l'interface `System` (`HostSystem` sur la machine). Droits
+inchangés et plan à poser : « La politique ne change pas. », le plan, la même
+question `[o/N]` ; la politique n'est pas réécrite ni tracée, seul le plan se
+pose. Rien à poser : « Rien ne change », sans question, et « Docker manque »
+redit s'il manque ; jamais un prérequis dit posé quand il ne l'est pas :
 
 | Pas | Quand | Comment |
 | --- | --- | --- |
@@ -755,7 +762,8 @@ après l'écriture de la politique, dans l'ordre, par l'interface `System`
 
 Un pas qui échoue arrête la suite (pas de relance sur un système à moitié
 prêt) : la politique reste écrite, ce qui est posé se dit avec `✓`, et la
-commande sort en erreur avec ce qui reste (`agent.prerequisites_failed`).
+commande sort en erreur avec ce qui reste (`agent.prerequisites_failed`,
+`agent.prerequisites_failed_same` quand elle ne changeait pas).
 Avant la question, `grant` dit aussi « vaut root » une fois, sous « Gérer »,
 dès qu'un droit du groupe `docker` est posé (`rights.manage_risk`, R-A3-12),
 et, sur la machine du serveur (`/etc/opencloud/config.toml` présent), quand

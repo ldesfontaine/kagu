@@ -154,3 +154,24 @@ func TestRightsBlock_ReportedValuesNeverEnterALine(t *testing.T) {
 		}
 	}
 }
+
+// E03-10 : un droit de « Gérer » que Docker refuse au compte de l'agent ;
+// l'écran donne la ligne du jeu, que grant rejoue pour poser le groupe
+// docker. Sans refus de Docker, ou pour des droits personnalisés, rien.
+func TestE03_10_DockerDeniedGivesTheLineOfTheSet(t *testing.T) {
+	const manage = "observe,probe.lan,agent.update,docker.deploy,docker.update,files.write=/srv/workspace,restic.produce,restic.docker,restic.restore,terminal.container"
+	denied := reportingAgent(t, "web-1", manage)
+	denied.Unavailable = map[string]string{agentpolicy.CapabilityDockerDeploy: "docker_denied"}
+	if got := agentToJSON(denied).Rights.PrepareLine; got != agentpolicy.GrantSetLine(agentpolicy.SetManage) {
+		t.Fatalf("prepare line %q, want the manage line", got)
+	}
+	pathDenied := reportingAgent(t, "web-1", manage)
+	pathDenied.Unavailable = map[string]string{agentpolicy.CapabilityFilesWrite: "path_denied"}
+	custom := reportingAgent(t, "web-1", "observe,docker.deploy")
+	custom.Unavailable = denied.Unavailable
+	for name, agent := range map[string]machine.Agent{"all exercised": reportingAgent(t, "web-1", manage), "path denied": pathDenied, "custom": custom} {
+		if got := agentToJSON(agent).Rights.PrepareLine; got != "" {
+			t.Errorf("%s: prepare line %q, want none", name, got)
+		}
+	}
+}

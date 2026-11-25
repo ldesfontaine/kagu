@@ -141,13 +141,15 @@ export type RightsSet = "observe" | "manage" | "root";
 
 // Les droits d'un agent pour l'onglet Droits (R-A3-13) : le jeu (vide :
 // personnalisé), les lignes --set des autres jeux, la machine du serveur en
-// « Gérer en root » (R-DROIT-5), et cinq groupes. Toutes les lignes sont
-// écrites par le serveur.
+// « Gérer en root » (R-DROIT-5), cinq groupes, et la ligne du jeu qui refait
+// les prérequis quand Docker refuse le compte de l'agent (vide sinon).
+// Toutes les lignes sont écrites par le serveur.
 export interface AgentRights {
   set: RightsSet | "";
   set_lines: SetLine[];
   root_here: boolean;
   groups: RightsGroup[];
+  prepare_line: string;
 }
 
 export interface SetLine {

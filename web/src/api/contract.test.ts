@@ -155,6 +155,7 @@ const machine = shape<Machine>("Machine", {
         grant_line: value,
         revoke_line: value,
       }),
+      prepare_line: value,
     }),
     fit: dictionaryOf(shape<RightFit>("RightFit", { state: value, reason: value })),
   }),

@@ -233,6 +233,60 @@ func TestR_A3_8_WithoutDockerTheRestIsLaidAndSaid(t *testing.T) {
 	}
 }
 
+// E03-10 : « Gérer » posé sans Docker, puis Docker installé : grant --set
+// manage, les droits inchangés, refait le plan et y met le groupe docker ;
+// il le dit avant la question, ne pose rien sur un refus, le pose après
+// l'accord sans réécrire la politique, puis n'a plus rien à demander.
+func TestE03_10_UnchangedRightsStillLayTheDockerGroup(t *testing.T) {
+	account, _ := testAccount(t)
+	b := newPolicyBench(t)
+	b.system.dockerGroup = false
+	b.grantSet(t, agentpolicy.SetManage)
+	b.system.take()
+	written := b.stored(t)
+
+	// Sans Docker, la même commande n'a rien à poser : elle ne demande rien
+	// et dit ce qui manque.
+	change, err := GrantSet(b.opts, agentpolicy.SetManage, func(PolicyChange) error {
+		t.Fatal("asked with nothing to lay")
+		return nil
+	})
+	if err != nil || change.Changed() || change.LaysPrerequisites() || !slices.Contains(kindsOf(change.Prerequisites), PrerequisiteDockerMissing) {
+		t.Fatalf("without docker: %+v %v", change.Prerequisites, err)
+	}
+
+	b.system.dockerGroup = true
+	declined := errors.New("declined")
+	var shown []Prerequisite
+	if _, err := GrantSet(b.opts, agentpolicy.SetManage, func(change PolicyChange) error {
+		shown = change.Prerequisites
+		return declined
+	}); !errors.Is(err, declined) {
+		t.Fatalf("declined: %v", err)
+	}
+	if done := b.system.take(); len(done) != 0 {
+		t.Fatalf("laid after a refusal: %q", done)
+	}
+	if !slices.Equal(kindsOf(shown), []PrerequisiteKind{PrerequisiteDockerJoin, PrerequisiteRestart}) {
+		t.Fatalf("shown %v", kindsOf(shown))
+	}
+
+	change = b.grantSet(t, agentpolicy.SetManage)
+	want := []string{"usermod -aG docker " + account, "systemctl daemon-reload", "systemctl try-restart opencloud-agent.service"}
+	if done := b.system.take(); !slices.Equal(done, want) || change.Changed() {
+		t.Fatalf("laid %q, changed %v\nwant %q", done, change.Changed(), want)
+	}
+	if !b.stored(t).Same(written) {
+		t.Fatalf("policy rewritten: %+v", b.stored(t))
+	}
+	if _, err := GrantSet(b.opts, agentpolicy.SetManage, func(PolicyChange) error {
+		t.Fatal("asked again once laid")
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // R-A3-8 : revoke défait ce qui ne sert plus : le groupe docker quand plus
 // aucun droit ne le demande, le drop-in quand plus rien ne s'écrit ailleurs,
 // puis la relance ; les dossiers restent (ce sont des données). Un retrait

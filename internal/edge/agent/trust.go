@@ -73,7 +73,7 @@ func Trust(opts PolicyOptions, request TrustRequest, confirm func(PolicyChange) 
 		return PolicyChange{}, err
 	}
 	verb := "trust " + request.Verb + " " + request.Kind + " " + request.Value
-	return changePolicy(opts, verb, change, confirm)
+	return changePolicy(opts, verb, leaveSystem, change, confirm)
 }
 
 // trustChange rend ce que le geste fait à la politique, ou le refus d'un

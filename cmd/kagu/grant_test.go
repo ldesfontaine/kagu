@@ -85,32 +85,47 @@ func runPolicyOn(t *testing.T, place agent.PolicyPlace, system agent.System, ter
 }
 
 // quietSystem est une machine avec un groupe docker, sans drop-in, qui note
-// ce qu'on lui fait poser sans rien lancer ; server : la machine du serveur.
+// ce qu'on lui fait poser sans rien lancer ; server : la machine du serveur ;
+// noDocker : pas de groupe docker ; member : le compte de l'agent y est ;
+// dropIn : le drop-in des droits écrit.
 type quietSystem struct {
-	server bool
-	laid   []string
+	server   bool
+	noDocker bool
+	member   bool
+	dropIn   []byte
+	laid     []string
 }
 
-func (*quietSystem) GroupExists(string) (bool, error)     { return true, nil }
-func (*quietSystem) InGroup(string, string) (bool, error) { return false, nil }
-func (*quietSystem) DropIns() ([]string, error)           { return nil, nil }
-func (*quietSystem) ReadDropIn(string) ([]byte, error)    { return nil, fs.ErrNotExist }
-func (*quietSystem) Proxmox() bool                        { return false }
-func (s *quietSystem) ServerMachine() bool                { return s.server }
+func (s *quietSystem) GroupExists(string) (bool, error)     { return !s.noDocker, nil }
+func (s *quietSystem) InGroup(string, string) (bool, error) { return s.member, nil }
+func (*quietSystem) DropIns() ([]string, error)             { return nil, nil }
+func (*quietSystem) Proxmox() bool                          { return false }
+func (s *quietSystem) ServerMachine() bool                  { return s.server }
 func (s *quietSystem) Run(name string, args ...string) error {
 	s.laid = append(s.laid, name+" "+strings.Join(args, " "))
+	if name == "usermod" {
+		s.member = true
+	}
 	return nil
 }
 func (s *quietSystem) MakeFolder(path string, _ fs.FileMode, _ fsx.Owner) error {
 	s.laid = append(s.laid, "folder "+path)
 	return nil
 }
+func (s *quietSystem) ReadDropIn(string) ([]byte, error) {
+	if s.dropIn == nil {
+		return nil, fs.ErrNotExist
+	}
+	return s.dropIn, nil
+}
 func (s *quietSystem) WriteDropIn(name string, content []byte) error {
 	s.laid = append(s.laid, "write "+name+" "+string(content))
+	s.dropIn = content
 	return nil
 }
 func (s *quietSystem) RemoveDropIn(name string) error {
 	s.laid = append(s.laid, "remove "+name)
+	s.dropIn = nil
 	return nil
 }
 
@@ -164,10 +179,12 @@ func TestR_A3_15_GrantWithoutConsentWritesNothing(t *testing.T) {
 // Un « o », ou -yes, écrit ; rights le relit, avec sa source et son empreinte.
 func TestRunAgentPolicy_GrantRevokeAndRights(t *testing.T) {
 	stateDir, place := policyState(t)
-	if _, err := runPolicy(t, place, fakeTerminal("o\n"), policyGrant, "-state", stateDir, "files.write=/srv/a", "probe.lan"); err != nil {
+	// Une seule machine : le drop-in écrit par le premier grant y reste.
+	system := &quietSystem{}
+	if _, err := runPolicyOn(t, place, system, fakeTerminal("o\n"), policyGrant, "-state", stateDir, "files.write=/srv/a", "probe.lan"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runPolicy(t, place, noTerminal, policyRevoke, "-state", stateDir, "-yes", "probe.lan"); err != nil {
+	if _, err := runPolicyOn(t, place, system, noTerminal, policyRevoke, "-state", stateDir, "-yes", "probe.lan"); err != nil {
 		t.Fatal(err)
 	}
 	out, err := runPolicy(t, place, noTerminal, policyRights, "-state", stateDir)
@@ -181,7 +198,7 @@ func TestRunAgentPolicy_GrantRevokeAndRights(t *testing.T) {
 	if !strings.Contains(out, agentpolicy.Digest(content)) || !strings.Contains(out, "files.write=/srv/a") || strings.Contains(out, "probe.lan") {
 		t.Fatalf("rights:\n%s", out)
 	}
-	out, err = runPolicy(t, place, noTerminal, policyGrant, "-state", stateDir, "files.write=/srv/a")
+	out, err = runPolicyOn(t, place, system, noTerminal, policyGrant, "-state", stateDir, "files.write=/srv/a")
 	if err != nil || !strings.Contains(out, "Rien ne change") {
 		t.Fatalf("nothing to change: %v\n%s", err, out)
 	}
@@ -332,7 +349,7 @@ func TestR_A3_12_ManageSaysItIsWorthRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	risk := "il vaut root sur la machine."
+	risk := "le compte de l'agent vaut root sur la machine."
 	question := strings.Index(out, "[o/N]")
 	if index := strings.Index(out, risk); index < 0 || index > question || strings.Count(out, risk) != 1 {
 		t.Fatalf("worth root not said once before the question:\n%s", out)
@@ -369,5 +386,48 @@ func TestR_DROIT_5_RootSetOnTheOpenCloudMachineSaysItBeforeLaying(t *testing.T) 
 	again, err := runPolicyOn(t, place, server, noTerminal, policyGrant, "-state", stateDir, "-yes", "probe.lan", "observe.env")
 	if err != nil || strings.Contains(again, sentence) {
 		t.Fatalf("said again on a machine already in root: %v\n%s", err, again)
+	}
+}
+
+// E03-10 : « Gérer » posé sans Docker ne promet pas le groupe ; la même
+// commande le redit manquant sans rien demander ; Docker installé, elle
+// refait le plan, droits inchangés : le groupe et la relance sont dits avant
+// la question, rien n'est posé sur « N », tout l'est sur « o », et la sortie
+// ne dit pas « Rien ne change ».
+func TestE03_10_GrantSetLaysTheDockerGroupWhenOnlyThePrerequisitesDiffer(t *testing.T) {
+	stateDir, place := policyState(t)
+	system := &quietSystem{noDocker: true}
+	out, err := runPolicyOn(t, place, system, noTerminal, policyGrant, "-state", stateDir, "-yes", "--set", "manage")
+	if err != nil || !strings.Contains(out, "pas de groupe docker") || strings.Contains(out, "groupe docker pour") || strings.Contains(out, "entre dans le groupe docker") {
+		t.Fatalf("without docker: %v\n%s", err, out)
+	}
+	system.laid = nil
+	out, err = runPolicyOn(t, place, system, noTerminal, policyGrant, "-state", stateDir, "--set", "manage")
+	if err != nil || !strings.Contains(out, "Rien ne change") || !strings.Contains(out, "pas de groupe docker") || strings.Contains(out, "[o/N]") || len(system.laid) != 0 {
+		t.Fatalf("still without docker: %v, laid %q\n%s", err, system.laid, out)
+	}
+
+	system.noDocker = false
+	before := policyContent(t, place)
+	for _, terminal := range []terminalOpener{fakeTerminal("N\n"), noTerminal} {
+		out, err = runPolicyOn(t, place, system, terminal, policyGrant, "-state", stateDir, "--set", "manage")
+		var refused *refusal
+		if !errors.As(err, &refused) || len(system.laid) != 0 || system.member || policyContent(t, place) != before {
+			t.Fatalf("declined: %v, laid %q", err, system.laid)
+		}
+		for _, want := range []string{"La politique ne change pas.", "groupe docker pour", "systemctl daemon-reload, puis relance"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("%q not said before the refusal:\n%s", want, out)
+			}
+		}
+	}
+
+	out, err = runPolicyOn(t, place, system, fakeTerminal("o\n"), policyGrant, "-state", stateDir, "--set", "manage")
+	question := strings.Index(out, "[o/N]")
+	if err != nil || question < strings.Index(out, "groupe docker pour") || strings.Contains(out, "Rien ne change") || !strings.Contains(out, "✓ groupe docker pour") || policyContent(t, place) != before {
+		t.Fatalf("accepted: %v\n%s", err, out)
+	}
+	if len(system.laid) != 3 || !strings.HasPrefix(system.laid[0], "usermod -aG docker ") || system.laid[1] != "systemctl daemon-reload" {
+		t.Fatalf("laid %q", system.laid)
 	}
 }

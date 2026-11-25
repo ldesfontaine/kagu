@@ -121,7 +121,11 @@ func finishPolicyChange(out io.Writer, text lang.Catalog, change agent.PolicyCha
 	var partial *agent.PrerequisiteError
 	if errors.As(err, &partial) {
 		printPolicyDone(out, text, partial.Change)
-		return &refusal{message: text.Format("agent.prerequisites_failed", partial.Err.Error())}
+		key := "agent.prerequisites_failed"
+		if !partial.Change.Changed() {
+			key = "agent.prerequisites_failed_same"
+		}
+		return &refusal{message: text.Format(key, partial.Err.Error())}
 	}
 	if err != nil {
 		return explainPolicyError(err, text)
@@ -226,7 +230,11 @@ func printPolicyChange(out io.Writer, text lang.Catalog, change agent.PolicyChan
 	if change.First {
 		fmt.Fprintln(out, text.Get("agent.policy_first"))
 	}
-	fmt.Fprintln(out, text.Get("agent.policy_change"))
+	if !change.Changed() {
+		fmt.Fprintln(out, text.Get("agent.policy_same"))
+	} else {
+		fmt.Fprintln(out, text.Get("agent.policy_change"))
+	}
 	for _, right := range change.Added {
 		fmt.Fprintf(out, "  + %s\n", right)
 	}
@@ -365,12 +373,23 @@ func printServerKeyChanges(out io.Writer, text lang.Catalog, before, after []age
 	}
 }
 
+// printPolicyDone dit ce qui est écrit et posé ; rien de posé, il redit ce
+// qui manque encore (Docker), jamais un prérequis comme posé (E03-10).
 func printPolicyDone(out io.Writer, text lang.Catalog, change agent.PolicyChange) {
-	if !change.Changed() {
+	switch {
+	case change.Changed():
+		fmt.Fprintln(out, text.Get("agent.policy_done"))
+	case len(change.Laid) > 0:
+		fmt.Fprintln(out, text.Get("agent.policy_same"))
+	default:
 		fmt.Fprintln(out, text.Get("agent.policy_unchanged"))
+		for _, step := range change.Prerequisites {
+			if step.Kind == agent.PrerequisiteDockerMissing {
+				fmt.Fprintln(out, "  "+prerequisiteText(text, step))
+			}
+		}
 		return
 	}
-	fmt.Fprintln(out, text.Get("agent.policy_done"))
 	for _, step := range change.Laid {
 		fmt.Fprintln(out, "  ✓ "+prerequisiteText(text, step))
 	}
