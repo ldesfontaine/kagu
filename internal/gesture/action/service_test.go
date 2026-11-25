@@ -5,6 +5,8 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"log/slog"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -214,12 +217,20 @@ func TestRecord_RefusesAReportOutsideTheProtocol(t *testing.T) {
 	for index := range long {
 		long[index] = agentwire.OutputLine{Stream: "stdout", Line: "x"}
 	}
+	manySteps := make([]step.Step, agentwire.MaxActionSteps+1)
+	for index := range manySteps {
+		manySteps[index] = step.Step{Key: step.EnrollDocker, State: step.StateDone, At: benchNow}
+	}
 	for name, result := range map[string]agentwire.ActionResult{
 		"state from the server": {RunID: run.ID, State: "expired"},
 		"no run":                {State: agentwire.ActionSucceeded},
 		"reason on two lines":   {RunID: run.ID, State: agentwire.ActionRefused, Reason: "a\nb"},
 		"too much output":       {RunID: run.ID, State: agentwire.ActionSucceeded, Output: long},
 		"unknown stream":        {RunID: run.ID, State: agentwire.ActionSucceeded, Output: []agentwire.OutputLine{{Stream: "tty", Line: "x"}}},
+		"too many steps":        {RunID: run.ID, State: agentwire.ActionSucceeded, Steps: manySteps},
+		"step without a key":    {RunID: run.ID, State: agentwire.ActionSucceeded, Steps: []step.Step{{Key: "docker", State: step.StateDone, At: benchNow}}},
+		"step in no state":      {RunID: run.ID, State: agentwire.ActionSucceeded, Steps: []step.Step{{Key: step.EnrollDocker, State: "queued", At: benchNow}}},
+		"step detail too long":  {RunID: run.ID, State: agentwire.ActionSucceeded, Steps: []step.Step{{Key: step.EnrollDocker, State: step.StateDone, Detail: strings.Repeat("x", step.MaxDetailRunes+1), At: benchNow}}},
 	} {
 		err := b.service.Record(context.Background(), machineID, agentwire.ActionReport{Results: []agentwire.ActionResult{result}})
 		if !errors.Is(err, action.ErrReportInvalid) {
@@ -228,6 +239,52 @@ func TestRecord_RefusesAReportOutsideTheProtocol(t *testing.T) {
 	}
 	if runs := b.runs(t); runs[0].State != action.StateSent {
 		t.Fatalf("a refused report moved the run: %+v", runs)
+	}
+}
+
+// Un faux agent coche trois étapes d'un run, rapport après rapport : la
+// lecture du run les rend dans l'ordre où il les a cochées, le détail passé
+// par untrusted.Strip. Le run fini, une étape rapportée plus tard ne s'écrit
+// pas.
+func TestRecord_StepsOfARunComeBackInOrder(t *testing.T) {
+	b := newBench(t)
+	run, err := b.service.Ping(operator(), machineID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := benchNow.Add(time.Second)
+	system := step.Step{Key: step.EnrollSystem, State: step.StateDone, Detail: "Debian 12, amd64", At: at}
+	docker := step.Step{Key: step.EnrollDocker, State: step.StateRunning, At: at}
+	reports := []agentwire.ActionResult{
+		{RunID: run.ID, State: agentwire.ActionAccepted, Steps: []step.Step{system, docker}},
+		{RunID: run.ID, State: agentwire.ActionAccepted, Steps: []step.Step{
+			system,
+			{Key: step.EnrollDocker, State: step.StateDone, Detail: "27.3.1\x1b[2J", At: at},
+			{Key: step.EnrollRestic, State: step.StateRunning, At: at},
+		}},
+		{RunID: run.ID, State: agentwire.ActionSucceeded, Steps: []step.Step{
+			system,
+			{Key: step.EnrollDocker, State: step.StateDone, Detail: "27.3.1\x1b[2J", At: at},
+			{Key: step.EnrollRestic, State: step.StateSkipped, At: at},
+		}},
+		{RunID: run.ID, State: agentwire.ActionSucceeded, Steps: []step.Step{{Key: step.EnrollReady, State: step.StateDone, At: at}}},
+	}
+	for _, reported := range reports {
+		if err := b.service.Record(context.Background(), machineID, agentwire.ActionReport{Results: []agentwire.ActionResult{reported}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read, err := b.db.GetActionRun(context.Background(), run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, one := range read.Steps {
+		got = append(got, string(one.Key)+" "+string(one.State)+" "+one.Detail)
+	}
+	want := []string{"step.enroll.system done Debian 12, amd64", "step.enroll.docker done 27.3.1\ufffd[2J", "step.enroll.restic skipped "}
+	if read.State != action.StateSucceeded || !slices.Equal(got, want) || !read.Steps[0].At.Equal(at) {
+		t.Fatalf("run %s, steps %q", read.State, got)
 	}
 }
 

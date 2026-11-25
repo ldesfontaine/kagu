@@ -24,11 +24,13 @@ import { RightsList } from "../components/RightsList";
 import { SectionHead } from "../components/SectionHead";
 import { Select } from "../components/Select";
 import { DangerZone, SettingFoot, SettingRow } from "../components/SettingRow";
+import { StepTrail } from "../components/StepTrail";
 import { List, RowLink, RowText, RowWhen, Table } from "../components/Table";
 import { Wizard, type WizardStep } from "../components/Wizard";
 import { useForm } from "../hooks/useForm";
 import { useViewMode } from "../hooks/useViewMode";
 import { useI18n, usePendingLine, type Translate } from "../i18n/context";
+import type { Step } from "../lib/steps";
 import type { WizardMode } from "../lib/wizard";
 import { ViewToggle } from "../components/ViewToggle";
 import "./VisualSystem.scss";
@@ -504,11 +506,37 @@ export function VisualSystem() {
               </CardBody>
             </Card>
           </section>
+
+          <section>
+            <h2 className="side-label section-label">{t("visual.steps.title")}</h2>
+            <Card>
+              <CardBody>
+                <p className="secondary">{t("visual.steps.text")}</p>
+                <div className="stack gap-10">
+                  <StepTrail steps={sampleSteps} />
+                  <StepTrail steps={sampleFailure} />
+                </div>
+              </CardBody>
+            </Card>
+          </section>
         </div>
       </div>
     </>
   );
 }
+
+// Une machine qui arrive, à mi-chemin, et une autre arrêtée par une étape en
+// échec : ce que join a coché jusque-là.
+const sampleSteps: Step[] = [
+  { key: "step.enroll.system", state: "done", detail: "Debian 12, amd64", at: "2026-11-25T10:00:00Z" },
+  { key: "step.enroll.docker", state: "done", detail: "27.3.1", at: "2026-11-25T10:00:41Z" },
+  { key: "step.enroll.restic", state: "skipped", at: "2026-11-25T10:00:41Z" },
+  { key: "step.enroll.account", state: "running", at: "2026-11-25T10:00:42Z" },
+];
+
+const sampleFailure: Step[] = [
+  { key: "step.enroll.system", state: "failed", detail: "Debian 11, amd64", at: "2026-11-25T10:00:00Z" },
+];
 
 // La fenêtre modale : le voile flou, la saisie qui ne se perd pas (Échap
 // demande avant d'abandonner, un clic sur le voile ne ferme rien), la

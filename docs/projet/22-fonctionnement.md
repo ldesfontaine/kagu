@@ -136,6 +136,7 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `opencloud.db` | Le journal d'audit : la table `audit_events`, une ligne par geste réussi qui écrit un objet déclaré ou une autorité : `at`, `actor_kind`, `actor_name` et `actor_label` (le nom que portait l'acteur à l'instant du geste, nullable : migration `017_audit_actor_label.sql`), `action`, `object_kind`, `object_id`, `object_name` recopié, `details` (JSON plat de textes) et `apply_id` quand un apply l'a écrit. **Aucun secret** : ni mot de passe, ni jeton, ni secret, ni URL de webhook (« Le journal d'audit ») | Ajout seul : un déclencheur refuse toute modification d'une ligne, hors la mise à nul du lien `apply_id` (`ON DELETE SET NULL`). Pas de clé étrangère vers l'objet : la ligne lui survit. Purgé après **un an** (`audit.Retention`), avec les alertes, au démarrage puis une fois par jour |
 | Machine Kagu, `state_dir` | `opencloud.db` | L'envoi du journal : la table `audit_deliveries`, une ligne par (événement, canal qui reçoit le journal) : `status` (`pending`, `delivered`, `failed`), `attempts`, `reason` et `code` du dernier essai, `next_attempt_at`. Réservée dans la transaction de l'événement. **Aucun contenu** : le message se refait de l'événement, relu à l'envoi (« Le journal d'audit › Envoi aux canaux ») | Part avec son événement (la purge à un an) et avec son canal (`ON DELETE CASCADE`) |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les ordres envoyés aux agents : `action_runs` (identifiant, genre `action`, paramètres sans secret `params`, machine et agent en `set null` avec `machine_name` recopié, état, `refusal_reason`, `not_after`, rang `seq` unique par agent, `requested_by` recopié de l'acteur, `requested_by_label` son nom lisible (migration `049`), `requested_at`, `finished_at`) et leur sortie, `run_logs` (rang, instant, flux, ligne ; 64 lignes au plus par run), partie avec son run (`cascade`). Écrit **avant** que l'ordre ne parte (« Comment un ordre part et revient ») | Un run survit à sa machine et à son agent : c'est une trace. Purgé à 90 jours (`action.Retention`) avec sa sortie, par la boucle des ordres. La sortie est ce que l'agent a écrit : rien n'y est masqué |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les étapes cochées d'un geste suivi (migration `057`) : `gesture_steps` (`subject` préfixé, `run:<id>` pour un ordre, `enrollment:<id du jeton>` réservé à l'arrivée d'une machine ; `position`, l'ordre d'affichage ; `key`, la clé du catalogue ; `state` `running`, `done`, `failed` ou `skipped` ; `detail`, 200 caractères au plus, nettoyé par `untrusted.Strip` ; `at` ; `source_addr`, nul pour un run). **Aucune clé étrangère** : un run purgé ou un jeton expiré ne bloque rien | La purge des runs efface elle-même les lignes `run:<id>` des runs purgés, dans sa transaction. Le détail est ce que l'agent a écrit, nettoyé, rien n'y est masqué |
 | Machine Kagu, `state_dir` | `opencloud.db` | Le rattachement des conteneurs à l'annuaire : `containers.unit_id` (l'unité déclarée, nulle tant que rien ne rattache) et `containers.match_level` (`label`, `compose` ou `name`), recalculés à chaque rapport et après chaque écriture de l'annuaire ; la table `ignored_keys` (machine, genre `compose_service` — valeur `projet/service` —, `compose_project` ou `container_name`, valeur) des conteneurs que l'opérateur dit voulus. Les deux labels du produit que le conteneur porte, `containers.label_service` et `containers.label_unit` (texte, vides par défaut) et `containers.label_invalid` (0 ou 1 : des labels de la marque étaient là, mal formés), pour que le rapprochement relise la valeur sans la demander à l'agent ; aucun autre label n'est gardé. Aucun secret, aucun identifiant Docker : une clé d'observation survit à la recréation du conteneur | `unit_id` passe à nul quand l'unité est supprimée (`ON DELETE SET NULL`), `ignored_keys` part avec sa machine. Pas de purge : l'opérateur retire une clé d'un geste |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les conteneurs : une fiche par conteneur dans `containers` (nom, projet Compose, image, état Docker, code de sortie, tué faute de mémoire, tué sans arrêt demandé, arrêt demandé, santé, ports publiés, mode réseau, privilégié, dépendances déclarées, dates), ses transitions dans `container_events`, ses mesures dans `container_samples`, ce que chaque machine dit de son Docker dans `machine_engines` | Purgés : transitions après 90 jours, fiche d'un conteneur détruit après 30 jours avec ses transitions et mesures, mesures après 48 h ; plafonnés par machine (fiches vivantes, archivées, transitions, cadence des mesures : « Comment les conteneurs sont suivis », point 6). **L'extrait de journal** d'un arrêt anormal (50 lignes, 10 Kio) est stocké en clair sur la transition : ce qu'une application écrit dans ses logs peut s'y trouver |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les clés SSH autorisées que chaque agent relève (migration `011_ssh_keys.sql`) : `ssh_reports` (une ligne par machine : relevé tronqué ou non, instant), `ssh_accounts` (machine, compte, uid, état `read`, `none`, `denied`, `unsafe` ou `too_large`, relevé tronqué, lignes ignorées) et `ssh_keys` (compte, fichier `authorized_keys` ou `authorized_keys2`, **empreinte SHA256**, type, taille en bits, commentaire borné à 64 octets, noms d'options reconnus). **Jamais le contenu d'un fichier ni la clé publique entière** : l'empreinte ne remonte pas à la clé | Remplacé en entier à chaque relevé retenu, dans une transaction : ce qu'une machine ne dit plus disparaît. Pas de purge d'âge. La machine retirée emporte tout (`ON DELETE CASCADE`), et le plan de suppression compte « clés SSH relevées » |
@@ -1743,12 +1744,28 @@ d'autre (test). Un ordre qui ne se décode pas n'atteint aucun exécuteur.
    de ces bornes (plus de 32 résultats, un état que seul le serveur pose,
    une raison sur deux lignes) refuse la section, `bad_actions` ; les autres
    s'écrivent.
+   Un résultat peut porter les **étapes cochées** du run (`steps`, brique
+   B-1, R-GESTE-4) : le parcours entier à chaque rapport, qui remplace le
+   précédent dans `gesture_steps` sous `run:<id>`, dans la même transaction
+   que l'état. Un run accepté qui avance ne change que ses étapes ; un run
+   fini n'en reçoit plus. 32 étapes au plus, une clé `step.…`, un des quatre
+   états, une heure, un détail passé par `untrusted.Strip` et de 200
+   caractères au plus ; sinon la section est refusée comme ci-dessus.
 8. **La boucle des ordres** (toutes les 30 s) passe `expired` ce qui attend
    encore (`queued`, `sent`) après `not_after`, passe `failed` (raison
    `timeout`) un run `accepted` depuis plus d'une heure
    (`action.MaxRunDuration` : l'agent a pris l'ordre et n'a jamais répondu),
-   et purge les runs de plus de 90 jours avec leur sortie. Avant, un run
-   accepté n'expirait jamais.
+   et purge les runs de plus de 90 jours avec leur sortie et leurs étapes.
+   Avant, un run accepté n'expirait jamais.
+
+**Les étapes cochées.** Une étape a une clé déclarée une fois par
+`step.Define` (`internal/kit/step`), dont le libellé vit dans
+`internal/kit/lang` : le terminal l'imprime par `step.Print`, l'écran la
+dessine par `StepTrail`, avec le même libellé (un test refuse une clé sans
+libellé). Une clé bien formée que le serveur ne connaît pas (agent plus
+récent) s'écrit, et s'affiche entre crochets. Aujourd'hui seules les neuf
+étapes d'arrivée d'une machine (`step.enroll.*`) sont déclarées ; aucun ordre
+n'en rapporte encore, et aucune route ne rend les étapes.
 
 | État | Posé par | Fini |
 | --- | --- | --- |

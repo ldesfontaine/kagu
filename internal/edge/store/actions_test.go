@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -94,6 +96,49 @@ func TestRunLogs_AreBoundedAndFollowTheirRun(t *testing.T) {
 	}
 	if left := count(t, db, `SELECT COUNT(*) FROM run_logs`); left != 0 {
 		t.Fatalf("%d run logs left after the purge", left)
+	}
+}
+
+// Les étapes d'un run vivent sous run:<id> sans clé étrangère : un run fini
+// n'en reçoit plus, et la purge des runs efface les siennes, pas celles d'un
+// autre sujet ni d'un run gardé.
+func TestGestureSteps_FollowTheirRunAndNothingElse(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	found, err := db.GetMachine(ctx, enrolledMachine(t, db, "vps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Unix(1_800_000_000, 0)
+	for _, run := range []action.Run{pendingRun("old", found, at), pendingRun("kept", found, at.Add(time.Hour))} {
+		if _, err := db.InsertRun(ctx, run); err != nil {
+			t.Fatal(err)
+		}
+	}
+	done := []step.Step{{Key: "step.a", State: step.StateDone, At: at}}
+	for _, id := range []string{"old", "kept"} {
+		if _, changed, err := db.ApplyRunResult(ctx, found.ID, action.Result{RunID: id, State: action.StateSucceeded, Steps: done}, at); err != nil || !changed {
+			t.Fatalf("%s: %v %v", id, changed, err)
+		}
+	}
+	late := action.Result{RunID: "old", State: action.StateSucceeded, Steps: []step.Step{{Key: "step.late", State: step.StateDone, At: at}}}
+	if _, changed, err := db.ApplyRunResult(ctx, found.ID, late, at); err != nil || changed {
+		t.Fatalf("a finished run took steps: %v %v", changed, err)
+	}
+	if _, err := db.sql.ExecContext(ctx, `
+		INSERT INTO gesture_steps (subject, position, key, state, at) VALUES ('enrollment:old', 0, 'step.enroll.system', 'done', 0)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.PurgeRuns(ctx, at.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.sql.QueryContext(ctx, `SELECT subject || '/' || key FROM gesture_steps ORDER BY subject`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subjects, err := collect(rows, scanString)
+	if err != nil || !slices.Equal(subjects, []string{"enrollment:old/step.enroll.system", "run:kept/step.a"}) {
+		t.Fatalf("after the purge %v %v", subjects, err)
 	}
 }
 

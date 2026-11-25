@@ -11,6 +11,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 )
 
 // OrderVersion est la forme de l'enveloppe que ce binaire écrit et lit (R-A1-9).
@@ -346,6 +347,7 @@ func RefusalReasons() []string {
 // serveur garde d'une sortie.
 const (
 	MaxActionResults   = 32
+	MaxActionSteps     = 32
 	MaxOutputLines     = 64
 	MaxOutputLineBytes = 4 << 10
 )
@@ -365,6 +367,9 @@ type ActionResult struct {
 	State  ActionState  `json:"state"`
 	Reason string       `json:"reason,omitempty"`
 	Output []OutputLine `json:"output,omitempty"`
+	// Les étapes cochées du run, toutes depuis la première : chaque rapport
+	// rend le parcours entier, qui remplace le précédent.
+	Steps []step.Step `json:"steps,omitempty"`
 	// Le chemin et le bilan d'une sauvegarde restic.backup, réussie ou non ;
 	// absent pour les autres ordres.
 	Restic *ResticRunReport `json:"restic,omitempty"`

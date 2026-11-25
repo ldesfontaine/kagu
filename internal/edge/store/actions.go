@@ -83,8 +83,16 @@ func (db *DB) ApplyRunResult(ctx context.Context, machineID string, result actio
 		}
 		run.ID, run.Kind, run.MachineID, run.AgentID = result.RunID, agentwire.Kind(kind), machineID, agentID
 		state := action.State(current)
-		if state.IsFinished() || (state == action.StateAccepted && result.State == action.StateAccepted) {
+		if state.IsFinished() {
 			return nil
+		}
+		if state == action.StateAccepted && result.State == action.StateAccepted {
+			// Un run accepté qui avance : seules ses étapes changent.
+			if len(result.Steps) == 0 {
+				return nil
+			}
+			run.State, changed = state, true
+			return replaceSteps(ctx, tx, runSubject(result.RunID), result.Steps)
 		}
 		finishedAt := time.Time{}
 		if result.State.IsFinished() {
@@ -96,6 +104,9 @@ func (db *DB) ApplyRunResult(ctx context.Context, machineID string, result actio
 			return fmt.Errorf("update run: %w", err)
 		}
 		if err := appendRunLogs(ctx, tx, result.RunID, result.Output, at); err != nil {
+			return err
+		}
+		if err := replaceSteps(ctx, tx, runSubject(result.RunID), result.Steps); err != nil {
 			return err
 		}
 		run.State, run.Reason, run.FinishedAt = result.State, result.Reason, finishedAt
@@ -221,12 +232,22 @@ func scanString(row scanner) (string, error) {
 	return value, err
 }
 
-// PurgeRuns retire les runs demandés avant before, leur sortie avec eux.
+// PurgeRuns retire les runs demandés avant before, leur sortie avec eux, et
+// leurs étapes : gesture_steps n'a pas de clé étrangère, la purge les efface
+// elle-même, dans la même transaction.
 func (db *DB) PurgeRuns(ctx context.Context, before time.Time) error {
-	if _, err := db.sql.ExecContext(ctx, `DELETE FROM action_runs WHERE requested_at < ?`, before.Unix()); err != nil {
-		return fmt.Errorf("purge runs: %w", err)
-	}
-	return nil
+	return db.inTx(ctx, "purge runs", func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `
+			DELETE FROM gesture_steps WHERE subject IN (SELECT ? || id FROM action_runs WHERE requested_at < ?)`,
+			runSubjectPrefix, before.Unix())
+		if err != nil {
+			return fmt.Errorf("purge run steps: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM action_runs WHERE requested_at < ?`, before.Unix()); err != nil {
+			return fmt.Errorf("purge runs: %w", err)
+		}
+		return nil
+	})
 }
 
 // ListActionRuns rend les runs, d'une machine ou de toutes, de ces genres ou
@@ -260,8 +281,9 @@ func (db *DB) ListActionRuns(ctx context.Context, query action.Query) ([]action.
 	return runs, nil
 }
 
-// GetActionRun rend un run et sa sortie ; sql.ErrNoRows, enveloppé, s'il
-// n'existe plus (la purge des runs l'a emporté).
+// GetActionRun rend un run, sa sortie et ses étapes dans l'ordre ;
+// sql.ErrNoRows, enveloppé, s'il n'existe plus (la purge des runs l'a
+// emporté).
 func (db *DB) GetActionRun(ctx context.Context, id string) (action.Run, error) {
 	run, err := scanActionRun(db.sql.QueryRowContext(ctx, `
 		SELECT `+runColumns+` FROM action_runs WHERE id = ?`, id))
@@ -272,6 +294,11 @@ func (db *DB) GetActionRun(ctx context.Context, id string) (action.Run, error) {
 	if err := attachRunLogs(ctx, db.sql, runs); err != nil {
 		return action.Run{}, err
 	}
+	steps, err := readSteps(ctx, db.sql, runSubject(id))
+	if err != nil {
+		return action.Run{}, err
+	}
+	runs[0].Steps = steps
 	return runs[0], nil
 }
 
