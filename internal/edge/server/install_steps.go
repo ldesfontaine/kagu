@@ -1,7 +1,6 @@
 package server
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
@@ -85,30 +84,18 @@ func installUnit() string {
 	return strings.Join(lines, "\n")
 }
 
-// rightsWritingOutsideState : les droits dont l'ordre écrit hors de l'état de
-// l'agent, donc dans un dossier que l'unité doit autoriser (la racine des
-// services, les sauvegardes reçues). files.write n'en est pas : ses dossiers
-// sont préparés au nom du compte, l'unité n'y change rien.
-var rightsWritingOutsideState = []string{agentpolicy.CapabilityDockerDeploy, agentpolicy.CapabilityDockerUpdate, agentpolicy.CapabilityBackupReceive}
-
-// installRights autorise, dans un drop-in de l'unité, les dossiers où ces
-// droits écrivent : sans lui, l'agent accepte l'ordre et ne peut pas écrire.
-// Vide quand aucun droit n'écrit ailleurs que dans l'état. Les chemins
-// viennent de writtenFolders, normalisés : ils passent entre apostrophes.
+// installRights autorise, dans un drop-in de l'unité, les dossiers où les
+// droits écrivent (machine.RightsDropInLines) : sans lui, l'agent accepte
+// l'ordre et ne peut pas écrire. Vide quand aucun droit n'écrit ailleurs que
+// dans l'état. Les chemins sont normalisés : ils passent entre apostrophes.
 func installRights(capabilities []agentpolicy.Capability) string {
-	var paths []string
-	for _, folder := range writtenFolders(capabilities) {
-		writesOutside := slices.ContainsFunc(folder.rights, func(right string) bool { return slices.Contains(rightsWritingOutsideState, right) })
-		if writesOutside && !slices.Contains(paths, folder.path) {
-			paths = append(paths, folder.path)
-		}
-	}
-	if len(paths) == 0 {
+	dropIn := machine.RightsDropInLines(machine.RightFolders(capabilities, brand.WorkspaceRoot))
+	if dropIn == nil {
 		return ""
 	}
 	return strings.Join([]string{
-		"install -d -m 0755 " + machine.ProduceDropInDir,
-		printfLines([]string{"[Service]", "ReadWritePaths=" + strings.Join(paths, " ")}) + " | install -m 0644 /dev/stdin " + machine.RightsDropInFile,
+		"install -d -m 0755 " + machine.UnitDropInDir,
+		printfLines(dropIn) + " | install -m 0644 /dev/stdin " + machine.RightsDropInFile,
 		"systemctl daemon-reload",
 		"systemctl restart " + brand.AgentUnit,
 	}, "\n")

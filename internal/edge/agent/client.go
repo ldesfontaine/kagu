@@ -99,6 +99,8 @@ type Client struct {
 	// pas exercer : jugés avant chaque ouverture du flux, redits avec lui.
 	account     string
 	unavailable string
+	// Ce que vaut ce compte sur la machine (R-A3-12), jugé de même.
+	rootEquivalent bool
 	// Le retour arrière que l'agent sait faire (0 : aucun).
 	rollback int
 	// Les ancres de confiance locales du fichier de l'agent, redites de même.
@@ -128,6 +130,12 @@ func (c *Client) SetAccount(account machine.Account) {
 // exercer, avec leur raison. Une table vide efface le rapport précédent.
 func (c *Client) SetUnavailable(unavailable map[string]string) {
 	c.unavailable = machine.FormatUnavailable(unavailable)
+}
+
+// SetRootEquivalent fixe ce que l'agent dit valoir sur sa machine à
+// l'ouverture du flux : root, ou l'égal de root.
+func (c *Client) SetRootEquivalent(rootEquivalent bool) {
+	c.rootEquivalent = rootEquivalent
 }
 
 // SetRollbackVersion fixe la version du retour arrière que l'agent rapporte à
@@ -294,6 +302,7 @@ func (c *Client) OpenStream(ctx context.Context, identity Identity) (*Stream, er
 	if c.rightsUntil != "" {
 		request.Header.Set(agentwire.HeaderAgentRightsUntil, c.rightsUntil)
 	}
+	request.Header.Set(agentwire.HeaderAgentRootEquivalent, strconv.FormatBool(c.rootEquivalent))
 	if fingerprint := identity.ServerKeyFingerprint(); fingerprint != "" {
 		request.Header.Set(agentwire.HeaderServerKey, fingerprint)
 	}

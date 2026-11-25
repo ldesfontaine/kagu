@@ -20,7 +20,7 @@ const machineSelect = `SELECT m.id, m.name, m.hostname, m.address, m.os, m.arch,
 		m.kind, m.kind_override, m.host_override,
 		a.id, a.public_key, a.version, a.root_dir, a.enrolled_at, a.last_seen_at, a.revoked_at,
 		a.server_key_fingerprint, a.run_as_uid, a.run_as_name, t.requested_capabilities, a.rollback_version, a.anchors, a.service_rollback_version,
-		a.policy_source, a.policy_digest, a.protocol, a.rights_until
+		a.policy_source, a.policy_digest, a.protocol, a.rights_until, a.root_equivalent
 	FROM machines m
 	LEFT JOIN agents a ON a.id = (
 		SELECT id FROM agents WHERE machine_id = m.id
@@ -222,6 +222,16 @@ func (db *DB) RecordRightsUntil(ctx context.Context, agentID string, until map[s
 	result, err := db.sql.ExecContext(ctx, `UPDATE agents SET rights_until = ? WHERE id = ?`, stored, agentID)
 	if err != nil {
 		return fmt.Errorf("record rights until: %w", err)
+	}
+	return notFoundIfNoRow(result, machine.ErrNotFound)
+}
+
+// RecordRootEquivalent note ce que l'agent dit valoir sur sa machine, à
+// l'ouverture du flux.
+func (db *DB) RecordRootEquivalent(ctx context.Context, agentID string, rootEquivalent bool) error {
+	result, err := db.sql.ExecContext(ctx, `UPDATE agents SET root_equivalent = ? WHERE id = ?`, rootEquivalent, agentID)
+	if err != nil {
+		return fmt.Errorf("record root equivalent: %w", err)
 	}
 	return notFoundIfNoRow(result, machine.ErrNotFound)
 }
@@ -529,9 +539,10 @@ func scanMachine(row scanner) (machine.Machine, error) {
 	var enrolledAt, lastSeenAt, revokedAt, runAsUID sql.NullInt64
 	var rollbackVersion, serviceRollbackVersion sql.NullInt64
 	var anchors, policySource, policyDigest, protocol, rightsUntil sql.NullString
+	var rootEquivalent sql.NullBool
 	err := row.Scan(&m.ID, &m.Name, &m.Hostname, &m.Address, &m.OS, &m.Arch, &createdAt, &m.UpdateLast, &role, &kind, &kindOverride, &hostOverride,
 		&agentID, &publicKey, &version, &rootDir, &enrolledAt, &lastSeenAt, &revokedAt, &serverKey, &runAsUID, &runAsName, &requested, &rollbackVersion, &anchors, &serviceRollbackVersion,
-		&policySource, &policyDigest, &protocol, &rightsUntil)
+		&policySource, &policyDigest, &protocol, &rightsUntil, &rootEquivalent)
 	if err != nil {
 		return machine.Machine{}, err
 	}
@@ -548,6 +559,7 @@ func scanMachine(row scanner) (machine.Machine, error) {
 		LastSeenAt: timeOrZero(lastSeenAt), RevokedAt: timeOrZero(revokedAt),
 		RollbackVersion: int(rollbackVersion.Int64), ServiceRollbackVersion: int(serviceRollbackVersion.Int64),
 		PolicySource: policySource.String, PolicyDigest: policyDigest.String, Protocol: protocol.String,
+		RootEquivalent: rootEquivalent.Bool,
 	}
 	if runAsUID.Valid {
 		m.Agent.RunAs = &machine.Account{UID: runAsUID.Int64, Name: runAsName.String}

@@ -57,6 +57,9 @@ type Agent struct {
 	// vides tant qu'il n'a rien dit (un agent d'avant la politique).
 	PolicySource string
 	PolicyDigest string
+	// RootEquivalent : l'agent dit valoir root sur sa machine (root, groupe
+	// docker, terminal.host ; R-A3-12) ; faux tant qu'il n'a rien dit.
+	RootEquivalent bool
 	// Le protocole que l'agent a annoncé à sa dernière ouverture du flux
 	// (« 3 ») ; vide tant qu'il n'est pas revenu depuis qu'on le garde.
 	Protocol string

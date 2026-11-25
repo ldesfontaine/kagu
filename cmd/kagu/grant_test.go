@@ -68,13 +68,50 @@ func policyState(t *testing.T, rights ...string) (stateDir string, place agent.P
 	return stateDir, place
 }
 
-// runPolicy lance la commande en root (euid 0) avec ce terminal.
+// runPolicy lance la commande en root (euid 0) avec ce terminal, sur un
+// système qui ne pose rien.
 func runPolicy(t *testing.T, place agent.PolicyPlace, terminal terminalOpener, verb string, args ...string) (string, error) {
+	t.Helper()
+	return runPolicyOn(t, place, &quietSystem{}, terminal, verb, args...)
+}
+
+// runPolicyOn est runPolicy sur ce système.
+func runPolicyOn(t *testing.T, place agent.PolicyPlace, system agent.System, terminal terminalOpener, verb string, args ...string) (string, error) {
 	t.Helper()
 	var out bytes.Buffer
 	placer := func(*os.Root) (agent.PolicyPlace, error) { return place, nil }
-	err := runAgentPolicy(verb, args, policyCommand{out: &out, openTerminal: terminal, euid: 0, place: placer})
+	err := runAgentPolicy(verb, args, policyCommand{out: &out, openTerminal: terminal, euid: 0, place: placer, system: system})
 	return out.String(), err
+}
+
+// quietSystem est une machine avec un groupe docker, sans drop-in, qui note
+// ce qu'on lui fait poser sans rien lancer ; server : la machine du serveur.
+type quietSystem struct {
+	server bool
+	laid   []string
+}
+
+func (*quietSystem) GroupExists(string) (bool, error)     { return true, nil }
+func (*quietSystem) InGroup(string, string) (bool, error) { return false, nil }
+func (*quietSystem) DropIns() ([]string, error)           { return nil, nil }
+func (*quietSystem) ReadDropIn(string) ([]byte, error)    { return nil, fs.ErrNotExist }
+func (*quietSystem) Proxmox() bool                        { return false }
+func (s *quietSystem) ServerMachine() bool                { return s.server }
+func (s *quietSystem) Run(name string, args ...string) error {
+	s.laid = append(s.laid, name+" "+strings.Join(args, " "))
+	return nil
+}
+func (s *quietSystem) MakeFolder(path string, _ fs.FileMode, _ fsx.Owner) error {
+	s.laid = append(s.laid, "folder "+path)
+	return nil
+}
+func (s *quietSystem) WriteDropIn(name string, content []byte) error {
+	s.laid = append(s.laid, "write "+name+" "+string(content))
+	return nil
+}
+func (s *quietSystem) RemoveDropIn(name string) error {
+	s.laid = append(s.laid, "remove "+name)
+	return nil
 }
 
 // runMigrate lance « agent policy … » en root avec ce terminal.
@@ -177,7 +214,11 @@ func TestRunAgentPolicy_RefusalsWriteNothing(t *testing.T) {
 		{[]string{policyGrant, "-state", stateDir, "-yes", "probe.lan", "--for", "169h"}, "de 5m à 168h"},
 		{[]string{policyGrant, "-state", stateDir, "-yes", "probe.lan", "--for", "toujours"}, "de 5m à 168h"},
 		{[]string{policyGrant, "-state", stateDir, "-yes", "terminal.host=Root"}, "nom de compte Unix"},
-		{[]string{policyGrant, "-state", stateDir, "-yes", "service.free"}, "n'existe pas"},
+		{[]string{policyGrant, "-state", stateDir, "-yes", "network.private=0"}, "nombre de pairs"},
+		{[]string{policyGrant, "-state", stateDir, "-yes", "--set", "admin"}, "observe, manage ou root"},
+		{[]string{policyGrant, "-state", stateDir, "-yes", "--set", "manage", "probe.lan"}, "Usage"},
+		{[]string{policyGrant, "-state", stateDir, "-yes", "--set", "root", "--for", "2h"}, "Usage"},
+		{[]string{policyRevoke, "-state", stateDir, "-yes", "--set", "observe"}, "Usage"},
 	}
 	for _, tc := range cases {
 		_, err := runPolicy(t, place, noTerminal, tc.args[0], tc.args[1:]...)
@@ -230,5 +271,103 @@ func TestN_M6_GrantHostTerminalTellsItsRiskAndTakesTwoHours(t *testing.T) {
 	out, err = runPolicy(t, place, noTerminal, policyGrant, "-state", stateDir, "-yes", "--for", "permanent", "terminal.host=admin")
 	if err != nil || !strings.Contains(out, "terminal.host   sans échéance") || strings.Contains(policyContent(t, place), "until") {
 		t.Fatalf("--for permanent: %v\n%s\n%s", err, out, policyContent(t, place))
+	}
+}
+
+// N-M3, R-A3-15 : grant --set liste, avant la question, chaque droit posé et
+// retiré, l'échéance de celui qui la perd, et ce qu'il fait aussi sur le
+// système ; « N », Entrée, ou pas de terminal sans -yes : rien n'est écrit,
+// rien n'est posé.
+func TestR_A3_15_GrantSetPrintsEachRightBeforeAsking(t *testing.T) {
+	stateDir, place := policyState(t)
+	if _, err := runPolicy(t, place, noTerminal, policyGrant, "-state", stateDir, "-yes", "terminal.host", "observe.env"); err != nil {
+		t.Fatal(err)
+	}
+	before := policyContent(t, place)
+	for _, terminal := range []terminalOpener{fakeTerminal("N\n"), fakeTerminal("\n"), noTerminal} {
+		system := &quietSystem{}
+		out, err := runPolicyOn(t, place, system, terminal, policyGrant, "-state", stateDir, "--set", "manage")
+		var refused *refusal
+		if !errors.As(err, &refused) || policyContent(t, place) != before || len(system.laid) != 0 {
+			t.Fatalf("declined: %v, laid %q", err, system.laid)
+		}
+		question := strings.Index(out, "[o/N]")
+		if question < 0 {
+			question = len(out)
+		}
+		said := out[:question]
+		for _, want := range []string{
+			"+ probe.lan", "+ agent.update", "+ docker.deploy", "+ docker.update", "+ files.write=/srv/workspace",
+			"+ restic.produce", "+ restic.docker", "+ restic.restore", "+ terminal.container", "- terminal.host=root",
+			"groupe docker pour", "dossier /srv/workspace", "droits.conf écrit", "systemctl daemon-reload, puis relance",
+		} {
+			if !strings.Contains(said, want) {
+				t.Errorf("%q not said before the question:\n%s", want, out)
+			}
+		}
+		if strings.Contains(said, "observe.env") {
+			t.Errorf("a right outside the sets is said changed:\n%s", out)
+		}
+	}
+	// Un droit posé par le jeu qui perd son échéance la dit.
+	if _, err := runPolicy(t, place, noTerminal, policyGrant, "-state", stateDir, "-yes", "--set", "root"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runPolicy(t, place, noTerminal, policyGrant, "-state", stateDir, "-yes", "terminal.host", "--for", "1h"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPolicy(t, place, noTerminal, policyGrant, "-state", stateDir, "-yes", "--set", "root")
+	if err != nil || !strings.Contains(out, "terminal.host   sans échéance") {
+		t.Fatalf("the lost expiry is not said: %v\n%s", err, out)
+	}
+}
+
+// R-A3-12 : « Gérer » met le compte de l'agent dans le groupe docker, et la
+// commande le dit « vaut root » avant la question, une fois ; le jeu posé,
+// le groupe, le dossier, le drop-in et la relance sont faits, et dits.
+func TestR_A3_12_ManageSaysItIsWorthRoot(t *testing.T) {
+	stateDir, place := policyState(t)
+	system := &quietSystem{}
+	out, err := runPolicyOn(t, place, system, fakeTerminal("o\n"), policyGrant, "-state", stateDir, "--set", "manage")
+	if err != nil {
+		t.Fatal(err)
+	}
+	risk := "il vaut root sur la machine."
+	question := strings.Index(out, "[o/N]")
+	if index := strings.Index(out, risk); index < 0 || index > question || strings.Count(out, risk) != 1 {
+		t.Fatalf("worth root not said once before the question:\n%s", out)
+	}
+	if len(system.laid) != 5 || !strings.HasPrefix(system.laid[0], "usermod -aG docker ") || !strings.Contains(out, "✓ systemctl daemon-reload") {
+		t.Fatalf("laid %q\n%s", system.laid, out)
+	}
+	// Observer ne le dit pas.
+	out, err = runPolicy(t, place, noTerminal, policyGrant, "-state", stateDir, "-yes", "--set", "observe")
+	if err != nil || strings.Contains(out, risk) {
+		t.Fatalf("observe: %v\n%s", err, out)
+	}
+}
+
+// R-DROIT-5 : sur la machine du serveur, « Gérer en root » se dit avant
+// d'être posé : qui entre dans l'interface y devient root. Ailleurs, ou
+// quand la machine y est déjà, la phrase ne vient pas.
+func TestR_DROIT_5_RootSetOnTheOpenCloudMachineSaysItBeforeLaying(t *testing.T) {
+	stateDir, place := policyState(t)
+	sentence := "qui entre dans l'interface devient root sur cette machine"
+	elsewhere, err := runPolicyOn(t, place, &quietSystem{}, fakeTerminal("N\n"), policyGrant, "-state", stateDir, "--set", "root")
+	var refused *refusal
+	if !errors.As(err, &refused) || strings.Contains(elsewhere, sentence) {
+		t.Fatalf("away from the server: %v\n%s", err, elsewhere)
+	}
+	server := &quietSystem{server: true}
+	out, err := runPolicyOn(t, place, server, fakeTerminal("o\n"), policyGrant, "-state", stateDir, "--set", "root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if index := strings.Index(out, sentence); index < 0 || index > strings.Index(out, "[o/N]") {
+		t.Fatalf("not said before the question:\n%s", out)
+	}
+	again, err := runPolicyOn(t, place, server, noTerminal, policyGrant, "-state", stateDir, "-yes", "probe.lan", "observe.env")
+	if err != nil || strings.Contains(again, sentence) {
+		t.Fatalf("said again on a machine already in root: %v\n%s", err, again)
 	}
 }

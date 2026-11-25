@@ -91,16 +91,19 @@ const (
 // knownRight est un droit que la politique connaît : son groupe, où il se
 // lit (R-A3-10), la grammaire de sa valeur, la valeur d'un droit posé sans
 // elle, la durée que « grant » lui donne quand rien n'est dit (zéro : sans
-// échéance) et la phrase de son risque, une clé des catalogues que « grant »
-// imprime avant la question (R-A3-12).
+// échéance), la phrase de son risque, une clé des catalogues que « grant »
+// imprime avant la question (R-A3-12), et ce qu'il demande au système
+// (R-A3-8) : le groupe docker, ou la porte root (A5).
 type knownRight struct {
-	name     string
-	group    Group
-	readable readable
-	value    valueGrammar
-	bare     string
-	term     time.Duration
-	risk     string
+	name        string
+	group       Group
+	readable    readable
+	value       valueGrammar
+	bare        string
+	term        time.Duration
+	risk        string
+	dockerGroup bool
+	rootGate    bool
 }
 
 // readable dit où un droit se lit.
@@ -111,9 +114,6 @@ const (
 	readEverywhere readable = iota
 	// Dans la politique seule (R-A3-10).
 	readInPolicy
-	// Un droit de la politique seule que rien ne lit encore : il s'ouvre en
-	// passant à readInPolicy, avec sa grammaire.
-	readNowhere
 )
 
 // valueGrammar est la forme de la valeur d'un droit.
@@ -129,38 +129,45 @@ const (
 	valueProducers
 	// Un nom de compte Unix (terminal.host).
 	valueAccount
+	// Un nombre de pairs, de 1 à maxPrivatePeers (network.private).
+	valuePeers
 )
 
 // hostTerminalTerm : un terminal sur la machine s'ouvre pour deux heures
 // quand « grant » ne dit rien (R-E4-11, N-M6).
 const hostTerminalTerm = 2 * time.Hour
 
+// manageRisk : le groupe docker vaut root (R-A3-12, R-DROIT-7) ; « grant »
+// le dit une fois, quel que soit le droit qui l'y met.
+const manageRisk = "rights.manage_risk"
+
 // knownRights est la seule liste des droits, dans l'ordre où ils
-// s'affichent ; un droit nouveau y entre avec son groupe, où il se lit et la
-// forme de sa valeur.
+// s'affichent ; un droit nouveau y entre avec son groupe, où il se lit, la
+// forme de sa valeur et ce qu'il demande au système (fiche A3, §5, « Ce que
+// grant fait aussi »).
 var knownRights = []knownRight{
 	{name: CapabilityObserve, group: GroupSee},
 	{name: CapabilityProbeLAN, group: GroupSee},
 	{name: CapabilityObserveEnv, group: GroupSee},
 	{name: CapabilityAgentUpdate, group: GroupDeploy},
-	{name: CapabilityDockerDeploy, group: GroupDeploy},
-	{name: CapabilityDockerUpdate, group: GroupDeploy},
+	{name: CapabilityDockerDeploy, group: GroupDeploy, risk: manageRisk, dockerGroup: true},
+	{name: CapabilityDockerUpdate, group: GroupDeploy, risk: manageRisk, dockerGroup: true},
 	{name: CapabilityBackupReceive, group: GroupBackup, value: valueOnePath},
-	{name: CapabilityBackupProduce, group: GroupBackup, value: valueProducers},
+	{name: CapabilityBackupProduce, group: GroupBackup, value: valueProducers, rootGate: true},
 	{name: CapabilityFilesWrite, group: GroupDeploy, value: valuePaths},
 	{name: CapabilityProxmoxPower, group: GroupDeploy},
 	{name: CapabilityProxmoxSnapshot, group: GroupDeploy},
 	{name: CapabilityResticTarget, group: GroupBackup, value: valueOnePath},
 	{name: CapabilityResticProduce, group: GroupBackup},
-	{name: CapabilityResticDocker, group: GroupBackup},
+	{name: CapabilityResticDocker, group: GroupBackup, risk: manageRisk, dockerGroup: true},
 	{name: CapabilityResticVerify, group: GroupBackup},
 	{name: CapabilityResticBrowse, group: GroupBackup},
 	{name: CapabilityResticRestore, group: GroupBackup},
-	{name: CapabilityTerminalContainer, group: GroupEnter, readable: readNowhere},
+	{name: CapabilityTerminalContainer, group: GroupEnter, readable: readInPolicy, risk: manageRisk, dockerGroup: true},
 	{name: CapabilityTerminalHost, group: GroupEnter, readable: readInPolicy, value: valueAccount, bare: "root", term: hostTerminalTerm,
-		risk: "rights.host_terminal_risk"},
-	{name: CapabilityServiceFree, group: GroupDeploy, readable: readNowhere},
-	{name: CapabilityNetworkPrivate, group: GroupNetwork, readable: readNowhere},
+		risk: "rights.host_terminal_risk", rootGate: true},
+	{name: CapabilityServiceFree, group: GroupDeploy, readable: readInPolicy, risk: manageRisk, dockerGroup: true},
+	{name: CapabilityNetworkPrivate, group: GroupNetwork, readable: readInPolicy, value: valuePeers, bare: "1", rootGate: true},
 }
 
 // knownRightOf rend le droit de ce nom ; faux pour un nom inconnu.
@@ -187,6 +194,28 @@ func NoticeOf(capability Capability) Notice {
 	return Notice{RiskKey: known.risk, OtherAccount: known.value == valueAccount && slices.Equal(capability.Paths, []string{known.bare})}
 }
 
+// NeedsDockerGroup dit si un de ces droits met le compte de l'agent dans le
+// groupe docker (R-A3-12) : docker.*, restic.docker, terminal.container,
+// service.free.
+func NeedsDockerGroup(rights []Capability) bool {
+	return slices.ContainsFunc(rights, func(right Capability) bool {
+		known, _ := knownRightOf(right.Name)
+		return known.dockerGroup
+	})
+}
+
+// RootGateRights rend ceux de ces droits qui passent par la porte root (A5) :
+// terminal.host, network.private, backup.produce.
+func RootGateRights(rights []Capability) []string {
+	var names []string
+	for _, right := range rights {
+		if known, _ := knownRightOf(right.Name); known.rootGate {
+			names = append(names, right.Name)
+		}
+	}
+	return names
+}
+
 // Names rend tous les droits que la politique connaît, dans l'ordre où ils
 // s'affichent.
 func Names() []string {
@@ -208,54 +237,4 @@ func CapabilityNames() []string {
 		}
 	}
 	return names
-}
-
-// Set est un jeu de droits (R-A3-7) : trois, et seulement trois. Un jeu est
-// un raccourci, un droit se pose aussi seul.
-type Set string
-
-const (
-	SetObserve Set = "observe"
-	SetManage  Set = "manage"
-	SetRoot    Set = "root"
-)
-
-// SetRight est un droit qu'un jeu pose, avec sa valeur. ServicesRoot : la
-// valeur est la racine des services de la machine, connue à la pose.
-type SetRight struct {
-	Name         string
-	Value        string
-	ServicesRoot bool
-}
-
-// setRights est ce qu'un jeu pose partout, et ce qu'il pose en plus sur un
-// hôte Proxmox.
-type setRights struct {
-	everywhere []SetRight
-	onProxmox  []SetRight
-}
-
-// Gérer reprend Observer, Gérer en root reprend Gérer. Les droits hors jeu
-// (observe.env, backup.receive, restic.target, restic.verify, restic.browse)
-// se posent un par un.
-var (
-	observeRights = []SetRight{{Name: CapabilityObserve}, {Name: CapabilityProbeLAN}}
-	manageRights  = slices.Concat(observeRights, []SetRight{
-		{Name: CapabilityAgentUpdate}, {Name: CapabilityDockerDeploy}, {Name: CapabilityDockerUpdate},
-		{Name: CapabilityResticProduce}, {Name: CapabilityResticDocker}, {Name: CapabilityResticRestore},
-		{Name: CapabilityFilesWrite, ServicesRoot: true}, {Name: CapabilityTerminalContainer},
-	})
-	manageProxmoxRights = []SetRight{{Name: CapabilityProxmoxPower}, {Name: CapabilityProxmoxSnapshot}}
-	rootRights          = slices.Concat(manageRights, []SetRight{
-		{Name: CapabilityTerminalHost, Value: "root"}, {Name: CapabilityServiceFree}, {Name: CapabilityNetworkPrivate, Value: "1"},
-	})
-	rootProxmoxRights = slices.Concat(manageProxmoxRights, []SetRight{{Name: CapabilityBackupProduce, Value: ProducerProxmoxVzdump}})
-)
-
-// sets : les jeux, figés par TestR_A3_7_ThreeSetsAndOnlyThree. grant --set
-// les lira (T03-04).
-var sets = map[Set]setRights{
-	SetObserve: {everywhere: observeRights},
-	SetManage:  {everywhere: manageRights, onProxmox: manageProxmoxRights},
-	SetRoot:    {everywhere: rootRights, onProxmox: rootProxmoxRights},
 }

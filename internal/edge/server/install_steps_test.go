@@ -132,17 +132,20 @@ func TestInstallUnit_TheShellWritesExactlyTheUnit(t *testing.T) {
 	}
 }
 
-func TestInstallRights_AuthorizesTheFoldersThatDeployAndBackupsWrite(t *testing.T) {
+// L'unité n'écrit que dans son état (ProtectSystem=strict) : chaque dossier
+// d'un droit qui écrit ailleurs y est ouvert, files.write et restic.target
+// compris (fiche A3, §5).
+func TestInstallRights_AuthorizesTheFoldersThatRightsWrite(t *testing.T) {
 	if got := installRights(nil); got != "" {
 		t.Fatalf("observe alone writes nowhere else: %q", got)
 	}
-	rights, err := agentpolicy.ParseCapabilities("docker.update,backup.receive=/srv/backups,files.write=/srv/site")
+	rights, err := agentpolicy.ParseCapabilities("docker.update,backup.receive=/srv/backups,files.write=/srv/site,restic.target=/srv/restic")
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := installRights(rights)
-	want := `printf '%s\n' '[Service]' 'ReadWritePaths=/srv/workspace /srv/backups' | install -m 0644 /dev/stdin /etc/systemd/system/opencloud-agent.service.d/droits.conf`
-	if !strings.Contains(got, want) || strings.Contains(got, "/srv/site") || !strings.HasSuffix(got, "systemctl restart opencloud-agent.service") {
+	want := `printf '%s\n' '[Service]' 'ReadWritePaths=-/srv/workspace -/srv/backups -/srv/site -/srv/restic' | install -m 0644 /dev/stdin /etc/systemd/system/opencloud-agent.service.d/droits.conf`
+	if !strings.Contains(got, want) || !strings.HasSuffix(got, "systemctl restart opencloud-agent.service") {
 		t.Fatalf("rights step:\n%s", got)
 	}
 }

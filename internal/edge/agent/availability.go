@@ -8,7 +8,10 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -63,6 +66,9 @@ type hostChecks struct {
 	// chemin que l'opérateur a déclaré, sinon dans le PATH de l'agent.
 	findRestic     func() (string, error)
 	findRestServer func() (string, error)
+	// dockerMember : le processus est dans le groupe docker (ses groupes
+	// supplémentaires, lus au démarrage de l'unité).
+	dockerMember func() bool
 }
 
 // newHostChecks branche les vérifications sur la vraie machine.
@@ -78,6 +84,7 @@ func newHostChecks(socket string, updater *selfUpdater) hostChecks {
 		proxmoxToken:   func() string { return "" },
 		findRestic:     func() (string, error) { return findBinary("", resticProgram, exec.LookPath) },
 		findRestServer: func() (string, error) { return findBinary("", restServerProgram, exec.LookPath) },
+		dockerMember:   inDockerGroup,
 	}
 }
 
@@ -94,7 +101,30 @@ func allowAll() hostChecks {
 		proxmoxToken:   func() string { return "" },
 		findRestic:     func() (string, error) { return "/usr/bin/" + resticProgram, nil },
 		findRestServer: func() (string, error) { return "/usr/bin/" + restServerProgram, nil },
+		dockerMember:   func() bool { return false },
 	}
+}
+
+// inDockerGroup dit si le processus porte le groupe docker.
+func inDockerGroup() bool {
+	group, err := user.LookupGroup(machine.DockerGroup)
+	if err != nil {
+		return false
+	}
+	gid, err := strconv.Atoi(group.Gid)
+	if err != nil {
+		return false
+	}
+	groups, err := os.Getgroups()
+	return err == nil && (slices.Contains(groups, gid) || os.Getegid() == gid)
+}
+
+// rootEquivalent dit si le compte de l'agent vaut root sur sa machine
+// (R-A3-12, R-DROIT-7) : il l'est (euid 0), il est dans le groupe docker, ou
+// la politique lui donne terminal.host, l'égal de root au premier terminal.
+// La porte root (A5, étape 14) s'y ajoutera.
+func rootEquivalent(euid int, rights []agentpolicy.Capability, checks hostChecks) bool {
+	return euid == 0 || checks.dockerMember() || agentpolicy.HasCapability(rights, agentpolicy.CapabilityTerminalHost)
 }
 
 // sudoListsProgram demande à sudo si la règle du compte laisse lancer ce

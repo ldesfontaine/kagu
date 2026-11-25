@@ -106,6 +106,17 @@ func (f *fakeStore) RecordServiceRollbackVersion(_ context.Context, agentID stri
 	return ErrNotFound
 }
 
+func (f *fakeStore) RecordRootEquivalent(_ context.Context, agentID string, rootEquivalent bool) error {
+	for id, m := range f.machines {
+		if m.Agent.ID == agentID {
+			m.Agent.RootEquivalent = rootEquivalent
+			f.machines[id] = m
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
 func (f *fakeStore) RecordRightsUntil(_ context.Context, agentID string, until map[string]time.Time) error {
 	for id, m := range f.machines {
 		if m.Agent.ID == agentID {
@@ -705,6 +716,28 @@ func TestIsHostname(t *testing.T) {
 	} {
 		if got := IsHostname(host); got != want {
 			t.Errorf("IsHostname(%q) = %v, want %v", host, got, want)
+		}
+	}
+}
+
+// R-A3-12 : ce que l'agent dit valoir sur sa machine se garde à chaque
+// ouverture du flux ; absent (un agent d'avant) ou illisible, il vaut faux.
+func TestNoteRootEquivalent_KeepsWhatTheAgentSays(t *testing.T) {
+	h := newHarness(t)
+	enrolled, _ := h.enroll(t, "vps-1")
+	for _, c := range []struct {
+		reported string
+		want     bool
+	}{{"true", true}, {"false", false}, {"true", true}, {"", false}, {"true", true}, {"oui", false}} {
+		if err := h.service.NoteRootEquivalent(context.Background(), enrolled.Agent.ID, c.reported); err != nil {
+			t.Fatal(err)
+		}
+		status, err := h.store.GetMachine(context.Background(), enrolled.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status.Agent.RootEquivalent != c.want {
+			t.Fatalf("%q stored %v, want %v", c.reported, status.Agent.RootEquivalent, c.want)
 		}
 	}
 }

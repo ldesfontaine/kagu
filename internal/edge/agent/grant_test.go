@@ -14,9 +14,11 @@ import (
 )
 
 // policyBench est un agent enrôlé, au binaire qui lit la politique, et un
-// dossier de politique vide ; le test y joue root (EUID 0) sans l'être.
+// dossier de politique vide ; le test y joue root (EUID 0) sans l'être, sur
+// un faux système qui enregistre la pose des prérequis.
 type policyBench struct {
-	opts PolicyOptions
+	opts   PolicyOptions
+	system *recordingSystem
 }
 
 func newPolicyBench(t *testing.T, rights ...string) *policyBench {
@@ -35,7 +37,8 @@ func newPolicyBench(t *testing.T, rights ...string) *policyBench {
 		t.Fatal(err)
 	}
 	place := testPolicyPlace(t)
-	return &policyBench{opts: PolicyOptions{StateDir: stateDir, StatePath: dir, Place: place, EUID: 0}}
+	system := newRecordingSystem()
+	return &policyBench{opts: PolicyOptions{StateDir: stateDir, StatePath: dir, Place: place, EUID: 0, System: system}, system: system}
 }
 
 // accept est la réponse « o » à la question.

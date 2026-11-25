@@ -321,6 +321,7 @@ type pending struct {
 func (p *pending) judgeRights(ctx context.Context, client *Client, rights []agentpolicy.Capability, root string, logger *slog.Logger) {
 	unavailable := judgeRights(ctx, rights, root, p.orders.checks)
 	client.SetUnavailable(unavailable)
+	client.SetRootEquivalent(rootEquivalent(os.Geteuid(), rights, p.orders.checks))
 	if machine.FormatUnavailable(unavailable) == machine.FormatUnavailable(p.unavailable) {
 		return
 	}

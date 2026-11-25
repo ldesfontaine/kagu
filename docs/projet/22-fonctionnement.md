@@ -215,8 +215,10 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    entre apostrophes, puis `daemon-reload` et `enable --now` ; son contenu,
    `machine.AgentUnitLines`, est celui de `docs/installation/opencloud-agent.service`
    sans les commentaires, un test échoue s'ils diffèrent) ; `rights` (le drop-in
-   `droits.conf` : `ReadWritePaths=` de la racine des services et des dossiers de
-   `backup.receive`, seulement quand un de ces droits est coché, puis `restart`).
+   `droits.conf` : `ReadWritePaths=-<dossier>` de chaque dossier de droit,
+   `machine.RightFolders` — racine des services, `backup.receive`,
+   `restic.target`, `files.write` —, seulement quand un de ces droits est coché,
+   puis `restart` ; la même liste que pose `agent grant`).
    Aucun renvoi à la documentation sur la page. **Aucun bloc ne nomme `sudo`** :
    tous se jouent en root (`su -`), l'enrôlement prend le compte par
    `runuser -u opencloud-agent --`. La migration de l'agent (fiche › Agent,
@@ -365,9 +367,13 @@ de plus, `terminal.container`, `terminal.host`, `service.free`,
 `network.private`, ne se lisent que dans la politique (R-A3-10) : ni
 `identity.json`, ni `-rights`, ni un jeton ne les acceptent
 (`machine.capability_unknown`). La table des droits (`knownRights`) dit, par
-droit, où il se lit et la grammaire de sa valeur : seul `terminal.host` est
-ouvert dans la politique (T03-05), les trois autres y restent inconnus. `agentpolicy` tient aussi les trois jeux
-(Observer, Gérer, Gérer en root, figés par `TestR_A3_7_ThreeSetsAndOnlyThree`)
+droit, où il se lit, la grammaire de sa valeur et ce qu'il demande au système
+(le groupe `docker`, la porte root) : les quatre s'y lisent (T03-05,
+T03-06), `terminal.host=<compte>` (`root` sans valeur), `network.private=<n>`
+(nombre de pairs, 1 à 254, `1` sans valeur, `machine.capability_peers`
+sinon), `terminal.container` et `service.free` sans valeur. `agentpolicy` tient aussi les trois jeux
+(Observer, Gérer, Gérer en root, figés par `TestR_A3_7_ThreeSetsAndOnlyThree`,
+posés par `grant --set`, « La politique de l'agent »)
 et les cinq groupes de l'onglet Droits (Voir, Déployer, Sauvegarder, Entrer,
 Réseau) ; aucun écran ne les montre encore.
 
@@ -597,7 +603,7 @@ lisent ; l'écran l'affiche sans le recalculer.
   machine : ils les offrent toutes.
 ### La politique de l'agent
 
-Fiche A3, T03-03, T03-04 et T03-05. Ce que l'agent peut faire, sur quoi, et sous
+Fiche A3, T03-03 à T03-06. Ce que l'agent peut faire, sur quoi, et sous
 quelle clé du serveur, est écrit dans un fichier **à root**, sur la machine ; l'agent le lit et ne l'écrit jamais (R-A3-1).
 Remplace la décision 10 (« les changer, c'est ré-enrôler ») : le ré-enrôlement
 ne sert plus qu'à changer la clé de l'agent.
@@ -622,6 +628,7 @@ ne sert plus qu'à changer la clé de l'agent.
 | --- | --- |
 | `opencloud agent rights` | La source, l'empreinte, ou la raison du refus, puis un droit par ligne ; en source `identity`, la ligne `policy migrate` |
 | `opencloud agent grant <droit>[=valeur]… [--for <durée>\|permanent]` | Pose des droits ; une valeur remplace celle du droit déjà posé, le terme son échéance (`--for` où qu'il soit sur la ligne). `grant terminal.host` imprime, avant la question, `rights.host_terminal_risk` (« au premier terminal ouvert, l'agent devient l'égal de root », R-A3-12) et, posé sous `root`, la ligne d'un autre compte (`terminal.host=<compte>`, N-M6) |
+| `opencloud agent grant --set observe\|manage\|root` | Remplace les droits des jeux par ceux du jeu (`Document.GrantSet`, R-A3-7), sans échéance, « Gérer en root » compris ; garde ancres, clé du serveur et droits hors jeu avec leur échéance (`observe.env`, `backup.receive` de la machine Kagu, `restic.target`, `restic.verify`, `restic.browse`). `files.write` prend la racine des services de l'agent ; `proxmox.*` et `backup.produce` seulement sur un hôte Proxmox (`role.Detect`), retirés ailleurs. Sans `--for`, sans autre droit sur la ligne |
 | `opencloud agent revoke <droit>…` | Retire des droits (`observe` ne se retire pas) |
 | `opencloud agent policy migrate` | Sur une machine d'avant la politique : recopie à l'identique droits, ancres et clé du serveur d'`identity.json` dans la politique, puis les efface d'`identity.json` (qui reste au compte de l'agent, `0600`) ; crée le dossier. La question vient avant la création du dossier : un refus ne change rien. Relancée, elle ne change rien, et efface ce qu'`identity.json` garderait d'une migration interrompue |
 
@@ -648,6 +655,34 @@ dans le refus d'un ordre (`fix.command`) et, pour chaque droit, dans
 « Ré-enrôler avec ce droit ». Elle vise `/usr/local/bin/opencloud`
 (`brand.Command`), jamais `bin/current`, que le compte de l'agent peut
 remplacer (R-DROIT-10).
+
+**Ce que `grant` et `revoke` font aussi sur le système** (R-A3-8, T03-06,
+`internal/edge/agent/prerequisites.go`). Le plan se lit avant la question et
+se dit sous « Ce que la commande fait aussi sur le système », puis se pose
+après l'écriture de la politique, dans l'ordre, par l'interface `System`
+(`HostSystem` sur la machine) :
+
+| Pas | Quand | Comment |
+| --- | --- | --- |
+| Groupe `docker` | Un droit d'après le demande (`docker.deploy`, `docker.update`, `restic.docker`, `terminal.container`, `service.free` : `knownRight.dockerGroup`) et le compte n'y est pas | `usermod -aG docker <compte>`. Sans groupe `docker` sur la machine : dit (« Docker manque »), le reste posé. Retiré (`gpasswd -d`) quand un droit d'avant le demandait et qu'aucun d'après ne le demande. Rien pour un agent en root |
+| Dossiers | Ceux des droits posés : la racine des services (`docker.*`, `0755`), `backup.receive` et `restic.target` (`0700`), `files.write` (`0755`) — `machine.RightFolders`, la même liste que la page du jeton | Au compte qui possède l'état de l'agent. Root crée par `MakeFolder` : les parents s'ouvrent depuis `/`, **composant par composant**, chacun relatif au descripteur du précédent, en `O_NOFOLLOW\|O_DIRECTORY` (un lien est refusé), ceux qui manquent créés à root en `0755` (`openTrustedDir`) ; chaque parent ouvert, `/` compris, est jugé sur son descripteur (`fstat`) : **à root et sans écriture pour le groupe ni pour les autres** (`mode & 0o022 == 0`), sinon refus avec le chemin et la raison (`/tmp`, un `0775` : le compte de l'agent y poserait un lien). Le dossier se crée et s'ouvre sous le dernier parent, sans suivre de lien, puis se donne par son descripteur (`Fchown`, `Fchmod`). Le drop-in passe par le même parcours, son dossier compris. Un dossier sous l'état ou sous un autre dossier du compte se fait sous le compte (`runuser … install -d`). Un retrait ne les efface pas : ce sont des données |
+| Drop-in | Quand son contenu change | `droits.conf` (`machine.RightsDropInFile`), écrit en entier : `ReadWritePaths=-<dossier> …`, chaque dossier des droits d'après (le `-` : un dossier effacé n'empêche pas l'unité de démarrer, l'agent le dit `path_denied`). Retiré quand plus rien ne s'écrit ailleurs. Les autres drop-ins (`produce.conf`, `root.conf`) sont dits, jamais touchés : systemd additionne leurs `ReadWritePaths` |
+| Relance | Un groupe ou un drop-in a changé | `systemctl daemon-reload`, puis `systemctl try-restart opencloud-agent.service` (rien si l'agent ne tourne pas) ; une montée de service coupée reprend au démarrage (`resumeUpdates`) |
+| Porte root | Un droit posé passe par elle (`terminal.host`, `network.private`, `backup.produce`) | Dit « porte root : étape 14 » ; rien n'est posé. Jamais `NoNewPrivileges=false`, ni `sudoers` ni `produce.conf` (QA-14) |
+
+Un pas qui échoue arrête la suite (pas de relance sur un système à moitié
+prêt) : la politique reste écrite, ce qui est posé se dit avec `✓`, et la
+commande sort en erreur avec ce qui reste (`agent.prerequisites_failed`).
+Avant la question, `grant` dit aussi « vaut root » une fois, sous « Gérer »,
+dès qu'un droit du groupe `docker` est posé (`rights.manage_risk`, R-A3-12),
+et, sur la machine du serveur (`/etc/opencloud/config.toml` présent), quand
+elle passe en « Gérer en root » (`agentpolicy.CoversSet`) : « qui entre dans
+l'interface devient root sur cette machine » (`agent.policy_root_on_server`,
+R-DROIT-5). L'agent rapporte s'il vaut root (euid 0, groupe `docker` dans ses
+groupes, ou `terminal.host` posé ; la porte s'y ajoutera) : en-tête
+`OpenCloud-Agent-Root-Equivalent` (`true`/`false`), colonne
+`agents.root_equivalent` (migration `054`, `0` pour un agent d'avant),
+`machine.Agent.RootEquivalent` ; l'onglet Droits (T03-08) le montrera.
 
 Ce que ça coûte : une machine d'avant la politique demande un geste de root
 (`policy migrate`) avant tout `grant` ou `trust` ; l'enrôlement écrit encore
@@ -2667,7 +2702,7 @@ un journal peut contenir un secret qu'il ne reconnaît pas.
   (images, volumes, privilèges) et stocké ; refusé pour cette première version.
 - **Pas de relecture de l'`.env`**, ni de modification sans le remplacer.
 - **L'unité systemd** de l'agent doit autoriser la racine
-  (`ReadWritePaths=/srv/workspace`) : la page du jeton donne le fichier quand
+  (`ReadWritePaths=-/srv/workspace`) : la page du jeton donne le fichier quand
   `docker.deploy` ou `docker.update` est coché. Le dossier est celui que la
   préparation a créé au nom du compte de l'agent (`path_denied` sinon). Le
   compte dédié est dans le groupe `docker`, qui équivaut à root (décision 2,

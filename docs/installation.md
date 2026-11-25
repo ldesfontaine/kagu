@@ -1359,23 +1359,35 @@ dédié, il ne lit pas celles des autres comptes, et ne doit pas recevoir
 `CAP_DAC_READ_SEARCH` pour cela (voir « Comment les clés SSH se relèvent »).
 
 **Un droit qui écrit ailleurs que dans l'état** (« Recevoir des sauvegardes »,
-« Déployer » et « Mettre à jour un service Docker ») demande un fichier de
-plus : l'unité n'écrit que dans son état (`ProtectSystem=strict`), le dossier
-du droit doit être autorisé. La dernière étape de la page du jeton donne le fichier ; par exemple
-pour `/srv/backups` (le dossier est déjà créé, au compte de l'agent, par la
-préparation de l'étape 2) :
+« Déployer », « Mettre à jour un service Docker », « Écrire des fichiers », la
+cible restic) demande un fichier de plus : l'unité n'écrit que dans son état
+(`ProtectSystem=strict`), le dossier du droit doit être autorisé. La dernière
+étape de la page du jeton donne le fichier ; par exemple pour `/srv/backups`
+(le dossier est déjà créé, au compte de l'agent, par la préparation de
+l'étape 2) :
 
 ```sh
 mkdir -p /etc/systemd/system/opencloud-agent.service.d
-printf '[Service]\nReadWritePaths=/srv/backups\n' > /etc/systemd/system/opencloud-agent.service.d/droits.conf
+printf '[Service]\nReadWritePaths=-/srv/backups\n' > /etc/systemd/system/opencloud-agent.service.d/droits.conf
 systemctl daemon-reload
 systemctl restart opencloud-agent
 ```
 
-Le dossier doit exister avant le redémarrage : systemd refuse de démarrer
-une unité dont un `ReadWritePaths=` manque. Sans ce fichier, l'agent accepte
-l'ordre, ne peut pas écrire, et répond `path_unwritable` ; si le dossier n'est
-pas au compte de l'agent, c'est `path_denied`.
+Le `-` devant le chemin laisse l'unité démarrer si le dossier manque (sans
+lui, systemd refuse). Sans ce fichier, l'agent accepte l'ordre, ne peut pas
+écrire, et répond `path_unwritable` ; si le dossier n'est pas au compte de
+l'agent, ou manque, c'est `path_denied`.
+
+**Sur une machine qui a sa politique** (`agent policy migrate` passé),
+`sudo opencloud agent grant <droit>` ou `grant --set observe|manage|root` fait
+tout cela lui-même : il met le compte dans le groupe `docker` quand un droit le
+demande (et dit qu'il vaut root ; sans Docker, il le dit et pose le reste),
+crée les dossiers au compte de l'agent, réécrit `droits.conf` en entier, puis
+`systemctl daemon-reload` et relance l'agent, qui reprend une montée de service
+coupée. Il le dit avant la question `[o/N]`. `revoke` retire le groupe et le
+chemin qui ne servent plus ; les dossiers restent. `grant` ne touche à aucun
+autre drop-in (`produce.conf`, `root.conf`) : il les nomme, et ce qu'ils
+ouvrent s'ajoute au sien.
 
 **Le code de sortie 3** veut dire « mis à jour, relance-moi » : l'agent vient
 de changer de binaire (`agent.update`) ou de revenir en arrière
@@ -1405,7 +1417,7 @@ demande deux choses sur la machine, et une dans l'unité :
 
 ```sh
 mkdir -p /etc/systemd/system/opencloud-agent.service.d
-printf '[Service]\nReadWritePaths=/srv/workspace\n' > /etc/systemd/system/opencloud-agent.service.d/droits.conf
+printf '[Service]\nReadWritePaths=-/srv/workspace\n' > /etc/systemd/system/opencloud-agent.service.d/droits.conf
 systemctl daemon-reload
 systemctl restart opencloud-agent
 ```

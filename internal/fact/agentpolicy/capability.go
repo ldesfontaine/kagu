@@ -4,6 +4,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
@@ -36,7 +37,12 @@ var (
 	ErrCapabilityPath    = refusal.Invalid("machine.capability_path", "capability path must be absolute, clean, and made of letters, digits, dot, dash, underscore")
 	ErrCapabilityScope   = refusal.Invalid("machine.capability_scope", "backup.receive and restic.target take one path, files.write one to eight, backup.produce one to four producers, the others none")
 	ErrCapabilityAccount = refusal.Invalid("machine.capability_account", "terminal.host takes one Unix account name: a lowercase letter or underscore, then lowercase letters, digits, underscores or dashes, 32 at most")
+	ErrCapabilityPeers   = refusal.Invalid("machine.capability_peers", "network.private takes one number of peers, from 1 to 254")
 )
+
+// maxPrivatePeers borne la valeur de network.private : le nombre de pairs du
+// réseau privé que la machine accepte (E5).
+const maxPrivatePeers = 254
 
 // NormalizeCapabilities vérifie une liste de droits lue hors de la politique
 // (le jeton, identity.json, -rights), ajoute observe, retire les doublons et
@@ -90,6 +96,8 @@ func normalizeValue(known knownRight, given []string) ([]string, error) {
 		return normalizeProducers(given)
 	case valueAccount:
 		return normalizeAccount(given)
+	case valuePeers:
+		return normalizePeers(given)
 	case valueNone:
 		if len(given) != 0 {
 			return nil, ErrCapabilityScope
@@ -124,6 +132,19 @@ func IsAccountName(name string) bool {
 func normalizeAccount(given []string) ([]string, error) {
 	if len(given) != 1 || !IsAccountName(given[0]) {
 		return nil, ErrCapabilityAccount
+	}
+	return slices.Clone(given), nil
+}
+
+// normalizePeers juge la valeur de network.private : un seul nombre, écrit
+// sans zéro devant ni signe, de 1 à maxPrivatePeers.
+func normalizePeers(given []string) ([]string, error) {
+	if len(given) != 1 {
+		return nil, ErrCapabilityPeers
+	}
+	peers, err := strconv.Atoi(given[0])
+	if err != nil || peers < 1 || peers > maxPrivatePeers || strconv.Itoa(peers) != given[0] {
+		return nil, ErrCapabilityPeers
 	}
 	return slices.Clone(given), nil
 }
