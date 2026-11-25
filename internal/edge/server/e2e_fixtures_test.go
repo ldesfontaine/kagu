@@ -59,7 +59,7 @@ func TestE2EFixtureServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpServer := &http.Server{Handler: server.handler}
+	httpServer := &http.Server{Handler: e2eWithAgentScene(t, server, server.handler)}
 	go func() {
 		if err := httpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			t.Error(err)

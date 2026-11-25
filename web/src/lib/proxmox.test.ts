@@ -142,6 +142,8 @@ function agent(over: Partial<Agent> = {}): Agent {
     run_as: { uid: 998, name: "opencloud" },
     rollback_capable: true, anchors: { reported: false, kinds: [] }, policy_source: "", policy_digest: "", migrate_line: "", rights: null,
     fit: {},
+    behind: false,
+    missing_kinds: [],
     ...over,
   };
 }

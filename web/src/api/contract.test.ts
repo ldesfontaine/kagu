@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import type { ActionsResponse, ActionRun, AgentMigration, AgentUpdateOffer, RunLine } from "./actions";
+import type { ActionsResponse, ActionRun, AgentMigration, AgentUpdateOffer, AgentUpdatePlan, RunLine } from "./actions";
 import type { APITokensState } from "./apiTokens";
 import type { AlertResponse, AlertsResponse, ChannelsResponse, MutesResponse } from "./alerts";
 import type { AuditForwarding, AuditResponse } from "./audit";
@@ -138,6 +138,8 @@ const machine = shape<Machine>("Machine", {
     policy_source: value,
     policy_digest: value,
     migrate_line: value,
+    behind: value,
+    missing_kinds: value,
     rights: shape<AgentRights>("AgentRights", {
       set: value,
       set_lines: shape<SetLine>("SetLine", { set: value, line: value }),
@@ -1269,6 +1271,32 @@ const deletionPlan = shape<DeletionPlan>("DeletionPlan", {
 const contract: Record<string, Shape<unknown>> = {
   "actions.golden.json": actions,
   "agent_update_offer.golden.json": agentUpdateOffer,
+  "agent_updates.golden.json": shape<AgentUpdatePlan>("AgentUpdatePlan", {
+    target: value,
+    imported_ahead: value,
+    upgrade_line: value,
+    in_progress: shape<NonNullable<AgentUpdatePlan["in_progress"]>>("AgentUpdateInProgress", {
+      run_id: value,
+      kind: value,
+      machine_id: value,
+      machine_name: value,
+      requested_at: value,
+    }),
+    machines: shape<AgentUpdatePlan["machines"][number]>("AgentUpdatePlanEntry", {
+      machine_id: value,
+      name: value,
+      version: value,
+      target: value,
+      up_to_date: value,
+      behind: value,
+      missing_kinds: value,
+      rollback_capable: value,
+      online: value,
+      update_last: value,
+      blocked_reason: value,
+      order: value,
+    }),
+  }),
   "agent_migration.golden.json": shape<AgentMigration>("AgentMigration", { version: value, commands: value, root_commands: value }),
   "alert.golden.json": alertResponse,
   "alert_channels.golden.json": channels,
@@ -1365,7 +1393,6 @@ const contract: Record<string, Shape<unknown>> = {
 // Les autres goldens JSON que le front ne lit pas, chacun avec sa raison.
 const notReadByFront: Record<string, string> = {
   "backups_runs.golden.json": "l'historique des passages des plans d'archives se lit par un jeton d'API ; la page Sauvegardes lit l'aperçu",
-  "agent_updates.golden.json": "le plan des mises à jour se lit par un agent IA (jeton en lecture) ; la fiche d'une machine lit l'offre de sa machine",
   "manifest_plan.golden.json": "le plan se lit par la commande apply ; l'écran ne montre que les passages",
   "verbs.golden.json": "le registre des verbes, pas une réponse de l'API ; parity.test.ts le compare aux écritures de routes.ts",
   "transitions.golden.json": "la fiche d'un conteneur reçoit ses transitions avec lui ; aucun module ne lit la route seule",

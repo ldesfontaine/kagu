@@ -1,5 +1,4 @@
 import type { Machine } from "../api/machines";
-import { agentBehindServer } from "./agentUpdate";
 import { blockingAnchors } from "./anchors";
 import { kindFix, type KindFix } from "./machineKind";
 import { isArchived } from "./machines";
@@ -31,7 +30,7 @@ export function machineTodos(machine: Machine, all: readonly Machine[], serverVe
     return [{ kind: "agent_missing" }];
   }
   const todos: MachineTodo[] = [];
-  if (agentBehindServer(agent.version, serverVersion)) {
+  if (agent.behind) {
     todos.push({ kind: "agent_behind", serverVersion });
   }
   const unavailable = agent.reported_at === null ? 0 : agent.capabilities.filter((capability) => capability.unavailable !== "").length;
@@ -48,7 +47,7 @@ export function machineTodos(machine: Machine, all: readonly Machine[], serverVe
     todos.push({ kind: "support_ended" });
   }
   // Un agent en retard a déjà son geste plus haut : le même bouton ne se pose pas deux fois.
-  const fix = kindFix(machine, all, serverVersion);
+  const fix = kindFix(machine, all);
   if (fix !== null && fix.action !== "update_agent") {
     todos.push({ kind: "kind_unknown", fix });
   }

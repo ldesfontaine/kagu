@@ -15,6 +15,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
+	"github.com/ldesfontaine/kagu/internal/kit/release"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -182,9 +183,13 @@ func (s *Server) rollbackAgent(w http.ResponseWriter, r *http.Request) {
 // en vol s'il y en a une. order est le rang recommandé, null quand rien n'est
 // à faire ou que rien ne peut partir. Le serveur n'exécute rien du plan.
 type agentUpdatePlanJSON struct {
-	Target     string                     `json:"target"`
-	InProgress *agentUpdateInProgressJSON `json:"in_progress"`
-	Machines   []agentUpdatePlanEntryJSON `json:"machines"`
+	Target string `json:"target"`
+	// Une version importée plus récente que le serveur, que root n'a pas
+	// installée, et la ligne qui l'installe ; vides sinon.
+	ImportedAhead string                     `json:"imported_ahead"`
+	UpgradeLine   string                     `json:"upgrade_line"`
+	InProgress    *agentUpdateInProgressJSON `json:"in_progress"`
+	Machines      []agentUpdatePlanEntryJSON `json:"machines"`
 }
 
 type agentUpdateInProgressJSON struct {
@@ -196,14 +201,17 @@ type agentUpdateInProgressJSON struct {
 }
 
 type agentUpdatePlanEntryJSON struct {
-	MachineID       string `json:"machine_id"`
-	Name            string `json:"name"`
-	Version         string `json:"version"`
-	Target          string `json:"target"`
-	UpToDate        bool   `json:"up_to_date"`
-	RollbackCapable bool   `json:"rollback_capable"`
-	Online          bool   `json:"online"`
-	UpdateLast      bool   `json:"update_last"`
+	MachineID string `json:"machine_id"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Target    string `json:"target"`
+	UpToDate  bool   `json:"up_to_date"`
+	// Plus ancien que le serveur ; et les genres d'ordres qu'il ne reçoit pas.
+	Behind          bool     `json:"behind"`
+	MissingKinds    []string `json:"missing_kinds"`
+	RollbackCapable bool     `json:"rollback_capable"`
+	Online          bool     `json:"online"`
+	UpdateLast      bool     `json:"update_last"`
 	// Une raison de la fiche (machine.agent_update_reason_*) ; vide si l'ordre
 	// peut partir, ou si la machine est à jour.
 	BlockedReason string `json:"blocked_reason"`
@@ -217,7 +225,8 @@ func planEntryToJSON(entry action.PlanEntry) agentUpdatePlanEntryJSON {
 	}
 	return agentUpdatePlanEntryJSON{
 		MachineID: entry.MachineID, Name: entry.MachineName, Version: entry.Version, Target: entry.Target,
-		UpToDate: entry.UpToDate, RollbackCapable: entry.RollbackCapable, Online: entry.Online,
+		UpToDate: entry.UpToDate, Behind: entry.Behind, MissingKinds: orEmpty(entry.Missing),
+		RollbackCapable: entry.RollbackCapable, Online: entry.Online,
 		UpdateLast: entry.UpdateLast, BlockedReason: entry.Blocked, Order: order,
 	}
 }
@@ -229,7 +238,17 @@ func (s *Server) listAgentUpdates(w http.ResponseWriter, r *http.Request) {
 	if s.failed(w, r, err, nil) {
 		return
 	}
-	plan := agentUpdatePlanJSON{Target: s.actions.TargetVersion(), Machines: httpx.ConvertAll(entries, planEntryToJSON)}
+	importedAhead, err := s.actions.ImportedAhead()
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	plan := agentUpdatePlanJSON{
+		Target: s.actions.TargetVersion(), ImportedAhead: importedAhead,
+		Machines: httpx.ConvertAll(entries, planEntryToJSON),
+	}
+	if importedAhead != "" {
+		plan.UpgradeLine = release.UpgradeLine()
+	}
 	inFlight, found, err := s.actions.UpdateInFlight(r.Context())
 	if s.failed(w, r, err, nil) {
 		return

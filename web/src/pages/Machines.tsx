@@ -1,11 +1,13 @@
 import { useMemo } from "react";
 import { Outlet } from "react-router";
 
+import { useAgentUpdatePlan } from "../api/actions";
 import { deleteMachineToken, useMachines, type PendingToken } from "../api/machines";
 import { useCurrentResources } from "../api/resources";
 import { ActionButton } from "../components/ActionButton";
 import { Button } from "../components/Button";
-import { Card, CardHeader } from "../components/Card";
+import { Card, CardBody, CardHeader, Note } from "../components/Card";
+import { TokenBox } from "../components/Copy";
 import { Failure } from "../components/Failure";
 import { PageHead } from "../components/PageHead";
 import { TabNav } from "../components/TabNav";
@@ -15,6 +17,7 @@ import { Verdict } from "../components/Verdict";
 import { useNow } from "../hooks/useNow";
 import { useAction } from "../hooks/useAction";
 import { useT, type Translate } from "../i18n/context";
+import { behindAgents } from "../lib/agentUpdate";
 import { buildMachineTree, summarizeMachines, type TreeSummary } from "../lib/machineTree";
 import { liveMachines, machinesSubtitle } from "../lib/machines";
 import { machinesListTabs } from "../lib/modules";
@@ -53,6 +56,8 @@ export function Machines({ tab }: { tab: MachinesTab }) {
       {machines.data && tab === "list" && (
         <>
           {list.length > 0 && <MachinesVerdict summary={summarizeMachines(list, rows)} />}
+          <AgentsBehind count={behindAgents(list)} />
+          <ImportedAhead />
           <Card>
             <Table>
               <thead>
@@ -95,6 +100,38 @@ function MachinesVerdict({ summary }: { summary: TreeSummary }) {
     >
       {t("machines.verdict_counts", summary.total, summary.online)}
     </Verdict>
+  );
+}
+
+// R-B2-13 : les agents en retard se mettent à jour avant tout déploiement.
+function AgentsBehind({ count }: { count: number }) {
+  const t = useT();
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <Note tone="warn">
+      <b>{count === 1 ? t("machines.agents_behind_one") : t("machines.agents_behind", count)}</b> {t("machines.agents_behind_text")}
+    </Note>
+  );
+}
+
+// Une version importée plus récente que le serveur, que root n'a pas
+// installée : la ligne qui l'installe, telle que le serveur l'écrit.
+function ImportedAhead() {
+  const t = useT();
+  const plan = useAgentUpdatePlan();
+  if (plan.data === null || plan.data.imported_ahead === "") {
+    return null;
+  }
+  return (
+    <Card>
+      <CardHeader title={t("machines.imported_ahead", plan.data.imported_ahead)} />
+      <CardBody gap={8}>
+        <span className="secondary">{t("machines.imported_ahead_text")}</span>
+        <TokenBox value={plan.data.upgrade_line} />
+      </CardBody>
+    </Card>
   );
 }
 

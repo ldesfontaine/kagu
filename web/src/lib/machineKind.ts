@@ -1,5 +1,4 @@
 import type { Machine } from "../api/machines";
-import { agentBehindServer } from "./agentUpdate";
 import { isArchived } from "./machines";
 import { detectedProxmox } from "./proxmox";
 
@@ -18,7 +17,7 @@ export interface KindFix {
 // qu'aucun hôte déclaré ne rapproche la machine d'un invité.
 // L'hôte à déclarer est une autre machine : la première dont l'agent a reconnu
 // Proxmox sans qu'il soit déclaré.
-export function kindFix(machine: Machine, all: readonly Machine[], serverVersion: string): KindFix | null {
+export function kindFix(machine: Machine, all: readonly Machine[]): KindFix | null {
   if (machine.kind !== "unknown" || machine.kind_override !== "" || isArchived(machine)) {
     return null;
   }
@@ -26,7 +25,7 @@ export function kindFix(machine: Machine, all: readonly Machine[], serverVersion
   if (machine.agent === null) {
     return { action: "reenroll", to: `${base}/reenroller` };
   }
-  if (agentBehindServer(machine.agent.version, serverVersion)) {
+  if (machine.agent.behind) {
     return { action: "update_agent", to: `${base}/agent` };
   }
   const undeclared = all.find((other) => other.id !== machine.id && !other.proxmox.declared && detectedProxmox(other) !== null);

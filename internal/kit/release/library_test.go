@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
@@ -266,5 +267,50 @@ func TestImport_RefusesAFolderItCannotRead(t *testing.T) {
 	}
 	if _, err := library.root.Stat("releases"); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("something was left in the state (%v)", err)
+	}
+}
+
+func TestVersions_ListsTheImportedVersionsOldestFirst(t *testing.T) {
+	newer := newImportFixture(t, Version{1, 1, 0})
+	keys := Keys{Current: newer.publicKey}
+	older := newImportFixture(t, Version{1, 0, 0})
+	older.publicKey, older.privateKey = newer.publicKey, newer.privateKey
+	older.writeSigned(t)
+	library := NewLibrary(testkit.EmptyRoot(t), keys)
+	if versions, err := library.Versions(); err != nil || len(versions) != 0 {
+		t.Fatalf("nothing imported: %v %v", versions, err)
+	}
+	for _, dir := range []string{newer.dir, older.dir} {
+		if _, err := library.Import(dir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Un dossier coupé avant ses sommes, un nom qui n'est pas une version :
+	// ni l'un ni l'autre n'est importé.
+	for _, name := range []string{"releases/v2.0.0", "releases/latest"} {
+		if err := library.root.MkdirAll(name, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	versions, err := library.Versions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(versions, []Version{{1, 0, 0}, {1, 1, 0}}) {
+		t.Fatalf("versions %v", versions)
+	}
+}
+
+func TestVersions_LeavesOutAVersionWhoseSumsNoLongerVerify(t *testing.T) {
+	fixture := newImportFixture(t, Version{1, 1, 0})
+	library := NewLibrary(testkit.EmptyRoot(t), Keys{Current: fixture.publicKey})
+	if _, err := library.Import(fixture.dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := library.root.WriteFile("releases/v1.1.0/SHA256SUMS", []byte(sumsLine("x")), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if versions, err := library.Versions(); err != nil || len(versions) != 0 {
+		t.Fatalf("changed sums: %v %v", versions, err)
 	}
 }

@@ -4,15 +4,21 @@ import (
 	"cmp"
 	"context"
 	"slices"
+
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // PlanEntry est ce que le plan de mise à jour dit d'une machine.
 type PlanEntry struct {
-	MachineID       string
-	MachineName     string
-	Version         string
-	Target          string
+	MachineID   string
+	MachineName string
+	Version     string
+	Target      string
+	// UpToDate, Behind et Missing : où en est l'agent (AgentStanding).
 	UpToDate        bool
+	Behind          bool
+	Missing         []string
 	RollbackCapable bool
 	Online          bool
 	UpdateLast      bool
@@ -41,17 +47,17 @@ func (s *Service) UpdatePlan(ctx context.Context) ([]PlanEntry, error) {
 		if err != nil {
 			return nil, err
 		}
-		entries = append(entries, planEntryOf(target.ID, target.Name, target.UpdateLast, target.Online, target.Agent.CanRollBack(), offer))
+		entries = append(entries, planEntryOf(target, offer, s.StandingOf(target.Agent)))
 	}
 	rankPlan(entries)
 	return entries, nil
 }
 
-func planEntryOf(id, name string, updateLast, online, rollbackCapable bool, offer UpdateOffer) PlanEntry {
+func planEntryOf(target machine.Status, offer UpdateOffer, standing AgentStanding) PlanEntry {
 	entry := PlanEntry{
-		MachineID: id, MachineName: name, Version: offer.Current, Target: offer.Target,
-		RollbackCapable: rollbackCapable, Online: online, UpdateLast: updateLast,
-		UpToDate: offer.Reason == OfferSameVersion || offer.Reason == OfferNewerAgent,
+		MachineID: target.ID, MachineName: target.Name, Version: offer.Current, Target: offer.Target,
+		RollbackCapable: target.Agent.CanRollBack(), Online: target.Online, UpdateLast: target.UpdateLast,
+		UpToDate: standing.UpToDate, Behind: standing.Behind, Missing: standing.Missing,
 	}
 	if !entry.UpToDate && !offer.Available {
 		entry.Blocked = offer.Reason
@@ -61,6 +67,52 @@ func planEntryOf(id, name string, updateLast, online, rollbackCapable bool, offe
 		entry.Blocked = offer.Reason
 	}
 	return entry
+}
+
+// AgentStanding dit où en est l'agent d'une machine face au serveur (R-B2-9),
+// quelle que soit la raison qui retient sa mise à jour : un agent plus ancien
+// hors ligne, ou sans droit, reste en retard.
+type AgentStanding struct {
+	// La version du serveur, ou une plus récente.
+	UpToDate bool
+	// Plus ancien que le serveur, ou d'une version illisible.
+	Behind bool
+	// Les genres d'ordres du serveur que l'agent ne reçoit pas, par nom.
+	Missing []string
+}
+
+// StandingOf juge l'agent : sans agent actif, rien ; sans bibliothèque des
+// versions, ni à jour ni en retard, mais ce qui lui manque se lit quand même
+// dans ses genres annoncés.
+func (s *Service) StandingOf(agent machine.Agent) AgentStanding {
+	if !agent.IsActive() {
+		return AgentStanding{}
+	}
+	standing := AgentStanding{Missing: missingKinds(agent)}
+	if s.releases == nil {
+		return standing
+	}
+	switch s.versionReason(agent.Version) {
+	case OfferSameVersion, OfferNewerAgent:
+		standing.UpToDate = true
+	default:
+		standing.Behind = true
+	}
+	return standing
+}
+
+// missingKinds rend les genres du registre que le serveur refuserait
+// d'envoyer à cet agent (envelopeFor), d'après ce qu'il a annoncé à sa
+// dernière ouverture du flux.
+func missingKinds(agent machine.Agent) []string {
+	var missing []string
+	for _, kind := range agentwire.OrderKinds() {
+		spec, _ := agentwire.SpecOf(kind)
+		if _, err := envelopeFor(agent.Protocol, agent.OrderKinds, spec); err != nil {
+			missing = append(missing, string(kind))
+		}
+	}
+	return missing
 }
 
 // rankPlan numérote ce qui peut partir (pas à jour, pas bloqué) : d'abord les
@@ -94,6 +146,24 @@ func rankPlan(entries []PlanEntry) {
 
 func (e PlanEntry) isReady() bool {
 	return !e.UpToDate && (e.Blocked == "" || e.Blocked == OfferRightUnavailable)
+}
+
+// ImportedAhead rend la plus récente des versions importées au-dessus de
+// celle du serveur : root l'a déposée sans l'installer. Vide sans
+// bibliothèque, ou quand rien d'importé n'est plus récent.
+func (s *Service) ImportedAhead() (string, error) {
+	if s.releases == nil {
+		return "", nil
+	}
+	versions, err := s.releases.Versions()
+	if err != nil || len(versions) == 0 {
+		return "", err
+	}
+	newest := versions[len(versions)-1]
+	if newest.Compare(s.serverVersion) <= 0 {
+		return "", nil
+	}
+	return newest.String(), nil
 }
 
 // TargetVersion est la version du serveur, celle que ses agents reçoivent ;

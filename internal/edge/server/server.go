@@ -317,6 +317,10 @@ type ActionService interface {
 	UpdatePlan(ctx context.Context) ([]action.PlanEntry, error)
 	UpdateInFlight(ctx context.Context) (action.Run, bool, error)
 	TargetVersion() string
+	// Où en est un agent face au serveur (R-B2-9), et la version importée
+	// plus récente que le serveur, que root n'a pas installée.
+	StandingOf(agent machine.Agent) action.AgentStanding
+	ImportedAhead() (string, error)
 	ConfirmAgentUpdate(ctx context.Context, machineID, agentID, reported string) error
 }
 

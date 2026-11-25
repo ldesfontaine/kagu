@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 
 import { useMachines, type Machine } from "../api/machines";
-import { useI18n } from "../i18n/context";
+import { useT } from "../i18n/context";
 import { kindFix } from "../lib/machineKind";
 import { Pill } from "./Pill";
 import "./MachineKind.scss";
@@ -12,9 +12,9 @@ import "./MachineKind.scss";
 // à jour l'agent, déclarer l'hôte Proxmox, corriger à la main).
 // `withFix` à faux pour un endroit où le geste ne tient pas (un pied de tuile).
 export function MachineKind({ machine, withFix = true }: { machine: Machine; withFix?: boolean }) {
-  const { t, version } = useI18n();
+  const t = useT();
   const all = useMachines().data?.machines ?? [];
-  const fix = kindFix(machine, all, version);
+  const fix = kindFix(machine, all);
   return (
     <span className="machine-kind">
       <Pill tone={machine.kind === "vps" ? "accent" : "neutral"} dot={false} small title={fix === null ? undefined : t(`machine.kind_why_${fix.action}`)}>
