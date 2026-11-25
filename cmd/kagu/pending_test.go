@@ -11,6 +11,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/edge/agent"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // writePending écrit dans l'état la liste que l'agent tient, comme il
@@ -64,6 +65,12 @@ func TestR_A3_15_E03_07_PendingWithoutTerminalWritesNothing(t *testing.T) {
 	}
 	if !strings.Contains(out, "docker.deploy") || !strings.Contains(out, "Déployer un service Docker") {
 		t.Fatalf("the pending right is not told in clear:\n%s", out)
+	}
+	if strings.Contains(out+refused.message, "-yes") {
+		t.Fatalf("--pending without terminal offers -yes, which it refuses:\n%s\n%s", out, refused.message)
+	}
+	if want := "Droits que " + brand.ProductName + " a demandés et que l'agent a refusés ces dernières 24 h :"; !strings.Contains(out, want) {
+		t.Fatalf("pending header, want %q:\n%s", want, out)
 	}
 	if _, err := runPolicy(t, place, fakeTerminal("o\n"), policyGrant, "-state", stateDir, "--pending", "-yes"); !errors.As(err, &refused) || policyContent(t, place) != before {
 		t.Fatalf("-yes with --pending: %v", err)

@@ -687,7 +687,7 @@ ne sert plus qu'à changer la clé de l'agent.
 | `kagu agent rights` | La source, l'empreinte, ou la raison du refus, puis un droit par ligne ; en source `identity`, la ligne `policy migrate` |
 | `kagu agent grant <droit>[=valeur]… [--for <durée>\|permanent]` | Pose des droits ; une valeur remplace celle du droit déjà posé, le terme son échéance (`--for` où qu'il soit sur la ligne). `grant terminal.host` imprime, avant la question, `rights.host_terminal_risk` (« au premier terminal ouvert, l'agent devient l'égal de root », R-A3-12) et, posé sous `root`, la ligne d'un autre compte (`terminal.host=<compte>`, N-M6) |
 | `kagu agent grant --set observe\|manage\|root` | Remplace les droits des jeux par ceux du jeu (`Document.GrantSet`, R-A3-7), sans échéance, « Gérer en root » compris ; garde ancres, clé du serveur et droits hors jeu avec leur échéance (`observe.env`, `backup.receive` de la machine Kagu, `restic.target`, `restic.verify`, `restic.browse`). `files.write` prend la racine des services de l'agent ; `proxmox.*` et `backup.produce` seulement sur un hôte Proxmox (`role.Detect`), retirés ailleurs. Sans `--for`, sans autre droit sur la ligne |
-| `kagu agent grant --pending` | Pose les droits que l'agent a lui-même refusés ces dernières 24 h (« Les droits en attente » ci-dessous). Chacun se dit en clair : nom et valeur, ce qu'il permet (le libellé `machine.capability_*` de l'écran), l'échéance que `grant` lui donne sans `--for`, le dernier refus ; puis le plan habituel de `grant`. La réponse se lit **sur `/dev/tty` seulement**, jamais sur l'entrée standard (`echo o \| sudo … grant --pending` ne pose rien), défaut N ; sans terminal, refus ; `-yes`, `--for`, `--set` ou un droit sur la ligne sont refusés. Accord : `agent.GrantPending` → `GrantRights`, le chemin de `grant`, même verrou, même trace (`policy grant +[…]`). Liste vide : « Aucun droit en attente. », code 0 |
+| `kagu agent grant --pending` | Pose les droits que l'agent a lui-même refusés ces dernières 24 h (« Les droits en attente » ci-dessous). Chacun se dit en clair : nom et valeur, ce qu'il permet (le libellé `machine.capability_*` de l'écran), l'échéance que `grant` lui donne sans `--for`, le dernier refus ; puis le plan habituel de `grant`. La réponse se lit **sur `/dev/tty` seulement**, jamais sur l'entrée standard (`echo o \| sudo … grant --pending` ne pose rien), défaut N ; sans terminal, refus (`agent.pending_needs_tty`, qui ne propose pas `-yes`) ; `-yes`, `--for`, `--set` ou un droit sur la ligne sont refusés. Accord : `agent.GrantPending` → `GrantRights`, le chemin de `grant`, même verrou, même trace (`policy grant +[…]`). Liste vide : « Aucun droit en attente. », code 0 |
 | `kagu agent revoke <droit>…` | Retire des droits (`observe` ne se retire pas) |
 | `kagu agent policy migrate` | Sur une machine d'avant la politique : recopie à l'identique droits, ancres et clé du serveur d'`identity.json` dans la politique, puis les efface d'`identity.json` (qui reste au compte de l'agent, `0600`) ; crée le dossier. La question vient avant la création du dossier : un refus ne change rien. Relancée, elle ne change rien, et efface ce qu'`identity.json` garderait d'une migration interrompue |
 
@@ -709,6 +709,13 @@ mal gardée (root la corrige ou l'efface), un agent dont le binaire ne lit pas e
 binaire plus ancien le perd en réécrivant son identité).
 
 **Les droits en attente** (R-A3-15, `internal/edge/agent/pending.go`).
+La liste ne se remplit que par un **ordre signé reçu sans le droit** : sur un
+serveur sain, le serveur refuse d'avance (il sait les droits que l'agent
+rapporte) et la liste reste vide. L'en-tête de `grant --pending` dit donc
+« Droits que {product} a demandés et que l'agent a refusés ». Un droit posé en
+sort à la **prochaine relecture de la politique dans un agent déjà lancé**
+(`reloadPolicy`, `previous != nil`), pas au redémarrage qui suit `grant`.
+
 L'agent note dans `pending-rights.json` (son état, `0600`, écrit d'un coup)
 chaque droit qu'il refuse `right_missing` : au jugement d'un ordre (le juge,
 puis les exécuteurs : `backup.produce`, `restic.docker`, `restic.target`…),
