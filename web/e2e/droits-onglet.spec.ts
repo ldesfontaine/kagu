@@ -76,11 +76,11 @@ test("onglet Droits : le jeu, cinq groupes, les noms repliés, les lignes du ser
     expect(folded, `${right.name} lisible pli fermé`).not.toContain(right.name);
   }
 
-  // Le groupe pas permis : sa ligne grant, ce qu'elle fera ; sous Entrer, le
-  // terminal sur la machine.
+  // Le groupe pas permis : la ligne constante (R-DROIT-8), ce qu'elle fera ;
+  // sous Entrer, le terminal sur la machine.
   const network = groupCard(main, "network");
   await expect(network).toContainText(label("rights.not_allowed"));
-  await expect(network.locator(".token-box code")).toHaveText(/^sudo \S+ agent grant network\.private$/);
+  await expect(network.locator(".token-box code")).toHaveText(/^sudo \S+ agent grant --pending$/);
   await expect(network).toContainText(label("rights.paste_shows_change"));
   const enter = groupCard(main, "enter");
   await expect(enter).toContainText(label("rights.host_terminal_risk"));

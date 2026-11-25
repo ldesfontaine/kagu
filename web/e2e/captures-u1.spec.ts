@@ -70,7 +70,7 @@ for (const theme of ["light", "dark"] as const) {
       await shoot(page, "destination-menu-machines", theme);
       const note = page.locator("[role=listbox] .select-option-group").first();
       await note.getByRole("link", { name: label("machine.grant_right") }).click();
-      await expect(page.locator(".note .token-box", { hasText: "agent grant backup.receive" })).toBeVisible();
+      await expect(page.locator(".note .token-box", { hasText: "agent grant --pending" })).toBeVisible();
       await shoot(page, "agent-ligne-grant", theme);
     });
 
@@ -100,7 +100,7 @@ for (const theme of ["light", "dark"] as const) {
       await page.goto("/machines");
       await page.locator("table a.svc").first().click();
       await page.goto(`${new URL(page.url()).pathname.replace(/\/$/, "")}/agent`);
-      await expect(page.locator(".token-box", { hasText: "agent grant agent.update" })).toBeVisible();
+      await expect(page.locator(".token-box", { hasText: "agent grant --pending" })).toBeVisible();
       await shoot(page, "agent-droit-manquant", theme);
     });
   });

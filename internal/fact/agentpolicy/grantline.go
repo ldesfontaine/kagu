@@ -14,15 +14,12 @@ import (
 // les autres caractères de contrôle, untrusted.HasControl les refuse.
 var lineChains = []string{";", "|", "&", "$(", "`", "<", ">"}
 
-// GrantLine écrit la ligne qui pose un droit sur la machine, telle que root la
-// colle : « sudo opencloud agent grant docker.deploy », avec « =valeur » pour
-// un droit borné. Vide si AgentLine la refuse.
-func GrantLine(right, value string) string {
-	granted := right
-	if value != "" {
-		granted += ScopeSeparator + value
-	}
-	return AgentLine("grant", granted)
+// PendingLine écrit la ligne que l'interface donne pour un droit manquant,
+// la même pour tous : « sudo opencloud agent grant --pending ». Rien n'y vient
+// du serveur, qui sert l'écran : la commande pose les droits que l'agent a
+// lui-même refusés, après un « o » tapé au clavier (R-DROIT-8, R-A3-15).
+func PendingLine() string {
+	return AgentLine("grant", "--pending")
 }
 
 // GrantSetLine écrit la ligne qui pose un jeu (R-A3-7) :

@@ -24,7 +24,7 @@ const rights: AgentRights = {
   groups: [
     group({ name: "see", rights: [{ name: "observe", paths: [], state: "ok", until: null }], revoke_line: "" }),
     group({ name: "deploy", worth_root: true, rights: [{ name: "docker.deploy", paths: [], state: "ok", until: null }], revoke_line: "sudo kagu agent revoke docker.deploy" }),
-    group({ name: "backup", state: "missing", rights: [{ name: "restic.produce", paths: [], state: "missing", until: null }], grant_line: "sudo kagu agent grant restic.produce" }),
+    group({ name: "backup", state: "missing", rights: [{ name: "restic.produce", paths: [], state: "missing", until: null }], grant_line: "sudo kagu agent grant --pending" }),
     group({
       name: "enter",
       host_terminal: true,
@@ -32,7 +32,7 @@ const rights: AgentRights = {
       rights: [{ name: "terminal.host", paths: ["root"], state: "ok", until: "2026-11-25T16:42:00Z" }],
       revoke_line: "sudo kagu agent revoke terminal.host",
     }),
-    group({ name: "network", state: "missing", rights: [{ name: "network.private", paths: [], state: "missing", until: null }], grant_line: "sudo kagu agent grant network.private" }),
+    group({ name: "network", state: "missing", rights: [{ name: "network.private", paths: [], state: "missing", until: null }], grant_line: "sudo kagu agent grant --pending" }),
   ],
 };
 
@@ -84,10 +84,13 @@ test("TestR_A3_12_HostTerminalRiskShownWhenTerminalHostIsSet", () => {
 // ce qu'elle fera ; la coche dit « permis jusqu'à » une échéance.
 test("les lignes viennent du serveur et la coche porte l'échéance", () => {
   const markup = render(rights);
-  for (const line of ["sudo kagu agent grant --set observe", "sudo kagu agent grant --set root", "sudo kagu agent grant restic.produce", "sudo kagu agent revoke terminal.host"]) {
+  for (const line of ["sudo kagu agent grant --set observe", "sudo kagu agent grant --set root", "sudo kagu agent grant --pending", "sudo kagu agent revoke terminal.host"]) {
     expect(markup).toContain(line);
   }
   expect(markup.match(/rights\.paste_shows_change/g)?.length).toBe(6);
+  // R-DROIT-8 (E03-07) : sous chaque ligne d'un groupe pas permis,
+  // l'avertissement de ne coller aucune autre ligne.
+  expect(markup.match(/rights\.paste_only_pending/g)?.length).toBe(2);
   expect(markup).toContain("rights.allowed_until(");
   expect(markup).toContain("rights.not_allowed");
   expect(markup).not.toContain("rights.root_here");

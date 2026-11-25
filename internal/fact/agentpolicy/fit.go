@@ -47,7 +47,7 @@ func Fit(status AgentStatus, right, value string) RightFit {
 	case !status.Reported:
 		fit.State = FitUnknown
 		return fit
-	case !covers(status.Rights, right, value):
+	case !Covers(status.Rights, right, value):
 		return fit
 	}
 	fit.State = FitOK
@@ -57,9 +57,9 @@ func Fit(status AgentStatus, right, value string) RightFit {
 	return fit
 }
 
-// covers dit si les droits portent celui-ci et, quand une valeur est dite,
+// Covers dit si les droits portent celui-ci et, quand une valeur est dite,
 // si sa portée la couvre.
-func covers(rights []Capability, right, value string) bool {
+func Covers(rights []Capability, right, value string) bool {
 	switch {
 	case value == "":
 		return HasCapability(rights, right)

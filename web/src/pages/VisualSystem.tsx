@@ -28,7 +28,7 @@ import { List, RowLink, RowText, RowWhen, Table } from "../components/Table";
 import { Wizard, type WizardStep } from "../components/Wizard";
 import { useForm } from "../hooks/useForm";
 import { useViewMode } from "../hooks/useViewMode";
-import { useGrantLine, useI18n, type Translate } from "../i18n/context";
+import { useI18n, usePendingLine, type Translate } from "../i18n/context";
 import type { WizardMode } from "../lib/wizard";
 import { ViewToggle } from "../components/ViewToggle";
 import "./VisualSystem.scss";
@@ -518,7 +518,7 @@ export function VisualSystem() {
 // machine pour deux heures ; la ligne est celle que la session tient du
 // serveur.
 function RightsSample() {
-  const grantLine = useGrantLine("network.private");
+  const pendingLine = usePendingLine();
   const until = new Date(Date.now() + 2 * 3600_000).toISOString();
   const right = (name: string, state: "ok" | "missing", rightUntil: string | null = null) => ({ name, paths: [], state, until: rightUntil });
   const group = { worth_root: false, host_terminal: false, grant_line: "", revoke_line: "", until: null };
@@ -535,7 +535,7 @@ function RightsSample() {
           { ...group, name: "deploy", state: "ok", worth_root: true, rights: [right("docker.deploy", "ok"), right("docker.update", "missing")] },
           { ...group, name: "backup", state: "ok", rights: [right("restic.produce", "ok")] },
           { ...group, name: "enter", state: "ok", until, host_terminal: true, rights: [right("terminal.host", "ok", until)] },
-          { ...group, name: "network", state: "missing", grant_line: grantLine, rights: [right("network.private", "missing")] },
+          { ...group, name: "network", state: "missing", grant_line: pendingLine, rights: [right("network.private", "missing")] },
         ],
       }}
     />

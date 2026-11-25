@@ -146,6 +146,9 @@ func (r *orderRunner) serveRelay(ctx context.Context, request agentwire.ResticRe
 	server := relayLink{fetch: r.fetch}
 	r.mu.Lock()
 	isTarget := agentpolicy.HasCapability(r.rights(), agentpolicy.CapabilityResticTarget)
+	if !isTarget {
+		r.notePendingRight(judgedOrder{}, agentwire.RightMissing(agentpolicy.CapabilityResticTarget))
+	}
 	r.mu.Unlock()
 	if !isTarget {
 		r.logger.Warn("restic relay refused", "repo", request.Repo, "reason", agentwire.RightMissing(agentpolicy.CapabilityResticTarget))

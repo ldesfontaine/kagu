@@ -165,7 +165,7 @@ test("l'explorateur sur une cible sans restic.browse : le refus porte son geste,
   await page.getByRole("menu").getByRole("menuitem", { name: label("backup.browse") }).click();
   const dialog = page.locator("dialog[open]");
   await expect(dialog).toContainText(label("restic.target_browse_right_missing"), { timeout: browseTimeout });
-  await expect(dialog.locator(".token-box", { hasText: "agent grant restic.browse" })).toBeVisible();
+  await expect(dialog.locator(".token-box", { hasText: "agent grant --pending" })).toBeVisible();
   expect(findings.unknown()).toEqual([]);
 });
 
@@ -185,7 +185,7 @@ test("restaurer sans le droit : le refus nomme le droit et porte sa ligne grant"
   await dialog.getByRole("button", { name: label("backup.restore"), exact: true }).click();
   await dialog.getByRole("button", { name: label("confirm.yes") }).click();
   await slow(dialog).toContainText(label("restic.source_restore_right_missing"));
-  await slow(dialog.locator(".token-box", { hasText: "agent grant restic.restore" })).toBeVisible();
+  await slow(dialog.locator(".token-box", { hasText: "agent grant --pending" })).toBeVisible();
   expect(findings.unknown()).toEqual([]);
 });
 

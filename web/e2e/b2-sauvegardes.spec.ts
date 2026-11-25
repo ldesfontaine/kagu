@@ -78,7 +78,7 @@ test("un service avec une base sur une machine sans restic.docker : le droit se 
   const carnet = card(page, "carnet");
   await expect(carnet.locator(".backup-parts")).toContainText("carnet-db-1");
   await expect(carnet).toContainText(filled("backup.unfit_right_missing", "pve-nord", "restic.docker"));
-  await expect(carnet.locator(".token-box", { hasText: "agent grant restic.docker" })).toBeVisible();
+  await expect(carnet.locator(".token-box", { hasText: "agent grant --pending" })).toBeVisible();
   expect(findings.unknown()).toEqual([]);
 });
 

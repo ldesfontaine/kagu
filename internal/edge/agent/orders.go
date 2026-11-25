@@ -112,10 +112,12 @@ func (r *orderRunner) receive(data []byte) {
 	order, reason := r.judge(signed)
 	if reason != "" {
 		r.refuse(signed, order, reason)
+		r.notePendingRight(order, reason)
 		return
 	}
 	r.journal.received(order, "")
 	result, job := r.execute(order)
+	r.notePendingRight(order, result.Reason)
 	// « accepté » part avant que le worker ne puisse finir : la réponse
 	// finale ne le précède jamais.
 	r.results.push(result)
@@ -211,6 +213,7 @@ func (r *orderRunner) reloadPolicy() AppliedPolicy {
 	}
 	if previous != nil {
 		r.logger.Info("agent policy changed", "source", applied.Source, "digest", applied.Digest, "rights", agentpolicy.FormatCapabilities(applied.Rights))
+		r.forgetHeldPendingRights()
 		select {
 		case r.policyChanged <- struct{}{}:
 		default:

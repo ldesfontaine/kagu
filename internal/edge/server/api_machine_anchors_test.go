@@ -9,6 +9,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
 	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
@@ -113,7 +114,7 @@ func TestProtectionFix_ExactForAnArchivePlanListOtherwise(t *testing.T) {
 		t.Fatalf("restic: %+v", fix)
 	}
 	missing := restic.Protection{Origin: restic.OriginRestic, Reason: "restic.source_right_missing", Fix: &refusal.Fix{Right: "restic.produce", Machine: "m-src"}}
-	if fix = protectionFix(missing, restic.Source{MachineID: "m-src"}, recipient); fix == nil || fix.Right != "restic.produce" || fix.Machine != "m-src" || !strings.HasSuffix(fix.Command, " agent grant restic.produce") {
+	if fix = protectionFix(missing, restic.Source{MachineID: "m-src"}, recipient); fix == nil || fix.Right != "restic.produce" || fix.Machine != "m-src" || fix.Command != agentpolicy.PendingLine() {
 		t.Fatalf("right: %+v", fix)
 	}
 	if fix = protectionFix(restic.Protection{Reason: "timeout"}, restic.Source{}, recipient); fix != nil {

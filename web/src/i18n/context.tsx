@@ -22,8 +22,8 @@ interface I18n {
   roles: SessionRole[];
   // Les droits qui se cochent à l'enrôlement, dans leur ordre.
   rights: readonly string[];
-  // Par droit, la ligne grant que le serveur écrit.
-  grantLines: Readonly<Record<string, string>>;
+  // La ligne constante d'un droit manquant, telle que le serveur l'écrit.
+  pendingLine: string;
   t: Translate;
   setLanguage: (code: string) => Promise<void>;
   // Relit la session : après un réglage de seuil, les jauges suivent sans
@@ -83,7 +83,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       verbRoutes: new Set(session.verbs.map((verb) => verb.route)),
       roles: session.roles,
       rights: session.rights,
-      grantLines: session.grant_lines,
+      pendingLine: session.pending_line,
       t,
       setLanguage,
       reloadSession: load,
@@ -138,10 +138,10 @@ export function useRightNames(): readonly string[] {
   return useI18n().rights;
 }
 
-// La ligne qui pose un droit en root sur une machine, telle que le serveur
-// l'écrit ; vide s'il n'en donne pas.
-export function useGrantLine(right: string): string {
-  return useI18n().grantLines[right] ?? "";
+// La ligne qu'un écran donne pour un droit manquant, la même pour tous, telle
+// que le serveur l'écrit (R-DROIT-8).
+export function usePendingLine(): string {
+  return useI18n().pendingLine;
 }
 
 // Dit si une écriture est aussi un verbe d'API que les jetons peuvent porter.

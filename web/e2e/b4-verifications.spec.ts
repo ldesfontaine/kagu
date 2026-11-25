@@ -121,7 +121,7 @@ test("la cible sans restic.verify : la carte le dit, le geste ré-enrôle avec c
   await page.getByRole("menu").getByRole("menuitem", { name: label("backup.verify_now") }).click();
   await expect(calendrier).toContainText(label("restic.target_verify_right_missing"));
   // Le geste est la ligne grant du serveur, sur la carte et dans la note du refus.
-  await expect(calendrier.locator(".token-box", { hasText: "agent grant restic.verify" })).toHaveCount(2);
+  await expect(calendrier.locator(".token-box", { hasText: "agent grant --pending" })).toHaveCount(2);
   expect(findings.unknown()).toEqual([]);
 });
 

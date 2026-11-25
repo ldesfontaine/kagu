@@ -889,7 +889,7 @@ const session = shape<Session>("Session", {
   verbs: shape("SessionVerb", { id: value, route: value }),
   roles: shape("SessionRole", { id: value, capabilities: value }),
   rights: value,
-  grant_lines: dictionaryOf(value),
+  pending_line: value,
 });
 
 type IncidentUpdateJSON = Incident["updates"][number];
