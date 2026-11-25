@@ -35,9 +35,16 @@ func confirmChange(out io.Writer, openTerminal terminalOpener, yes bool, text la
 	if yes {
 		return nil
 	}
+	return askOnTerminal(out, openTerminal, text, "agent.confirm_needs_tty")
+}
+
+// askOnTerminal pose la question sur le terminal de contrôle ; sans terminal
+// elle refuse avec le message de needsTerminalKey, que chaque commande choisit
+// selon ce qu'elle accepte (-yes ou non).
+func askOnTerminal(out io.Writer, openTerminal terminalOpener, text lang.Catalog, needsTerminalKey string) error {
 	terminal, err := openTerminal()
 	if err != nil {
-		return &refusal{message: text.Get("agent.confirm_needs_tty")}
+		return &refusal{message: text.Get(needsTerminalKey)}
 	}
 	defer terminal.Close()
 	fmt.Fprint(out, text.Get("agent.confirm"))

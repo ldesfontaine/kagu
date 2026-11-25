@@ -156,7 +156,7 @@ func grantPending(command policyCommand, opts agent.PolicyOptions, text lang.Cat
 	confirm := func(change agent.PolicyChange) error {
 		printPendingRights(command.out, text, pending.Grantable, change)
 		printPolicyChange(command.out, text, change)
-		return confirmChange(command.out, command.openTerminal, false, text)
+		return askOnTerminal(command.out, command.openTerminal, text, "agent.pending_needs_tty")
 	}
 	change, err := agent.GrantPending(opts, pending.Grantable, confirm)
 	return finishPolicyChange(command.out, text, change, err)
