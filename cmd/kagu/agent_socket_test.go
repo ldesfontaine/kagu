@@ -153,7 +153,7 @@ func TestR_B1_7_OnlyTheAgentSocketEnrollsAsTheServerMachine(t *testing.T) {
 	const agentUID = 990
 	_, parts, srv := realServer(t, filepath.Join(shortDir(t), "state"))
 	parts.actions.SetKey(action.GenerateKey())
-	parts.machines.SetServerHost("sha256:server", "oc-host")
+	parts.machines.SetServerHost("sha256:server", "kg-host")
 	socket := serveAgentSocket(t, agentAccount{uid: agentUID, gid: os.Getgid()}, srv.AgentSocketHandler(), peerOf(agentUID))
 	socketClient := &http.Client{Transport: &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -168,7 +168,7 @@ func TestR_B1_7_OnlyTheAgentSocketEnrollsAsTheServerMachine(t *testing.T) {
 		t.Fatal("over the port the server fingerprint must give a new machine")
 	}
 
-	response, err := socketClient.Do(enrollRequest(t, parts, "oc-host"))
+	response, err := socketClient.Do(enrollRequest(t, parts, "kg-host"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func enrollRequest(t *testing.T, parts *components, name string) *http.Request {
 	public, _, _ := ed25519.GenerateKey(nil)
 	payload, _ := json.Marshal(agentwire.EnrollRequest{
 		MachineID: id, PublicKey: base64.StdEncoding.EncodeToString(public), Token: cleartext,
-		Hostname: "oc-host", HostFingerprint: "sha256:server",
+		Hostname: "kg-host", HostFingerprint: "sha256:server",
 	})
 	request := httptest.NewRequest(http.MethodPost, "http://localhost/agent/enroll", bytes.NewReader(payload))
 	request.RequestURI = ""

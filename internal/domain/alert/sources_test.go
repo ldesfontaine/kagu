@@ -729,7 +729,7 @@ func TestE03_09_ASuspendedProbeOpensNoAlert(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	untrusted := &probe.Certificate{Subject: "cloud.exemple.fr", Issuer: "openCloud dev", NotBefore: f.clock.Add(-30 * 24 * time.Hour), NotAfter: f.clock.Add(12 * 24 * time.Hour), Fingerprint: strings.Repeat("e", 64), HostnameMatch: true}
+	untrusted := &probe.Certificate{Subject: "cloud.exemple.fr", Issuer: "Kagu dev", NotBefore: f.clock.Add(-30 * 24 * time.Hour), NotAfter: f.clock.Add(12 * 24 * time.Hour), Fingerprint: strings.Repeat("e", 64), HostnameMatch: true}
 	record(f.result(created.ID, probe.OutcomeUp, untrusted))
 	if f.kinds(t) != "cert_untrusted:attention,cert_expiring:attention" {
 		t.Fatalf("kinds %q", f.kinds(t))

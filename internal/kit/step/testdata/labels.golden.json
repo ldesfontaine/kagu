@@ -1,6 +1,6 @@
 {
   "en": {
-    "step.enroll.account": "Account opencloud-agent created",
+    "step.enroll.account": "Account kagu-agent created",
     "step.enroll.docker": "Docker installed",
     "step.enroll.enrolled": "Agent enrolled",
     "step.enroll.ready": "First signal from the agent",
@@ -11,7 +11,7 @@
     "step.enroll.workspace": "Services folder"
   },
   "fr": {
-    "step.enroll.account": "Compte opencloud-agent créé",
+    "step.enroll.account": "Compte kagu-agent créé",
     "step.enroll.docker": "Docker installé",
     "step.enroll.enrolled": "Agent enrôlé",
     "step.enroll.ready": "Premier signal de l'agent",

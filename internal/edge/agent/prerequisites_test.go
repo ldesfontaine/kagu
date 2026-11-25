@@ -272,7 +272,7 @@ func TestE03_10_UnchangedRightsStillLayTheDockerGroup(t *testing.T) {
 	}
 
 	change = b.grantSet(t, agentpolicy.SetManage)
-	want := []string{"usermod -aG docker " + account, "systemctl daemon-reload", "systemctl try-restart opencloud-agent.service"}
+	want := []string{"usermod -aG docker " + account, "systemctl daemon-reload", "systemctl try-restart kagu-agent.service"}
 	if done := b.system.take(); !slices.Equal(done, want) || change.Changed() {
 		t.Fatalf("laid %q, changed %v\nwant %q", done, change.Changed(), want)
 	}
