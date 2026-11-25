@@ -2,9 +2,10 @@ package release
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"slices"
+
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Les clés publiques des versions, au format minisign : la seule liste des
@@ -26,7 +27,7 @@ const (
 
 // ErrNoTrustedKey : ce binaire n'embarque aucune clé de version, ou toutes
 // sont retirées.
-var ErrNoTrustedKey = errors.New("release: no trusted public key embedded in this binary")
+var ErrNoTrustedKey = refusal.Conflict("release.no_trusted_key", "release: no trusted public key embedded in this binary")
 
 // Keys sont les clés de version qu'un binaire croit : la courante, et la
 // secours qui la retire. Une Backup vide ne vérifie rien.

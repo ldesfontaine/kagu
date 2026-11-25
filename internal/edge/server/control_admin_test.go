@@ -1,7 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +15,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/peercred"
 )
 
@@ -48,6 +52,9 @@ var adminBodies = map[string]string{
 	"POST /control/admin/auth-mode":          `{"mode":"forward","header":"X-Forwarded-User"}`,
 	"POST /control/admin/sessions/close-all": `{}`,
 	"POST /control/admin/tokens/revoke-all":  `{}`,
+	"GET /control/admin/health":              ``,
+	"POST /control/admin/backup/pre-upgrade": `{}`,
+	"POST /control/admin/releases/import":    `{"folder":"/var/lib/opencloud-import/v0.0.2"}`,
 }
 
 // R-A2-11 : un pair d'uid non nul reçoit 403 sur chaque route
@@ -89,6 +96,11 @@ func TestR_A2_11_AdminRoutesRefuseANonRootPeer(t *testing.T) {
 	after, err := ts.operator.State(context.Background())
 	if err != nil || !after.Same(before) {
 		t.Fatalf("a refused peer changed the access: %+v %v", after, err)
+	}
+	for _, written := range []string{brand.UpgradeDir, brand.ReleasesDir} {
+		if _, err := ts.state.Stat(written); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("a refused peer wrote %s in the state: %v", written, err)
+		}
 	}
 	if got := callWithSession(ts.Server, "/api/counts", session); got.Code != http.StatusOK {
 		t.Fatalf("a refused peer closed a session: %d", got.Code)
@@ -161,10 +173,18 @@ func TestR_A2_10_NothingReopensTheFirstSetupFromThePort(t *testing.T) {
 	if got := callSignedInJSON(ts.Server, http.MethodPost, "/api/auth/actions/disable", `{}`, testPassword); got.Code != http.StatusNotFound {
 		t.Fatalf("POST /api/auth/actions/disable: %d %s, want 404", got.Code, got.Body.String())
 	}
+	// Un GET qu'aucune route ne prend reçoit le repli du port (la page de
+	// l'application si le front est compilé) : seule cette réponse-là, à
+	// l'octet près, dit qu'une route d'administration n'y est pas servie.
+	unrouted := callSignedInJSON(ts.Server, http.MethodGet, "/__aucune-route-r-a2-10", "", testPassword)
 	for _, route := range ts.adminRoutes() {
 		method, path, _ := strings.Cut(route.pattern, " ")
 		for _, onPort := range []string{path, "/api" + path} {
-			if got := callSignedInJSON(ts.Server, method, onPort, adminBodies[route.pattern], testPassword); got.Code < 300 || got.Code == http.StatusNotModified {
+			got := callSignedInJSON(ts.Server, method, onPort, adminBodies[route.pattern], testPassword)
+			if method == http.MethodGet && sameResponse(got, unrouted) {
+				continue
+			}
+			if got.Code < 300 || got.Code == http.StatusNotModified {
 				t.Errorf("%s %s served on the port: %d", method, onPort, got.Code)
 			}
 		}
@@ -269,4 +289,11 @@ func TestAdminRoutes_CloseSessionsAndRevokeTokens(t *testing.T) {
 	if code := callAs(ts.Server, http.MethodGet, "/api/counts", testUsername, testPassword).Code; code != http.StatusOK {
 		t.Fatalf("revoke-all touched the account: %d", code)
 	}
+}
+
+// sameResponse : même code, même Content-Type, même corps à l'octet près.
+func sameResponse(got, want *httptest.ResponseRecorder) bool {
+	return got.Code == want.Code &&
+		got.Header().Get("Content-Type") == want.Header().Get("Content-Type") &&
+		bytes.Equal(got.Body.Bytes(), want.Body.Bytes())
 }

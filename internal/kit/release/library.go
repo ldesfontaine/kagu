@@ -7,11 +7,13 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 var (
@@ -20,9 +22,15 @@ var (
 	ErrNoRelease = errors.New("release: version not imported")
 	// ErrVersionConflict : la version est déjà importée avec d'autres sommes.
 	// Une version ne se réécrit jamais.
-	ErrVersionConflict = errors.New("release: version already imported with other files")
+	ErrVersionConflict = refusal.Conflict("release.version_conflict", "release: version already imported with other files")
 	// ErrNothingToImport : le dossier ne porte aucun binaire de la version.
-	ErrNothingToImport = errors.New("release: the version lists no binary")
+	ErrNothingToImport = refusal.Invalid("release.nothing_to_import", "release: the version lists no binary")
+	// ErrFolderNotAbsolute : le dossier à importer se nomme par un chemin
+	// absolu ; un chemin relatif se lirait depuis le dossier courant de serve.
+	ErrFolderNotAbsolute = refusal.Invalid("release.folder_not_absolute", "release: the folder path is not absolute")
+	// ErrFolderUnreadable : le dossier, ou l'un de ses fichiers, manque ou
+	// n'est pas lisible du compte qui importe (serve n'a pas le /tmp de root).
+	ErrFolderUnreadable = refusal.Invalid("release.folder_unreadable", "release: the folder or one of its files cannot be read")
 )
 
 const (
@@ -56,24 +64,28 @@ func versionDir(version Version) string {
 	return path.Join(brand.ReleasesDir, version.String())
 }
 
-// Import copie sous l'état la version que contient dir (SHA256SUMS, sa
-// signature et chaque binaire listé), après avoir tout vérifié : la signature
-// avec les clés de confiance, puis la somme de chaque binaire. Rien n'est écrit
-// d'une version qui ne passe pas. Importer deux fois la même version ne change
-// rien ; la même version avec d'autres sommes est refusée.
+// Import copie sous l'état la version que contient dir, un chemin absolu
+// (SHA256SUMS, sa signature et chaque binaire listé), après avoir tout
+// vérifié : la signature avec les clés de confiance, puis la somme de chaque
+// binaire. Rien n'est écrit d'une version qui ne passe pas. Importer deux fois
+// la même version ne change rien ; la même version avec d'autres sommes est
+// refusée.
 func (library *Library) Import(dir string) (Release, error) {
+	if !filepath.IsAbs(dir) {
+		return Release{}, ErrFolderNotAbsolute
+	}
 	source, err := os.OpenRoot(dir)
 	if err != nil {
-		return Release{}, fmt.Errorf("open release folder: %w", err)
+		return Release{}, unreadable(fmt.Errorf("open release folder: %w", err))
 	}
 	defer source.Close()
 	sums, err := readSmallIn(source, brand.ReleaseSumsFile)
 	if err != nil {
-		return Release{}, err
+		return Release{}, unreadable(err)
 	}
 	signature, err := readSmallIn(source, brand.ReleaseSignatureFile)
 	if err != nil {
-		return Release{}, err
+		return Release{}, unreadable(err)
 	}
 	signed, err := VerifySums(sums, signature, library.keys)
 	if err != nil {
@@ -81,7 +93,7 @@ func (library *Library) Import(dir string) (Release, error) {
 	}
 	binaries, err := readBinaries(source, signed)
 	if err != nil {
-		return Release{}, err
+		return Release{}, unreadable(err)
 	}
 	if err := library.refuseOtherSums(signed.Version, sums); err != nil {
 		return Release{}, err
@@ -90,6 +102,15 @@ func (library *Library) Import(dir string) (Release, error) {
 		return Release{}, err
 	}
 	return signed, nil
+}
+
+// unreadable fait d'un fichier absent ou interdit du dossier importé le refus
+// ErrFolderUnreadable ; toute autre erreur reste ce qu'elle est.
+func unreadable(err error) error {
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrPermission) {
+		return fmt.Errorf("%w: %w", ErrFolderUnreadable, err)
+	}
+	return err
 }
 
 // BinaryNames rend, dans l'ordre, les binaires que la version liste.

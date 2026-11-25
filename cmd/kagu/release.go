@@ -140,7 +140,11 @@ func importRelease(args []string, configPath string, out io.Writer, trusted func
 		return err
 	}
 	defer stateDir.Close()
-	signed, err := release.NewLibrary(stateDir, keys).Import(args[0])
+	folder, err := filepath.Abs(args[0])
+	if err != nil {
+		return err
+	}
+	signed, err := release.NewLibrary(stateDir, keys).Import(folder)
 	if err != nil {
 		return refuseImport(err, args[0])
 	}

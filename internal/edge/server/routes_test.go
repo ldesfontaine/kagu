@@ -376,6 +376,7 @@ func newFirstSetupServer(t *testing.T) *testServer {
 		Proxmox:         hypervisors,
 		Firewalls:       firewalls,
 		Backups:         backups,
+		UpgradeCopies:   db,
 		Restic:          resticBackups,
 		ResticAgent:     resticBackups,
 		ResticRelay:     relay,

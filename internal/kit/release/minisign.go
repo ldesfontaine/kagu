@@ -5,25 +5,26 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"strings"
 
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
+// Des refus, chacun sa clé : la route d'import de serve les rend à root.
 var (
 	// ErrMalformed : le texte n'a pas la forme d'une clé, d'une signature ou
 	// d'un fichier de sommes.
-	ErrMalformed = errors.New("release: malformed")
+	ErrMalformed = refusal.Invalid("release.malformed", "release: malformed")
 	// ErrLegacyAlgorithm : signature minisign sans pré-hachage ("Ed"), refusée.
-	ErrLegacyAlgorithm = errors.New("release: legacy signature algorithm")
+	ErrLegacyAlgorithm = refusal.Invalid("release.legacy_algorithm", "release: legacy signature algorithm")
 	// ErrWrongKey : la signature porte l'identifiant d'une autre clé.
-	ErrWrongKey = errors.New("release: signature made by another key")
+	ErrWrongKey = refusal.Invalid("release.wrong_key", "release: signature made by another key")
 	// ErrBadSignature : le message ou le commentaire de confiance a changé.
-	ErrBadSignature = errors.New("release: bad signature")
+	ErrBadSignature = refusal.Invalid("release.bad_signature", "release: bad signature")
 )
 
 // Les marques du format minisign : l'algorithme de la clé publique, celui de

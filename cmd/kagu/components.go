@@ -48,19 +48,21 @@ import (
 // pour serve (le direct, les boucles, les commandeurs, la machine openCloud)
 // reste dans serve.go.
 type components struct {
-	db           *store.DB
-	actions      *action.Service
-	sshKeys      *sshkeys.Service
-	systemd      *systemdunits.Service
-	links        *link.Service
-	hostConns    *hostconn.Service
-	roles        *role.Service
-	proxmox      *proxmox.Service
-	firewalls    *firewall.Service
-	backups      *backup.Service
-	restic       *restic.Service
-	relay        *restic.Broker
-	deployer     *deploy.Service
+	db        *store.DB
+	actions   *action.Service
+	sshKeys   *sshkeys.Service
+	systemd   *systemdunits.Service
+	links     *link.Service
+	hostConns *hostconn.Service
+	roles     *role.Service
+	proxmox   *proxmox.Service
+	firewalls *firewall.Service
+	backups   *backup.Service
+	restic    *restic.Service
+	relay     *restic.Broker
+	deployer  *deploy.Service
+	// releases est la bibliothèque des versions ; nil sans clé de version.
+	releases     *release.Library
 	logger       *slog.Logger
 	preferences  *settings.Service
 	machines     *machine.Service
@@ -164,11 +166,14 @@ func buildComponents(cfg config.Config, stateDir *os.Root, db *store.DB, logger 
 	actions := action.New(db, machines, logger)
 	actions.SetAuditor(journal)
 	actions.SetAlerter(alerts)
-	// Les mises à jour des agents : la bibliothèque des versions importées, lue
-	// avec les clés de version embarquées. Sans clé (binaire de développement),
-	// rien ne se vérifie et la fiche ne propose rien.
+	// Les mises à jour des agents et l'import par root : la bibliothèque des
+	// versions, lue avec les clés de version embarquées. Sans clé (binaire de
+	// développement), rien ne se vérifie, la fiche ne propose rien et l'import
+	// est refusé.
+	var releases *release.Library
 	if releaseKeys, keyErr := release.TrustedPublicKeys(); keyErr == nil {
-		actions.SetReleases(release.NewLibrary(stateDir, releaseKeys), version.Number())
+		releases = release.NewLibrary(stateDir, releaseKeys)
+		actions.SetReleases(releases, version.Number())
 	} else {
 		logger.Info("no release key embedded: agent updates are off")
 	}
@@ -234,6 +239,7 @@ func buildComponents(cfg config.Config, stateDir *os.Root, db *store.DB, logger 
 		probes: probes, declared: declared, updates: updates, statusPage: statusPage,
 		alerts: alerts, clockWatch: clockWatch, notifier: notifier, apiTokens: apiTokens, verbRequests: verbRequests, operator: operator,
 		support: support, manifests: manifests, actions: actions, sshKeys: sshKeys, systemd: systemd, links: links, hostConns: hostConns, roles: roles, proxmox: hypervisors, firewalls: firewalls, backups: backups, restic: resticBackups, relay: relay, deployer: deployer,
+		releases: releases,
 	}, nil
 }
 
@@ -271,6 +277,8 @@ func (c *components) serverOptions(cfg config.Config) server.Options {
 		Proxmox:         c.proxmox,
 		Firewalls:       c.firewalls,
 		Backups:         c.backups,
+		UpgradeCopies:   c.db,
+		Releases:        c.releases,
 		Restic:          c.restic,
 		ResticAgent:     c.restic,
 		ResticRelay:     c.relay,

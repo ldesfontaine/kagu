@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite" // pilote SQLite pur Go, enregistré sous le nom "sqlite"
@@ -36,6 +37,10 @@ type DB struct {
 	// Chiffre les secrets qui entrent en base et les ouvre à la lecture ;
 	// posé par SetSealer au démarrage.
 	sealer Sealer
+	// stateDir est le dossier de la base : les copies d'avant montée s'y
+	// écrivent, une à la fois (upgradeCopy).
+	stateDir    *os.Root
+	upgradeCopy sync.Mutex
 }
 
 // Open crée ou ouvre la base sous le répertoire d'état, en WAL, et la met
@@ -46,7 +51,7 @@ func Open(ctx context.Context, stateDir *os.Root) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db := &DB{sql: handle}
+	db := &DB{sql: handle, stateDir: stateDir}
 	if err := db.migrate(ctx); err != nil {
 		_ = handle.Close()
 		return nil, err

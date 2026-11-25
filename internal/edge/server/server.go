@@ -44,6 +44,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/mail"
 	"github.com/ldesfontaine/kagu/internal/kit/mcpcheck"
 	"github.com/ldesfontaine/kagu/internal/kit/ratelimit"
+	"github.com/ldesfontaine/kagu/internal/kit/release"
 	"github.com/ldesfontaine/kagu/internal/kit/sampler"
 	"github.com/ldesfontaine/kagu/internal/view/manifest"
 	"github.com/ldesfontaine/kagu/internal/view/reader"
@@ -374,6 +375,12 @@ type Backups interface {
 	Runs(ctx context.Context, query backup.RunQuery) ([]backup.RunRecord, error)
 }
 
+// Ce que le serveur attend de la base pour la montée de serve : sa copie,
+// écrite sous le compte du service (R-B2-2).
+type UpgradeCopier interface {
+	CopyBeforeUpgrade(ctx context.Context, running release.Version) (string, error)
+}
+
 // Ce que le serveur attend du composant restic : l'aperçu de la page
 // Sauvegardes, les cibles et les sauvegardes restic. Le relais et le signal
 // passent par agentapi.
@@ -430,10 +437,14 @@ type Server struct {
 	proxmox      ProxmoxService
 	firewalls    FirewallService
 	backups      Backups
-	restic       ResticService
-	deploy       Deployer
-	live         Live
-	logStreams   atomic.Int32
+	// upgradeCopies et releases servent les routes de root qui préparent une
+	// montée (control_upgrade.go) ; releases est nil sans clé de version.
+	upgradeCopies UpgradeCopier
+	releases      *release.Library
+	restic        ResticService
+	deploy        Deployer
+	live          Live
+	logStreams    atomic.Int32
 	// Le limiteur de la racine, par source : les connexions, les changements
 	// de mot de passe et les jetons d'API.
 	authLimit *ratelimit.BySource
@@ -525,6 +536,11 @@ type Options struct {
 	Firewalls FirewallService
 	// Backups pilote la page Sauvegardes ; voir api_backups.go.
 	Backups Backups
+	// UpgradeCopies copie la base avant une montée ; Releases importe une
+	// version, vérifiée par les clés de ce binaire, nil s'il n'en a pas. Voir
+	// control_upgrade.go.
+	UpgradeCopies UpgradeCopier
+	Releases      *release.Library
 	// Restic rend l'aperçu de la page Sauvegardes et ses gestes restic ; voir
 	// api_restic.go. ResticAgent écrit la section restic du signal et les
 	// résultats des sauvegardes ; ResticRelay est le relais des sources qui ne
@@ -583,38 +599,40 @@ func New(opts Options) (*Server, error) {
 		return nil, fmt.Errorf("register woff2 type: %w", err)
 	}
 	server := &Server{
-		logger:       opts.Logger,
-		version:      opts.Version,
-		commit:       opts.Commit,
-		catalogs:     catalogs,
-		reader:       opts.Reader,
-		settings:     opts.Settings,
-		machines:     opts.Machines,
-		heartbeats:   opts.Heartbeats,
-		resources:    opts.Resources,
-		containers:   opts.Containers,
-		probes:       opts.Probes,
-		directory:    opts.Directory,
-		manifest:     opts.Manifest,
-		updates:      opts.Updates,
-		lifecycle:    opts.Lifecycle,
-		status:       opts.Status,
-		alerts:       opts.Alerts,
-		notifier:     opts.Notifier,
-		apiTokens:    opts.APITokens,
-		verbRequests: opts.VerbRequests,
-		mcpURL:       opts.MCPURL,
-		auth:         opts.Auth,
-		actions:      opts.Actions,
-		sshKeys:      opts.SSHKeys,
-		systemd:      opts.Systemd,
-		links:        opts.Links,
-		proxmox:      opts.Proxmox,
-		firewalls:    opts.Firewalls,
-		backups:      opts.Backups,
-		restic:       opts.Restic,
-		deploy:       opts.Deploy,
-		live:         opts.Live,
+		logger:        opts.Logger,
+		version:       opts.Version,
+		commit:        opts.Commit,
+		catalogs:      catalogs,
+		reader:        opts.Reader,
+		settings:      opts.Settings,
+		machines:      opts.Machines,
+		heartbeats:    opts.Heartbeats,
+		resources:     opts.Resources,
+		containers:    opts.Containers,
+		probes:        opts.Probes,
+		directory:     opts.Directory,
+		manifest:      opts.Manifest,
+		updates:       opts.Updates,
+		lifecycle:     opts.Lifecycle,
+		status:        opts.Status,
+		alerts:        opts.Alerts,
+		notifier:      opts.Notifier,
+		apiTokens:     opts.APITokens,
+		verbRequests:  opts.VerbRequests,
+		mcpURL:        opts.MCPURL,
+		auth:          opts.Auth,
+		actions:       opts.Actions,
+		sshKeys:       opts.SSHKeys,
+		systemd:       opts.Systemd,
+		links:         opts.Links,
+		proxmox:       opts.Proxmox,
+		firewalls:     opts.Firewalls,
+		backups:       opts.Backups,
+		upgradeCopies: opts.UpgradeCopies,
+		releases:      opts.Releases,
+		restic:        opts.Restic,
+		deploy:        opts.Deploy,
+		live:          opts.Live,
 		authLimit: ratelimit.NewBySourceWithGlobal(authAttemptRate, authAttemptBurst, authIdle, ratelimit.GlobalLimit{
 			PerMinute: cmp.Or(opts.AuthGlobalPerMinute, DefaultAuthGlobalPerMinute),
 			Exempt:    isLoopbackAddress,

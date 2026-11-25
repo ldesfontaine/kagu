@@ -12,13 +12,14 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 var (
 	// ErrNotListed : le nom du fichier n'est pas dans les sommes de la version.
 	ErrNotListed = errors.New("release: file not listed in the version")
 	// ErrDigestMismatch : la somme du fichier n'est pas celle de la version.
-	ErrDigestMismatch = errors.New("release: file does not match the version")
+	ErrDigestMismatch = refusal.Invalid("release.digest_mismatch", "release: file does not match the version")
 )
 
 // Un fichier de sommes ou de signature tient en quelques centaines d'octets.
