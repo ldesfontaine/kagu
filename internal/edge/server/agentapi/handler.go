@@ -213,7 +213,8 @@ func New(opts Options) *Handler {
 }
 
 // Routes déclare les routes de l'agent. Le serveur les monte à leur place
-// dans son arbre, que server/routes_test.go fige.
+// dans son arbre, que server/routes_test.go fige, et une seconde fois, seules,
+// sur la socket des agents locaux (Server.AgentSocketHandler).
 func (h *Handler) Routes(add func(method, pattern string, handler http.HandlerFunc)) {
 	add("POST", "/agent/enroll", h.enroll)
 	add("GET", "/agent/stream", h.stream)

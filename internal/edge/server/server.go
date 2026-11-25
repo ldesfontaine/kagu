@@ -472,8 +472,10 @@ type Server struct {
 	refusals    *refusalLog
 	// La socket de commande ne sert que les routes du fichier de l'annuaire.
 	controlHandler http.Handler
-	publicURL      string
-	trustedProxies []netip.Prefix
+	// La socket des agents locaux ne sert que les routes de l'agent.
+	agentSocketHandler http.Handler
+	publicURL          string
+	trustedProxies     []netip.Prefix
 	// Le secret que le mandataire pose dans brand.ProxySecretHeader ; vide :
 	// aucun n'est configuré, l'adresse du pair seule décide (voir auth.go).
 	forwardSecret string
@@ -705,7 +707,38 @@ func New(opts Options) (*Server, error) {
 	}
 	server.handler = server.chain(server.securityHeaders(routed))
 	server.controlHandler = server.chain(server.controlMux())
+	agentRouted := http.Handler(server.agentSocketMux())
+	if opts.ResponseWriteTimeout > 0 {
+		agentRouted = boundResponseWrite(opts.ResponseWriteTimeout, agentRouted)
+	}
+	if opts.RequestReadTimeout > 0 {
+		agentRouted = boundRequestRead(opts.RequestReadTimeout, agentRouted)
+	}
+	server.agentSocketHandler = server.chain(agentRouted)
 	return server, nil
+}
+
+// AgentSocketHandler est ce que serve sert sur brand.AgentSocketPath : les
+// routes de l'agent, et elles seules, avec les durées du port. Enrôlement,
+// preuve signée et flux y sont ceux de HTTPS ; seul le transport change. Le
+// jugement du pair (son uid) est à qui ouvre la socket.
+func (s *Server) AgentSocketHandler() http.Handler {
+	return s.agentSocketHandler
+}
+
+// agentSocketMux monte les routes d'agentapi.Handler.Routes une seconde fois,
+// hors de mux() : ni /api/, ni /control/, ni l'interface n'y passent.
+func (s *Server) agentSocketMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	s.agent.Routes(func(method, pattern string, handler http.HandlerFunc) {
+		bounded := boundByKind(method, pattern, handler)
+		if method != anyMethod {
+			pattern = method + " " + pattern
+		}
+		mux.HandleFunc(pattern, bounded)
+	})
+	mux.HandleFunc("/", http.NotFound)
+	return mux
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

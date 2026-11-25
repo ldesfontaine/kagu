@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"os"
 	"os/signal"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -246,7 +247,8 @@ func runServe(args []string) error {
 		return err
 	}
 	control := startControlSocket(logger, cfg.StateDir, server.ControlHandler(), peercred.Peer)
-	return listenUntilSignal(ctx, logger, newHTTPServer(cfg.Listen, server), listener, control, cfg)
+	agents := openAgentSocket(logger, server.AgentSocketHandler())
+	return listenUntilSignal(ctx, logger, newHTTPServer(cfg.Listen, server), listener, []*http.Server{control, agents}, cfg)
 }
 
 // listenLimited ouvre le port principal ; ses connexions sont comptées à
@@ -348,13 +350,14 @@ func newHTTPServer(addr string, handler http.Handler) *http.Server {
 	return httpServer
 }
 
-// listenUntilSignal sert sur listener jusqu'au signal d'arrêt. control, la
-// socket de commande, est nil quand elle n'a pas pu s'ouvrir.
-func listenUntilSignal(ctx context.Context, logger *slog.Logger, httpServer *http.Server, listener net.Listener, control *http.Server, cfg config.Config) error {
-	if control != nil {
+// listenUntilSignal sert sur listener jusqu'au signal d'arrêt. sockets sont
+// les sockets locales (commande, agents) ; une entrée nil n'a pas pu s'ouvrir.
+func listenUntilSignal(ctx context.Context, logger *slog.Logger, httpServer *http.Server, listener net.Listener, sockets []*http.Server, cfg config.Config) error {
+	sockets = slices.DeleteFunc(sockets, func(socket *http.Server) bool { return socket == nil })
+	for _, socket := range sockets {
 		// Fermer retire aussi le fichier de la socket, quelle que soit la
 		// sortie.
-		defer control.Close()
+		defer socket.Close()
 	}
 	failed := make(chan error, 1)
 	go func() {
@@ -370,18 +373,18 @@ func listenUntilSignal(ctx context.Context, logger *slog.Logger, httpServer *htt
 	logger.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
-	// La socket de commande s'arrête en même temps que le serveur principal,
-	// pas avant lui : une requête de commande lente ne doit pas manger le
-	// délai du reste.
-	controlDone := make(chan error, 1)
-	if control != nil {
-		go func() { controlDone <- control.Shutdown(shutdownCtx) }()
-	} else {
-		controlDone <- nil
+	// Les sockets locales s'arrêtent en même temps que le serveur principal,
+	// pas avant lui : une requête lente sur l'une ne doit pas manger le délai
+	// du reste.
+	socketsDone := make(chan error, len(sockets))
+	for _, socket := range sockets {
+		go func() { socketsDone <- socket.Shutdown(shutdownCtx) }()
 	}
 	mainErr := httpServer.Shutdown(shutdownCtx)
-	if err := <-controlDone; err != nil {
-		logger.Warn("shutdown control socket", "error", err)
+	for range sockets {
+		if err := <-socketsDone; err != nil {
+			logger.Warn("shutdown local socket", "error", err)
+		}
 	}
 	if mainErr != nil && !errors.Is(mainErr, http.ErrServerClosed) {
 		return fmt.Errorf("shutdown: %w", mainErr)

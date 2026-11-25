@@ -38,6 +38,11 @@ const (
 	// La socket de commande, dans state_dir : serve y sert les routes du
 	// fichier de l'annuaire à la commande locale, sans rien ouvrir au réseau.
 	ControlSocketFile = "control.sock"
+	// La socket des agents locaux : serve y sert les seules routes de l'agent
+	// à l'agent de la machine Kagu, sans adresse publique (R-B1-7). Le dossier
+	// est le RuntimeDirectory de l'unité du serveur.
+	RuntimeDir      = "/run/" + ID
+	AgentSocketPath = RuntimeDir + "/agent.sock"
 	// Le dossier des colis à destination des agents, dans state_dir : vidé au
 	// démarrage, rien n'y reste plus de quelques heures.
 	OutgoingDir = "outgoing"
