@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/fact/probe"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
@@ -360,5 +361,40 @@ func TestAgentStream_PushesTheNewSetAfterAnEdit(t *testing.T) {
 	if len(assignment.Probes) != 1 || assignment.Probes[0].ID != created.ID ||
 		assignment.Probes[0].Target != "https://b.fr/" || assignment.Probes[0].IntervalSeconds != 120 {
 		t.Fatalf("le jeu poussé après l'édition ne porte pas la nouvelle définition: %+v", assignment)
+	}
+}
+
+// E03-09 : la fiche d'une sonde suspendue dit le droit qui manque, la machine
+// dont l'agent doit le tenir et la ligne constante « grant --pending », jamais
+// une ligne qui nomme le droit (R-DROIT-8). Une sonde qui n'est pas suspendue
+// ne porte rien.
+func TestE03_09_TheSuspendedProbeSheetGivesTheMissingRightAndThePendingLine(t *testing.T) {
+	server := newTestServer(t)
+	server.enroll(t, "vps-paris-1", remoteID)
+	local := server.createProbeVia(t, probeRequest{Name: "nas", Kind: "tcp", Target: "192.168.1.20:445", MachineID: remoteID})
+	public := server.createProbeVia(t, probeRequest{Name: "site", Kind: "http", Target: "https://a.fr/", MachineID: remoteID})
+	report := probe.Report{Results: []probe.Result{
+		{ProbeID: local.ID, CheckedAt: testNow, Outcome: probe.OutcomeDown, Reason: probe.ReasonLAN},
+		{ProbeID: public.ID, CheckedAt: testNow, Outcome: probe.OutcomeDown, Reason: probe.ReasonRefused},
+	}}
+	if err := server.probes.Record(context.Background(), remoteID, report); err != nil {
+		t.Fatal(err)
+	}
+
+	var sheet probeResponse
+	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/probes/"+local.ID, nil), &sheet)
+	if sheet.Probe.Status != string(probe.StatusSuspended) || sheet.Probe.Fix == nil {
+		t.Fatalf("status %s, fix %+v", sheet.Probe.Status, sheet.Probe.Fix)
+	}
+	fix := *sheet.Probe.Fix
+	if fix.Right != agentpolicy.CapabilityProbeLAN || fix.Machine != remoteID || fix.Command != agentpolicy.PendingLine() {
+		t.Fatalf("fix %+v", fix)
+	}
+	if strings.Contains(fix.Command, agentpolicy.CapabilityProbeLAN) {
+		t.Fatalf("the line names the right: %q", fix.Command)
+	}
+	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/probes/"+public.ID, nil), &sheet)
+	if sheet.Probe.Status == string(probe.StatusSuspended) || sheet.Probe.Fix != nil {
+		t.Fatalf("a probe that is not suspended: status %s, fix %+v", sheet.Probe.Status, sheet.Probe.Fix)
 	}
 }

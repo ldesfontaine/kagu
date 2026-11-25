@@ -207,7 +207,7 @@ func Run(ctx context.Context, opts Options) error {
 	go updater.Run(ctx)
 	// Les sondes tournent tant que l'agent vit : leur jeu vient du serveur,
 	// mais une coupure du flux ne les arrête pas, le tampon garde les essais.
-	checked := &results{}
+	checked := &results{refused: orders.noteRefusedRight}
 	// Le réseau local ne s'ouvre aux sondes que par probe.lan, demandé à la
 	// politique à chaque sonde. Un état mal gardé n'a que observe, donc le
 	// ferme aussi.

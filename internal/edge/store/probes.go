@@ -118,7 +118,8 @@ func (db *DB) CountProbes(ctx context.Context) (total, attention int, err error)
 // tombe entre maintenant et l'instant donné, et ceux qui l'ont déjà
 // passée. La plus proche échéance rendue est à venir : celle d'un
 // certificat expiré ne dirait pas dans combien de jours il expire. Une
-// sonde en pause est écartée : ce qu'elle a vu ne dit plus rien.
+// sonde en pause ou suspendue est écartée : ce qu'elle a vu ne dit plus
+// rien.
 func (db *DB) CountProbeCertificates(ctx context.Context, now, before time.Time) (probe.Certificates, error) {
 	var counted probe.Certificates
 	var soonest sql.NullInt64
@@ -127,8 +128,8 @@ func (db *DB) CountProbeCertificates(ctx context.Context, now, before time.Time)
 			COALESCE(SUM(c.not_after >= ? AND c.not_after < ?), 0),
 			COALESCE(SUM(c.not_after < ?), 0),
 			MIN(CASE WHEN c.not_after >= ? THEN c.not_after END)
-		FROM probe_certificates c JOIN probes p ON p.id = c.probe_id WHERE p.status != ?`,
-		now.Unix(), before.Unix(), now.Unix(), now.Unix(), string(probe.StatusPaused),
+		FROM probe_certificates c JOIN probes p ON p.id = c.probe_id WHERE p.status NOT IN (?, ?)`,
+		now.Unix(), before.Unix(), now.Unix(), now.Unix(), string(probe.StatusPaused), string(probe.StatusSuspended),
 	).Scan(&counted.Total, &counted.Expiring, &counted.Expired, &soonest)
 	if err != nil {
 		return probe.Certificates{}, fmt.Errorf("count probe certificates: %w", err)

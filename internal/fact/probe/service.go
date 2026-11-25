@@ -585,7 +585,7 @@ func (s *Service) ReviewCertificates(ctx context.Context) error {
 		return err
 	}
 	for _, found := range probes {
-		if found.Certificate != nil && found.Status != StatusPaused && found.Status != StatusNew {
+		if found.Certificate != nil && !found.Status.SaysNothingOfTarget() {
 			s.alerter.ProbeChanged(ctx, found)
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
@@ -14,20 +15,31 @@ import (
 )
 
 // Les états d'une sonde, dans le vocabulaire de la direction artistique :
-// Nouveau, En ligne, Dégradé, Hors ligne, En pause.
+// Nouveau, En ligne, Dégradé, Hors ligne, En pause, Suspendue. Suspendue :
+// l'agent n'a plus le droit de la faire tourner (MissingRight), un retrait
+// voulu par root, pas une panne (essai E03-09).
 type Status string
 
 const (
-	StatusNew      Status = "new"
-	StatusUp       Status = "up"
-	StatusDegraded Status = "degraded"
-	StatusDown     Status = "down"
-	StatusPaused   Status = "paused"
+	StatusNew       Status = "new"
+	StatusUp        Status = "up"
+	StatusDegraded  Status = "degraded"
+	StatusDown      Status = "down"
+	StatusPaused    Status = "paused"
+	StatusSuspended Status = "suspended"
 )
 
 // Statuses liste les états, dans l'ordre des écrans.
 func Statuses() []Status {
-	return []Status{StatusNew, StatusUp, StatusDegraded, StatusDown, StatusPaused}
+	return []Status{StatusNew, StatusUp, StatusDegraded, StatusDown, StatusPaused, StatusSuspended}
+}
+
+// SaysNothingOfTarget dit que l'état ne parle pas de la cible : rien
+// n'a encore été essayé, plus rien ne l'est, ou l'agent n'a pas le droit
+// de l'essayer. Une telle sonde n'alerte pas, ni sur la cible ni sur son
+// certificat.
+func (s Status) SaysNothingOfTarget() bool {
+	return s == StatusNew || s == StatusPaused || s == StatusSuspended
 }
 
 // Kind est ce que la sonde parle.
@@ -93,6 +105,15 @@ func Reasons() []Reason {
 		ReasonStatus, ReasonBody, ReasonRedirect, ReasonTLSUntrusted, ReasonTLSExpired, ReasonTLSHostname,
 		ReasonLAN, ReasonAgentRefused,
 	}
+}
+
+// MissingRight rend le droit dont l'absence a donné ce motif : probe.lan
+// pour lan. Un tel essai suspend la sonde au lieu de la faire tomber.
+func (r Reason) MissingRight() (string, bool) {
+	if r == ReasonLAN {
+		return agentpolicy.CapabilityProbeLAN, true
+	}
+	return "", false
 }
 
 func isReason(reason Reason) bool {
@@ -228,6 +249,15 @@ type Probe struct {
 
 func (p Probe) IsPaused() bool {
 	return p.Status == StatusPaused
+}
+
+// MissingRight rend le droit dont l'absence suspend la sonde ; rien pour une
+// sonde qui n'est pas suspendue.
+func (p Probe) MissingRight() (string, bool) {
+	if p.Status != StatusSuspended {
+		return "", false
+	}
+	return p.LastReason.MissingRight()
 }
 
 // Definition redonne la sonde sous la forme que l'édition remplace entière.

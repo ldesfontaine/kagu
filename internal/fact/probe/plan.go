@@ -71,22 +71,30 @@ func advance(current Probe, result Result) Probe {
 		after.ConsecutiveFailures = current.ConsecutiveFailures + 1
 		after.ConsecutiveSuccesses = 0
 	}
-	after.Status = nextStatus(current, after, result.Outcome)
+	after.Status = nextStatus(current, after, result)
 	return after
 }
 
 // nextStatus ne fait basculer l'état qu'au seuil atteint : un hoquet
 // réseau ne fait pas clignoter la page, et une cible qui revient doit le
-// confirmer. Trois exceptions : une sonde en pause ne bouge pas, même si
-// un essai parti avant la pause arrive après ; le premier essai fixe
-// l'état tout de suite, parce qu'une sonde qui répond n'a pas à rester
-// « Nouvelle » ; et Dégradé et En ligne sont deux nuances d'un même
-// succès, passer de l'une à l'autre n'attend rien.
-func nextStatus(before, after Probe, outcome Outcome) Status {
-	switch before.Status {
-	case StatusPaused:
+// confirmer. Quatre exceptions : une sonde en pause ne bouge pas, même si
+// un essai parti avant la pause arrive après ; un essai que l'agent n'a
+// pas eu le droit de faire suspend la sonde tout de suite, sans seuil :
+// c'est un geste de root, pas une panne ; le premier essai, ou le premier
+// qui suit une suspension (le droit est revenu), fixe l'état tout de
+// suite, parce qu'une sonde qui répond n'a pas à attendre ; et Dégradé et
+// En ligne sont deux nuances d'un même succès, passer de l'une à l'autre
+// n'attend rien.
+func nextStatus(before, after Probe, result Result) Status {
+	outcome := result.Outcome
+	if before.Status == StatusPaused {
 		return StatusPaused
-	case StatusNew:
+	}
+	if _, missing := result.Reason.MissingRight(); missing {
+		return StatusSuspended
+	}
+	switch before.Status {
+	case StatusNew, StatusSuspended:
 		if outcome.IsSuccess() {
 			return successStatus(outcome)
 		}

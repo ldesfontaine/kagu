@@ -7,6 +7,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/edge/server/httpx"
 	"github.com/ldesfontaine/kagu/internal/fact/probe"
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 const (
@@ -50,6 +51,9 @@ type probeJSON struct {
 	LastReason         string           `json:"last_reason"`
 	Certificate        *certificateJSON `json:"certificate"`
 	CreatedAt          time.Time        `json:"created_at"`
+	// Suspendue : le droit qui manque à l'agent, sa machine et la ligne
+	// constante qui le pose (rightFixJSON) ; null sinon.
+	Fix *fixJSON `json:"fix"`
 }
 
 // La chaîne présentée, réduite à des faits. Le serveur ne dit ni « valide »
@@ -124,7 +128,7 @@ type probeRequest struct {
 }
 
 func probeToJSON(found probe.Probe, online bool) probeJSON {
-	return probeJSON{
+	converted := probeJSON{
 		ID:                 found.ID,
 		Name:               found.Name,
 		Kind:               string(found.Kind),
@@ -152,6 +156,10 @@ func probeToJSON(found probe.Probe, online bool) probeJSON {
 		Certificate:        certificateToJSON(found.Certificate),
 		CreatedAt:          found.CreatedAt.UTC(),
 	}
+	if right, suspended := found.MissingRight(); suspended {
+		converted.Fix = rightFixJSON(refusal.Fix{Right: right, Machine: found.MachineID})
+	}
+	return converted
 }
 
 func certificateToJSON(certificate *probe.Certificate) *certificateJSON {

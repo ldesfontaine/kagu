@@ -34,7 +34,14 @@ func (b *migratedBench) refuseDeploy(t *testing.T, seq int64, signer ed25519.Pri
 // pendingNames lit la liste comme root et rend les droits à poser.
 func (b *migratedBench) pendingNames(t *testing.T) []string {
 	t.Helper()
-	pending, err := ReadPendingRightsAsRoot(b.opts)
+	return grantablePendingRights(t, b.opts)
+}
+
+// grantablePendingRights lit la liste comme « grant --pending » en root et
+// rend les droits qu'il poserait.
+func grantablePendingRights(t *testing.T, opts PolicyOptions) []string {
+	t.Helper()
+	pending, err := ReadPendingRightsAsRoot(opts)
 	if err != nil {
 		t.Fatal(err)
 	}

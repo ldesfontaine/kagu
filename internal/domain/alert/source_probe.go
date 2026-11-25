@@ -19,11 +19,12 @@ func UntrustReasons() []string {
 }
 
 // Ce que le composant sonde constate : une sonde dont l'état vient de
-// bouger, ou dont le certificat est à rejuger. Une sonde nouvelle ou en
-// pause ne dit rien de la cible : tout ce qu'elle portait se résout.
+// bouger, ou dont le certificat est à rejuger. Une sonde nouvelle, en
+// pause ou suspendue ne dit rien de la cible : tout ce qu'elle portait se
+// résout, et une suspension (droit retiré par root) n'alerte pas.
 func (e *Engine) ProbeChanged(ctx context.Context, found probe.Probe) {
 	object := Object{Kind: ObjectProbe, ID: found.ID, Name: found.Name}
-	if found.Status == probe.StatusPaused || found.Status == probe.StatusNew {
+	if found.Status.SaysNothingOfTarget() {
 		e.Gone(ctx, object)
 		return
 	}

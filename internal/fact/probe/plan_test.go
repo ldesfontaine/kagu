@@ -172,3 +172,69 @@ func TestPlan_ResultCheckedBeforeTheRevisionWritesHistoryOnly(t *testing.T) {
 		t.Fatalf("l'essai pris après la révision doit compter: %+v", changes)
 	}
 }
+
+// applyResult rejoue un essai entier (motif compris) sur une sonde.
+func applyResult(current Probe, result Result) Probe {
+	result.ProbeID = current.ID
+	changes := planChanges(map[string]Probe{current.ID: current}, Report{Results: []Result{result}}, planNow)
+	if len(changes.Probes) == 0 {
+		return current
+	}
+	return changes.Probes[0]
+}
+
+// E03-09 : un essai que l'agent n'a pas eu le droit de faire (probe.lan
+// retiré) suspend la sonde tout de suite, quel que soit son état et sans
+// attendre le seuil : un retrait voulu par root n'est pas une panne. Le
+// premier essai qui revient sans ce motif (le droit est revenu) tranche
+// l'état tout de suite. Une sonde en pause reste en pause.
+func TestE03_09_ARefusedRightSuspendsTheProbeAndItsReturnResumesIt(t *testing.T) {
+	refused := Result{CheckedAt: planNow.Add(10 * time.Minute), Outcome: OutcomeDown, Reason: ReasonLAN}
+	for _, before := range []Status{StatusNew, StatusUp, StatusDegraded, StatusDown} {
+		current := watched()
+		current.Status = before
+		if got := applyResult(current, refused).Status; got != StatusSuspended {
+			t.Fatalf("from %s: status %s, want %s", before, got, StatusSuspended)
+		}
+	}
+	paused := watched()
+	paused.Status = StatusPaused
+	if got := applyResult(paused, refused).Status; got != StatusPaused {
+		t.Fatalf("a paused probe moved to %s", got)
+	}
+
+	suspended := applyResult(apply(watched(), OutcomeUp), refused)
+	if right, ok := suspended.MissingRight(); !ok || right != "probe.lan" {
+		t.Fatalf("missing right %q %v, want probe.lan", right, ok)
+	}
+	code := 200
+	resumed := applyResult(suspended, Result{CheckedAt: planNow.Add(11 * time.Minute), Outcome: OutcomeUp, Code: &code})
+	if resumed.Status != StatusUp {
+		t.Fatalf("the right came back, status %s, want %s", resumed.Status, StatusUp)
+	}
+	if _, ok := resumed.MissingRight(); ok {
+		t.Fatal("a resumed probe still names a missing right")
+	}
+	// Le droit revient sur une cible tombée : la sonde le dit tout de suite.
+	fallen := applyResult(suspended, Result{CheckedAt: planNow.Add(11 * time.Minute), Outcome: OutcomeDown, Reason: ReasonRefused})
+	if fallen.Status != StatusDown {
+		t.Fatalf("the right came back on a fallen target, status %s, want %s", fallen.Status, StatusDown)
+	}
+}
+
+// Seul le motif lan dit un droit manquant ; aucun autre motif ne suspend.
+func TestE03_09_OnlyTheLANReasonNamesAMissingRight(t *testing.T) {
+	for _, reason := range Reasons() {
+		right, missing := reason.MissingRight()
+		if missing != (reason == ReasonLAN) {
+			t.Fatalf("reason %q: missing %v", reason, missing)
+		}
+		if missing && right != "probe.lan" {
+			t.Fatalf("reason %q names %q", reason, right)
+		}
+	}
+	current := apply(watched(), OutcomeUp)
+	if got := applyResult(current, Result{CheckedAt: planNow.Add(time.Hour), Outcome: OutcomeDown, Reason: ReasonAgentRefused}).Status; got == StatusSuspended {
+		t.Fatal("agent_refused suspended the probe")
+	}
+}

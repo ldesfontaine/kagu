@@ -14,6 +14,7 @@ export const probeTones: Record<ProbeStatus, Tone> = {
   degraded: "warn",
   down: "danger",
   paused: "neutral",
+  suspended: "neutral",
 };
 
 // Où vit chaque écran des sondes. Un seul endroit construit ces adresses : la
