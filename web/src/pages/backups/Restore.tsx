@@ -9,10 +9,8 @@ import type { FileSelection } from "../../components/FileExplorer";
 import { Pill } from "../../components/Pill";
 import { useAction } from "../../hooks/useAction";
 import { useT } from "../../i18n/context";
+import { stateTones } from "../../lib/actions";
 import { restoreDestination, restoreSourcePath, restoreStamp } from "../../lib/restore";
-import type { Tone } from "../../lib/tone";
-
-const stateTones: Record<string, Tone> = { sent: "neutral", accepted: "accent", succeeded: "ok", failed: "danger", refused: "danger", expired: "warn" };
 
 // La sortie « Restaurer » de l'explorateur : le fichier ou le dossier choisi
 // revient À CÔTÉ de l'original, sur la machine source, sous <chemin>.restaure-
@@ -73,7 +71,7 @@ function RestoreResults({ machineID, started }: { machineID: string; started: { 
         const state = run?.state ?? "sent";
         return (
           <li key={item.id}>
-            <Pill small tone={stateTones[state] ?? "neutral"}>
+            <Pill small tone={stateTones[state]}>
               {t(`action.state_${state}`)}
             </Pill>
             <span className="mono">{item.destination}</span>

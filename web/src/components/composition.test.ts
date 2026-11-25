@@ -92,12 +92,10 @@ const fetchHomes = ["api/client.ts", "statut/"];
 const toneTables = /Record<[^;=]*,\s*Tone>/g;
 
 const toneTableCeilings: Record<string, number> = {
-  "components/ActionsCard.tsx": 1,
   "components/AgentAnchors.tsx": 1,
   "components/MachineSSHKeys.tsx": 1,
   "components/MachineStorage.tsx": 1,
   "components/PlanView.tsx": 1,
-  "pages/backups/Restore.tsx": 1,
   "pages/backups/Targets.tsx": 1,
   "pages/settings/AIAgentSection.tsx": 1,
   "pages/settings/MutesBlock.tsx": 1,
