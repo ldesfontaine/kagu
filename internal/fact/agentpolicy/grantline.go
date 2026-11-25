@@ -2,6 +2,7 @@ package agentpolicy
 
 import (
 	"encoding/base64"
+	"slices"
 	"strings"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
@@ -63,7 +64,8 @@ func MigrateLine() string {
 // l'unique écriture des lignes que l'interface donne à coller (grant, trust).
 // Le binaire est celui que root pose hors du dossier de l'agent, jamais
 // bin/current (R-DROIT-10). Les mots vides tombent ; vide si la ligne
-// enchaînerait une autre commande ou porterait un caractère de contrôle.
+// enchaînerait une autre commande, porterait un caractère de contrôle ou
+// -yes.
 func AgentLine(words ...string) string {
 	line := "sudo " + brand.Command + " agent"
 	for _, word := range words {
@@ -79,5 +81,20 @@ func AgentLine(words ...string) string {
 			return ""
 		}
 	}
+	if slices.ContainsFunc(strings.Fields(line), isYesFlag) {
+		return ""
+	}
 	return line
+}
+
+// isYesFlag reconnaît -yes, --yes et --yes=… : il sauterait la question
+// [o/N] qu'une ligne collée doit poser au clavier (R-DROIT-8, ARB-1). Aucune
+// ligne de l'interface ne le porte.
+func isYesFlag(word string) bool {
+	name, isFlag := strings.CutPrefix(word, "-")
+	if !isFlag {
+		return false
+	}
+	name = strings.TrimPrefix(name, "-")
+	return name == "yes" || strings.HasPrefix(name, "yes=")
 }

@@ -51,7 +51,7 @@ type policyCommand struct {
 func runAgentPolicy(verb string, args []string, command policyCommand) error {
 	flags := flag.NewFlagSet("agent policy", flag.ContinueOnError)
 	stateDir := flags.String("state", defaultAgentStateDir, "répertoire d'état de l'agent")
-	yes := flags.Bool("yes", false, "confirme sans poser la question (obligatoire sans terminal)")
+	yes := flags.Bool("yes", false, "sans terminal seulement (script, cloud-init) : confirme sans poser la question ; avec un terminal, la question est posée")
 	forTerm := flags.String("for", "", "grant : la durée des droits posés, de 5m à 168h, ou permanent")
 	setName := flags.String("set", "", "grant : remplace les droits des jeux par ceux de observe, manage ou root")
 	pending := flags.Bool("pending", false, "grant : pose les droits que l'agent a refusés ces dernières 24 h, après un « o » tapé au clavier")
@@ -107,11 +107,7 @@ func runAgentPolicy(verb string, args []string, command policyCommand) error {
 	if *pending {
 		return grantPending(command, opts, text)
 	}
-	confirm := func(change agent.PolicyChange) error {
-		printPolicyChange(command.out, text, change)
-		return confirmChange(command.out, command.openTerminal, *yes, text)
-	}
-	change, err := changeRights(verb, opts, names, *setName, term, confirm)
+	change, err := changeRights(verb, opts, names, *setName, term, confirmChange(command.out, command.openTerminal, *yes, text))
 	return finishPolicyChange(command.out, text, change, err)
 }
 

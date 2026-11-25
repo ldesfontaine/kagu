@@ -23,4 +23,12 @@ func init() {
 		Label: "api_token.verb_agent_rollback", Summary: "api_token.verb_agent_rollback_text", Reverse: "agent.update",
 		Level: 1, Token: true, Order: agentwire.KindAgentRollback, Right: agentpolicy.CapabilityAgentUpdate, Audit: audit.ActionOrder,
 	})
+	// Demander un droit à la machine (R-DROIT-8, ARB-1) : niveau 3, interface
+	// seulement. L'ordre part sans jugement d'avance ; seul root le pose ensuite,
+	// sur la machine. Pas de droit : le genre le calcule sur ce qu'il demande.
+	Default.MustRegister(Verb{
+		ID: "right.request", Route: "POST /api/machines/{id}/actions/request-right", Params: []string{"id"}, Body: []string{"right", "value"}, Target: TargetMachine,
+		Label: "api_token.verb_right_request", Summary: "api_token.verb_right_request_text",
+		Level: 3, Reason: "api_token.verb_right_request_reason", Order: agentwire.KindRightRequest, Audit: audit.ActionOrder,
+	})
 }

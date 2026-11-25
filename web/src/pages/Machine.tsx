@@ -235,7 +235,7 @@ function MachineRights({ machine, now }: { machine: Machine; now: number }) {
           {agent.rights === null && <p className="secondary">{t("machine.agent_rights_unreported")}</p>}
         </CardBody>
       </Card>
-      {agent.rights !== null && <RightsList rights={agent.rights} refusal={agent.policy_refusal} machineName={machine.name} now={now} />}
+      {agent.rights !== null && <RightsList rights={agent.rights} refusal={agent.policy_refusal} machineID={machine.id} machineName={machine.name} now={now} />}
     </>
   );
 }

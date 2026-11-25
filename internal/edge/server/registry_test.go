@@ -23,8 +23,10 @@ import (
 
 // gestureLists sont les listes que le test croise.
 type gestureLists struct {
-	// Spec.Right de chaque genre du registre.
-	rights map[agentwire.Kind]string
+	// Spec.Right de chaque genre du registre ; vide pour un genre qui le
+	// calcule sur l'ordre décodé (computed).
+	rights   map[agentwire.Kind]string
+	computed map[agentwire.Kind]bool
 	// Les noms de droits connus d'agentpolicy.
 	knownRights []string
 	// Verb.Order, Verb.Right et Verb.Audit de chaque verbe, par identifiant.
@@ -39,6 +41,12 @@ type gestureLists struct {
 func (l gestureLists) disagreements() []string {
 	var found []string
 	for kind, right := range l.rights {
+		// Un droit calculé (right.request) se juge par agentpolicy à chaque
+		// ordre, sur ce qu'il demande : il n'a pas de nom ici, et le verbe qui
+		// l'envoie n'en déclare pas.
+		if l.computed[kind] && right == "" {
+			continue
+		}
 		if !slices.Contains(l.knownRights, right) {
 			found = append(found, "genre "+string(kind)+" : droit "+right+" inconnu")
 		}
@@ -69,6 +77,7 @@ func (l gestureLists) disagreements() []string {
 func currentGestureLists() gestureLists {
 	lists := gestureLists{
 		rights:       map[agentwire.Kind]string{},
+		computed:     map[agentwire.Kind]bool{},
 		knownRights:  agentpolicy.Names(),
 		verbOrders:   map[string]agentwire.Kind{},
 		verbRights:   map[string]string{},
@@ -78,6 +87,7 @@ func currentGestureLists() gestureLists {
 	for _, kind := range agentwire.OrderKinds() {
 		spec, _ := agentwire.SpecOf(kind)
 		lists.rights[kind] = spec.Right
+		lists.computed[kind] = spec.RightIsComputed()
 	}
 	for _, offered := range verb.Default.All() {
 		lists.verbOrders[offered.ID] = offered.Order
@@ -138,8 +148,15 @@ func literalRights(fileSet *token.FileSet, file *ast.File) []string {
 	return found
 }
 
-// declaresAKind reconnaît Define[P], agentwire.Define[P] et DefineWithoutParams.
+// declaresAKind reconnaît Define[P], agentwire.Define[P] et DefineWithoutParams,
+// dont le second argument est le droit, et DefineRightOf, dont le second
+// argument calcule le droit (rightOf).
 func declaresAKind(function ast.Expr) bool {
+	name := declarationName(function)
+	return name == "Define" || name == "DefineWithoutParams" || name == "DefineRightOf"
+}
+
+func declarationName(function ast.Expr) string {
 	if index, generic := function.(*ast.IndexExpr); generic {
 		function = index.X
 	}
@@ -150,7 +167,7 @@ func declaresAKind(function ast.Expr) bool {
 	case *ast.SelectorExpr:
 		name = typed.Sel.Name
 	}
-	return name == "Define" || name == "DefineWithoutParams"
+	return name
 }
 
 func TestRegistry_RightsAreNamedConstants(t *testing.T) {
@@ -194,6 +211,12 @@ func notAgentpolicyRights(fileSet *token.FileSet, file *ast.File) (declared int,
 			return true
 		}
 		declared++
+		// Un droit calculé n'est pas une constante : la fonction le prend dans
+		// agentpolicy (CheckRequested), TestARB1_TheRightOfARightRequestIsTheRightItNames
+		// (internal/wire/judge) l'éprouve.
+		if declarationName(call.Fun) == "DefineRightOf" {
+			return true
+		}
 		right, isSelector := call.Args[1].(*ast.SelectorExpr)
 		if !isSelector || !isIdent(right.X, "agentpolicy") || !strings.HasPrefix(right.Sel.Name, "Capability") {
 			found = append(found, fileSet.Position(call.Pos()).String())

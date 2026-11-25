@@ -114,11 +114,29 @@ func missingValueOf(order judgedOrder, name string) string {
 		producer = params.Producer
 	case agentwire.ResticBackupParams:
 		producer = agentpolicy.ProducerProxmoxVzdump
+	case agentwire.RightRequestParams:
+		producer = params.Value
 	}
-	if !slices.Contains(agentpolicy.Producers(), producer) {
+	if producer == "" || agentpolicy.CheckRequested(name, producer) != nil {
 		return ""
 	}
 	return producer
+}
+
+// requestRight joue right.request (ARB-1) : rien à exécuter. Le juge a
+// refusé l'ordre si la politique ne porte pas le droit ; porté sans la
+// valeur demandée (un autre producteur), il est refusé ici, avec la même
+// raison. Dans les deux cas receive le note, par notePendingRight : le seul
+// chemin d'écriture de la liste. Tenu, l'ordre réussit à vide.
+func (r *orderRunner) requestRight(order judgedOrder) agentwire.ActionResult {
+	params, _ := order.Params.(agentwire.RightRequestParams)
+	if !agentpolicy.Covers(r.rights(), params.Right, params.Value) {
+		reason := agentwire.RightMissing(params.Right)
+		r.journal.notAccepted(order, reason)
+		return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionRefused, Reason: reason}
+	}
+	r.journal.executed(order)
+	return agentwire.ActionResult{RunID: order.RunID, State: agentwire.ActionSucceeded}
 }
 
 // forgetHeldPendingRights retire les droits que la politique porte

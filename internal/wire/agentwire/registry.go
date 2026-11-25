@@ -22,8 +22,17 @@ type Spec struct {
 	// genre qui s'élargit le monte, et le serveur ne l'envoie qu'à un agent
 	// qui annonce ce numéro ou un plus haut (R-B2-8).
 	Revision int
-	// Un nom de droit d'agentpolicy, toujours par sa constante (R-A1-14).
+	// Un nom de droit d'agentpolicy, toujours par sa constante (R-A1-14) ;
+	// vide quand le genre calcule son droit (rightOf).
 	Right string
+	// rightOf calcule le droit sur les paramètres décodés (R-A1-1) ; vide :
+	// l'ordre ne se lit pas. Nil : le droit est Right.
+	rightOf func(params any) string
+	// Vrai pour le seul genre que le serveur ne juge pas d'avance (ARB-1,
+	// right.request) : il part même quand l'agent a rapporté ne pas tenir son
+	// droit, et l'agent le juge seul. Les autres gardent le jugement d'avance
+	// (R-DROIT-4).
+	AgentJudgesAlone bool
 	// Les ancres qui bornent ce genre, et la valeur de l'ordre que chacune juge.
 	Anchors []AnchorCheck
 	// Les champs des paramètres que le journal local retient : jamais un
@@ -83,6 +92,13 @@ func AnchoredWhen[P any](name string, applies func(P) bool, value func(P) string
 	return func(spec *Spec) { spec.Anchors = append(spec.Anchors, check) }
 }
 
+// JudgedByTheAgentAlone dit que le serveur ne juge pas le droit du genre
+// avant de l'envoyer : l'exception d'ARB-1, déclarée ici et nulle part
+// ailleurs.
+func JudgedByTheAgentAlone() Option {
+	return func(spec *Spec) { spec.AgentJudgesAlone = true }
+}
+
 // WithSecret dit que le genre porte un champ secret, du type S.
 func WithSecret[S any]() Option {
 	return func(spec *Spec) {
@@ -98,14 +114,32 @@ func WithSecret[S any]() Option {
 
 // Define déclare un genre dont les paramètres sont du type P.
 func Define[P any](kind Kind, right string, options ...Option) Spec {
-	decode := func(raw []byte) (any, error) {
+	return newSpec(kind, right, decoderOf[P](), options)
+}
+
+// decoderOf lit des paramètres du type P, strictement.
+func decoderOf[P any]() func(raw []byte) (any, error) {
+	return func(raw []byte) (any, error) {
 		var params P
 		if err := StrictDecode(raw, &params); err != nil {
 			return nil, err
 		}
 		return params, nil
 	}
-	return newSpec(kind, right, decode, options)
+}
+
+// DefineRightOf déclare un genre dont les paramètres sont du type P et dont
+// le droit se calcule sur eux, décodés, par rightOf (R-A1-1).
+func DefineRightOf[P any](kind Kind, rightOf func(P) string, options ...Option) Spec {
+	spec := newSpec(kind, "", decoderOf[P](), options)
+	spec.rightOf = func(params any) string {
+		typed, ok := params.(P)
+		if !ok {
+			return ""
+		}
+		return rightOf(typed)
+	}
+	return spec
 }
 
 // DefineWithoutParams déclare un genre qui ne porte aucun paramètre.
@@ -164,6 +198,7 @@ var registry = []Spec{
 	Define[ResticVerifyParams](KindResticVerify, agentpolicy.CapabilityResticVerify, Journal("user"), WithSecret[ResticVerifySecret]()),
 	Define[ResticBrowseParams](KindResticBrowse, agentpolicy.CapabilityResticBrowse, Journal("user", "snapshot", "path"), WithSecret[ResticBrowseSecret]()),
 	Define[ResticRestoreParams](KindResticRestore, agentpolicy.CapabilityResticRestore, Journal("target", "snapshot", "path", "stamp")),
+	DefineRightOf(KindRightRequest, requestedRight, Journal("right", "value"), JudgedByTheAgentAlone()),
 }
 
 // AnnouncedKinds rend ce que cet agent annonce à l'ouverture de son flux :
@@ -257,6 +292,21 @@ func DecodeSecret(kind Kind, secret json.RawMessage) (any, error) {
 		return nil, fmt.Errorf("%s secret: %w", kind, err)
 	}
 	return decoded, nil
+}
+
+// RightIsComputed dit si le droit du genre se calcule sur ses paramètres :
+// il ne se lit qu'une fois l'ordre décodé (Order.Right).
+func (s Spec) RightIsComputed() bool {
+	return s.rightOf != nil
+}
+
+// Right rend le droit qu'exige l'ordre décodé : celui du genre, ou celui que
+// le genre calcule sur ses paramètres ; vide si la demande ne se lit pas.
+func (o Order) Right() string {
+	if o.spec.rightOf == nil {
+		return o.spec.Right
+	}
+	return o.spec.rightOf(o.Params)
 }
 
 // Presented rend, pour chaque ancre qui borne l'ordre, la valeur qu'il lui

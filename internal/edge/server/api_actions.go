@@ -133,6 +133,27 @@ func (s *Server) pingAgent(w http.ResponseWriter, r *http.Request) {
 	s.writeAPI(w, http.StatusCreated, actionRunToJSON(run))
 }
 
+// Le droit que « Demander ce droit à la machine » demande, et sa valeur
+// quand c'est un producteur (agentpolicy.CheckRequested).
+type rightRequestJSON struct {
+	Right string `json:"right"`
+	Value string `json:"value"`
+}
+
+// requestRight envoie right.request (ARB-1) : geste de niveau 3, que le
+// registre des verbes ferme aux jetons.
+func (s *Server) requestRight(w http.ResponseWriter, r *http.Request) {
+	var request rightRequestJSON
+	if !s.readAPI(w, r, &request) {
+		return
+	}
+	run, err := s.actions.RequestRight(r.Context(), r.PathValue("id"), request.Right, request.Value)
+	if s.failed(w, r, err, machine.ErrNotFound) {
+		return
+	}
+	s.writeAPI(w, http.StatusCreated, actionRunToJSON(run))
+}
+
 // Ce que la fiche de la machine propose à son agent : la version du serveur,
 // ou pourquoi pas. reason est vide quand la mise à jour est disponible, sauf
 // right_unavailable : elle l'est quand même, le compte de l'agent ne peut pas

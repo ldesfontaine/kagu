@@ -27,7 +27,7 @@ import (
 func runAgentTrust(args []string, command policyCommand) error {
 	flags := flag.NewFlagSet("agent trust", flag.ContinueOnError)
 	stateDir := flags.String("state", defaultAgentStateDir, "répertoire d'état de l'agent")
-	yes := flags.Bool("yes", false, "confirme sans poser la question (obligatoire sans terminal)")
+	yes := flags.Bool("yes", false, "sans terminal seulement (script, cloud-init) : confirme sans poser la question ; avec un terminal, la question est posée")
 	keepOld := flags.Duration("keep-old", 0, "add server-key : garde l'ancienne clé acceptée cette durée (5m à 168h)")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -76,11 +76,7 @@ func runAgentTrust(args []string, command policyCommand) error {
 		printTrustList(command.out, text, report.Applied)
 		return nil
 	}
-	confirm := func(change agent.PolicyChange) error {
-		printPolicyChange(command.out, text, change)
-		return confirmChange(command.out, command.openTerminal, *yes, text)
-	}
-	change, err := agent.Trust(opts, request, confirm)
+	change, err := agent.Trust(opts, request, confirmChange(command.out, command.openTerminal, *yes, text))
 	if err != nil {
 		return explainTrustError(err, request, text)
 	}

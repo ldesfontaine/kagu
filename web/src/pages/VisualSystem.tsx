@@ -14,6 +14,7 @@ import { CardGrid, EntityCard } from "../components/EntityCard";
 import { Checkbox, Checks, Field, Input } from "../components/Field";
 import { Icon } from "../components/Icon";
 import { LockedAction } from "../components/LockedAction";
+import { RequestRight } from "../components/RequestRight";
 import { RootCommand } from "../components/RootCommand";
 import { Modal, ModalCancel } from "../components/Modal";
 import type { MenuAction } from "../components/MoreMenu";
@@ -362,6 +363,7 @@ export function VisualSystem() {
                   <LockedAction fix={{ right: "files.write", machine: "demo" }} path="/srv/restore" short />
                   <LockedAction fix={{ command: t("anchor.cmd_list"), machine: "demo" }} />
                   <RootCommand command={t("anchor.cmd_list")} short />
+                  <RequestRight machineID="demo" right="probe.lan" />
                 </div>
               </CardBody>
             </Card>
@@ -549,9 +551,10 @@ function RightsSample() {
   const pendingLine = usePendingLine();
   const until = new Date(Date.now() + 2 * 3600_000).toISOString();
   const right = (name: string, state: "ok" | "missing", rightUntil: string | null = null) => ({ name, paths: [], state, until: rightUntil });
-  const group = { worth_root: false, host_terminal: false, grant_line: "", revoke_line: "", until: null };
+  const group = { worth_root: false, host_terminal: false, grant_line: "", request_right: "", revoke_line: "", until: null };
   return (
     <RightsList
+      machineID="vitrine"
       machineName="vps-paris-1"
       now={Date.now()}
       rights={{
@@ -564,7 +567,7 @@ function RightsSample() {
           { ...group, name: "deploy", state: "ok", worth_root: true, rights: [right("docker.deploy", "ok"), right("docker.update", "missing")] },
           { ...group, name: "backup", state: "ok", rights: [right("restic.produce", "ok")] },
           { ...group, name: "enter", state: "ok", until, host_terminal: true, rights: [right("terminal.host", "ok", until)] },
-          { ...group, name: "network", state: "missing", grant_line: pendingLine, rights: [right("network.private", "missing")] },
+          { ...group, name: "network", state: "missing", grant_line: pendingLine, request_right: "network.private", rights: [right("network.private", "missing")] },
         ],
       }}
     />

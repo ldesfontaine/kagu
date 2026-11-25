@@ -3,6 +3,7 @@ package agent
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -215,5 +216,49 @@ func TestR_A3_15_E03_07_AnUnknownOrHostileEntryIsNeverGranted(t *testing.T) {
 	}
 	if _, err := ReadPendingRightsAsRoot(PolicyOptions{StateDir: b.opts.StateDir, StatePath: b.opts.StatePath, EUID: 1000}); err == nil {
 		t.Fatal("a non-root account read the list")
+	}
+}
+
+// requestRight envoie un ordre right.request signé, de rang seq.
+func (b *migratedBench) requestRight(t *testing.T, seq int64, params agentwire.RightRequestParams) agentwire.ActionResult {
+	t.Helper()
+	encoded, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := order(seq)
+	body.Kind, body.Params = agentwire.KindRightRequest, encoded
+	body.NotAfter = b.clock.now.Add(time.Minute).Unix()
+	return b.send(t, body, b.private)
+}
+
+// ARB-1 : l'agent n'exécute rien pour right.request. Sans le droit, il le
+// refuse right_missing et la liste le porte, valeur comprise ; quand il le
+// tient, l'ordre réussit à vide et la liste reste vide.
+func TestARB1_TheAgentRefusesAndNotesARequestedRight(t *testing.T) {
+	b := pendingBench(t)
+	deploy := agentwire.RightRequestParams{Right: agentpolicy.CapabilityDockerDeploy}
+	if result := b.requestRight(t, 1, deploy); result.State != agentwire.ActionRefused || result.Reason != "right_missing:docker.deploy" {
+		t.Fatalf("without the right: %+v", result)
+	}
+	vzdump := agentwire.RightRequestParams{Right: agentpolicy.CapabilityBackupProduce, Value: agentpolicy.ProducerProxmoxVzdump}
+	b.requestRight(t, 2, vzdump)
+	if names := b.pendingNames(t); !slices.Equal(names, []string{"docker.deploy", "backup.produce=proxmox-vzdump"}) {
+		t.Fatalf("pending %v", names)
+	}
+
+	held := pendingBench(t)
+	if _, err := GrantRights(held.opts, []agentpolicy.Capability{{Name: agentpolicy.CapabilityDockerDeploy}}, agentpolicy.Term{}, accept); err != nil {
+		t.Fatal(err)
+	}
+	result := held.requestRight(t, 1, deploy)
+	if result.State != agentwire.ActionSucceeded || result.Reason != "" || len(result.Output) != 0 {
+		t.Fatalf("with the right: %+v", result)
+	}
+	if names := held.pendingNames(t); len(names) != 0 {
+		t.Fatalf("pending %v, want none", names)
+	}
+	if _, err := held.stateDir.Stat(pendingRightsFile); err == nil {
+		t.Fatal("the pending file was written for a held right")
 	}
 }

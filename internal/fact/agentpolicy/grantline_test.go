@@ -65,3 +65,27 @@ func TestAgentLine_DropsEmptyWords(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+// R-DROIT-8 (ARB-1) : aucune ligne servie ne porte -yes, sous aucune forme,
+// pas même cachée dans une valeur : elle sauterait la question [o/N]. Un
+// mot qui contient « yes » sans être le drapeau passe.
+func TestR_DROIT_8_AgentLineRefusesYes(t *testing.T) {
+	for _, words := range [][]string{
+		{"grant", "--yes", "docker.deploy"},
+		{"grant", "-yes", "docker.deploy"},
+		{"grant", "--yes=true", "docker.deploy"},
+		{"grant", "-yes=1", "docker.deploy"},
+		{"policy", "migrate", "--yes=false"},
+		{"trust", "add", "backup.guest", "5012 --yes"},
+		{"grant", "--set", "manage -yes"},
+	} {
+		if line := AgentLine(words...); line != "" {
+			t.Errorf("AgentLine(%q) = %q, want no line", words, line)
+		}
+	}
+	for _, words := range [][]string{{"trust", "add", "backup.guest", "yes"}, {"grant", "--pending"}, {"grant", "--yesterday"}} {
+		if line := AgentLine(words...); line == "" {
+			t.Errorf("AgentLine(%q) refused a line without -yes", words)
+		}
+	}
+}

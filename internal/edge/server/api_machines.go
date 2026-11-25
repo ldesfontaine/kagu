@@ -167,7 +167,9 @@ type setLineJSON struct {
 
 // Un groupe : son verdict (agentpolicy.GroupFits), ses droits pour le
 // détail replié, la ligne constante quand il n'est pas permis
-// (agentpolicy.PendingLine), la ligne revoke qui retire ce qu'il porte.
+// (agentpolicy.PendingLine) et le droit que « Demander ce droit à la
+// machine » demande alors (celui qui ouvre le groupe, ARB-1), la ligne revoke
+// qui retire ce qu'il porte.
 type rightsGroupJSON struct {
 	Name         string           `json:"name"`
 	State        string           `json:"state"`
@@ -176,6 +178,7 @@ type rightsGroupJSON struct {
 	HostTerminal bool             `json:"host_terminal"`
 	Rights       []groupRightJSON `json:"rights"`
 	GrantLine    string           `json:"grant_line"`
+	RequestRight string           `json:"request_right"`
 	RevokeLine   string           `json:"revoke_line"`
 }
 
@@ -234,7 +237,7 @@ func groupToJSON(agent machine.Agent, group agentpolicy.GroupFit) rightsGroupJSO
 		RevokeLine: agentpolicy.RevokeLine(group.HeldNames()),
 	}
 	if group.State == agentpolicy.FitMissing {
-		converted.GrantLine = agentpolicy.PendingLine()
+		converted.GrantLine, converted.RequestRight = agentpolicy.PendingLine(), group.Opener
 	}
 	for _, right := range group.Rights {
 		converted.Rights = append(converted.Rights, groupRightJSON{

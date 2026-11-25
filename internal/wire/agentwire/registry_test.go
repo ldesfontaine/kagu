@@ -56,6 +56,7 @@ func serverSamples(t *testing.T) map[Kind]any {
 		KindResticVerify:  ResticVerifyParams{User: "m-abc"},
 		KindResticBrowse:  ResticBrowseParams{User: "m-abc", Snapshot: "abcd1234", Path: "/srv/<wiki>"},
 		KindResticRestore: ResticRestoreParams{Target: "m-abc", Snapshot: "abcd1234", Path: "/srv/wiki", Stamp: "20261122-1200"},
+		KindRightRequest:  RightRequestParams{Right: agentpolicy.CapabilityBackupProduce, Value: agentpolicy.ProducerProxmoxVzdump},
 	}
 }
 
@@ -91,7 +92,9 @@ func TestR_A1_1_EachKindIsDeclaredOnceInTheRegistry(t *testing.T) {
 		}
 		seen[kind] = true
 		spec, _ := SpecOf(kind)
-		if spec.Right == "" || spec.decodeParams == nil {
+		// Le droit est fixe, ou calculé sur l'ordre décodé : jamais les deux,
+		// jamais aucun (R-A1-1).
+		if (spec.Right == "") == (spec.rightOf == nil) || spec.decodeParams == nil {
 			t.Errorf("%s: incomplete declaration", kind)
 		}
 		for _, check := range spec.Anchors {

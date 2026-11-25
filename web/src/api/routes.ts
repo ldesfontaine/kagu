@@ -31,6 +31,7 @@ export const writes = [
   "DELETE /api/machines/{id}",
   "POST /api/machines/{id}/actions/reenroll",
   "POST /api/machines/{id}/actions/ping",
+  "POST /api/machines/{id}/actions/request-right",
   "POST /api/machines/{id}/actions/update-agent",
   "POST /api/machines/{id}/actions/rollback-agent",
   "POST /api/machines/{id}/actions/check-updates",

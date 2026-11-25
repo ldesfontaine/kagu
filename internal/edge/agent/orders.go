@@ -323,6 +323,7 @@ var executors = map[agentwire.Kind]executor{
 	agentwire.KindResticVerify:          (*orderRunner).acceptResticVerify,
 	agentwire.KindResticBrowse:          (*orderRunner).acceptResticBrowse,
 	agentwire.KindResticRestore:         (*orderRunner).acceptResticRestore,
+	agentwire.KindRightRequest:          immediate((*orderRunner).requestRight),
 }
 
 // immediate fait un exécuteur d'un ordre fait tout de suite : pas de travail

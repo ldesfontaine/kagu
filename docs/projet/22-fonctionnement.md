@@ -387,7 +387,8 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
 Liste de départ prise par Lucas le 21 octobre 2026 (décision 9). **Appliqués
 par l'agent** (#146) : chaque genre de la liste fermée déclare le droit qu'il
 exige (`Spec.Right`, au registre des genres d'`agentwire`, que le serveur
-et l'agent lisent tous deux), et l'agent refuse un ordre dont le droit n'est pas
+et l'agent lisent tous deux ; `right.request` le calcule sur l'ordre décodé,
+`Order.Right`), et l'agent refuse un ordre dont le droit n'est pas
 dans ce qu'il applique : la politique de la machine, sinon son fichier
 (« La politique de l'agent », plus bas). Les changer, c'est `sudo kagu
 agent grant` ou `revoke` sur la machine (T03-03), plus un ré-enrôlement.
@@ -432,6 +433,7 @@ et les groupes, jamais une liste à plat de noms. Le serveur rend le bloc
 | `prepare_line` | Un droit rapporté `docker_denied` et des droits qui forment un jeu : `GrantSetLine` de ce jeu (E03-10 : `grant` refait le plan, le groupe `docker` compris) ; vide sinon, et en personnalisé (les `set_lines` des trois jeux sont là) | Sous les droits indisponibles, avec `rights.paste_shows_change` ; `machine.capability_unavailable_docker_denied` y renvoie |
 | `groups[]` | `agentpolicy.GroupFits` : un groupe est `ok` dès qu'un de ses droits s'exerce, `unavailable` s'il en porte sans pouvoir, `unknown` avant le rapport, `missing` sinon ; `until`, l'échéance de son dernier droit exercé (aucune si l'un est sans échéance) | La coche : permis, permis jusqu'à une heure, pas permis |
 | `groups[].grant_line` | Groupe `missing` : la ligne constante `agentpolicy.PendingLine` (`sudo kagu agent grant --pending`, R-DROIT-8) ; vide sinon | La ligne, avec `rights.paste_only_pending` et `rights.paste_shows_change` |
+| `groups[].request_right` | Groupe `missing` : le droit qui ouvre le groupe (`GroupFit.Opener`) ; vide sinon | Le bouton « Demander ce droit à la machine » (`RequestRight`, ARB-1), à côté de la ligne |
 | `groups[].revoke_line` | `agentpolicy.RevokeLine` des droits qu'il porte, `observe` excepté | Sous « Voir le détail » |
 | `groups[].worth_root` | Déployer, quand un droit rapporté met l'agent dans le groupe `docker` (`NeedsDockerGroup`) | « vaut root », et `rights.worth_root_why` dans le détail (R-A3-12) |
 | `groups[].host_terminal` | Entrer, quand `terminal.host` est posé | `rights.host_terminal_risk` sous le groupe (R-A3-12, N-M6) |
@@ -637,8 +639,11 @@ L'onglet Agent ne montre plus de droits : il y renvoie.
   sinon celle de `/api/session` (`pending_line`) quand l'écran construit le
   `fix` lui-même. Le droit se dit à côté (`rights.missing_right`, « Il manque
   le droit docker.deploy »), avec le chemin d'un droit borné, jamais dans la
-  ligne, et l'avertissement `rights.paste_only_pending` (« Ne collez jamais en
-  root une autre ligne venue de Kagu »). Une liste qui ne porte qu'un lien (choix d'une machine,
+  ligne, et l'avertissement `rights.paste_only_pending` (« Une ligne venue de
+  Kagu est une seule commande `sudo kagu agent …`, sans « ; », « | », « && »
+  ni `--yes` : sinon, ne la collez pas », R-DROIT-8). À côté, hors d'une
+  carte étroite, le bouton « Demander ce droit à la machine » (`RequestRight`,
+  « Demander un droit à la machine » ci-dessous). Une liste qui ne porte qu'un lien (choix d'une machine,
   menu d'une VM) mène à l'onglet Agent de la fiche avec `?droit=<nom>`
   (`&chemin=` pour un droit borné), qui montre la ligne tant que le serveur
   juge le droit manquant. `MissingRight` dit un manque connu d'avance
@@ -697,8 +702,8 @@ ne sert plus qu'à changer la clé de l'agent.
 `grant` et `revoke` relisent la politique **sous son verrou** (`flock` sur
 `policy.toml.lock`, à root), disent chaque droit posé (`+`) et retiré (`-`),
 chaque échéance posée ou retirée,
-demandent `[o/N]` sur `/dev/tty` (`-yes` sans terminal, sinon refus sans rien
-écrire, R-A3-15), puis écrivent d'un coup (temporaire puis renommage,
+demandent `[o/N]` sur `/dev/tty` (R-A3-15 ; `-yes` ne vaut que sans terminal,
+« La question `[o/N]` » ci-dessous), puis écrivent d'un coup (temporaire puis renommage,
 `fsx.WriteAtomicOwned`) et tracent le changement au journal du système
 (`authpriv`, empreinte comprise). Deux gestes en même temps se suivent
 (R-A3-3). `policy migrate` montre tout ce qu'il recopie, chaque droit en `+` :
@@ -711,10 +716,57 @@ mal gardée (root la corrige ou l'efface), un agent dont le binaire ne lit pas e
 (`identity.json` sans `policy_format`, que l'agent écrit à son démarrage ; un
 binaire plus ancien le perd en réécrivant son identité).
 
+**La question `[o/N]`** (R-DROIT-8, R-A3-15, décisions de Lucas du
+25/11/2026). Toute commande qui change les droits ou la confiance de l'agent
+(`grant`, `grant --set`, `grant --pending`, `revoke`, `policy migrate`,
+`trust`) imprime ce qu'elle change, puis demande `[o/N]` au clavier, N par
+défaut. Un seul endroit : `confirmChange` (`cmd/kagu/confirm.go`), que
+`grant`, `revoke`, `--set`, `policy migrate` et `trust` appellent. Il ouvre
+**d'abord** le terminal de contrôle (`/dev/tty`), et ne regarde `-yes`
+qu'ensuite :
+
+| Terminal | `-yes` | Ce qui se passe |
+| --- | --- | --- |
+| Oui | non | Le changement, `[o/N]` ; seul « o » (ou « oui », « y », « yes ») écrit |
+| Oui | oui | `agent.confirm_yes_ignored` (« --yes ne vaut que sans terminal : la question est posée. »), le changement, `[o/N]` : `-yes` est ignoré |
+| Non | non | Le changement, puis refus `agent.confirm_needs_tty`, rien d'écrit |
+| Non | oui | Le changement, écrit sans question (script, cloud-init) |
+
+`echo o | sudo …` ne répond pas : la réponse ne se lit jamais sur l'entrée
+standard. `grant --pending` refuse `-yes` dans tous les cas
+(`agent.pending_no_yes`) et pose sa question par `askOnTerminal`. Aucune ligne
+servie ne porte `-yes` : `agentpolicy.AgentLine` rend une ligne vide pour
+`-yes`, `--yes` et `--yes=…`, comme pour « ; » et « | ».
+
+| Coût | Ce que ça rapporte |
+| --- | --- |
+| Un script lancé dans un terminal (`ssh -t`, `sudo` interactif) avec `-yes` s'arrête sur la question | Une ligne collée depuis un écran pris ne pose rien sans « o » tapé, même si elle porte `-yes` |
+
+**Demander un droit à la machine** (R-DROIT-8, ARB-1, genre `right.request`).
+Sur un serveur sain, le serveur juge le droit d'un ordre d'avance (il sait les
+droits que l'agent rapporte) et ne fait rien partir : l'agent ne refuserait
+jamais, la liste resterait vide. Le geste « Demander ce droit à la machine »
+(verbe `right.request`, niveau 3, interface seulement, refusé à tout jeton)
+envoie l'ordre signé `right.request`, paramètres `{right, value?}` :
+
+| Étape | Où | Quoi |
+| --- | --- | --- |
+| 1 | Écran | `LockedAction` (un geste grisé) et l'onglet Droits (`groups[].request_right`) : `POST /api/machines/{id}/actions/request-right` |
+| 2 | Serveur | `action.RequestRight` juge le droit par `agentpolicy.CheckRequested` : un nom d'`agentpolicy`, une valeur seulement de la liste fermée des producteurs (`machine.capability_unknown`, `machine.capability_producer`, 422 sinon) ; puis `Send`. Le registre déclare ce genre `JudgedByTheAgentAlone` : `send` ne le juge pas d'avance. Tous les autres genres gardent le jugement d'avance (R-DROIT-4) |
+| 3 | Agent | Le droit du genre est `params.right`, calculé sur l'ordre décodé (`DefineRightOf`, `Order.Right`) : le juge décode ce genre **avant** le droit. Sans le droit : refus `right_missing:<droit>`, noté par `notePendingRight` ; tenu sans la valeur demandée : même refus, par l'exécuteur `requestRight`. Tenu : réussi à vide |
+| 4 | Historique | Le run « Droit demandé », refusé, raison « L'agent n'a pas le droit … », et la ligne constante |
+
+Un agent qui n'annonce pas `right.request@1` reçoit « agent à mettre à jour »
+(`action.agent_outdated`, T04-16) : rien ne part.
+
+| Coût | Ce que ça rapporte |
+| --- | --- |
+| Un genre que le serveur envoie sans le droit : un run refusé de plus dans l'historique à chaque clic | La liste de `grant --pending` se remplit sur un serveur sain ; aucun autre genre ne part sans le droit, et l'agent n'exécute rien pour celui-ci |
+
 **Les droits en attente** (R-A3-15, `internal/edge/agent/pending.go`).
-La liste ne se remplit que par un **ordre signé reçu sans le droit** : sur un
-serveur sain, le serveur refuse d'avance (il sait les droits que l'agent
-rapporte) et la liste reste vide. L'en-tête de `grant --pending` dit donc
+La liste se remplit par un **ordre signé reçu sans le droit** : sur un serveur
+sain, c'est `right.request` (ci-dessus), les autres genres étant refusés
+d'avance. L'en-tête de `grant --pending` dit
 « Droits que {product} a demandés et que l'agent a refusés ». Un droit posé en
 sort à la **prochaine relecture de la politique dans un agent déjà lancé**
 (`reloadPolicy`, `previous != nil`), pas au redémarrage qui suit `grant`.
@@ -844,8 +896,8 @@ rapporte au serveur, et qu'**aucun ordre ne peut écrire**.
   (et la clé du serveur, « La rotation de la clé du serveur »),
   **en root**, depuis `/usr/local/bin/kagu` (un autre compte : refus, rien n'est écrit). `add` et `remove`
   **disent ce qu'ils changent** (type, valeur, empreinte courte d'un certificat)
-  puis demandent `[o/N]` sur `/dev/tty` ; sans terminal, `-yes` est exigé, sinon
-  refus sans rien écrire (R-A3-15). Elle écrit la politique comme `grant` :
+  puis demandent `[o/N]` sur `/dev/tty` ; `-yes` ne vaut que sans terminal,
+  sinon refus sans rien écrire (R-A3-15, « La question `[o/N]` »). Elle écrit la politique comme `grant` :
   sous le verrou `policy.toml.lock`, d'un seul coup, et **écrit le
   changement au journal du système** (`syslog`, facilité `authpriv`, lu par
   journald). Un journal injoignable n'annule pas le changement : la commande
@@ -5760,6 +5812,7 @@ verbes se croisent avec `agentwire` et `audit` dans
 | `job.resume` | `POST /api/jobs/{id}/actions/resume` | 1 | `job.pause` | — | `heartbeat.resume` |
 | `agent.update` | `POST /api/machines/{id}/actions/update-agent` | 1 | `agent.rollback` | `agent.update` | `action.order` |
 | `agent.rollback` | `POST /api/machines/{id}/actions/rollback-agent` | 1 | `agent.update` | `agent.rollback` | `action.order` |
+| `right.request` | `POST /api/machines/{id}/actions/request-right` | 3 (raison `api_token.verb_right_request_reason`) | — | `right.request` (droit calculé, pas de `Right`) | `action.order` |
 | `proxmox.vm.start` | `POST /api/machines/{id}/proxmox/guests/{vmid}/actions/start` | 1 | `proxmox.vm.shutdown` | `proxmox.vm.start` | `machine.proxmox_guest` |
 | `proxmox.vm.shutdown` | `POST /api/machines/{id}/proxmox/guests/{vmid}/actions/shutdown` | 1 | `proxmox.vm.start` | `proxmox.vm.shutdown` | `machine.proxmox_guest` |
 | `proxmox.vm.snapshot` | `POST /api/machines/{id}/proxmox/guests/{vmid}/actions/snapshot` | 1 | `proxmox.vm.snapshot_delete` | `proxmox.vm.snapshot` | `machine.proxmox_guest` |

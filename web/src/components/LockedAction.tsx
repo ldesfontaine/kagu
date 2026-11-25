@@ -1,6 +1,7 @@
 import type { RefusalFix } from "../api/client";
 import { usePendingLine, useT } from "../i18n/context";
 import { machineAgentPath } from "../lib/rights";
+import { RequestRight } from "./RequestRight";
 import { RootCommand } from "./RootCommand";
 
 // Ce qui rouvre un geste fermé, tel que le serveur le joint au refus (fix) :
@@ -15,7 +16,7 @@ import { RootCommand } from "./RootCommand";
 export function LockedAction({ fix, path, short = false }: { fix: RefusalFix; path?: string | undefined; short?: boolean }) {
   const t = useT();
   if (fix.right !== undefined && fix.machine !== undefined) {
-    return <PendingLine right={fix.right} command={fix.command} path={path} short={short} />;
+    return <PendingLine machineID={fix.machine} right={fix.right} command={fix.command} path={path} short={short} />;
   }
   if (fix.command !== undefined) {
     // exact : la commande pose la valeur de l'ordre ; sinon c'est « trust
@@ -29,8 +30,9 @@ export function LockedAction({ fix, path, short = false }: { fix: RefusalFix; pa
 // La ligne d'un droit manquant : celle du refus, sinon celle de la session ;
 // rien si le serveur n'en donne pas. Le droit et le chemin se disent à côté,
 // jamais dans la ligne, avec l'avertissement : un serveur pris sert aussi
-// l'écran.
-function PendingLine({ right, command, path, short }: { right: string; command: string | undefined; path: string | undefined; short: boolean }) {
+// l'écran. À côté, hors d'une ligne étroite, le geste qui demande le droit à
+// la machine (ARB-1) : sans lui, la ligne constante ne trouverait rien.
+function PendingLine({ machineID, right, command, path, short }: { machineID: string; right: string; command: string | undefined; path: string | undefined; short: boolean }) {
   const t = useT();
   const sessionLine = usePendingLine();
   const line = command !== undefined && command !== "" ? command : sessionLine;
@@ -39,5 +41,13 @@ function PendingLine({ right, command, path, short }: { right: string; command: 
   }
   const where = path !== undefined && path !== "" ? [t("machine.grant_path", path)] : [];
   const notes = [t("rights.missing_right", right), ...where, t("rights.paste_only_pending"), t("rights.paste_shows_change")];
-  return <RootCommand command={line} notes={notes} short={short} />;
+  if (short || machineID === "") {
+    return <RootCommand command={line} notes={notes} short={short} />;
+  }
+  return (
+    <>
+      <RequestRight machineID={machineID} right={right} />
+      <RootCommand command={line} notes={notes} />
+    </>
+  );
 }

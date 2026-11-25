@@ -233,3 +233,49 @@ func TestJudge_ReadsNoFile(t *testing.T) {
 		t.Fatal("no source seen")
 	}
 }
+
+// rightRequest rend un ordre right.request valide, qui demande ce droit.
+func rightRequest(t *testing.T, params agentwire.RightRequestParams) agentwire.OrderBody {
+	t.Helper()
+	body := ping()
+	body.Kind = agentwire.KindRightRequest
+	encoded, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body.Params = encoded
+	return body
+}
+
+// ARB-1 : le droit de right.request est celui qu'il demande, calculé sur les
+// paramètres décodés. Sans lui, refusé right_missing:<droit>, l'ordre décodé
+// (l'agent en note la valeur) ; avec lui, il passe. Un nom hors d'agentpolicy,
+// une valeur qui n'est pas un producteur de la liste fermée, un champ
+// inconnu : l'ordre ne se lit pas.
+func TestARB1_TheRightOfARightRequestIsTheRightItNames(t *testing.T) {
+	b := newJudgeBench(t, "")
+	asked := agentwire.RightRequestParams{Right: agentpolicy.CapabilityBackupProduce, Value: agentpolicy.ProducerProxmoxVzdump}
+	verdict := Judge(sign(t, rightRequest(t, asked), b.private), b.policy, judgeNow)
+	if verdict.Reason != "right_missing:backup.produce" || verdict.Order.Params != asked {
+		t.Fatalf("without the right: %+v", verdict)
+	}
+	held := newJudgeBench(t, "docker.deploy")
+	deploy := rightRequest(t, agentwire.RightRequestParams{Right: agentpolicy.CapabilityDockerDeploy})
+	if verdict := Judge(sign(t, deploy, held.private), held.policy, judgeNow); verdict.Reason != "" {
+		t.Fatalf("with the right: %+v", verdict)
+	}
+	unreadable := map[string]agentwire.OrderBody{
+		"unknown right":   rightRequest(t, agentwire.RightRequestParams{Right: "shell.exec"}),
+		"path value":      rightRequest(t, agentwire.RightRequestParams{Right: agentpolicy.CapabilityFilesWrite, Value: "/etc"}),
+		"other producer":  rightRequest(t, agentwire.RightRequestParams{Right: agentpolicy.CapabilityBackupProduce, Value: "dd"}),
+		"value elsewhere": rightRequest(t, agentwire.RightRequestParams{Right: agentpolicy.CapabilityDockerDeploy, Value: agentpolicy.ProducerProxmoxVzdump}),
+	}
+	extra := ping()
+	extra.Kind, extra.Params = agentwire.KindRightRequest, json.RawMessage(`{"right":"docker.deploy","yes":true}`)
+	unreadable["unknown field"] = extra
+	for name, body := range unreadable {
+		if verdict := Judge(sign(t, body, b.private), b.policy, judgeNow); verdict.Reason != agentwire.ReasonBadOrder {
+			t.Errorf("%s: %+v", name, verdict)
+		}
+	}
+}

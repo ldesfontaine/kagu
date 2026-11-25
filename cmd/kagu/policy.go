@@ -17,7 +17,7 @@ const policyMigrate = "migrate"
 func runAgentPolicyMigrate(args []string, command policyCommand) error {
 	flags := flag.NewFlagSet("agent policy migrate", flag.ContinueOnError)
 	stateDir := flags.String("state", defaultAgentStateDir, "répertoire d'état de l'agent")
-	yes := flags.Bool("yes", false, "confirme sans poser la question (obligatoire sans terminal)")
+	yes := flags.Bool("yes", false, "sans terminal seulement (script, cloud-init) : confirme sans poser la question ; avec un terminal, la question est posée")
 	catalogs, err := lang.Load()
 	if err != nil {
 		return err
@@ -48,11 +48,7 @@ func runAgentPolicyMigrate(args []string, command policyCommand) error {
 		return err
 	}
 	opts := agent.PolicyOptions{StateDir: root, StatePath: *stateDir, Place: place, EUID: command.euid, Audit: auditToSystemJournal}
-	confirm := func(change agent.PolicyChange) error {
-		printPolicyChange(command.out, text, change)
-		return confirmChange(command.out, command.openTerminal, *yes, text)
-	}
-	change, err := agent.MigratePolicy(opts, confirm)
+	change, err := agent.MigratePolicy(opts, confirmChange(command.out, command.openTerminal, *yes, text))
 	if err != nil {
 		return explainPolicyError(err, text)
 	}
