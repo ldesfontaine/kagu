@@ -49,10 +49,12 @@ func (p *pusher) Command(_ string, command agentwire.Command) error {
 }
 
 type bench struct {
-	db      *store.DB
-	service *action.Service
-	pusher  *pusher
-	now     time.Time
+	db       *store.DB
+	service  *action.Service
+	machines *machine.Service
+	agentID  string
+	pusher   *pusher
+	now      time.Time
 }
 
 // newBench enrôle une machine, ouvre la session de son agent (elle est en
@@ -84,6 +86,8 @@ func newBenchLogging(t *testing.T, rights string, logger *slog.Logger) *bench {
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, machines, enrolled.Agent.ID)
+	b.machines, b.agentID = machines, enrolled.Agent.ID
 	t.Cleanup(func() { machines.Disconnect(session) })
 	journal := audit.New(db, logger)
 	b.pusher = &pusher{db: db}

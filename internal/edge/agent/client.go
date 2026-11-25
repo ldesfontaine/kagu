@@ -363,6 +363,7 @@ func (c *Client) OpenStream(ctx context.Context, identity Identity) (*Stream, er
 		request.Header.Set(agentwire.HeaderAgentRollback, strconv.Itoa(c.rollback))
 	}
 	request.Header.Set(agentwire.HeaderAgentServiceRollback, strconv.Itoa(agentwire.ServiceRollbackVersion))
+	request.Header.Set(agentwire.HeaderAgentOrderKinds, agentwire.AnnouncedKinds().Format())
 	request.Header.Set("Accept", "text/event-stream")
 
 	response, err := c.http.Do(request)

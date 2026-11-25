@@ -213,6 +213,17 @@ func (f *fakeStore) RecordServerKey(_ context.Context, agentID, fingerprint stri
 	return ErrNotFound
 }
 
+func (f *fakeStore) RecordOrderKinds(_ context.Context, agentID string, kinds OrderKinds) error {
+	for id, m := range f.machines {
+		if m.Agent.ID == agentID {
+			m.Agent.OrderKinds = kinds
+			f.machines[id] = m
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
 func (f *fakeStore) RecordProtocol(_ context.Context, agentID, protocol string) error {
 	for id, m := range f.machines {
 		if m.Agent.ID == agentID {

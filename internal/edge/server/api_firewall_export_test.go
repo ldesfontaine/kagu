@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/fact/firewall/opnsense/opnsensetest"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
@@ -28,6 +29,7 @@ func TestBackups_FirewallExportPlanNeverLeaksTheKeysOrTheConfiguration(t *testin
 	if _, err := server.machines.Connect(context.Background(), remote.Machine, "192.0.2.1", agentwire.PrefixSinceVersion, "backup.receive=/srv/backups", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, server.machines, remote.Machine.Agent.ID)
 	firewallID, _ := declareFirewallThroughAPI(t, server, fake)
 	body := map[string]any{"name": "Pare-feu de bordure", "source_kind": "agent", "producer": "opnsense-config", "selector": firewallID, "destination_id": destinationID, "keep": 7}
 

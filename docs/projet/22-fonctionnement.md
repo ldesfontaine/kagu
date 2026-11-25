@@ -125,7 +125,7 @@ dit comment. Une migration de plus part de `002`.
 
 | Où | Fichier | Contenu | Protection |
 | --- | --- | --- | --- |
-| Machine Kagu, `state_dir` | `opencloud.db` | Les machines (`machines` : nom, hôte, adresse, système, rôle choisi), leurs agents (`agents` : clé publique Ed25519, version, racine `/srv/workspace`, date d'enrôlement, dernier signe de vie, révocation, l'empreinte de la clé du serveur que l'agent dit avoir épinglée `server_key_fingerprint`, le dernier rang d'ordre donné `last_order_seq`, les ancres de confiance locales que l'agent dit tenir `anchors` (texte de l'en-tête ; NULL tant qu'il n'a rien dit), le compte sous lequel il tourne `run_as_uid` et `run_as_name` (nuls tant qu'il ne l'a pas dit) ; un seul actif par machine, l'index `agents_one_active` le tient), d'où il tient ses droits `policy_source` (`policy`, `identity`, `refused`) et l'empreinte SHA-256 de sa politique `policy_digest` (migration `051` ; nulles tant qu'il n'a rien dit), le protocole annoncé à la dernière ouverture du flux `protocol` (migration `052` ; NULL tant qu'il n'est pas revenu depuis), l'échéance de chaque droit rapporté qui en a une `rights_until` (migration `053`, JSON nom → heure ; NULL sans échéance), les droits que chaque agent rapporte (`agent_capabilities` : droit, chemins, instant du rapport, et `unavailable`, la raison pour laquelle son compte ne peut pas l'exercer, vide s'il le peut), les jetons d'enrôlement (avec les droits demandés, `requested_capabilities`, et l'agent qui l'a consommé, `agent_id`), les champs que l'agent a dits de lui et que le serveur a refusés (`machine_report_refusals`, migration `050` : `hostname`, `system`, `arch`, `version` ; jamais la valeur refusée) | Jetons stockés hachés : une copie de la base n'enrôle personne. Un jeton vaut **1 h** et sert une fois (`machine.TokenLifetime`) ; au démarrage, `serve` efface les jetons périmés jamais servis et les consommés depuis plus de 90 jours, **sauf celui d'un agent actif** : il dit ce qui était demandé, contre quoi se lit ce que l'agent rapporte. La clé publique n'est pas un secret. Une valeur refusée (`machine.RefusedFields` : nom d'hôte RFC 1123, texte de 120 octets sans caractère de contrôle ; au flux, le système par `machine.IsSystemName`) n'est jamais écrite ; son refus l'est, la fiche le rend (`report_rejected`) jusqu'au champ redit valable ou au ré-enrôlement. La `050` a rejugé une fois, par ce même juge, ce qu'une base d'avant gardait : la valeur refusée effacée, son refus noté. Une machine retirée emporte ses agents, leurs droits et ses refus (cascade) |
+| Machine Kagu, `state_dir` | `opencloud.db` | Les machines (`machines` : nom, hôte, adresse, système, rôle choisi), leurs agents (`agents` : clé publique Ed25519, version, racine `/srv/workspace`, date d'enrôlement, dernier signe de vie, révocation, l'empreinte de la clé du serveur que l'agent dit avoir épinglée `server_key_fingerprint`, le dernier rang d'ordre donné `last_order_seq`, les ancres de confiance locales que l'agent dit tenir `anchors` (texte de l'en-tête ; NULL tant qu'il n'a rien dit), le compte sous lequel il tourne `run_as_uid` et `run_as_name` (nuls tant qu'il ne l'a pas dit) ; un seul actif par machine, l'index `agents_one_active` le tient), d'où il tient ses droits `policy_source` (`policy`, `identity`, `refused`) et l'empreinte SHA-256 de sa politique `policy_digest` (migration `051` ; nulles tant qu'il n'a rien dit), le protocole annoncé à la dernière ouverture du flux `protocol` (migration `052` ; NULL tant qu'il n'est pas revenu depuis), les genres d'ordres qu'il y a annoncés `order_kinds` (migration `056`, JSON genre → numéro ; NULL tant qu'il n'a rien annoncé, un agent du protocole 2), l'échéance de chaque droit rapporté qui en a une `rights_until` (migration `053`, JSON nom → heure ; NULL sans échéance), les droits que chaque agent rapporte (`agent_capabilities` : droit, chemins, instant du rapport, et `unavailable`, la raison pour laquelle son compte ne peut pas l'exercer, vide s'il le peut), les jetons d'enrôlement (avec les droits demandés, `requested_capabilities`, et l'agent qui l'a consommé, `agent_id`), les champs que l'agent a dits de lui et que le serveur a refusés (`machine_report_refusals`, migration `050` : `hostname`, `system`, `arch`, `version` ; jamais la valeur refusée) | Jetons stockés hachés : une copie de la base n'enrôle personne. Un jeton vaut **1 h** et sert une fois (`machine.TokenLifetime`) ; au démarrage, `serve` efface les jetons périmés jamais servis et les consommés depuis plus de 90 jours, **sauf celui d'un agent actif** : il dit ce qui était demandé, contre quoi se lit ce que l'agent rapporte. La clé publique n'est pas un secret. Une valeur refusée (`machine.RefusedFields` : nom d'hôte RFC 1123, texte de 120 octets sans caractère de contrôle ; au flux, le système par `machine.IsSystemName`) n'est jamais écrite ; son refus l'est, la fiche le rend (`report_rejected`) jusqu'au champ redit valable ou au ré-enrôlement. La `050` a rejugé une fois, par ce même juge, ce qu'une base d'avant gardait : la valeur refusée effacée, son refus noté. Une machine retirée emporte ses agents, leurs droits et ses refus (cascade) |
 | Où tourne chaque machine, `state_dir` | `opencloud.db` | Le type rapporté (`machines.kind`), la correction de l'opérateur (`kind_override`, `host_override`), les cartes réseau (`machine_interfaces` : nom, adresse MAC), les disques physiques (`machine_block_devices` : nom, modèle, taille, nature, amovible), les pools (`machine_storage_pools` : genre, niveau, état, taille, disques) et les grappes d'hyperviseurs (`hypervisor_clusters`, `machine_proxmox.cluster_id`) | Rien de secret : des noms de noyau et des adresses MAC. Chaque rapport de l'agent remplace les listes ; une machine retirée les emporte (cascade), une grappe sans hôte est retirée |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les tâches surveillées et leur jeton de ping, **chiffré** (AES-256-GCM, clé du serveur, lié à sa ligne) : la page doit le réafficher. Pour le retrouver à chaque ping, la colonne `token_lookup` garde son SHA-256 ; le chiffré est dans `token_sealed` | Une copie de la base seule ne livre pas les URL de ping ; elle donne l'empreinte, qui ne remonte pas au jeton (128 bits tirés au hasard). Qui a la base **et** `secret.key` les lit. Le jeton se régénère depuis la page de la tâche : l'ancienne URL cesse aussitôt de répondre, sans recréer la tâche. La machine d'une tâche, facultative, est en `restrict` : une machine à laquelle une tâche est rattachée ne se retire pas (409 `machine.has_heartbeats`), on détache la tâche d'abord |
 | Machine Kagu, `state_dir` | `opencloud.db` | Les pings bruts (forme, source, méthode, corps tronqué à 10 Kio, **en clair**) et les exécutions (début, fin, durée, code, issue dont « manquée » : un retard sans exécution) | Purgés : pings après 7 jours, exécutions après 90 jours |
@@ -317,12 +317,26 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    resservir une fois, ce qui suppose de lire le trafic en clair, donc de
    tenir le proxy qui termine TLS (il tient déjà le flux).
    Chaque requête de l'agent porte `OpenCloud-Agent-Protocol: 3`. Le serveur
-   admet encore le `2`, pour qu'un agent d'avant reçoive sa mise à jour : la
-   session retient le protocole lu à l'ouverture du flux (en mémoire, rien en
-   base), et un agent du protocole 2 ne reçoit qu'`agent.update` (« Un ordre,
-   de bout en bout »). Un agent d'une autre version reçoit
+   admet les protocoles `2` et `3` (R-B2-8) : un agent d'avant reste en ligne,
+   observe, et reçoit sa mise à jour. La session retient le protocole lu à
+   l'ouverture du flux, et un agent du protocole 2 ne reçoit qu'`agent.update`
+   (« Comment un ordre part et revient »). Un agent d'une autre version reçoit
    `426 protocol_unsupported`, sur chaque chemin `/agent/…`,
    `/agent/challenge` du protocole 1 compris.
+   À l'ouverture du flux, un agent du protocole 3 **annonce les genres
+   d'ordres qu'il sait exécuter**, en un seul en-tête :
+   `OpenCloud-Agent-Order-Kinds: agent.ping@1,agent.update@1,…`, chaque genre
+   de son registre (`agentwire.AnnouncedKinds`) avec son numéro
+   (`agentwire.Spec.Revision`, 1 pour tous aujourd'hui ; un genre qui
+   s'élargit le monte). Le serveur le garde dans `agents.order_kinds` (JSON
+   genre → numéro) et ne signe à cet agent que ces genres, à ce numéro ou
+   au-delà. C'est le seul moyen de dire ce qu'un agent sait faire : ni sa
+   version ni son protocole ne le disent. Une annonce illisible
+   (`machine.ParseOrderKinds` : genre `[a-z][a-z0-9_.]`, 64 caractères au
+   plus, numéro de 1 à 999, 128 genres au plus, aucun répété) s'écrit vide,
+   comme l'absence : aucun genre annoncé. Ce que l'agent sait lire de
+   l'enveloppe s'y ajoutera (`floor@1` avec le plancher, `cosign@1` avec la
+   co-signature).
    **L'agent ne suit aucune redirection** : une réponse 3xx est un refus, un
    proxy mal réglé ou un faux serveur ne l'envoie pas ailleurs avec ses
    en-têtes. Il lit le flux par lignes de 64 Kio au plus et par événements
@@ -1582,8 +1596,11 @@ fermée et vit dans le protocole (`agentwire.Kind`) : jamais une chaîne shell.
    écrire : `404` machine inconnue, `409 machine.no_agent` sans agent actif,
    `409 action.right_missing` quand l'agent a rapporté ses droits sans celui
    de l'ordre, `409 action.machine_offline` sans flux ouvert,
-   `409 action.agent_outdated` quand l'agent parle encore le protocole 2 et
-   que l'ordre n'est pas `agent.update`.
+   `409 action.agent_outdated` (« Mettre à jour l'agent ») quand l'agent n'a
+   pas annoncé le genre de l'ordre à ce numéro, ou parle encore le protocole 2
+   et que l'ordre n'est pas `agent.update` (R-B2-8). Tous les ordres passent
+   par ce même jugement (`action.Service.send`), avant que rien ne soit écrit,
+   signé ni mis en file.
 2. **Le serveur écrit le run**, état `queued`, et prend dans la même
    transaction le **rang** suivant de l'agent (`agents.last_order_seq`, qui ne
    recule jamais, même quand les runs sont purgés ; un agent révoqué entre-temps

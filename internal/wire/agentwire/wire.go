@@ -74,6 +74,12 @@ const (
 	// (agentpolicy.Digest), redites à chaque ouverture du flux.
 	HeaderAgentPolicySource = brand.HeaderPrefix + "Agent-Policy-Source"
 	HeaderAgentPolicyDigest = brand.HeaderPrefix + "Agent-Policy-Digest"
+	// Les genres d'ordres que l'agent sait exécuter, chacun avec son numéro
+	// (AnnouncedKinds, machine.OrderKinds.Format), redits à chaque ouverture
+	// du flux : le serveur ne lui signe que ceux-là (R-B2-8). C'est le seul
+	// champ qui dit ce qu'un agent sait faire. Absent chez un agent du
+	// protocole 2, qui ne reçoit qu'agent.update.
+	HeaderAgentOrderKinds = brand.HeaderPrefix + "Agent-Order-Kinds"
 	// La version du retour arrière que l'agent sait faire, un entier : posée
 	// seulement s'il tourne sous le lanceur stable (brand.AgentGuardEnv). Absent
 	// chez un agent plus vieux ou qui n'est pas migré : le serveur refuse

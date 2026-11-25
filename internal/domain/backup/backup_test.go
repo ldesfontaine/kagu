@@ -106,6 +106,7 @@ func newBench(t *testing.T, reportedRights string) *bench {
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, b.machines, enrolled.Agent.ID)
 	t.Cleanup(func() { b.machines.Disconnect(b.session) })
 
 	journal := audit.New(db, logger)

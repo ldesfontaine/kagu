@@ -142,18 +142,23 @@ func (o Order) encode() ([]byte, error) {
 	return json.Marshal(body) // #nosec G117 -- le corps signé porte le secret jusqu'à l'agent, rien d'autre ne le garde.
 }
 
-// envelopeFor rend l'enveloppe qu'un agent de ce protocole lit pour ce genre.
-// Un agent du protocole 2 ne lit que la v1, et ne reçoit qu'agent.update, pour
-// se mettre à jour : tout autre ordre vers lui est refusé avant d'être écrit.
-// L'exception disparaît à la version suivante.
-func envelopeFor(protocol string, kind agentwire.Kind) (int, error) {
-	if protocol != agentwire.LegacyProtocolVersion {
-		return agentwire.OrderVersion, nil
+// envelopeFor rend l'enveloppe qu'un agent lit pour ce genre, ou le refus,
+// avant que rien ne soit écrit ni signé (R-B2-8). Un agent du protocole 2 ne
+// lit que la v1 et ne reçoit qu'agent.update, pour se mettre à jour ;
+// l'exception disparaît à la version suivante. Un autre ne reçoit que les
+// genres qu'il a annoncés, à leur numéro : seul ce qu'il annonce compte,
+// jamais sa version.
+func envelopeFor(protocol string, announced machine.OrderKinds, spec agentwire.Spec) (int, error) {
+	if protocol == agentwire.LegacyProtocolVersion {
+		if spec.Kind != agentwire.KindAgentUpdate {
+			return 0, ErrAgentOutdated
+		}
+		return agentwire.LegacyOrderVersion, nil
 	}
-	if kind != agentwire.KindAgentUpdate {
+	if !announced.Announces(string(spec.Kind), spec.Revision) {
 		return 0, ErrAgentOutdated
 	}
-	return agentwire.LegacyOrderVersion, nil
+	return agentwire.OrderVersion, nil
 }
 
 // Query choisit les runs d'une liste, du plus récent au plus ancien.
@@ -168,9 +173,9 @@ var (
 	// ErrRightMissing : l'agent a rapporté ses droits et celui de l'ordre
 	// n'y est pas ; il le refuserait. Rien n'est écrit.
 	ErrRightMissing = refusal.Conflict("action.right_missing", "the agent does not hold the right this order needs: re-enroll it with that right")
-	// ErrAgentOutdated : l'agent parle encore le protocole 2 ; il ne reçoit
-	// qu'agent.update. Rien n'est écrit.
-	ErrAgentOutdated = refusal.Conflict("action.agent_outdated", "the agent is too old to read this order: update it first")
+	// ErrAgentOutdated : l'agent n'a pas annoncé le genre de l'ordre, ou parle
+	// encore le protocole 2 et ne reçoit qu'agent.update. Rien n'est écrit.
+	ErrAgentOutdated = refusal.Conflict("action.agent_outdated", "the agent does not know this kind of order: update the agent")
 	// ErrMachineOffline : alias de machine.ErrOffline, le temps que les appelants passent au nom neuf.
 	ErrMachineOffline = machine.ErrOffline
 	// ErrReportInvalid : la section actions d'un signal sort de ce qu'un

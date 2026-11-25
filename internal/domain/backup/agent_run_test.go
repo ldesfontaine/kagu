@@ -19,6 +19,7 @@ import (
 	"filippo.io/age"
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
@@ -49,6 +50,7 @@ func (b *bench) connectSource(rights string) *machine.Session {
 	if err != nil {
 		b.t.Fatal(err)
 	}
+	storetest.AnnounceKinds(b.t, b.machines, source.Machine.Agent.ID)
 	b.t.Cleanup(func() { b.machines.Disconnect(session) })
 	return session
 }
@@ -65,6 +67,7 @@ func (b *bench) reconnectDestination(version, reportedRights string) {
 	if err != nil {
 		b.t.Fatal(err)
 	}
+	storetest.AnnounceKinds(b.t, b.machines, destination.Machine.Agent.ID)
 }
 
 // agentPlanFor est un plan agent de sujet « pve » : ses fichiers s'appellent

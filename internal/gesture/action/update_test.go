@@ -60,6 +60,7 @@ func newUpdateBench(t *testing.T, options updateOptions) *updateBench {
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, b.machines, enrolled.Agent.ID)
 	t.Cleanup(func() { b.machines.Disconnect(session) })
 	b.session = session
 	// Un agent migré dit à chaque ouverture de flux qu'il revient seul en
@@ -473,5 +474,47 @@ func TestConfirmAgentUpdate_SucceedsOnReconnectWithTheTargetVersionOnly(t *testi
 	got := runState()
 	if got.State != action.StateSucceeded || got.FinishedAt.IsZero() || len(got.Output) != 1 || got.Output[0].Line != "reconnected as v0.0.2" {
 		t.Fatalf("after the agent came back with the target version: %+v", got)
+	}
+}
+
+// Le serveur n'offre à un agent que sa propre version, celle de la
+// bibliothèque qui correspond à serve : ni une plus récente importée à côté, ni
+// une plus ancienne à un agent plus récent (R-B2-6).
+func TestR_B2_6_TheServerOffersAnAgentOnlyItsOwnVersion(t *testing.T) {
+	b := newUpdateBench(t, updateOptions{rights: "observe,agent.update", agentVersion: "v0.0.1", arch: "amd64"})
+	b.publishBoth(t, "v0.0.3")
+	b.service.SetReleases(b.library, "v0.0.2")
+	if offer := b.offer(t); offer.Available || offer.Reason != action.OfferNoRelease || offer.Target != "v0.0.2" {
+		t.Fatalf("only a newer release imported: %+v", offer)
+	}
+	if _, err := b.service.UpdateAgent(operator(), machineID); !errors.Is(err, action.ErrUpdateUnavailable) || len(b.pusher.sent) != 0 {
+		t.Fatalf("a newer release was sent: %v, %d sent", err, len(b.pusher.sent))
+	}
+
+	b.publishBoth(t, "v0.0.2")
+	run, err := b.service.UpdateAgent(operator(), machineID)
+	if err != nil || len(b.pusher.sent) != 1 {
+		t.Fatalf("update: %+v, %d sent, %v", run, len(b.pusher.sent), err)
+	}
+	var body agentwire.OrderBody
+	var params agentwire.AgentUpdateParams
+	if json.Unmarshal(b.pusher.sent[0].Order.Body, &body) != nil || json.Unmarshal(body.Params, &params) != nil || params.Version != "v0.0.2" {
+		t.Fatalf("the version sent: %s", b.pusher.sent[0].Order.Body)
+	}
+	opened, _, err := b.service.OpenParcel(machineID, params.Parcel, params.Binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := io.ReadAll(opened)
+	_ = opened.Close()
+	if err != nil || string(content) != "the amd64 binary of v0.0.2" {
+		t.Fatalf("the binary sent holds %q, %v", content, err)
+	}
+
+	newer := newUpdateBench(t, updateOptions{rights: "observe,agent.update", agentVersion: "v0.0.3", arch: "amd64"})
+	newer.publishBoth(t, "v0.0.2")
+	newer.service.SetReleases(newer.library, "v0.0.2")
+	if offer := newer.offer(t); offer.Available || offer.Reason != action.OfferNewerAgent {
+		t.Fatalf("an older version offered to a newer agent: %+v", offer)
 	}
 }

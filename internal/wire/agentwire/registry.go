@@ -9,6 +9,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 )
 
 // Spec est un genre d'ordre, déclaré une fois (R-A1-1) : le type de ses
@@ -17,6 +18,10 @@ import (
 // registre ; aucune autre table ne dit ces faits d'un genre.
 type Spec struct {
 	Kind Kind
+	// Le numéro du genre, que l'agent annonce avec lui (« agent.ping@1 ») : un
+	// genre qui s'élargit le monte, et le serveur ne l'envoie qu'à un agent
+	// qui annonce ce numéro ou un plus haut (R-B2-8).
+	Revision int
 	// Un nom de droit d'agentpolicy, toujours par sa constante (R-A1-14).
 	Right string
 	// Les ancres qui bornent ce genre, et la valeur de l'ordre que chacune juge.
@@ -115,7 +120,7 @@ func DefineWithoutParams(kind Kind, right string, options ...Option) Spec {
 }
 
 func newSpec(kind Kind, right string, decode func([]byte) (any, error), options []Option) Spec {
-	spec := Spec{Kind: kind, Right: right, decodeParams: decode}
+	spec := Spec{Kind: kind, Revision: 1, Right: right, decodeParams: decode}
 	for _, option := range options {
 		option(&spec)
 	}
@@ -159,6 +164,17 @@ var registry = []Spec{
 	Define[ResticVerifyParams](KindResticVerify, agentpolicy.CapabilityResticVerify, Journal("user"), WithSecret[ResticVerifySecret]()),
 	Define[ResticBrowseParams](KindResticBrowse, agentpolicy.CapabilityResticBrowse, Journal("user", "snapshot", "path"), WithSecret[ResticBrowseSecret]()),
 	Define[ResticRestoreParams](KindResticRestore, agentpolicy.CapabilityResticRestore, Journal("target", "snapshot", "path", "stamp")),
+}
+
+// AnnouncedKinds rend ce que cet agent annonce à l'ouverture de son flux :
+// chaque genre du registre, à son numéro. Ce qu'il sait lire de l'enveloppe
+// s'y ajoutera (le plancher, la co-signature) quand il le saura.
+func AnnouncedKinds() machine.OrderKinds {
+	kinds := make(machine.OrderKinds, len(registry))
+	for _, spec := range registry {
+		kinds[string(spec.Kind)] = spec.Revision
+	}
+	return kinds
 }
 
 // SpecOf rend la déclaration d'un genre ; faux pour un genre hors du registre.

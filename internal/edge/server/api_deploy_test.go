@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
@@ -34,6 +35,7 @@ func deploySetupSession(t *testing.T, server *testServer, rights string) (servic
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, server.machines, enrolled.Agent.ID)
 	if err := server.machines.NoteRootDir(context.Background(), session.AgentID, "/srv/workspace"); err != nil {
 		t.Fatal(err)
 	}

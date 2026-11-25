@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/goldentest"
@@ -59,10 +60,12 @@ func newResticBench(t *testing.T, sourceRights, targetRights string) *resticBenc
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, server.machines, sourceMachine.Agent.ID)
 	target, err := server.machines.Connect(ctx, targetMachine, "192.0.2.10", "v0.0.1", targetRights, "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, server.machines, targetMachine.Agent.ID)
 	bench := &resticBench{testServer: server, source: source, target: target, sourceKey: sourceKey}
 	created := callAPI(server.Server, http.MethodPost, "/api/directory/services", nextcloudRequest(resticSourceID))
 	if created.Code != http.StatusCreated {
@@ -379,6 +382,7 @@ func TestRestic_AMissingRightIsRefusedWithTheRightAndTheMachine(t *testing.T) {
 	if _, err := ready.machines.Connect(context.Background(), sourceMachine.Machine, "192.0.2.21", "v0.0.1", "observe", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, ready.machines, sourceMachine.Machine.Agent.ID)
 	got = callAPI(ready.Server, http.MethodPost, "/api/machines/"+resticSourceID+"/restic-backups", map[string]any{
 		"name": "nextcloud", "scope": "service", "service_id": ready.serviceID, "target_machine_id": resticTargetID,
 	})

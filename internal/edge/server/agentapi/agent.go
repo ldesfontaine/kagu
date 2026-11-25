@@ -134,10 +134,10 @@ func (h *Handler) writeEnrollError(w http.ResponseWriter, r *http.Request, err e
 	}
 }
 
-// speaksProtocol refuse un agent d'une autre version du protocole, en le
+// speaksProtocol refuse un agent d'un protocole hors de la liste admise, en le
 // disant : 426 protocol_unsupported. Un agent du protocole 1 ne pose pas
-// l'en-tête. Le protocole 2 est encore admis, pour qu'un agent d'avant reçoive
-// agent.update (la session retient lequel).
+// l'en-tête. Le protocole 2 est encore admis (R-B2-8), pour qu'un agent
+// d'avant reste en ligne et reçoive agent.update (la session retient lequel).
 func (h *Handler) speaksProtocol(w http.ResponseWriter, r *http.Request) bool {
 	switch r.Header.Get(agentwire.HeaderProtocol) {
 	case agentwire.ProtocolVersion, agentwire.LegacyProtocolVersion:
@@ -194,6 +194,10 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// du serveur se refuse tant qu'un agent est plus ancien (#588).
 	if err := h.machines.NoteProtocol(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderProtocol)); err != nil {
 		h.logger.Warn("note protocol", "machine_id", authenticated.ID, "error", err)
+	}
+	// Les genres qu'il annonce : le serveur ne lui signe que ceux-là.
+	if err := h.machines.NoteOrderKinds(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderAgentOrderKinds)); err != nil {
+		h.logger.Warn("note order kinds", "machine_id", authenticated.ID, "error", err)
 	}
 	// La racine des services que l'agent a dans son fichier : le plan d'un
 	// déploiement la montre.

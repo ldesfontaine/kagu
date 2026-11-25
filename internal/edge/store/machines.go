@@ -20,7 +20,7 @@ const machineSelect = `SELECT m.id, m.name, m.hostname, m.address, m.os, m.arch,
 		m.kind, m.kind_override, m.host_override,
 		a.id, a.public_key, a.version, a.root_dir, a.enrolled_at, a.last_seen_at, a.revoked_at,
 		a.server_key_fingerprint, a.run_as_uid, a.run_as_name, t.requested_capabilities, a.rollback_version, a.anchors, a.service_rollback_version,
-		a.policy_source, a.policy_digest, a.protocol, a.rights_until, a.root_equivalent
+		a.policy_source, a.policy_digest, a.protocol, a.rights_until, a.root_equivalent, a.order_kinds
 	FROM machines m
 	LEFT JOIN agents a ON a.id = (
 		SELECT id FROM agents WHERE machine_id = m.id
@@ -159,6 +159,24 @@ func (db *DB) RecordProtocol(ctx context.Context, agentID, protocol string) erro
 	result, err := db.sql.ExecContext(ctx, `UPDATE agents SET protocol = ? WHERE id = ?`, nullableString(protocol), agentID)
 	if err != nil {
 		return fmt.Errorf("record protocol: %w", err)
+	}
+	return notFoundIfNoRow(result, machine.ErrNotFound)
+}
+
+// RecordOrderKinds note les genres que l'agent annonce à l'ouverture du
+// flux, en objet JSON (genre -> numéro) ; nil s'écrit NULL.
+func (db *DB) RecordOrderKinds(ctx context.Context, agentID string, kinds machine.OrderKinds) error {
+	var stored any
+	if kinds != nil {
+		encoded, err := json.Marshal(kinds)
+		if err != nil {
+			return fmt.Errorf("encode order kinds: %w", err)
+		}
+		stored = string(encoded)
+	}
+	result, err := db.sql.ExecContext(ctx, `UPDATE agents SET order_kinds = ? WHERE id = ?`, stored, agentID)
+	if err != nil {
+		return fmt.Errorf("record order kinds: %w", err)
 	}
 	return notFoundIfNoRow(result, machine.ErrNotFound)
 }
@@ -538,11 +556,11 @@ func scanMachine(row scanner) (machine.Machine, error) {
 	var publicKey []byte
 	var enrolledAt, lastSeenAt, revokedAt, runAsUID sql.NullInt64
 	var rollbackVersion, serviceRollbackVersion sql.NullInt64
-	var anchors, policySource, policyDigest, protocol, rightsUntil sql.NullString
+	var anchors, policySource, policyDigest, protocol, rightsUntil, orderKinds sql.NullString
 	var rootEquivalent sql.NullBool
 	err := row.Scan(&m.ID, &m.Name, &m.Hostname, &m.Address, &m.OS, &m.Arch, &createdAt, &m.UpdateLast, &role, &kind, &kindOverride, &hostOverride,
 		&agentID, &publicKey, &version, &rootDir, &enrolledAt, &lastSeenAt, &revokedAt, &serverKey, &runAsUID, &runAsName, &requested, &rollbackVersion, &anchors, &serviceRollbackVersion,
-		&policySource, &policyDigest, &protocol, &rightsUntil, &rootEquivalent)
+		&policySource, &policyDigest, &protocol, &rightsUntil, &rootEquivalent, &orderKinds)
 	if err != nil {
 		return machine.Machine{}, err
 	}
@@ -567,6 +585,10 @@ func scanMachine(row scanner) (machine.Machine, error) {
 	// Des échéances illisibles en base valent « aucune » : l'agent juge.
 	if rightsUntil.Valid {
 		_ = json.Unmarshal([]byte(rightsUntil.String), &m.Agent.RightsUntil)
+	}
+	// Des genres illisibles en base valent « rien annoncé » : aucun ordre ne part.
+	if orderKinds.Valid {
+		_ = json.Unmarshal([]byte(orderKinds.String), &m.Agent.OrderKinds)
 	}
 	// Des ancres illisibles en base valent « pas rapportées » : rien n'est jugé.
 	m.Agent.Anchors, _ = anchor.Parse(anchors.String)

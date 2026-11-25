@@ -15,6 +15,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
 	"github.com/ldesfontaine/kagu/internal/edge/store"
+	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
@@ -74,6 +75,7 @@ func TestRun_RefusesAnOfflineMachineAndALostRight(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, b.machines, enrolled.Machine.Agent.ID)
 	if _, err := b.backups.RunNow(operator(), backup.SubjectDatabase); !errors.Is(err, backup.ErrRightMissing) {
 		t.Fatalf("lost right: %v", err)
 	}
@@ -103,6 +105,7 @@ func TestRun_ShowsAnUnavailableRightButStillSendsTheOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, b.machines, enrolled.Machine.Agent.ID)
 	overview, err := b.backups.Overview(context.Background())
 	if err != nil || len(overview.Destinations) != 1 {
 		t.Fatalf("overview %+v %v", overview, err)
@@ -124,6 +127,7 @@ func TestRun_ShowsAnUnavailableRightButStillSendsTheOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	storetest.AnnounceKinds(t, b.machines, enrolled.Machine.Agent.ID)
 	if overview, err = b.backups.Overview(context.Background()); err != nil || overview.Destinations[0].Right != agentpolicy.FitMissing || overview.Destinations[0].RightReason != "" {
 		t.Fatalf("overview %+v %v", overview, err)
 	}
