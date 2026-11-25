@@ -6,15 +6,11 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
-func TestGrantLine_WritesTheLineRootPastes(t *testing.T) {
-	cases := []struct{ right, value, want string }{
-		{CapabilityDockerDeploy, "", "sudo " + brand.Command + " agent grant docker.deploy"},
-		{CapabilityFilesWrite, "/srv/restore", "sudo " + brand.Command + " agent grant files.write=/srv/restore"},
-	}
-	for _, c := range cases {
-		if got := GrantLine(c.right, c.value); got != c.want {
-			t.Errorf("GrantLine(%q, %q) = %q, want %q", c.right, c.value, got, c.want)
-		}
+// R-DROIT-8 (E03-07) : la ligne d'un droit manquant est constante, sans nom
+// de droit.
+func TestR_A3_15_E03_07_ThePendingLineIsConstant(t *testing.T) {
+	if got, want := PendingLine(), "sudo "+brand.Command+" agent grant --pending"; got != want {
+		t.Fatalf("PendingLine() = %q, want %q", got, want)
 	}
 }
 
@@ -38,8 +34,8 @@ func TestR_A3_15_AHostileValueGivesARefusalWithoutLine(t *testing.T) {
 		"/srv\x00id",
 	}
 	for _, value := range hostile {
-		if line := GrantLine(CapabilityFilesWrite, value); line != "" {
-			t.Errorf("GrantLine(files.write, %q) = %q, want no line", value, line)
+		if line := AgentLine("grant", CapabilityFilesWrite+ScopeSeparator+value); line != "" {
+			t.Errorf("AgentLine(grant files.write, %q) = %q, want no line", value, line)
 		}
 		if line := AgentLine("trust", "add", "backup.guest", value); line != "" {
 			t.Errorf("AgentLine(trust add, %q) = %q, want no line", value, line)

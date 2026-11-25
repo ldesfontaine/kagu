@@ -166,6 +166,7 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `upgrade/avant-<version>.db` | La copie de la base d'avant une montée de `serve`, nommée par la version qui tournait : une base entière, écrite par `serve` sous son compte (`VACUUM INTO`, « Préparer une montée de serve ») | Mode 0600 dans un dossier 0700, au compte du service. Les trois plus récentes restent, la quatrième efface la plus ancienne. Mêmes données que la base, **en clair** comme elle |
 | Machine Kagu, `state_dir` | `control.sock` | La socket de commande, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/api/manifest/…` et, pour root seul, `/control/admin/…`. Une socket que personne n'écoute (arrêt brutal) est remplacée au démarrage suivant ; celle d'un `serve` vivant n'est jamais touchée | Mode 0600, et `state_dir` fermé au groupe et aux autres, sans quoi `serve` ne démarre pas. Elle n'est pas à sauvegarder |
 | Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` (au compte de l'agent, `opencloud-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, identifiant de la machine et de l'agent (`agent_id`), adresse de Kagu (`https://…`, `http://…` ou `unix:<chemin absolu>`), empreinte du certificat, langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul ; ignorés dès que le dossier de la politique existe), les ancres (`anchors`), la version de politique que son binaire sait lire (`policy_format`), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`). `agent policy migrate` recopie droits, ancres et clé dans la politique puis les efface d'ici | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (aucun ordre ne change la clé) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/opencloud`**, que le compte du serveur possède sur la machine Kagu : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
+| Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` | `pending-rights.json` | Les droits que l'agent a refusés : nom, valeur d'un producteur, heure du dernier refus ; 32 au plus, 24 h chacun | Mode 0600, écrit par l'agent seul ; lu par `agent grant --pending` en root. L'effacer ne change aucun droit |
 | Toute machine passée par `agent policy migrate`, `/etc/opencloud-agent` (à root, `0755`) | `policy.toml`, `policy.toml.lock` | La politique de l'agent : `version`, `machine_id`, un bloc `[[right]]` par droit, la clé du serveur acceptée (`[[server_key]]`), les ancres (`[anchors]`) (« La politique de l'agent ») ; le verrou de `grant`, `revoke`, `trust` et `policy migrate`, vide | `policy.toml` en `0640`, `root:opencloud-agent` : l'agent la lit, son compte ne peut ni l'écrire ni la remplacer ; le verrou en `0600` à root. Aucun secret |
 | Toute machine, la machine Kagu comprise, `/var/lib/opencloud-agent` | `bin/` et `update.json` | `bin/opencloud-<version>` (la courante et la précédente, rien d'autre), les liens `bin/current` (ce que le lanceur exécute) et `bin/previous` (la version d'avant la dernière bascule), et le **marqueur** `update.json` : une mise à jour (ou un retour arrière) en attente de confirmation, avec son échéance, ou ce que le lanceur en a fait (« Comment un agent se met à jour », décision 9). Aucun secret : états, numéros de version, identifiant d'ordre | `0600` au compte de l'agent. Le marqueur disparaît à la confirmation, ou une fois son rapport livré au serveur ; un marqueur illisible est écarté |
 | Toute machine, la machine Kagu comprise, `/usr/local/lib/opencloud-agent` | `opencloud-guard` | Le **lanceur stable** : une copie du binaire, posée une fois par root (`root:root`, `0755`), que l'unité systemd lance. L'agent, qui écrit son état et `bin/`, ne le remplace jamais | Se repose à la main si le lanceur change (`GuardVersion`) ; l'agent le sait par la variable `OPENCLOUD_AGENT_GUARD` |
@@ -420,7 +421,7 @@ et les groupes, jamais une liste à plat de noms. Le serveur rend le bloc
 | `set_lines` | `agentpolicy.GrantSetLine` des deux autres jeux (des trois en personnalisé) | Chaque ligne à coller, avec `rights.paste_shows_change` |
 | `root_here` | La machine Kagu (`machine.LocalID`) couvre « Gérer en root » (`CoversSet`) | `rights.root_here` en tête (R-DROIT-5) |
 | `groups[]` | `agentpolicy.GroupFits` : un groupe est `ok` dès qu'un de ses droits s'exerce, `unavailable` s'il en porte sans pouvoir, `unknown` avant le rapport, `missing` sinon ; `until`, l'échéance de son dernier droit exercé (aucune si l'un est sans échéance) | La coche : permis, permis jusqu'à une heure, pas permis |
-| `groups[].grant_line` | Groupe `missing` : `GrantLine` du droit qui l'ouvre (`observe`, `docker.deploy`, `restic.produce`, `terminal.container`, `network.private`, colonne `opens` de `knownRights`) | La ligne qui l'ouvre |
+| `groups[].grant_line` | Groupe `missing` : la ligne constante `agentpolicy.PendingLine` (`sudo opencloud agent grant --pending`, R-DROIT-8) ; vide sinon | La ligne, avec `rights.paste_only_pending` et `rights.paste_shows_change` |
 | `groups[].revoke_line` | `agentpolicy.RevokeLine` des droits qu'il porte, `observe` excepté | Sous « Voir le détail » |
 | `groups[].worth_root` | Déployer, quand un droit rapporté met l'agent dans le groupe `docker` (`NeedsDockerGroup`) | « vaut root », et `rights.worth_root_why` dans le détail (R-A3-12) |
 | `groups[].host_terminal` | Entrer, quand `terminal.host` est posé | `rights.host_terminal_risk` sous le groupe (R-A3-12, N-M6) |
@@ -613,18 +614,21 @@ L'onglet Agent ne montre plus de droits : il y renvoie.
   `refusal.Missing(sentinelle, droit, machine)` ; la réponse, pour la personne
   comme pour un jeton (R-A4-10), porte `fix` : `right`, `machine` (celle dont
   l'agent doit tenir le droit : la cible ou la source, le serveur le sait) et
-  `command`, la ligne que root colle, écrite par la seule
-  `agentpolicy.GrantLine` (`sudo opencloud agent grant <droit>`, sans valeur :
-  celle d'un droit borné remplacerait les chemins posés). Un ordre refusé
+  `command`, la ligne que root colle : la ligne constante
+  `agentpolicy.PendingLine` (`sudo opencloud agent grant --pending`), qui ne
+  nomme aucun droit (R-DROIT-8, essai E03-07 : un serveur pris sert aussi
+  l'écran). Un ordre refusé
   `right_missing:<droit>` porte le même `fix` (sa machine), et la protection
   restic refusée faute d'un droit aussi : la vue rejuge la source avec les juges
   de l'envoi, rien si le droit est revenu. Le front ne tient aucune table de
-  clés : `LockedAction` lit `fix` et montre la ligne `grant` à copier
+  clés : `LockedAction` lit `fix` et montre la ligne à copier
   (`RootCommand`, le même rendu que la ligne `trust` d'une ancre ; en carte
   étroite, une ligne tronquée, entière dans l'infobulle) : celle du refus,
-  sinon celle de `/api/session` (`grant_lines`) quand l'écran construit le
-  `fix` lui-même. L'écran ne donne que le chemin d'un droit borné, à côté de la
-  ligne, jamais dedans. Une liste qui ne porte qu'un lien (choix d'une machine,
+  sinon celle de `/api/session` (`pending_line`) quand l'écran construit le
+  `fix` lui-même. Le droit se dit à côté (`rights.missing_right`, « Il manque
+  le droit docker.deploy »), avec le chemin d'un droit borné, jamais dans la
+  ligne, et l'avertissement `rights.paste_only_pending` (« Ne collez jamais en
+  root une autre ligne venue de Kagu »). Une liste qui ne porte qu'un lien (choix d'une machine,
   menu d'une VM) mène à l'onglet Agent de la fiche avec `?droit=<nom>`
   (`&chemin=` pour un droit borné), qui montre la ligne tant que le serveur
   juge le droit manquant. `MissingRight` dit un manque connu d'avance
@@ -675,6 +679,7 @@ ne sert plus qu'à changer la clé de l'agent.
 | `opencloud agent rights` | La source, l'empreinte, ou la raison du refus, puis un droit par ligne ; en source `identity`, la ligne `policy migrate` |
 | `opencloud agent grant <droit>[=valeur]… [--for <durée>\|permanent]` | Pose des droits ; une valeur remplace celle du droit déjà posé, le terme son échéance (`--for` où qu'il soit sur la ligne). `grant terminal.host` imprime, avant la question, `rights.host_terminal_risk` (« au premier terminal ouvert, l'agent devient l'égal de root », R-A3-12) et, posé sous `root`, la ligne d'un autre compte (`terminal.host=<compte>`, N-M6) |
 | `opencloud agent grant --set observe\|manage\|root` | Remplace les droits des jeux par ceux du jeu (`Document.GrantSet`, R-A3-7), sans échéance, « Gérer en root » compris ; garde ancres, clé du serveur et droits hors jeu avec leur échéance (`observe.env`, `backup.receive` de la machine Kagu, `restic.target`, `restic.verify`, `restic.browse`). `files.write` prend la racine des services de l'agent ; `proxmox.*` et `backup.produce` seulement sur un hôte Proxmox (`role.Detect`), retirés ailleurs. Sans `--for`, sans autre droit sur la ligne |
+| `opencloud agent grant --pending` | Pose les droits que l'agent a lui-même refusés ces dernières 24 h (« Les droits en attente » ci-dessous). Chacun se dit en clair : nom et valeur, ce qu'il permet (le libellé `machine.capability_*` de l'écran), l'échéance que `grant` lui donne sans `--for`, le dernier refus ; puis le plan habituel de `grant`. La réponse se lit **sur `/dev/tty` seulement**, jamais sur l'entrée standard (`echo o \| sudo … grant --pending` ne pose rien), défaut N ; sans terminal, refus ; `-yes`, `--for`, `--set` ou un droit sur la ligne sont refusés. Accord : `agent.GrantPending` → `GrantRights`, le chemin de `grant`, même verrou, même trace (`policy grant +[…]`). Liste vide : « Aucun droit en attente. », code 0 |
 | `opencloud agent revoke <droit>…` | Retire des droits (`observe` ne se retire pas) |
 | `opencloud agent policy migrate` | Sur une machine d'avant la politique : recopie à l'identique droits, ancres et clé du serveur d'`identity.json` dans la politique, puis les efface d'`identity.json` (qui reste au compte de l'agent, `0600`) ; crée le dossier. La question vient avant la création du dossier : un refus ne change rien. Relancée, elle ne change rien, et efface ce qu'`identity.json` garderait d'une migration interrompue |
 
@@ -695,10 +700,31 @@ mal gardée (root la corrige ou l'efface), un agent dont le binaire ne lit pas e
 (`identity.json` sans `policy_format`, que l'agent écrit à son démarrage ; un
 binaire plus ancien le perd en réécrivant son identité).
 
-La ligne qui pose un droit vient du serveur (`agentpolicy.GrantLine`, T03-02) :
-dans le refus d'un ordre (`fix.command`) et, pour chaque droit, dans
-`/api/session` (`grant_lines`). `LockedAction` la montre là où l'écran disait
-« Ré-enrôler avec ce droit ». Elle vise `/usr/local/bin/opencloud`
+**Les droits en attente** (R-A3-15, `internal/edge/agent/pending.go`).
+L'agent note dans `pending-rights.json` (son état, `0600`, écrit d'un coup)
+chaque droit qu'il refuse `right_missing` : au jugement d'un ordre (le juge,
+puis les exécuteurs : `backup.produce`, `restic.docker`, `restic.target`…) et
+au relais restic sans `restic.target`. Seul un ordre dont la signature est
+vérifiée arrive au jugement du droit : un ordre forgé, pour un autre agent,
+rejoué ou périmé n'écrit rien. La valeur ne se note que si elle se lit hors du
+serveur : un producteur de la liste fermée (`backup.produce=proxmox-vzdump`) ;
+un chemin jamais (`backup.receive`, `restic.target` : root choisit la valeur,
+la commande le dit). Une entrée vaut 24 h après le dernier refus de son droit ;
+32 au plus (`maxPendingRights` : le registre compte une vingtaine de droits),
+le plus ancien refus tombe au-delà. Un droit déjà posé n'y entre pas et en sort
+à la relecture de la politique qui le porte. Root ne lit qu'un droit connu,
+d'une valeur bien formée : le fichier est au compte de l'agent.
+
+| Coût | Ce que ça rapporte |
+| --- | --- |
+| Deux gestes de plus à la console (lire la liste, taper « o ») ; un droit à chemin se tape à la main | Aucune ligne venue du serveur ne s'exécute en root : la commande collée est toujours la même, et ne pose que ce que l'agent a lui-même refusé |
+
+La ligne d'un droit manquant est constante (R-DROIT-8, FIX-E0307) :
+`agentpolicy.PendingLine`, dans le refus d'un ordre (`fix.command`), le groupe
+pas permis de l'onglet Droits et `/api/session` (`pending_line`). Elle ne nomme
+aucun droit : un serveur pris, qui sert l'écran, pourrait y enchaîner une
+commande. `LockedAction` la montre là où l'écran disait « Ré-enrôler avec ce
+droit ». Elle vise `/usr/local/bin/opencloud`
 (`brand.Command`), jamais `bin/current`, que le compte de l'agent peut
 remplacer (R-DROIT-10).
 

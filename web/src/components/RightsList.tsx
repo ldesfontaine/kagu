@@ -74,7 +74,7 @@ function GroupCard({ group, now }: { group: RightsGroup; now: number }) {
       <CardBody gap={10}>
         <p className="secondary">{t(`rights.group_${group.name}_hint`)}</p>
         {group.host_terminal && <Note tone="warn">{t("rights.host_terminal_risk")}</Note>}
-        {group.grant_line !== "" && <RootCommand command={group.grant_line} notes={[t("rights.paste_shows_change")]} />}
+        {group.grant_line !== "" && <RootCommand command={group.grant_line} notes={[t("rights.paste_only_pending"), t("rights.paste_shows_change")]} />}
         <Fold label={t("rights.see_detail")} initiallyOpen={false}>
           {group.worth_root && <p className="secondary">{t("rights.worth_root_why")}</p>}
           <ul className="stack gap-8">

@@ -133,10 +133,11 @@ func fixOf(err error) *fixJSON {
 	return nil
 }
 
-// rightFixJSON écrit la ligne grant du droit, sans valeur : celle d'un droit
-// borné (files.write=<chemin>) remplacerait les chemins déjà posés.
+// rightFixJSON rend le droit qui manque, pour le dire, et la ligne constante
+// (agentpolicy.PendingLine) : jamais une ligne qui nomme le droit, que root
+// collerait telle que le serveur l'écrit (R-DROIT-8).
 func rightFixJSON(fix refusal.Fix) *fixJSON {
-	return &fixJSON{Right: fix.Right, Machine: fix.Machine, Command: agentpolicy.GrantLine(fix.Right, "")}
+	return &fixJSON{Right: fix.Right, Machine: fix.Machine, Command: agentpolicy.PendingLine()}
 }
 
 // anchorFixJSON rend la commande d'une ancre et la machine où la lancer, vide

@@ -156,7 +156,7 @@ export type RightsGroupName = "see" | "deploy" | "backup" | "enter" | "network";
 
 // Un groupe : son verdict (permis jusqu'à until, null sans échéance), « vaut
 // root » (worth_root), terminal.host posé (host_terminal), ses droits pour le
-// détail, la ligne grant qui l'ouvre (vide s'il est permis) et la ligne
+// détail, la ligne constante qui l'ouvre (vide s'il est permis) et la ligne
 // revoke qui retire ce qu'il porte (vide sans rien à retirer).
 export interface RightsGroup {
   name: RightsGroupName;

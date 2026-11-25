@@ -80,7 +80,7 @@ func TestRightsBlock_AbsentUntilTheAgentReports(t *testing.T) {
 }
 
 // R-DROIT-3 : l'onglet Droits donne la ligne exacte à coller, écrite par
-// agentpolicy (GrantLine pour un groupe pas permis, GrantSetLine pour les
+// agentpolicy (PendingLine pour un groupe pas permis, GrantSetLine pour les
 // autres jeux, RevokeLine pour retirer), jamais par l'écran.
 func TestR_DROIT_3_TheRightsTabGivesTheLineToPaste(t *testing.T) {
 	manage := "observe,probe.lan,agent.update,docker.deploy,docker.update,restic.produce,restic.docker,restic.restore,files.write=/srv,terminal.container"
@@ -96,7 +96,7 @@ func TestR_DROIT_3_TheRightsTabGivesTheLineToPaste(t *testing.T) {
 		t.Errorf("set lines %v, want %v", rights.SetLines, wantSets)
 	}
 	network := rightsGroup(t, rights, agentpolicy.GroupNetwork)
-	if network.State != "missing" || network.GrantLine != agentpolicy.GrantLine(agentpolicy.CapabilityNetworkPrivate, "") || network.GrantLine == "" {
+	if network.State != "missing" || network.GrantLine != agentpolicy.PendingLine() || network.GrantLine == "" {
 		t.Errorf("network %+v, want missing with its grant line", network)
 	}
 	deploy := rightsGroup(t, rights, agentpolicy.GroupDeploy)

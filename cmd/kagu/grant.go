@@ -20,7 +20,7 @@ import (
 )
 
 // opencloud agent rights | grant <droit>[=valeur]… [--for <durée>|permanent]
-// | grant --set observe|manage|root | revoke <droit>… : la politique de
+// | grant --set observe|manage|root | grant --pending | revoke <droit>… : la politique de
 // l'agent (fiche A3), root seul. grant et revoke disent ce qui change, et ce
 // qu'ils font aussi sur le système, demandent [o/N] (R-A3-15), écrivent la
 // politique d'un coup sous son verrou, tracent le changement au journal du
@@ -54,6 +54,7 @@ func runAgentPolicy(verb string, args []string, command policyCommand) error {
 	yes := flags.Bool("yes", false, "confirme sans poser la question (obligatoire sans terminal)")
 	forTerm := flags.String("for", "", "grant : la durée des droits posés, de 5m à 168h, ou permanent")
 	setName := flags.String("set", "", "grant : remplace les droits des jeux par ceux de observe, manage ou root")
+	pending := flags.Bool("pending", false, "grant : pose les droits que l'agent a refusés ces dernières 24 h, après un « o » tapé au clavier")
 	names, err := parseWordsAndFlags(flags, args)
 	if err != nil {
 		return err
@@ -64,8 +65,14 @@ func runAgentPolicy(verb string, args []string, command policyCommand) error {
 	}
 	text := catalogs.For(lang.Default)
 	withSet := *setName != ""
-	if (verb == policyRights || withSet) != (len(names) == 0) || (verb != policyGrant && (*forTerm != "" || withSet)) || (withSet && *forTerm != "") {
+	bare := verb == policyRights || withSet || *pending
+	if bare != (len(names) == 0) || (verb != policyGrant && (*forTerm != "" || withSet || *pending)) || (withSet && *forTerm != "") || (*pending && (withSet || *forTerm != "")) {
 		return &refusal{message: text.Format("agent.policy_usage", brand.Command)}
+	}
+	// --pending ne se confirme qu'au clavier : -yes poserait ce que l'agent a
+	// noté sans que personne ne l'ait lu (R-A3-15).
+	if *pending && *yes {
+		return &refusal{message: text.Get("agent.pending_no_yes")}
 	}
 	term, err := agentpolicy.ParseTerm(*forTerm)
 	if err != nil {
@@ -97,21 +104,81 @@ func runAgentPolicy(verb string, args []string, command policyCommand) error {
 		printPolicyReport(command.out, text, place, report)
 		return nil
 	}
+	if *pending {
+		return grantPending(command, opts, text)
+	}
 	confirm := func(change agent.PolicyChange) error {
 		printPolicyChange(command.out, text, change)
 		return confirmChange(command.out, command.openTerminal, *yes, text)
 	}
 	change, err := changeRights(verb, opts, names, *setName, term, confirm)
+	return finishPolicyChange(command.out, text, change, err)
+}
+
+// finishPolicyChange dit ce qu'un geste a écrit et posé, ou pourquoi il s'est
+// arrêté.
+func finishPolicyChange(out io.Writer, text lang.Catalog, change agent.PolicyChange, err error) error {
 	var partial *agent.PrerequisiteError
 	if errors.As(err, &partial) {
-		printPolicyDone(command.out, text, partial.Change)
+		printPolicyDone(out, text, partial.Change)
 		return &refusal{message: text.Format("agent.prerequisites_failed", partial.Err.Error())}
 	}
 	if err != nil {
 		return explainPolicyError(err, text)
 	}
-	printPolicyDone(command.out, text, change)
+	printPolicyDone(out, text, change)
 	return nil
+}
+
+// grantPending joue « grant --pending » (R-DROIT-8, R-A3-15) : les droits que
+// l'agent a lui-même refusés ces dernières 24 h, dits en clair, posés par le
+// chemin de grant après un « o » lu sur le terminal de contrôle, jamais sur
+// l'entrée standard : la ligne a pu arriver par un pipe. Sans terminal, rien
+// ne s'écrit.
+func grantPending(command policyCommand, opts agent.PolicyOptions, text lang.Catalog) error {
+	pending, err := agent.ReadPendingRightsAsRoot(opts)
+	if err != nil {
+		return explainPolicyError(err, text)
+	}
+	for _, entry := range pending.NeedsValue {
+		fmt.Fprintln(command.out, text.Format("agent.pending_needs_value", entry.Name, rightLabel(text, entry.Name), brand.Command))
+	}
+	if len(pending.Grantable) == 0 {
+		if len(pending.NeedsValue) == 0 {
+			fmt.Fprintln(command.out, text.Get("agent.pending_none"))
+		}
+		return nil
+	}
+	confirm := func(change agent.PolicyChange) error {
+		printPendingRights(command.out, text, pending.Grantable, change)
+		printPolicyChange(command.out, text, change)
+		return confirmChange(command.out, command.openTerminal, false, text)
+	}
+	change, err := agent.GrantPending(opts, pending.Grantable, confirm)
+	return finishPolicyChange(command.out, text, change, err)
+}
+
+// printPendingRights dit chaque droit en attente que le geste pose : son nom
+// et sa valeur, ce qu'il permet, l'échéance que grant lui donne, le dernier
+// refus de l'agent.
+func printPendingRights(out io.Writer, text lang.Catalog, pending []agent.PendingRight, change agent.PolicyChange) {
+	fmt.Fprintln(out, text.Get("agent.pending_header"))
+	for _, entry := range pending {
+		if !slices.Contains(change.Added, entry.Text()) {
+			continue
+		}
+		term := text.Get("agent.pending_permanent")
+		if until := change.After.Expiries[entry.Name].Until; !until.IsZero() {
+			term = text.Format("agent.pending_until", until.Local().Format(time.DateTime))
+		}
+		fmt.Fprintln(out, text.Format("agent.pending_right", entry.Text(), rightLabel(text, entry.Name), term, entry.RefusedAt.Local().Format(time.DateTime)))
+	}
+}
+
+// rightLabel rend ce qu'un droit permet, tel que l'écran le dit
+// (web/src/lib/machines.ts, capabilityLabelKey).
+func rightLabel(text lang.Catalog, name string) string {
+	return text.Get("machine.capability_" + strings.ReplaceAll(name, ".", "_"))
 }
 
 // parseWordsAndFlags lit les drapeaux où qu'ils soient : « grant

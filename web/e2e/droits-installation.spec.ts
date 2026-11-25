@@ -123,7 +123,7 @@ test("Destination de sauvegarde : les machines sans le droit sont grisées, avec
   // Le lien mène à l'onglet Agent de la machine, qui montre la ligne grant.
   await note.getByRole("link", { name: label("machine.grant_right") }).click();
   await expect(page).toHaveURL(/\/machines\/[^/]+\/agent\?droit=backup\.receive/);
-  await expect(page.locator(".note .token-box", { hasText: "agent grant backup.receive" })).toBeVisible();
+  await expect(page.locator(".note .token-box", { hasText: "agent grant --pending" })).toBeVisible();
   expect(findings.unknown()).toEqual([]);
 });
 

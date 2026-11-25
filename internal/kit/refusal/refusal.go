@@ -15,8 +15,9 @@ type Error struct {
 }
 
 // Fix dit ce qui lève un refus de droit : le droit qui manque et la machine
-// dont l'agent doit le tenir. La ligne à coller, le serveur l'écrit de ces deux
-// faits (agentpolicy.GrantLine) : ce paquet ne connaît pas les droits.
+// dont l'agent doit le tenir. La ligne à coller, le serveur la joint : la
+// ligne constante (agentpolicy.PendingLine) ; ce paquet ne connaît pas les
+// droits.
 type Fix struct {
 	Right   string
 	Machine string

@@ -79,7 +79,7 @@ test("Droit manquant : la carte Liens le dit et porte la ligne grant du serveur"
   await openService(page, "notes");
   const note = page.locator(".note", { hasText: label("link.environment_off") });
   await expect(note).toBeVisible();
-  await expect(note.locator(".token-box", { hasText: "agent grant observe.env" })).toBeVisible();
+  await expect(note.locator(".token-box", { hasText: "agent grant --pending" })).toBeVisible();
   await expect(note.getByRole("link", { name: /reenroller/ })).toHaveCount(0);
   expect(findings.unknown()).toEqual([]);
 });
