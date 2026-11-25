@@ -10,13 +10,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 
 	"github.com/ldesfontaine/kagu/internal/kit/egress"
@@ -147,12 +147,12 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, into an
 	case response.StatusCode != http.StatusOK:
 		return fmt.Errorf("%w: status %d", ErrBadResponse, response.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	body, err := fsx.ReadLimited(response.Body, maxResponseBytes)
+	if errors.Is(err, fsx.ErrTooLarge) {
+		return fmt.Errorf("%w: answer over %d bytes", ErrBadResponse, maxResponseBytes)
+	}
 	if err != nil {
 		return transportRefusal(err)
-	}
-	if len(body) > maxResponseBytes {
-		return fmt.Errorf("%w: answer over %d bytes", ErrBadResponse, maxResponseBytes)
 	}
 	var wrapped envelope
 	if err := json.Unmarshal(body, &wrapped); err != nil || len(wrapped.Data) == 0 {

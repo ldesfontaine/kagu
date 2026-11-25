@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"syscall"
 
 	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -46,8 +46,8 @@ func readProxmoxToken(stateDir *os.Root) (proxmoxToken, string) {
 	if !isPrivateToCaller(info) {
 		return proxmoxToken{}, agentwire.ReasonProxmoxTokenUnsafe
 	}
-	content, err := io.ReadAll(io.LimitReader(file, maxProxmoxTokenBytes+1))
-	if err != nil || len(content) > maxProxmoxTokenBytes {
+	content, err := fsx.ReadLimited(file, maxProxmoxTokenBytes)
+	if err != nil {
 		return proxmoxToken{}, agentwire.ReasonProxmoxTokenMissing
 	}
 	var token proxmoxToken

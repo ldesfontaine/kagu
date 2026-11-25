@@ -21,8 +21,11 @@ func TestReadPrivate_RefusesAFileOthersCanRead(t *testing.T) {
 	if err := root.WriteFile("key", []byte("0123456789abcdefXYZ"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	content, err := ReadPrivate(root, "key", 16)
-	if err != nil || string(content) != "0123456789abcdefX" {
+	if _, err := ReadPrivate(root, "key", 16); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("too long: %v", err)
+	}
+	content, err := ReadPrivate(root, "key", 19)
+	if err != nil || string(content) != "0123456789abcdefXYZ" {
 		t.Fatalf("read %q %v", content, err)
 	}
 	if err := root.Chmod("key", 0o640); err != nil {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 )
 
 const backupUsage = `Usage : {command} backup restore -key <clé.age> -state <dossier> <sauvegarde.tar.age>
@@ -119,14 +120,11 @@ func readBounded(path string, limit int64) ([]byte, error) {
 		return nil, err
 	}
 	defer file.Close()
-	content, err := io.ReadAll(io.LimitReader(file, limit+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(content)) > limit {
+	content, err := fsx.ReadLimited(file, limit)
+	if errors.Is(err, fsx.ErrTooLarge) {
 		return nil, fmt.Errorf("plus de %d octets", limit)
 	}
-	return content, nil
+	return content, err
 }
 
 // readPassphrase lit une ligne : l'invite va sur la sortie d'erreur quand

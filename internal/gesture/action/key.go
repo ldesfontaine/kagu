@@ -47,6 +47,13 @@ var (
 	ErrNoRotation = errors.New("action: no server key rotation in progress")
 )
 
+var keyFileRefusals = fsx.KeyFileRefusals{
+	Missing: ErrNoKey,
+	TooOpen: ErrKeyFileMode,
+	Invalid: ErrKeyFileInvalid,
+	Reading: "read server key",
+}
+
 // Key est la clé du serveur, et la précédente le temps d'une rotation ;
 // sûre pour plusieurs goroutines.
 type Key struct {
@@ -119,14 +126,9 @@ func (k *Key) Finished() (*Key, error) {
 
 // LoadKey lit server.key sous root.
 func LoadKey(root *os.Root) (*Key, error) {
-	content, err := fsx.ReadPrivate(root, brand.ServerKeyFile, maxKeyFileBytes)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return nil, ErrNoKey
-	case errors.Is(err, fsx.ErrTooOpen):
-		return nil, fmt.Errorf("%w: %v", ErrKeyFileMode, err)
-	case err != nil:
-		return nil, fmt.Errorf("read server key: %w", err)
+	content, err := fsx.ReadKeyFile(root, brand.ServerKeyFile, maxKeyFileBytes, keyFileRefusals)
+	if err != nil {
+		return nil, err
 	}
 	return parseKeyFile(content)
 }
@@ -134,9 +136,6 @@ func LoadKey(root *os.Root) (*Key, error) {
 // Le fichier garde une ligne « ed25519-v1:<graine en base64url> » : la clé
 // courante, puis la précédente le temps d'une rotation.
 func parseKeyFile(content []byte) (*Key, error) {
-	if len(content) > maxKeyFileBytes {
-		return nil, fmt.Errorf("%w: too long", ErrKeyFileInvalid)
-	}
 	text, _ := bytes.CutSuffix(content, []byte("\n"))
 	lines := strings.Split(string(text), "\n")
 	if len(lines) > 2 {

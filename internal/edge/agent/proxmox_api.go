@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/domain/proxmox"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -178,8 +179,8 @@ func (a *proxmoxAPI) call(ctx context.Context, method, path string, form url.Val
 		return transportError(err)
 	}
 	defer response.Body.Close()
-	content, err := io.ReadAll(io.LimitReader(response.Body, maxProxmoxResponseBytes+1))
-	if err != nil || len(content) > maxProxmoxResponseBytes {
+	content, err := fsx.ReadLimited(response.Body, maxProxmoxResponseBytes)
+	if err != nil {
 		return &pveError{reason: agentwire.ReasonProxmoxBadResponse, message: "unreadable or oversized answer"}
 	}
 	if failure := statusError(response.StatusCode, content); failure != nil {

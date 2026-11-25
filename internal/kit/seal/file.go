@@ -34,26 +34,25 @@ var (
 	ErrKeyFileInvalid = errors.New("seal: key file is not a valid key")
 )
 
+var keyFileRefusals = fsx.KeyFileRefusals{
+	Missing: ErrNoKey,
+	TooOpen: ErrKeyFileMode,
+	Invalid: ErrKeyFileInvalid,
+	Reading: "read key file",
+}
+
 // Load lit les clés sous root. Le fichier garde une ligne
 // « key-v1:<id>:<clé> » par clé : la première scelle, toutes ouvrent. Hors
 // rotation, il n'y en a qu'une.
 func Load(root *os.Root) (*Keyring, error) {
-	content, err := fsx.ReadPrivate(root, brand.SecretKeyFile, maxKeyFileBytes)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return nil, ErrNoKey
-	case errors.Is(err, fsx.ErrTooOpen):
-		return nil, fmt.Errorf("%w: %v", ErrKeyFileMode, err)
-	case err != nil:
-		return nil, fmt.Errorf("read key file: %w", err)
+	content, err := fsx.ReadKeyFile(root, brand.SecretKeyFile, maxKeyFileBytes, keyFileRefusals)
+	if err != nil {
+		return nil, err
 	}
 	return parseKeyFile(content)
 }
 
 func parseKeyFile(content []byte) (*Keyring, error) {
-	if len(content) > maxKeyFileBytes {
-		return nil, fmt.Errorf("%w: too long", ErrKeyFileInvalid)
-	}
 	text, _ := bytes.CutSuffix(content, []byte("\n"))
 	if len(text) == 0 {
 		return nil, fmt.Errorf("%w: empty", ErrKeyFileInvalid)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -118,13 +117,13 @@ func readBinaries(source *os.Root, signed Release) (map[string][]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("open %s: %w", name, err)
 		}
-		content, err := io.ReadAll(io.LimitReader(file, maxBinarySize+1))
+		content, err := fsx.ReadLimited(file, maxBinarySize)
 		_ = file.Close()
+		if errors.Is(err, fsx.ErrTooLarge) {
+			return nil, fmt.Errorf("%w: %s is too long", ErrMalformed, name)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", name, err)
-		}
-		if len(content) > maxBinarySize {
-			return nil, fmt.Errorf("%w: %s is too long", ErrMalformed, name)
 		}
 		if err := signed.Check(name, bytes.NewReader(content)); err != nil {
 			return nil, err
