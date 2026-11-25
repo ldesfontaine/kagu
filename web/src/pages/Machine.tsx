@@ -235,7 +235,7 @@ function MachineRights({ machine, now }: { machine: Machine; now: number }) {
           {agent.rights === null && <p className="secondary">{t("machine.agent_rights_unreported")}</p>}
         </CardBody>
       </Card>
-      {agent.rights !== null && <RightsList rights={agent.rights} machineName={machine.name} now={now} />}
+      {agent.rights !== null && <RightsList rights={agent.rights} refusal={agent.policy_refusal} machineName={machine.name} now={now} />}
     </>
   );
 }
@@ -243,10 +243,12 @@ function MachineRights({ machine, now }: { machine: Machine; now: number }) {
 // D'où l'agent tient ses droits, tel qu'il le rapporte : sa politique (son
 // empreinte, à comparer avec « agent rights » sur la machine), identity.json
 // faute de politique (droits non protégés, et la ligne « policy migrate » que
-// le serveur rend), ou une politique refusée. Rien pour un agent d'avant.
+// le serveur rend), ou une politique refusée : sa raison est dans le jeu posé
+// (RightsList) ; un agent qui ne la dit pas garde la phrase générale. Rien
+// pour un agent d'avant la politique.
 function PolicySource({ agent }: { agent: Agent }) {
   const t = useT();
-  if (agent.policy_source === "refused") {
+  if (agent.policy_source === "refused" && agent.policy_refusal === null) {
     return <Note tone="danger">{t("machine.agent_policy_refused", t(capabilityLabelKey(alwaysGranted)))}</Note>;
   }
   if (agent.policy_source === "policy") {

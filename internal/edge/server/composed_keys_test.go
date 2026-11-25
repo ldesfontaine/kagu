@@ -192,6 +192,8 @@ func closedKeyLists() []composedKeys {
 		// Les plans de sauvegarde : d'où ils prennent, et ce qu'un agent sait produire.
 		{prefix: "backup.source_kind_", values: []string{backup.SourceDatabase, backup.SourceAgent, backup.KindFirewall}},
 		{prefix: "backup.producer_", values: agentpolicy.Producers()},
+		// Pourquoi l'agent refuse sa politique : l'onglet Droits et « agent rights » (E03-08).
+		{prefix: "rights.refusal_", values: agentpolicy.RefusedReasons()},
 		{prefix: "backup.source_sub_", values: append(backup.SourceKinds(), agentwire.ResticScopeService)},
 		{prefix: "backup.target_kind_", values: backup.TargetKinds()},
 		{prefix: "backup.path_reason_", values: agentwire.ResticPathReasons()},

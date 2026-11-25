@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/edge/agent"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -65,6 +66,32 @@ func TestRunAgentPolicyMigrate_TellsWhatItCopiesThenErasesIt(t *testing.T) {
 	for _, args := range [][]string{{}, {"move"}, {"migrate", "extra"}} {
 		if _, err := runMigrate(t, place, noTerminal, args...); !errors.As(err, &refused) || !strings.Contains(refused.message, "policy migrate") {
 			t.Errorf("%v: %v", args, err)
+		}
+	}
+}
+
+// Essai E03-08 : « agent rights » dit la raison du refus dans les mots de
+// l'onglet Droits, en français, la clé inconnue nommée ; la commande qui
+// corrige suit quand elle existe.
+func TestE03_08_AgentRightsSaysWhyThePolicyIsRefused(t *testing.T) {
+	text := testCatalog(t)
+	for _, c := range []struct {
+		refused agentpolicy.Refusal
+		want    []string
+	}{
+		{agentpolicy.Refusal{Reason: agentpolicy.RefusedUnknownKey, Detail: "foo"}, []string{"Politique refusée", "clé inconnue, « foo »"}},
+		{agentpolicy.Refusal{Reason: agentpolicy.RefusedOwner, Detail: agentpolicy.FilePath()}, []string{"n'appartient pas à root", "sudo chown root " + agentpolicy.FilePath()}},
+		{agentpolicy.Refusal{Reason: agentpolicy.RefusedMode, Detail: agentpolicy.FilePath()}, []string{"autre compte que root", "sudo chmod 640 " + agentpolicy.FilePath()}},
+	} {
+		var out strings.Builder
+		printPolicyRefusal(&out, text, c.refused, errors.New("agent policy is unreadable: strict mode"))
+		for _, want := range c.want {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("%+v: %q lacks %q", c.refused, out.String(), want)
+			}
+		}
+		if strings.Contains(out.String(), "strict mode") || strings.Contains(out.String(), "%!") {
+			t.Errorf("%+v: %q", c.refused, out.String())
 		}
 	}
 }

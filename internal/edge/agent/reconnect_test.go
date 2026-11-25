@@ -39,6 +39,8 @@ type fakeServer struct {
 	rights, rightsUntil []string
 	// Ce que l'agent dit valoir sur sa machine, à chaque ouverture du flux.
 	rootEquivalents []string
+	// La source de la politique et la raison de son refus, de même.
+	policySources, policyRefusals []string
 	// Les genres annoncés à chaque ouverture du flux.
 	orderKinds     []string
 	refusedSignals []time.Time
@@ -64,6 +66,8 @@ func (f *fakeServer) stream(w http.ResponseWriter, r *http.Request) {
 	f.rightsUntil = append(f.rightsUntil, r.Header.Get(agentwire.HeaderAgentRightsUntil))
 	f.rootEquivalents = append(f.rootEquivalents, r.Header.Get(agentwire.HeaderAgentRootEquivalent))
 	f.orderKinds = append(f.orderKinds, r.Header.Get(agentwire.HeaderAgentOrderKinds))
+	f.policySources = append(f.policySources, r.Header.Get(agentwire.HeaderAgentPolicySource))
+	f.policyRefusals = append(f.policyRefusals, r.Header.Get(agentwire.HeaderAgentPolicyRefusal))
 	count := len(f.streams)
 	refusal := f.streamRefusal
 	f.mu.Unlock()

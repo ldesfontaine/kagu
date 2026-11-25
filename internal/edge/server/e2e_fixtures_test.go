@@ -100,6 +100,7 @@ func seedE2E(t *testing.T, ts *testServer) {
 	seedE2EThresholds(t, ts)
 	seedE2EServiceRollback(t, ts)
 	seedE2ERights(t, ts)
+	seedE2ERefusedPolicy(t, ts)
 	seedE2ESuspendedProbe(t, ts)
 }
 
@@ -541,11 +542,29 @@ func seedE2ERights(t *testing.T, ts *testServer) {
 		t.Fatal(err)
 	}
 	ctx, agentID := context.Background(), found.Agent.ID
-	if err := ts.machines.NotePolicy(ctx, agentID, agentpolicy.SourcePolicy, strings.Repeat("ab", 32)); err != nil {
+	if err := ts.machines.NotePolicy(ctx, agentID, agentpolicy.SourcePolicy, strings.Repeat("ab", 32), ""); err != nil {
 		t.Fatal(err)
 	}
 	until := map[string]time.Time{agentpolicy.CapabilityTerminalHost: testNow.Add(2 * time.Hour)}
 	if err := ts.machines.NoteRightsUntil(ctx, agentID, agentpolicy.FormatRightsUntil(until)); err != nil {
+		t.Fatal(err)
+	}
+	go e2eIgnoreOrders(session)
+}
+
+// vps-refusee, l'onglet Droits d'une politique refusée (essai E03-08) : le
+// fichier n'est pas à root, l'agent le dit ; seul observe s'applique.
+const e2eRefusedPolicyID = "cccccccc-1111-4222-8333-777777777777"
+
+func seedE2ERefusedPolicy(t *testing.T, ts *testServer) {
+	t.Helper()
+	session := e2eConnect(t, ts, "vps-refusee", e2eRefusedPolicyID, agentpolicy.CapabilityObserve)
+	found, err := ts.machines.Get(context.Background(), e2eRefusedPolicyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refused := agentpolicy.NewRefusal(agentpolicy.RefusedOwner, agentpolicy.FilePath()).Format()
+	if err := ts.machines.NotePolicy(context.Background(), found.Agent.ID, agentpolicy.SourceRefused, "", refused); err != nil {
 		t.Fatal(err)
 	}
 	go e2eIgnoreOrders(session)

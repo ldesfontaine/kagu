@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 func testKey(t *testing.T) []byte {
@@ -178,5 +180,47 @@ func TestMigrate_CopiesWhatIdentityHeld(t *testing.T) {
 	legacy.ServerKey = []byte("short")
 	if document := Migrate(legacy); len(document.ServerKeys) != 0 {
 		t.Fatalf("a malformed key was copied: %+v", document.ServerKeys)
+	}
+}
+
+// Essai E03-08 : la clé inconnue que le décodeur strict trouve est nommée,
+// pas noyée dans le message du décodeur.
+func TestE03_08_DecodeNamesTheUnknownKey(t *testing.T) {
+	_, err := Decode([]byte("version = 1\nmachine_id = 'm'\nfoo = 1\n"))
+	var unknown *UnknownKeyError
+	if !errors.Is(err, ErrUnreadable) || !errors.As(err, &unknown) || unknown.Key != "foo" {
+		t.Fatalf("%v", err)
+	}
+	if _, err := Decode([]byte("version = [")); errors.As(err, &unknown) {
+		t.Fatalf("a broken document named a key: %v", err)
+	}
+}
+
+// Une raison rapportée se relit dans l'ensemble fermé, son détail nettoyé ;
+// la commande ne vise que le fichier et le dossier de la politique.
+func TestE03_08_ARefusalReadsBackClosed(t *testing.T) {
+	for _, reason := range RefusedReasons() {
+		refused := NewRefusal(reason, "x")
+		if got := ParseRefusal(refused.Format()); got != refused {
+			t.Errorf("%s read back as %+v", reason, got)
+		}
+	}
+	if got := ParseRefusal("everything:x"); got != (Refusal{}) {
+		t.Errorf("an unknown reason read as %+v", got)
+	}
+	for _, c := range []struct {
+		refused Refusal
+		want    string
+	}{
+		{Refusal{RefusedMode, FilePath()}, "sudo chmod 640 " + FilePath()},
+		{Refusal{RefusedMode, brand.AgentPolicyDir}, "sudo chmod 755 " + brand.AgentPolicyDir},
+		{Refusal{RefusedOwner, brand.AgentPolicyDir}, "sudo chown root " + brand.AgentPolicyDir},
+		{Refusal{RefusedMode, "/etc"}, ""},
+		{Refusal{RefusedOwner, brand.AgentPolicyDir + "/../shadow"}, ""},
+		{Refusal{RefusedUnknownKey, FilePath()}, ""},
+	} {
+		if got := c.refused.FixLine(); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.refused, got, c.want)
+		}
 	}
 }

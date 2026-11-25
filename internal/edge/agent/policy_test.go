@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
@@ -281,4 +282,109 @@ func TestWatchPolicy_RereadsOnItsInterval(t *testing.T) {
 	go runner.watchPolicy(ctx, nil, 10*time.Millisecond)
 	writePolicyFile(t, place, policyGranting(t, "m", "observe"), policyMode)
 	waittest.Until(t, "probe.lan to close", func() bool { return !allowsLAN() })
+}
+
+// Essai E03-08 : l'agent rapporte la raison précise du refus, dans un
+// ensemble fermé ; la clé inconnue est nommée, le chemin mal gardé aussi.
+func TestE03_08_TheAgentReportsWhyThePolicyIsRefused(t *testing.T) {
+	identity := identityWith(t)
+	granting := policyGranting(t, "m", "probe.lan")
+	refusalFor := func(t *testing.T, place PolicyPlace) agentpolicy.Refusal {
+		t.Helper()
+		applied, err := readPolicy(place, identity, SystemClock())
+		if err == nil || applied.Source != agentpolicy.SourceRefused {
+			t.Fatalf("%+v %v", applied, err)
+		}
+		return applied.Refusal
+	}
+	filePath := func(t *testing.T, place PolicyPlace) string {
+		t.Helper()
+		resolved, err := filepath.EvalSymlinks(place.Dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return filepath.Join(resolved, policyFile)
+	}
+	t.Run("0666", func(t *testing.T) {
+		place := testPolicyPlace(t)
+		writePolicyFile(t, place, granting, 0o666)
+		want := agentpolicy.Refusal{Reason: agentpolicy.RefusedMode, Detail: filePath(t, place)}
+		if got := refusalFor(t, place); got != want {
+			t.Fatalf("%+v, want %+v", got, want)
+		}
+	})
+	t.Run("another owner", func(t *testing.T) {
+		place := testPolicyPlace(t)
+		writePolicyFile(t, place, granting, policyMode)
+		place.Owner.UID++
+		if got := refusalFor(t, place); got.Reason != agentpolicy.RefusedOwner || got.Detail == "" {
+			t.Fatalf("%+v", got)
+		}
+	})
+	t.Run("unknown key", func(t *testing.T) {
+		place := testPolicyPlace(t)
+		writePolicyFile(t, place, "foo = 1\n"+granting, policyMode)
+		want := agentpolicy.Refusal{Reason: agentpolicy.RefusedUnknownKey, Detail: "foo"}
+		if got := refusalFor(t, place); got != want {
+			t.Fatalf("%+v, want %+v", got, want)
+		}
+	})
+	t.Run("unknown key that hides its name", func(t *testing.T) {
+		place := testPolicyPlace(t)
+		writePolicyFile(t, place, "\"f\\u202Eo\\u0007o\" = 1\n"+granting, policyMode)
+		want := agentpolicy.Refusal{Reason: agentpolicy.RefusedUnknownKey, Detail: "f�o�o"}
+		if got := refusalFor(t, place); got != want {
+			t.Fatalf("%+v, want %+v", got, want)
+		}
+	})
+	t.Run("missing", func(t *testing.T) {
+		place := testPolicyPlace(t)
+		want := agentpolicy.Refusal{Reason: agentpolicy.RefusedMissing, Detail: place.Dir}
+		if got := refusalFor(t, place); got != want {
+			t.Fatalf("%+v, want %+v", got, want)
+		}
+	})
+	t.Run("not toml", func(t *testing.T) {
+		place := testPolicyPlace(t)
+		writePolicyFile(t, place, "version = [", policyMode)
+		want := agentpolicy.Refusal{Reason: agentpolicy.RefusedUnreadable, Detail: filepath.Join(place.Dir, policyFile)}
+		if got := refusalFor(t, place); got != want {
+			t.Fatalf("%+v, want %+v", got, want)
+		}
+	})
+	t.Run("readable", func(t *testing.T) {
+		place := testPolicyPlace(t)
+		writePolicyFile(t, place, granting, policyMode)
+		if applied, err := readPolicy(place, identity, SystemClock()); err != nil || applied.Refusal != (agentpolicy.Refusal{}) {
+			t.Fatalf("%+v %v", applied, err)
+		}
+	})
+}
+
+// Essai E03-08 : la raison du refus part avec la source à l'ouverture du
+// flux ; le serveur la montre sur l'onglet Droits.
+func TestE03_08_TheStreamCarriesTheRefusal(t *testing.T) {
+	place := testPolicyPlace(t)
+	writePolicyFile(t, place, "foo = 1\n"+policyGranting(t, "m", "probe.lan"), policyMode)
+	server := &fakeServer{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := startAgentWith(t, ctx, server, &bytes.Buffer{}, nil, func(_ *Client, orders *orderRunner) {
+		orders.policyPlace = place
+		orders.reloadPolicy()
+	})
+	waittest.Until(t, "a first stream", func() bool {
+		streams, _, _ := server.snapshot()
+		return len(streams) >= 1
+	})
+	server.mu.Lock()
+	source, refusal := server.policySources[0], server.policyRefusals[0]
+	server.mu.Unlock()
+	if source != agentpolicy.SourceRefused || refusal != "unknown_key:foo" {
+		t.Errorf("the stream said %q %q", source, refusal)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("agent stopped with %v", err)
+	}
 }

@@ -223,8 +223,9 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		h.logger.Warn("note anchors", "machine_id", authenticated.ID, "error", err)
 	}
 	// D'où viennent ses droits et l'empreinte de sa politique : la fiche dit
-	// une politique refusée, où seul observe s'applique.
-	if err := h.machines.NotePolicy(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderAgentPolicySource), r.Header.Get(agentwire.HeaderAgentPolicyDigest)); err != nil {
+	// une politique refusée, où seul observe s'applique, et pourquoi.
+	if err := h.machines.NotePolicy(r.Context(), authenticated.Agent.ID, r.Header.Get(agentwire.HeaderAgentPolicySource),
+		r.Header.Get(agentwire.HeaderAgentPolicyDigest), r.Header.Get(agentwire.HeaderAgentPolicyRefusal)); err != nil {
 		h.logger.Warn("note policy", "machine_id", authenticated.ID, "error", err)
 	}
 	// L'échéance de chaque droit qu'il rapporte : le serveur n'envoie pas un

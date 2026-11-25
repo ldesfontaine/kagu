@@ -23,7 +23,7 @@ function agentWith(requested: string[], reported: { name: string; unavailable?: 
     capabilities_differ: false,
     server_key_fingerprint: "",
     run_as: null,
-    rollback_capable: true, anchors: { reported: false, kinds: [] }, policy_source: "", policy_digest: "", migrate_line: "", rights: null,
+    rollback_capable: true, anchors: { reported: false, kinds: [] }, policy_source: "", policy_digest: "", policy_refusal: null, migrate_line: "", rights: null,
     fit,
     behind: false,
     missing_kinds: [],

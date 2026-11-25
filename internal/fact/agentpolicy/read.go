@@ -55,6 +55,9 @@ func Decode(content []byte) (Document, error) {
 	var file policyFile
 	decoder := toml.NewDecoder(bytes.NewReader(content)).DisallowUnknownFields()
 	if err := decoder.Decode(&file); err != nil {
+		if unknown := unknownKeyOf(err); unknown != nil {
+			return Document{}, fmt.Errorf("%w: %w", ErrUnreadable, unknown)
+		}
 		return Document{}, fmt.Errorf("%w: %w", ErrUnreadable, err)
 	}
 	if file.Version != FormatVersion {

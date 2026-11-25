@@ -121,6 +121,9 @@ export interface Agent {
   // Vide pour un agent d'avant.
   policy_source: "" | "policy" | "identity" | "refused";
   policy_digest: string;
+  // Source refused : pourquoi, tel que l'agent le rapporte ; null sinon, et
+  // chez un agent d'avant, qui ne le dit pas.
+  policy_refusal: PolicyRefusal | null;
   // Source identity : la ligne qui recopie les droits dans la politique
   // (policy migrate), rendue par le serveur ; vide sinon.
   migrate_line: string;
@@ -136,16 +139,26 @@ export interface Agent {
   rights: AgentRights | null;
 }
 
+// Pourquoi l'agent refuse sa politique (agentpolicy.RefusedReasons) : le
+// détail (le chemin ou la clé en cause) vient de la machine et s'affiche en
+// texte brut ; fix_line, la commande qui corrige, écrite par le serveur, vide
+// quand il n'y en a pas.
+export interface PolicyRefusal {
+  reason: "mode" | "owner" | "unknown_key" | "missing" | "unreadable";
+  detail: string;
+  fix_line: string;
+}
+
 // Un jeu de droits (agentpolicy.Set).
 export type RightsSet = "observe" | "manage" | "root";
 
 // Les droits d'un agent pour l'onglet Droits (R-A3-13) : le jeu (vide :
-// personnalisé), les lignes --set des autres jeux, la machine du serveur en
+// personnalisé ; refused : la politique est refusée, aucun jeu ne tient), les lignes --set des autres jeux, la machine du serveur en
 // « Gérer en root » (R-DROIT-5), cinq groupes, et la ligne du jeu qui refait
 // les prérequis quand Docker refuse le compte de l'agent (vide sinon).
 // Toutes les lignes sont écrites par le serveur.
 export interface AgentRights {
-  set: RightsSet | "";
+  set: RightsSet | "" | "refused";
   set_lines: SetLine[];
   root_here: boolean;
   groups: RightsGroup[];

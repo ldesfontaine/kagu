@@ -29,8 +29,8 @@ import (
 
 const (
 	policyFile     = brand.AgentPolicyFile
-	policyMode     = 0o640
-	policyDirMode  = 0o755
+	policyMode     = agentpolicy.FileMode
+	policyDirMode  = agentpolicy.DirMode
 	policyLockFile = policyFile + ".lock"
 	// policyRereadInterval : la relecture sans ordre ni signal (R-A3-4).
 	policyRereadInterval = 15 * time.Second
@@ -87,6 +87,8 @@ type AppliedPolicy struct {
 	Source string
 	// Digest : l'empreinte du fichier lu (source policy seulement).
 	Digest string
+	// Refusal : pourquoi la politique est refusée (source refused seulement).
+	Refusal agentpolicy.Refusal
 }
 
 // report est ce qu'une lecture change pour le serveur : la source,
@@ -94,7 +96,7 @@ type AppliedPolicy struct {
 // clés acceptées. Un droit ou une clé gardée qui échoit le change : le flux
 // se rouvre et ne les redit plus (R-A3-5).
 func (p AppliedPolicy) report() string {
-	return p.Source + " " + p.Digest + " " + agentpolicy.FormatCapabilities(p.Rights) + " " + agentpolicy.FormatRightsUntil(p.Until) + " " +
+	return p.Source + " " + p.Digest + " " + p.Refusal.Format() + " " + agentpolicy.FormatCapabilities(p.Rights) + " " + agentpolicy.FormatRightsUntil(p.Until) + " " +
 		anchor.FromFile(p.Anchors).Format() + " " + p.serverKeyFingerprints()
 }
 
@@ -131,7 +133,7 @@ func readPolicy(place PolicyPlace, identity Identity, now agentpolicy.Clock) (Ap
 		legacy := agentpolicy.Migrate(identity.legacy())
 		return AppliedPolicy{Rights: legacy.Rights, ServerKeys: legacy.LiveServerKeys(now), Anchors: legacy.Anchors, Source: agentpolicy.SourceIdentity}, nil
 	case err != nil:
-		applied = AppliedPolicy{Rights: observeOnly(), Source: agentpolicy.SourceRefused}
+		applied = AppliedPolicy{Rights: observeOnly(), Source: agentpolicy.SourceRefused, Refusal: refusalOf(err, place)}
 	default:
 		rights, until := document.LiveRights(now)
 		applied = AppliedPolicy{
@@ -143,6 +145,26 @@ func readPolicy(place PolicyPlace, identity Identity, now agentpolicy.Clock) (Ap
 		applied.Rights, applied.Until = observeOnly(), nil
 	}
 	return applied, err
+}
+
+// refusalOf range l'erreur d'une lecture refusée dans l'ensemble fermé des
+// raisons que l'agent rapporte : un chemin mal gardé (propriétaire, puis
+// droits), une clé inconnue, un fichier absent ; illisible sinon. Le détail
+// nomme toujours ce qui est en cause : le chemin, ou la clé.
+func refusalOf(err error, place PolicyPlace) agentpolicy.Refusal {
+	var unsafe *UnsafeStateError
+	var unknown *agentpolicy.UnknownKeyError
+	switch {
+	case errors.As(err, &unsafe) && !ownedBy(unsafe.UID, uint32(place.Owner.UID)): // #nosec G115 -- un uid.
+		return agentpolicy.NewRefusal(agentpolicy.RefusedOwner, unsafe.Path)
+	case errors.As(err, &unsafe) && (unsafe.Mode.IsRegular() || unsafe.Mode.IsDir()):
+		return agentpolicy.NewRefusal(agentpolicy.RefusedMode, unsafe.Path)
+	case errors.As(err, &unknown):
+		return agentpolicy.NewRefusal(agentpolicy.RefusedUnknownKey, unknown.Key)
+	case errors.Is(err, errPolicyMissing):
+		return agentpolicy.NewRefusal(agentpolicy.RefusedMissing, place.Dir)
+	}
+	return agentpolicy.NewRefusal(agentpolicy.RefusedUnreadable, filepath.Join(place.Dir, policyFile))
 }
 
 // loadPolicy ouvre le dossier de la politique, le juge, puis lit et décode le

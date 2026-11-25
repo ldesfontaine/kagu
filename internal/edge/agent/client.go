@@ -119,14 +119,15 @@ type Client struct {
 	// Les ancres de confiance locales du fichier de l'agent, redites de même.
 	anchors string
 	// D'où viennent les droits rapportés, et l'empreinte de la politique.
-	policySource string
-	policyDigest string
+	policySource  string
+	policyDigest  string
+	policyRefusal string
 }
 
-// SetPolicy fixe la source des droits et l'empreinte de la politique que
-// l'agent rapporte à l'ouverture du flux.
-func (c *Client) SetPolicy(source, digest string) {
-	c.policySource, c.policyDigest = source, digest
+// SetPolicy fixe la source des droits, l'empreinte de la politique et la
+// raison de son refus que l'agent rapporte à l'ouverture du flux.
+func (c *Client) SetPolicy(source, digest string, refused agentpolicy.Refusal) {
+	c.policySource, c.policyDigest, c.policyRefusal = source, digest, refused.Format()
 }
 
 // SetAnchors fixe les ancres que l'agent rapporte à l'ouverture du flux.
@@ -358,6 +359,9 @@ func (c *Client) OpenStream(ctx context.Context, identity Identity) (*Stream, er
 	}
 	if c.policyDigest != "" {
 		request.Header.Set(agentwire.HeaderAgentPolicyDigest, c.policyDigest)
+	}
+	if c.policyRefusal != "" {
+		request.Header.Set(agentwire.HeaderAgentPolicyRefusal, c.policyRefusal)
 	}
 	if c.rollback > 0 {
 		request.Header.Set(agentwire.HeaderAgentRollback, strconv.Itoa(c.rollback))
