@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { expect, test, vi } from "vitest";
 
-import type { AgentRights, RightsGroup } from "../api/machines";
+import type { AgentRights, PolicyRefusal, RightsGroup } from "../api/machines";
 import { RightsList } from "./RightsList";
 
 vi.mock("../i18n/context", () => ({
@@ -97,4 +97,28 @@ test("les lignes viennent du serveur et la coche porte l'échéance", () => {
   expect(markup).not.toContain("rights.root_here");
   expect(render({ ...rights, root_here: true, set: "root" })).toContain("rights.root_here(vps-1)");
   expect(render({ ...rights, set: "" })).toContain("rights.custom_hint");
+});
+
+// Essai E03-08 : une politique refusée se lit « Refusée », jamais
+// « Personnalisé », avec la raison que l'agent rapporte, ce qu'elle nomme en
+// texte brut, et la commande du serveur quand elle existe.
+function renderRefused(refusal: PolicyRefusal | null): string {
+  return renderToStaticMarkup(
+    <MemoryRouter>
+      <RightsList rights={{ ...rights, set: "refused" }} refusal={refusal} machineName="vps-1" now={Date.parse("2026-11-25T12:00:00Z")} />
+    </MemoryRouter>,
+  );
+}
+
+test("TestE03_08_TheRefusalIsShown : la raison, le détail, la commande", () => {
+  const owner = renderRefused({ reason: "owner", detail: "/etc/kagu-agent/policy.toml", fix_line: "sudo chown root /etc/kagu-agent/policy.toml" });
+  expect(owner).toContain("rights.refused");
+  expect(owner).not.toContain("rights.custom");
+  expect(owner).toContain("rights.refusal_owner(/etc/kagu-agent/policy.toml)");
+  expect(owner).toContain("sudo chown root /etc/kagu-agent/policy.toml");
+  const unknown = renderRefused({ reason: "unknown_key", detail: "<img src=x>", fix_line: "" });
+  expect(unknown).toContain("rights.refusal_unknown_key(&lt;img src=x&gt;)");
+  expect(unknown).not.toContain("<img");
+  expect(unknown).not.toMatch(/sudo ch(own|mod)/);
+  expect(renderRefused(null)).not.toContain("rights.refusal_");
 });

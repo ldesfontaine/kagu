@@ -209,12 +209,46 @@ func TestNotePolicy_KeepsAKnownSourceAndADigestAndNothingElse(t *testing.T) {
 		{agentpolicy.SourceIdentity, digest[:63], agentpolicy.SourceIdentity, ""},
 		{"", "", "", ""},
 	} {
-		if err := h.service.NotePolicy(ctx, enrolled.Agent.ID, c.source, c.digest); err != nil {
+		if err := h.service.NotePolicy(ctx, enrolled.Agent.ID, c.source, c.digest, ""); err != nil {
 			t.Fatal(err)
 		}
 		status, _ := h.service.Get(ctx, enrolled.ID)
 		if status.Agent.PolicySource != c.keptSource || status.Agent.PolicyDigest != c.keptDigest {
 			t.Errorf("%q %q kept as %q %q", c.source, c.digest, status.Agent.PolicySource, status.Agent.PolicyDigest)
+		}
+	}
+}
+
+// La raison d'un refus se garde sous la source refused seulement, dans
+// l'ensemble fermé ; son détail, venu d'un fichier, est borné et nettoyé
+// (essai E03-08).
+func TestE03_08_TheReportedRefusalIsKeptClosedAndClean(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	cleartext, _, err := h.service.CreateToken(ctx, "vps-paris-1", RoleGeneric, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrolled := h.enrollWith(t, cleartext)
+	long := strings.Repeat("k", 300)
+	for _, c := range []struct {
+		source, reported string
+		kept             agentpolicy.Refusal
+	}{
+		{agentpolicy.SourceRefused, "unknown_key:foo", agentpolicy.Refusal{Reason: agentpolicy.RefusedUnknownKey, Detail: "foo"}},
+		{agentpolicy.SourceRefused, "owner:" + agentpolicy.FilePath(), agentpolicy.Refusal{Reason: agentpolicy.RefusedOwner, Detail: agentpolicy.FilePath()}},
+		{agentpolicy.SourceRefused, "unknown_key:fo\u202eo\x01", agentpolicy.Refusal{Reason: agentpolicy.RefusedUnknownKey, Detail: "fo\ufffdo\ufffd"}},
+		{agentpolicy.SourceRefused, "unknown_key:" + long, agentpolicy.Refusal{Reason: agentpolicy.RefusedUnknownKey, Detail: long[:128]}},
+		{agentpolicy.SourceRefused, "because:it is so", agentpolicy.Refusal{}},
+		{agentpolicy.SourceRefused, "", agentpolicy.Refusal{}},
+		{agentpolicy.SourcePolicy, "mode:/etc", agentpolicy.Refusal{}},
+	} {
+		if err := h.service.NotePolicy(ctx, enrolled.Agent.ID, c.source, "", c.reported); err != nil {
+			t.Fatal(err)
+		}
+		status, _ := h.service.Get(ctx, enrolled.ID)
+		if status.Agent.PolicyRefusal != c.kept {
+			t.Errorf("%q under %s kept as %+v, want %+v", c.reported, c.source, status.Agent.PolicyRefusal, c.kept)
 		}
 	}
 }

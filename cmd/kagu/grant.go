@@ -407,10 +407,24 @@ func printPolicyReport(out io.Writer, text lang.Catalog, place agent.PolicyPlace
 	case agentpolicy.SourceIdentity:
 		fmt.Fprintln(out, text.Format("agent.policy_source_identity", agentpolicy.MigrateLine()))
 	case agentpolicy.SourceRefused:
-		fmt.Fprintln(out, text.Format("agent.policy_source_refused", report.Refused.Error()))
+		printPolicyRefusal(out, text, applied.Refusal, report.Refused)
 	}
 	for _, capability := range applied.Rights {
 		fmt.Fprintln(out, agentpolicy.FormatCapabilities([]agentpolicy.Capability{capability}))
+	}
+}
+
+// printPolicyRefusal écrit pourquoi la politique est refusée, dans les mots
+// de l'onglet Droits, puis la commande qui corrige quand elle existe. Un
+// document illisible garde aussi l'erreur du décodeur : la seule à dire
+// quelle ligne fautive.
+func printPolicyRefusal(out io.Writer, text lang.Catalog, refused agentpolicy.Refusal, err error) {
+	fmt.Fprintln(out, text.Format("agent.policy_source_refused", text.Format("rights.refusal_"+refused.Reason, refused.Detail)))
+	if line := refused.FixLine(); line != "" {
+		fmt.Fprintln(out, "  "+line)
+	}
+	if refused.Reason == agentpolicy.RefusedUnreadable && err != nil {
+		fmt.Fprintln(out, "  "+err.Error())
 	}
 }
 

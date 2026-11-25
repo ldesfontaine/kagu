@@ -57,6 +57,9 @@ type Agent struct {
 	// vides tant qu'il n'a rien dit (un agent d'avant la politique).
 	PolicySource string
 	PolicyDigest string
+	// Pourquoi l'agent refuse sa politique, sous la source refused ; nulle
+	// sinon, et chez un agent d'avant.
+	PolicyRefusal agentpolicy.Refusal
 	// RootEquivalent : l'agent dit valoir root sur sa machine (root, groupe
 	// docker, terminal.host ; R-A3-12) ; faux tant qu'il n'a rien dit.
 	RootEquivalent bool

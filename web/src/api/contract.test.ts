@@ -13,7 +13,7 @@ import type { Firewall, FirewallCounts, FirewallDetail, FirewallFlowsResponse, F
 import type { DeletionCount, DeletionPlan } from "./deletion";
 import type { DeclaredServiceDetail, DeclaredServicesResponse, DeployPlan, GapsResponse, ProjectsResponse, ProposalResponse, ServiceUpdate } from "./directory";
 import type { JobResponse, JobsResponse } from "./jobs";
-import type { Account, Agent, AgentAnchors, AgentRights, AnchorKind, Capability, GroupRight, Machine, MachineHost, MachineRole, MachinesResponse, ReportedCapability, RightFit, RightsGroup, SetLine } from "./machines";
+import type { Account, Agent, AgentAnchors, AgentRights, AnchorKind, Capability, GroupRight, Machine, MachineHost, MachineRole, MachinesResponse, PolicyRefusal, ReportedCapability, RightFit, RightsGroup, SetLine } from "./machines";
 import type { MachineStorage, PhysicalDisk, StoragePool } from "./storage";
 import type { AppliesResponse, Apply } from "./manifest";
 import type { MCPCheck } from "./mcpCheck";
@@ -138,6 +138,7 @@ const machine = shape<Machine>("Machine", {
     }),
     policy_source: value,
     policy_digest: value,
+    policy_refusal: shape<PolicyRefusal>("PolicyRefusal", { reason: value, detail: value, fix_line: value }),
     migrate_line: value,
     behind: value,
     missing_kinds: value,

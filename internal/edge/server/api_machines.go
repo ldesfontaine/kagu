@@ -103,6 +103,9 @@ type agentJSON struct {
 	// qu'il n'a rien dit ; et l'empreinte SHA-256 du fichier de sa politique.
 	PolicySource string `json:"policy_source"`
 	PolicyDigest string `json:"policy_digest"`
+	// Source refused : pourquoi, tel que l'agent le rapporte (essai E03-08) ;
+	// null sinon, et chez un agent d'avant, qui ne le dit pas.
+	PolicyRefusal *policyRefusalJSON `json:"policy_refusal"`
 	// Source identity : les droits ne sont pas protégés, et la ligne qui les
 	// recopie dans la politique (R-A3-16) ; vide sinon.
 	MigrateLine string `json:"migrate_line"`
@@ -122,7 +125,8 @@ type agentJSON struct {
 // jeu, cinq groupes, jamais une liste à plat ; chaque verdict vient
 // d'agentpolicy et chaque ligne de ses fonctions (R-DROIT-3).
 type rightsJSON struct {
-	// Le jeu que les droits posent ; vide : personnalisé.
+	// Le jeu que les droits posent ; vide : personnalisé ; "refused" : la
+	// politique est refusée, aucun jeu ne tient (observe seul, R-A3-6).
 	Set string `json:"set"`
 	// Les lignes --set des autres jeux (des trois quand le jeu est
 	// personnalisé).
@@ -136,6 +140,24 @@ type rightsJSON struct {
 	// droits posent, grant refaisant le plan même sans changement ; vide
 	// sinon, et pour des droits personnalisés, que SetLines remplaceraient.
 	PrepareLine string `json:"prepare_line"`
+}
+
+// La raison d'un refus de la politique : un mot de l'ensemble fermé
+// (agentpolicy.RefusedReasons), que l'écran traduit ; son détail, texte
+// venu de la machine, affiché brut ; la commande qui le corrige quand elle
+// existe (agentpolicy.Refusal.FixLine), vide sinon.
+type policyRefusalJSON struct {
+	Reason  string `json:"reason"`
+	Detail  string `json:"detail"`
+	FixLine string `json:"fix_line"`
+}
+
+func policyRefusalToJSON(agent machine.Agent) *policyRefusalJSON {
+	refused := agent.PolicyRefusal
+	if agent.PolicySource != agentpolicy.SourceRefused || refused.Reason == "" {
+		return nil
+	}
+	return &policyRefusalJSON{Reason: refused.Reason, Detail: refused.Detail, FixLine: refused.FixLine()}
 }
 
 type setLineJSON struct {
@@ -171,8 +193,12 @@ func rightsToJSON(agent machine.Agent) *rightsJSON {
 		return nil
 	}
 	set, ok := agentpolicy.SetOf(agent.Capabilities, agent.RightsUntil)
+	setName := string(set)
+	if agent.PolicySource == agentpolicy.SourceRefused {
+		setName, ok = agentpolicy.SourceRefused, false
+	}
 	rights := &rightsJSON{
-		Set:      string(set),
+		Set:      setName,
 		SetLines: []setLineJSON{},
 		RootHere: agent.MachineID == machine.LocalID && agentpolicy.CoversSet(agent.Capabilities, agentpolicy.SetRoot),
 	}
@@ -386,6 +412,7 @@ func agentToJSON(agent machine.Agent) *agentJSON {
 		Anchors:              anchorsToJSON(agent.Anchors),
 		PolicySource:         agent.PolicySource,
 		PolicyDigest:         agent.PolicyDigest,
+		PolicyRefusal:        policyRefusalToJSON(agent),
 		MigrateLine:          migrateLineFor(agent.PolicySource),
 		Fit:                  fitsToJSON(agent),
 		Rights:               rightsToJSON(agent),

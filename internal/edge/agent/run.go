@@ -474,7 +474,7 @@ func connectOnce(ctx context.Context, client *Client, identity Identity, pending
 	identity.ServerKey = applied.AcceptedServerKey()
 	client.SetCapabilities(applied.Rights)
 	client.SetRightsUntil(applied.Until)
-	client.SetPolicy(applied.Source, applied.Digest)
+	client.SetPolicy(applied.Source, applied.Digest, applied.Refusal)
 	client.SetAnchors(anchor.FromFile(applied.Anchors))
 	// Le compte et la machine ont pu changer depuis la dernière ouverture : un
 	// dossier rendu, un groupe docker ajouté. Les droits se jugent à neuf.

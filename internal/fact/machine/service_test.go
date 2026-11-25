@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
@@ -128,10 +129,10 @@ func (f *fakeStore) RecordRightsUntil(_ context.Context, agentID string, until m
 	return ErrNotFound
 }
 
-func (f *fakeStore) RecordPolicy(_ context.Context, agentID, source, digest string) error {
+func (f *fakeStore) RecordPolicy(_ context.Context, agentID, source, digest string, refused agentpolicy.Refusal) error {
 	for id, m := range f.machines {
 		if m.Agent.ID == agentID {
-			m.Agent.PolicySource, m.Agent.PolicyDigest = source, digest
+			m.Agent.PolicySource, m.Agent.PolicyDigest, m.Agent.PolicyRefusal = source, digest, refused
 			f.machines[id] = m
 			return nil
 		}

@@ -74,6 +74,10 @@ const (
 	// (agentpolicy.Digest), redites à chaque ouverture du flux.
 	HeaderAgentPolicySource = brand.HeaderPrefix + "Agent-Policy-Source"
 	HeaderAgentPolicyDigest = brand.HeaderPrefix + "Agent-Policy-Digest"
+	// Pourquoi la politique est refusée (agentpolicy.Refusal.Format), sous la
+	// source refused seulement. Absent chez un agent plus vieux : la fiche
+	// garde sa phrase générale.
+	HeaderAgentPolicyRefusal = brand.HeaderPrefix + "Agent-Policy-Refusal"
 	// Les genres d'ordres que l'agent sait exécuter, chacun avec son numéro
 	// (AnnouncedKinds, machine.OrderKinds.Format), redits à chaque ouverture
 	// du flux : le serveur ne lui signe que ceux-là (R-B2-8). C'est le seul

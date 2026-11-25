@@ -175,3 +175,44 @@ func TestE03_10_DockerDeniedGivesTheLineOfTheSet(t *testing.T) {
 		}
 	}
 }
+
+// Essai E03-08 : une politique refusée se dit avec sa raison, sa commande
+// quand elle existe ; le jeu posé est « refusée », jamais « personnalisé ».
+// Une raison sans source refused ne sort pas.
+func TestE03_08_TheRightsTabSaysWhyThePolicyIsRefused(t *testing.T) {
+	refusedWith := func(refused agentpolicy.Refusal) *agentJSON {
+		agent := reportingAgent(t, "web-1", "observe")
+		agent.PolicySource, agent.PolicyRefusal = agentpolicy.SourceRefused, refused
+		return agentToJSON(agent)
+	}
+	owner := refusedWith(agentpolicy.Refusal{Reason: agentpolicy.RefusedOwner, Detail: agentpolicy.FilePath()})
+	wantOwner := policyRefusalJSON{Reason: "owner", Detail: agentpolicy.FilePath(), FixLine: "sudo chown root " + agentpolicy.FilePath()}
+	if owner.PolicyRefusal == nil || *owner.PolicyRefusal != wantOwner {
+		t.Errorf("owner: %+v, want %+v", owner.PolicyRefusal, wantOwner)
+	}
+	if owner.Rights.Set != agentpolicy.SourceRefused {
+		t.Errorf("set %q, want refused", owner.Rights.Set)
+	}
+	mode := refusedWith(agentpolicy.Refusal{Reason: agentpolicy.RefusedMode, Detail: agentpolicy.FilePath()})
+	if want := "sudo chmod 640 " + agentpolicy.FilePath(); mode.PolicyRefusal.FixLine != want {
+		t.Errorf("mode fix %q, want %q", mode.PolicyRefusal.FixLine, want)
+	}
+	// Un autre chemin ne se remet pas d'ici : la raison sans commande.
+	elsewhere := refusedWith(agentpolicy.Refusal{Reason: agentpolicy.RefusedMode, Detail: "/etc"})
+	if elsewhere.PolicyRefusal.FixLine != "" {
+		t.Errorf("fix %q for a path the server does not know", elsewhere.PolicyRefusal.FixLine)
+	}
+	unknown := refusedWith(agentpolicy.Refusal{Reason: agentpolicy.RefusedUnknownKey, Detail: "foo"})
+	if unknown.PolicyRefusal.Detail != "foo" || unknown.PolicyRefusal.FixLine != "" {
+		t.Errorf("unknown key %+v", unknown.PolicyRefusal)
+	}
+	// Un agent d'avant ne dit pas la raison : null, l'écran garde sa phrase.
+	if before := refusedWith(agentpolicy.Refusal{}); before.PolicyRefusal != nil || before.Rights.Set != agentpolicy.SourceRefused {
+		t.Errorf("an older agent: %+v %q", before.PolicyRefusal, before.Rights.Set)
+	}
+	held := reportingAgent(t, "web-1", "observe")
+	held.PolicySource, held.PolicyRefusal = agentpolicy.SourcePolicy, agentpolicy.Refusal{Reason: agentpolicy.RefusedOwner}
+	if got := agentToJSON(held).PolicyRefusal; got != nil {
+		t.Errorf("a held policy says a refusal: %+v", got)
+	}
+}

@@ -36,7 +36,7 @@ type MachineService interface {
 	NoteRollbackVersion(ctx context.Context, agentID, reported string) error
 	NoteServiceRollbackVersion(ctx context.Context, agentID, reported string) error
 	NoteAnchors(ctx context.Context, agentID, reported string) error
-	NotePolicy(ctx context.Context, agentID, source, digest string) error
+	NotePolicy(ctx context.Context, agentID, source, digest, refusal string) error
 	NoteRightsUntil(ctx context.Context, agentID, until string) error
 	NoteRootEquivalent(ctx context.Context, agentID, reported string) error
 	Connect(ctx context.Context, authenticated machine.Machine, address, agentVersion, capabilities, account, unavailable, protocol string) (*machine.Session, error)

@@ -56,9 +56,9 @@ type Store interface {
 	RecordServiceRollbackVersion(ctx context.Context, agentID string, version int) error
 	// RecordAnchors garde le texte des ancres que l'agent a dit ; "" ne change rien.
 	RecordAnchors(ctx context.Context, agentID, anchors string) error
-	// RecordPolicy garde la source des droits et l'empreinte de la politique
-	// que l'agent a dites ; "" s'écrit vide.
-	RecordPolicy(ctx context.Context, agentID, source, digest string) error
+	// RecordPolicy garde la source des droits, l'empreinte de la politique et
+	// la raison de son refus que l'agent a dites ; "" s'écrit vide.
+	RecordPolicy(ctx context.Context, agentID, source, digest string, refused agentpolicy.Refusal) error
 	// RecordRightsUntil garde l'échéance de chaque droit rapporté ; une table
 	// vide s'écrit NULL.
 	RecordRightsUntil(ctx context.Context, agentID string, until map[string]time.Time) error
@@ -699,18 +699,24 @@ func (s *Service) NoteAnchors(ctx context.Context, agentID, reported string) err
 	return s.store.RecordAnchors(ctx, agentID, reported)
 }
 
-// NotePolicy garde d'où l'agent dit tenir ses droits et l'empreinte de sa
-// politique, redites à chaque ouverture du flux : la fiche montre une machine
-// dont la politique est refusée (observe seul). Une source inconnue ou une
-// empreinte qui n'en a pas la forme s'écrivent vides.
-func (s *Service) NotePolicy(ctx context.Context, agentID, source, digest string) error {
+// NotePolicy garde d'où l'agent dit tenir ses droits, l'empreinte de sa
+// politique et la raison de son refus, redites à chaque ouverture du flux :
+// la fiche montre une machine dont la politique est refusée (observe seul),
+// et pourquoi. Une source inconnue ou une empreinte qui n'en a pas la forme
+// s'écrivent vides ; une raison hors de l'ensemble fermé, ou hors de la
+// source refused, aussi (agentpolicy.ParseRefusal).
+func (s *Service) NotePolicy(ctx context.Context, agentID, source, digest, refusal string) error {
 	if !slices.Contains(agentpolicy.Sources(), source) {
 		source = ""
 	}
 	if !agentpolicy.IsDigest(digest) {
 		digest = ""
 	}
-	return s.store.RecordPolicy(ctx, agentID, source, digest)
+	var refused agentpolicy.Refusal
+	if source == agentpolicy.SourceRefused {
+		refused = agentpolicy.ParseRefusal(refusal)
+	}
+	return s.store.RecordPolicy(ctx, agentID, source, digest, refused)
 }
 
 // NoteRightsUntil garde l'échéance de chaque droit que l'agent rapporte,
