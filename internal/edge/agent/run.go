@@ -65,6 +65,9 @@ type Options struct {
 	Server string
 	Token  string
 	Pin    string
+	// EnrollOnly rend la main dès l'identité écrite, ou relue si l'agent est
+	// déjà enrôlé : ni flux, ni geste. C'est la reprise de setup.
+	EnrollOnly bool
 	// AllowPlain accepte http:// vers un serveur distant ; à réserver à un
 	// réseau déjà chiffré.
 	AllowPlain bool
@@ -132,7 +135,8 @@ type Options struct {
 }
 
 // Run enrôle l'agent si besoin, puis tient le flux ouvert jusqu'à ce que le
-// contexte s'arrête ou que le serveur refuse l'identité pour de bon.
+// contexte s'arrête ou que le serveur refuse l'identité pour de bon ; avec
+// EnrollOnly, il s'arrête à l'identité.
 func Run(ctx context.Context, opts Options) error {
 	// Une mise à jour réussie arrête tout : les sondes, le veilleur Docker et
 	// le flux vivent sous ce contexte, que la bascule du lien annule.
@@ -146,7 +150,7 @@ func Run(ctx context.Context, opts Options) error {
 		opts.SampleInterval = resource.SampleInterval
 	}
 	identity, err := loadOrEnroll(ctx, opts)
-	if err != nil {
+	if err != nil || opts.EnrollOnly {
 		return err
 	}
 	identity = notePolicyFormat(opts.StateDir, identity, opts.Logger)
