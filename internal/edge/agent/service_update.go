@@ -134,9 +134,6 @@ func (t dockerTools) loadMarker(project string) (marker updateMarker, found bool
 	if err != nil {
 		return updateMarker{}, false, fmt.Errorf("%w: %w", errMarkerCorrupt, err)
 	}
-	if len(content) > maxMarkerBytes {
-		return updateMarker{}, false, fmt.Errorf("%w: more than %d bytes", errMarkerCorrupt, maxMarkerBytes)
-	}
 	if err := json.Unmarshal(content, &marker); err != nil {
 		return updateMarker{}, false, fmt.Errorf("%w: %w", errMarkerCorrupt, err)
 	}

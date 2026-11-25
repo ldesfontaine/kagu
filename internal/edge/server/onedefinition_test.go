@@ -662,18 +662,7 @@ var (
 		"internal/kit/mcpcheck/mcpcheck.go":         1,
 		"internal/kit/registry/client.go":           1,
 	}
-	handBoundedReadInventory = map[string]int{
-		"cmd/kagu/backup.go":                        1,
-		"internal/domain/proxmox/client.go":         1,
-		"internal/edge/agent/proxmox_api.go":        1,
-		"internal/edge/agent/proxmox_token.go":      1,
-		"internal/fact/firewall/opnsense/client.go": 1,
-		"internal/fact/lifecycle/source.go":         1,
-		"internal/fact/sshkeys/read.go":             1,
-		"internal/kit/proxysecret/proxysecret.go":   1,
-		"internal/kit/release/library.go":           1,
-		"internal/kit/release/release.go":           1,
-	}
+	handBoundedReadInventory     = map[string]int{}
 	handDrawnIdentifierInventory = map[string]int{
 		"internal/domain/restic/proxy.go": 1,
 	}

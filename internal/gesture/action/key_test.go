@@ -3,6 +3,7 @@ package action
 import (
 	"crypto/ed25519"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ func TestLoadKey_RefusesAnOpenOrDamagedFile(t *testing.T) {
 	if _, err := LoadKey(root); !errors.Is(err, ErrKeyFileMode) {
 		t.Fatalf("readable by others: %v", err)
 	}
-	for _, content := range []string{"", "ed25519-v1:\n", "ed25519-v2:AAAA\n", "ed25519-v1:@@@\n", "a\nb\n"} {
+	for _, content := range []string{"", "ed25519-v1:\n", "ed25519-v2:AAAA\n", "ed25519-v1:@@@\n", "a\nb\n", strings.Repeat("x", maxKeyFileBytes+1)} {
 		damaged := testkit.EmptyRoot(t)
 		if err := damaged.WriteFile(brand.ServerKeyFile, []byte(content), keyFileMode); err != nil {
 			t.Fatal(err)

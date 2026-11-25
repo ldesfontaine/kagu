@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 )
 
 const (
@@ -54,7 +55,10 @@ func Load(path string) (string, error) {
 	if info.Mode().Perm()&forbiddenBits != 0 {
 		return "", fmt.Errorf("%w: %s has mode %04o, want 0640 or stricter", ErrFileMode, path, info.Mode().Perm())
 	}
-	content, err := io.ReadAll(io.LimitReader(file, maxFileBytes+1))
+	content, err := fsx.ReadLimited(file, maxFileBytes)
+	if errors.Is(err, fsx.ErrTooLarge) {
+		return "", fmt.Errorf("forward secret file %s: %w: too long", path, ErrInvalid)
+	}
 	if err != nil {
 		return "", fmt.Errorf("read forward secret file %s: %w", path, err)
 	}
@@ -69,9 +73,6 @@ func Load(path string) (string, error) {
 // voyage dans un en-tête, et un octet de contrôle ou une espace ne s'y
 // retrouveraient pas à l'identique.
 func parse(content []byte) (string, error) {
-	if len(content) > maxFileBytes {
-		return "", fmt.Errorf("%w: too long", ErrInvalid)
-	}
 	line, _ := bytes.CutSuffix(content, []byte("\n"))
 	line, _ = bytes.CutSuffix(line, []byte("\r"))
 	if bytes.ContainsAny(line, "\r\n") {

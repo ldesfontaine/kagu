@@ -125,6 +125,8 @@ func LoadKey(root *os.Root) (*Key, error) {
 		return nil, ErrNoKey
 	case errors.Is(err, fsx.ErrTooOpen):
 		return nil, fmt.Errorf("%w: %v", ErrKeyFileMode, err)
+	case errors.Is(err, fsx.ErrTooLarge):
+		return nil, fmt.Errorf("%w: too long", ErrKeyFileInvalid)
 	case err != nil:
 		return nil, fmt.Errorf("read server key: %w", err)
 	}
@@ -134,9 +136,6 @@ func LoadKey(root *os.Root) (*Key, error) {
 // Le fichier garde une ligne « ed25519-v1:<graine en base64url> » : la clé
 // courante, puis la précédente le temps d'une rotation.
 func parseKeyFile(content []byte) (*Key, error) {
-	if len(content) > maxKeyFileBytes {
-		return nil, fmt.Errorf("%w: too long", ErrKeyFileInvalid)
-	}
 	text, _ := bytes.CutSuffix(content, []byte("\n"))
 	lines := strings.Split(string(text), "\n")
 	if len(lines) > 2 {

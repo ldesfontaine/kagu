@@ -17,6 +17,8 @@ import (
 	"syscall"
 
 	"golang.org/x/crypto/ssh"
+
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 )
 
 // La lecture, côté agent. Le dossier personnel d'un compte est le terrain de
@@ -227,12 +229,12 @@ func (r reader) readFile(dir Dir, file string, uid uint32) fileResult {
 	if err != nil || !isSingleRegularFile(opened) || !r.isTrusted(opened, uid) {
 		return fileResult{state: StateUnsafe}
 	}
-	content, err := io.ReadAll(io.LimitReader(handle, MaxFileBytes+1))
+	content, err := fsx.ReadLimited(handle, MaxFileBytes)
+	if errors.Is(err, fsx.ErrTooLarge) {
+		return fileResult{state: StateTooLarge}
+	}
 	if err != nil {
 		return fileResult{state: StateDenied}
-	}
-	if len(content) > MaxFileBytes {
-		return fileResult{state: StateTooLarge}
 	}
 	keys, ignored := parseKeys(file, content)
 	return fileResult{state: StateRead, keys: keys, ignored: ignored}

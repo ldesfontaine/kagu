@@ -3,7 +3,6 @@ package fsx
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 )
 
@@ -14,9 +13,9 @@ const privateForbiddenBits = 0o077
 var ErrTooOpen = errors.New("file is readable by other accounts")
 
 // ReadPrivate lit une clé ou un secret sous root : le mode se juge sur le
-// descripteur ouvert, pas sur le chemin, et la lecture s'arrête à limit+1
-// octets pour que l'appelant voie un fichier trop long. Un fichier absent
-// rend une erreur qui satisfait errors.Is(err, fs.ErrNotExist).
+// descripteur ouvert, pas sur le chemin, et un fichier de plus de limit
+// octets rend ErrTooLarge (enveloppé). Un fichier absent rend une erreur qui
+// satisfait errors.Is(err, fs.ErrNotExist).
 func ReadPrivate(root *os.Root, name string, limit int64) ([]byte, error) {
 	file, err := root.Open(name)
 	if err != nil {
@@ -30,7 +29,7 @@ func ReadPrivate(root *os.Root, name string, limit int64) ([]byte, error) {
 	if info.Mode().Perm()&privateForbiddenBits != 0 {
 		return nil, fmt.Errorf("%w: %s has mode %04o", ErrTooOpen, name, info.Mode().Perm())
 	}
-	content, err := io.ReadAll(io.LimitReader(file, limit+1))
+	content, err := ReadLimited(file, limit)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", name, err)
 	}

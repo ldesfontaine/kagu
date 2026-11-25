@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/fact/firewall"
 	"github.com/ldesfontaine/kagu/internal/kit/egress"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 )
 
 const (
@@ -150,12 +150,12 @@ func (c *Client) fetch(ctx context.Context, path string, query url.Values, accep
 	case response.StatusCode != http.StatusOK:
 		return nil, fmt.Errorf("%w: %w", firewall.ErrBadResponse, httpStatusError{response.StatusCode})
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	body, err := fsx.ReadLimited(response.Body, limit)
+	if errors.Is(err, fsx.ErrTooLarge) {
+		return nil, fmt.Errorf("%w: answer over %d bytes", firewall.ErrBadResponse, limit)
+	}
 	if err != nil {
 		return nil, transportRefusal(err)
-	}
-	if int64(len(body)) > limit {
-		return nil, fmt.Errorf("%w: answer over %d bytes", firewall.ErrBadResponse, limit)
 	}
 	return body, nil
 }

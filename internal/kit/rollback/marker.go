@@ -140,9 +140,6 @@ func Load(state *os.Root) (Marker, error) {
 	if err != nil {
 		return Marker{}, fmt.Errorf("%w: %w", ErrCorruptMarker, err)
 	}
-	if len(content) > maxMarkerBytes {
-		return Marker{}, fmt.Errorf("%w: more than %d bytes", ErrCorruptMarker, maxMarkerBytes)
-	}
 	var marker Marker
 	if err := json.Unmarshal(content, &marker); err != nil {
 		return Marker{}, fmt.Errorf("%w: %w", ErrCorruptMarker, err)

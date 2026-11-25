@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 )
 
 var (
@@ -128,12 +129,12 @@ func readSmallFile(path string) ([]byte, error) {
 
 // readSmall lit un fichier de sommes ou de signature, borné.
 func readSmall(file io.Reader, name string) ([]byte, error) {
-	content, err := io.ReadAll(io.LimitReader(file, maxSmallFileSize+1))
+	content, err := fsx.ReadLimited(file, maxSmallFileSize)
+	if errors.Is(err, fsx.ErrTooLarge) {
+		return nil, fmt.Errorf("%w: %s is too long", ErrMalformed, name)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", name, err)
-	}
-	if len(content) > maxSmallFileSize {
-		return nil, fmt.Errorf("%w: %s is too long", ErrMalformed, name)
 	}
 	return content, nil
 }

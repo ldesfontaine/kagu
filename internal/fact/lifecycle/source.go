@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/egress"
+	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 )
 
 const (
@@ -204,12 +204,12 @@ func (s *HTTPSource) get(ctx context.Context, path string, limit int64, into any
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("%w: status %d on %s", ErrSource, response.StatusCode, path)
 	}
-	content, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	content, err := fsx.ReadLimited(response.Body, limit)
+	if errors.Is(err, fsx.ErrTooLarge) {
+		return fmt.Errorf("%w: response over %d bytes on %s", ErrSource, limit, path)
+	}
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrSource, err)
-	}
-	if int64(len(content)) > limit {
-		return fmt.Errorf("%w: response over %d bytes on %s", ErrSource, limit, path)
 	}
 	if err := json.Unmarshal(content, into); err != nil {
 		return fmt.Errorf("%w: %w", ErrSource, err)
