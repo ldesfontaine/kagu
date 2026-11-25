@@ -198,7 +198,8 @@ interface MachineTab {
 const fixedTabs: MachineTab[] = [
   { slug: "", label: "tab.summary", rank: 0 },
   { slug: "reseau", label: "tab.network", rank: 30 },
-    { slug: "journaux", label: "tab.logs", rank: 60 },
+  { slug: "journaux", label: "tab.logs", rank: 60 },
+  { slug: "droits", label: "tab.rights", rank: 65 },
   { slug: "agent", label: "tab.agent", rank: 70 },
 ];
 

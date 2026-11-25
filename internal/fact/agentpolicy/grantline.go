@@ -25,6 +25,27 @@ func GrantLine(right, value string) string {
 	return AgentLine("grant", granted)
 }
 
+// GrantSetLine écrit la ligne qui pose un jeu (R-A3-7) :
+// « sudo opencloud agent grant --set manage ».
+func GrantSetLine(set Set) string {
+	return AgentLine("grant", "--set", string(set))
+}
+
+// RevokeLine écrit la ligne qui retire ces droits : observe ne se retire pas
+// et n'y entre pas. Vide quand il ne reste rien à retirer.
+func RevokeLine(names []string) string {
+	words := []string{"revoke"}
+	for _, name := range names {
+		if revocable(name) {
+			words = append(words, name)
+		}
+	}
+	if len(words) == 1 {
+		return ""
+	}
+	return AgentLine(words...)
+}
+
 // TrustServerKey est le nom que « agent trust » donne à la clé du serveur, à
 // côté des types d'ancre.
 const TrustServerKey = "server-key"

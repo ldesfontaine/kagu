@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 
 import { useMachineContainers } from "../api/containers";
 import type { Lifecycle } from "../api/lifecycle";
@@ -27,6 +27,7 @@ import { MachineThresholds } from "../components/MachineThresholds";
 import { MachineSystemdUnits } from "../components/MachineSystemdUnits";
 import { NetworkView } from "../components/NetworkView";
 import { PageHead } from "../components/PageHead";
+import { RightsList } from "../components/RightsList";
 import { RoleCard } from "../components/RoleCard";
 import { ProbeTable } from "../components/ProbeTable";
 import { ResourceHistory, ResourceStats } from "../components/Resources";
@@ -42,7 +43,7 @@ import { renamedMachineTabs, resolveMachineTab } from "../lib/machineTabs";
 import { engineNote, filterContainers, type Filter } from "../lib/containers";
 import { lifecycleHasDetails } from "../lib/lifecycle";
 import { lacksSudo, wantedRightOf } from "../lib/rights";
-import { alwaysGranted, capabilityLabelKey, describeAccount, describeCapability, isArchived, unavailableRights } from "../lib/machines";
+import { alwaysGranted, capabilityLabelKey, describeAccount, isArchived, unavailableRights } from "../lib/machines";
 import { formatWhen } from "../lib/time";
 import { NotFound } from "./NotFound";
 import "./Machine.scss";
@@ -111,6 +112,8 @@ function MachineView({ current, all, tab }: { current: Machine; all: Machine[]; 
               <AgentCard machineID={current.id} agent={current.agent} reportRejected={current.report_rejected} updateLast={current.update_last} withoutSudo={lacksSudo(current)} now={now} />
               <ActionsCard machineID={current.id} agent={current.agent} />
             </>
+          ) : tab === "droits" ? (
+            <MachineRights machine={current} now={now} />
           ) : tab === "services" ? (
             <MachineContainers machineID={current.id} />
           ) : tab === "reseau" ? (
@@ -154,11 +157,9 @@ function SystemSupport({ lifecycle }: { lifecycle: Lifecycle }) {
   );
 }
 
-// L'agent de la machine : sa version, depuis quand, s'il est révoqué, et ses
-// droits, tels qu'il les rapporte et tels que sa commande d'installation les
-// demandait, avec la politique d'où il les tient. Ils se changent en root sur
-// la machine (agent grant) : un lien qui nomme un droit (?droit=) mène ici,
-// où sa ligne se montre tant qu'il manque.
+// L'agent de la machine : sa version, depuis quand, s'il est révoqué, son
+// compte. Ses droits sont dans l'onglet Droits ; un lien qui nomme un droit
+// (?droit=) mène encore ici, où sa ligne se montre tant qu'il manque.
 function AgentCard({ machineID, agent, reportRejected, updateLast, withoutSudo, now }: { machineID: string; agent: Agent | null; reportRejected: string[]; updateLast: boolean; withoutSudo: boolean; now: number }) {
   const t = useT();
   const [search] = useSearchParams();
@@ -174,7 +175,6 @@ function AgentCard({ machineID, agent, reportRejected, updateLast, withoutSudo, 
     );
   }
   const account = describeAccount(agent.run_as);
-  const unavailable = agent.revoked_at === null && agent.reported_at !== null ? unavailableRights(t, agent) : [];
   const wantedFit = wanted === null ? undefined : agent.fit[wanted.name];
   const wantedMissing = wanted !== null && agent.revoked_at === null && (wantedFit === undefined || wantedFit.state === "missing");
   return (
@@ -188,34 +188,53 @@ function AgentCard({ machineID, agent, reportRejected, updateLast, withoutSudo, 
         <KeyValue label={t("machine.field_agent_enrolled")} value={formatWhen(agent.enrolled_at, now)} />
         <KeyValue label={t("machine.agent_account")} value={account ?? t("machine.agent_account_unreported")} mono={account !== null} />
         {agent.run_as?.uid === 0 && <p className="secondary">{t("machine.agent_account_root_note")}</p>}
-        <KeyValue
-          label={t("machine.agent_rights")}
-          value={agent.reported_at === null ? t("machine.agent_rights_unreported") : agent.capabilities.map((capability) => describeCapability(t, capability)).join(" · ")}
-        />
-        <PolicySource agent={agent} />
         {wantedMissing && (
           <MissingRight machineID={machineID} right={wanted.name} path={wanted.path}>
             {t("machine.fit_right_missing", t(capabilityLabelKey(wanted.name)))}
           </MissingRight>
         )}
-        {agent.requested.length > 0 && (
-          <KeyValue label={t("machine.agent_rights_requested")} value={agent.requested.map((capability) => describeCapability(t, capability)).join(" · ")} />
-        )}
-        {agent.capabilities_differ && <Note tone="warn">{t("machine.agent_rights_differ")}</Note>}
-        {unavailable.length > 0 && (
-          <Note tone="warn">
-            <strong>{t("machine.agent_rights_unavailable")}</strong>
-            <ul>
-              {unavailable.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          </Note>
-        )}
-        <p className="secondary">{t("machine.agent_rights_note")}</p>
+        <Link to={`/machines/${machineID}/droits`}>{t("rights.open_tab")}</Link>
         <AgentAnchors agent={agent} />
       </CardBody>
     </Card>
+  );
+}
+
+// L'onglet Droits : d'où l'agent les tient, ce que son compte ne peut pas
+// exercer, puis le jeu et les cinq groupes (RightsList), tels que le serveur
+// les a jugés. Sans agent actif, rien à montrer.
+function MachineRights({ machine, now }: { machine: Machine; now: number }) {
+  const t = useT();
+  const agent = machine.agent;
+  if (agent === null) {
+    return <EmptyCard icon="lock" text={t("machine.agent_none")} />;
+  }
+  if (agent.revoked_at !== null) {
+    return <EmptyCard icon="lock" text={t("machine.agent_revoked", formatWhen(agent.revoked_at, now))} />;
+  }
+  const unavailable = agent.reported_at !== null ? unavailableRights(t, agent) : [];
+  return (
+    <>
+      <Card>
+        <CardHeader title={t("machine.agent_policy")} />
+        <CardBody gap={10}>
+          <PolicySource agent={agent} />
+          {agent.capabilities_differ && <Note tone="warn">{t("machine.agent_rights_differ")}</Note>}
+          {unavailable.length > 0 && (
+            <Note tone="warn">
+              <strong>{t("machine.agent_rights_unavailable")}</strong>
+              <ul>
+                {unavailable.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </Note>
+          )}
+          {agent.rights === null && <p className="secondary">{t("machine.agent_rights_unreported")}</p>}
+        </CardBody>
+      </Card>
+      {agent.rights !== null && <RightsList rights={agent.rights} machineName={machine.name} now={now} />}
+    </>
   );
 }
 

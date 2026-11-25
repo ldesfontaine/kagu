@@ -127,6 +127,53 @@ export interface Agent {
   // Par droit connu, le verdict du serveur : l'écran l'affiche sans le
   // recalculer.
   fit: Record<string, RightFit>;
+  // L'onglet Droits, tel que le serveur l'a jugé et écrit ; null tant que
+  // l'agent n'a pas rapporté ses droits, et pour un agent révoqué.
+  rights: AgentRights | null;
+}
+
+// Un jeu de droits (agentpolicy.Set).
+export type RightsSet = "observe" | "manage" | "root";
+
+// Les droits d'un agent pour l'onglet Droits (R-A3-13) : le jeu (vide :
+// personnalisé), les lignes --set des autres jeux, la machine du serveur en
+// « Gérer en root » (R-DROIT-5), et cinq groupes. Toutes les lignes sont
+// écrites par le serveur.
+export interface AgentRights {
+  set: RightsSet | "";
+  set_lines: SetLine[];
+  root_here: boolean;
+  groups: RightsGroup[];
+}
+
+export interface SetLine {
+  set: RightsSet;
+  line: string;
+}
+
+// Un groupe de l'onglet Droits.
+export type RightsGroupName = "see" | "deploy" | "backup" | "enter" | "network";
+
+// Un groupe : son verdict (permis jusqu'à until, null sans échéance), « vaut
+// root » (worth_root), terminal.host posé (host_terminal), ses droits pour le
+// détail, la ligne grant qui l'ouvre (vide s'il est permis) et la ligne
+// revoke qui retire ce qu'il porte (vide sans rien à retirer).
+export interface RightsGroup {
+  name: RightsGroupName;
+  state: RightState;
+  until: string | null;
+  worth_root: boolean;
+  host_terminal: boolean;
+  rights: GroupRight[];
+  grant_line: string;
+  revoke_line: string;
+}
+
+export interface GroupRight {
+  name: string;
+  paths: string[];
+  state: RightState;
+  until: string | null;
 }
 
 // L'état d'un droit, tel que le serveur le rend (agentpolicy.Fit) : ok, le

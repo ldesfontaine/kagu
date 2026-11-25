@@ -13,6 +13,7 @@ test("aucun onglet connu ne mène à un écran pas encore livré", () => {
 test("resolveMachineTab renvoie un onglet pas encore livré au résumé, et l'inconnu à la page introuvable", () => {
   expect(resolveMachineTab("reseau")).toBe("shown");
   expect(resolveMachineTab("journaux")).toBe("shown");
+  expect(resolveMachineTab("droits")).toBe("shown");
   expect(resolveMachineTab("agent")).toBe("shown");
   expect(resolveMachineTab("ssh")).toBe("shown");
   expect(resolveMachineTab("sauvegardes")).toBe("summary");

@@ -21,6 +21,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/domain/deploy"
 	"github.com/ldesfontaine/kagu/internal/domain/directory"
 	"github.com/ldesfontaine/kagu/internal/edge/server/servertest"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/firewall/opnsense/opnsensetest"
 	"github.com/ldesfontaine/kagu/internal/fact/hostconn"
@@ -96,6 +97,7 @@ func seedE2E(t *testing.T, ts *testServer) {
 	seedE2EZFSCache(t, ts)
 	seedE2EThresholds(t, ts)
 	seedE2EServiceRollback(t, ts)
+	seedE2ERights(t, ts)
 }
 
 // seedE2EVirtualized fait rapporter « machine virtuelle » aux deux machines,
@@ -518,6 +520,30 @@ func seedE2EAnchors(t *testing.T, ts *testServer) {
 	waittest.Until(t, "la passe de compta refusée par les ancres", func() bool {
 		return strings.Contains(callAPI(ts.Server, http.MethodGet, "/api/backups/overview", nil).Body.String(), `"fix":`)
 	})
+}
+
+// vps-droits, l'onglet Droits (T03-08) : un agent en « Gérer » qui tient ses
+// droits de sa politique, avec en plus terminal.host pour deux heures ; le
+// groupe Réseau n'est pas permis.
+const e2eRightsID = "cccccccc-1111-4222-8333-666666666666"
+
+func seedE2ERights(t *testing.T, ts *testServer) {
+	t.Helper()
+	manage := "observe,probe.lan,agent.update,docker.deploy,docker.update,restic.produce,restic.docker,restic.restore,files.write=/srv,terminal.container"
+	session := e2eConnect(t, ts, "vps-droits", e2eRightsID, manage+",terminal.host=root")
+	found, err := ts.machines.Get(context.Background(), e2eRightsID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, agentID := context.Background(), found.Agent.ID
+	if err := ts.machines.NotePolicy(ctx, agentID, agentpolicy.SourcePolicy, strings.Repeat("ab", 32)); err != nil {
+		t.Fatal(err)
+	}
+	until := map[string]time.Time{agentpolicy.CapabilityTerminalHost: testNow.Add(2 * time.Hour)}
+	if err := ts.machines.NoteRightsUntil(ctx, agentID, agentpolicy.FormatRightsUntil(until)); err != nil {
+		t.Fatal(err)
+	}
+	go e2eIgnoreOrders(session)
 }
 
 // seedE2ERestic remplit la page Sauvegardes : une cible restic en marche, une

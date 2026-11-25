@@ -20,6 +20,7 @@ import type { MenuAction } from "../components/MoreMenu";
 import { PageHead } from "../components/PageHead";
 import { Dot, Pill } from "../components/Pill";
 import { RightPill } from "../components/RightPill";
+import { RightsList } from "../components/RightsList";
 import { SectionHead } from "../components/SectionHead";
 import { Select } from "../components/Select";
 import { DangerZone, SettingFoot, SettingRow } from "../components/SettingRow";
@@ -27,7 +28,7 @@ import { List, RowLink, RowText, RowWhen, Table } from "../components/Table";
 import { Wizard, type WizardStep } from "../components/Wizard";
 import { useForm } from "../hooks/useForm";
 import { useViewMode } from "../hooks/useViewMode";
-import { useI18n, type Translate } from "../i18n/context";
+import { useGrantLine, useI18n, type Translate } from "../i18n/context";
 import type { WizardMode } from "../lib/wizard";
 import { ViewToggle } from "../components/ViewToggle";
 import "./VisualSystem.scss";
@@ -345,6 +346,11 @@ export function VisualSystem() {
           </section>
 
           <section>
+            <h2 className="side-label section-label">{t("tab.rights")}</h2>
+            <RightsSample />
+          </section>
+
+          <section>
             <h2 className="side-label section-label">{t("visual.locked.title")}</h2>
             <Card>
               <CardBody>
@@ -508,6 +514,34 @@ export function VisualSystem() {
 // demande avant d'abandonner, un clic sur le voile ne ferme rien), la
 // confirmation d'un geste qui ne se défait pas, la redemande d'un geste de
 // niveau 4 (ConfirmGesture), et le bouton d'action avec ou sans la puce « MCP ».
+// L'onglet Droits d'une machine en « Gérer » qui a aussi un terminal sur la
+// machine pour deux heures ; la ligne est celle que la session tient du
+// serveur.
+function RightsSample() {
+  const grantLine = useGrantLine("network.private");
+  const until = new Date(Date.now() + 2 * 3600_000).toISOString();
+  const right = (name: string, state: "ok" | "missing", rightUntil: string | null = null) => ({ name, paths: [], state, until: rightUntil });
+  const group = { worth_root: false, host_terminal: false, grant_line: "", revoke_line: "", until: null };
+  return (
+    <RightsList
+      machineName="vps-paris-1"
+      now={Date.now()}
+      rights={{
+        set: "manage",
+        set_lines: [],
+        root_here: false,
+        groups: [
+          { ...group, name: "see", state: "ok", rights: [right("observe", "ok"), right("probe.lan", "ok")] },
+          { ...group, name: "deploy", state: "ok", worth_root: true, rights: [right("docker.deploy", "ok"), right("docker.update", "missing")] },
+          { ...group, name: "backup", state: "ok", rights: [right("restic.produce", "ok")] },
+          { ...group, name: "enter", state: "ok", until, host_terminal: true, rights: [right("terminal.host", "ok", until)] },
+          { ...group, name: "network", state: "missing", grant_line: grantLine, rights: [right("network.private", "missing")] },
+        ],
+      }}
+    />
+  );
+}
+
 function ModalSample() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);

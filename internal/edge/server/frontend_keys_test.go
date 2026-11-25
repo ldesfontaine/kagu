@@ -35,6 +35,7 @@ var literalsNotKeys = map[string]string{
 	"restic.verify":    "un droit d'agent (agentpolicy.CapabilityResticVerify), que le front envoie au serveur",
 	"restic.browse":    "un droit d'agent (agentpolicy.CapabilityResticBrowse), que le front envoie au serveur",
 	"restic.restore":   "un droit d'agent (agentpolicy.CapabilityResticRestore), que le front envoie au serveur",
+	"network.private":  "un droit d'agent (agentpolicy.CapabilityNetworkPrivate), que le front lit dans l'onglet Droits",
 	"backup.recipient": "un type d'ancre de confiance (anchor.BackupRecipient), que le front lit dans la fiche d'une machine",
 	"backup.guest":     "un type d'ancre de confiance (anchor.BackupGuest), que le front lit dans la fiche d'une machine",
 	"machine.delete":   "un verbe du registre (internal/gesture/verb), que le front reconnaît dans une demande à confirmer",

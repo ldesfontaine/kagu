@@ -2,6 +2,7 @@ package agentpolicy
 
 import (
 	"slices"
+	"time"
 
 	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
@@ -133,4 +134,45 @@ func CoversSet(rights []Capability, set Set) bool {
 		}
 	}
 	return true
+}
+
+// setsInOrder : les jeux, du plus étroit au plus large, dans l'ordre où
+// l'onglet Droits donne leurs lignes.
+var setsInOrder = []Set{SetObserve, SetManage, SetRoot}
+
+// Sets rend les trois jeux, du plus étroit au plus large.
+func Sets() []Set {
+	return slices.Clone(setsInOrder)
+}
+
+// SetOf rend le jeu que ces droits posent, à l'identique : leurs droits de
+// jeu sont ceux d'un jeu, partout ou sur un hôte Proxmox, quelles que soient
+// leurs valeurs ; les droits hors jeu n'y changent rien (--set les garde),
+// ni un droit à échéance (until) : un jeu se pose sans échéance, un droit
+// ajouté pour un temps ne le change pas. Faux : personnalisé.
+func SetOf(rights []Capability, until map[string]time.Time) (Set, bool) {
+	var held []string
+	for _, right := range rights {
+		if _, lapses := until[right.Name]; inSomeSet(right.Name) && !lapses {
+			held = append(held, right.Name)
+		}
+	}
+	for _, set := range setsInOrder {
+		listed := sets[set]
+		if sameNames(held, listed.everywhere) || sameNames(held, slices.Concat(listed.everywhere, listed.onProxmox)) {
+			return set, true
+		}
+	}
+	return "", false
+}
+
+// sameNames dit si held porte exactement les droits listés.
+func sameNames(held []string, listed []SetRight) bool {
+	names := make([]string, 0, len(listed))
+	for _, right := range listed {
+		names = append(names, right.Name)
+	}
+	slices.Sort(names)
+	sorted := slices.Sorted(slices.Values(held))
+	return slices.Equal(slices.Compact(sorted), names)
 }

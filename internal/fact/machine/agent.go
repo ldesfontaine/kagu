@@ -102,10 +102,20 @@ func (a Agent) UnavailableReason(capability string) string {
 // Fit dit si l'agent peut exercer ce droit, avec cette valeur
 // (agentpolicy.Fit).
 func (a Agent) Fit(right, value string) agentpolicy.RightFit {
-	status := agentpolicy.AgentStatus{
+	return agentpolicy.Fit(a.status(), right, value)
+}
+
+// GroupFits rend le verdict des cinq groupes de l'onglet Droits
+// (agentpolicy.GroupFits), avec l'échéance des droits rapportés.
+func (a Agent) GroupFits() []agentpolicy.GroupFit {
+	return agentpolicy.GroupFits(a.status(), a.RightsUntil)
+}
+
+// status est ce que les verdicts d'agentpolicy lisent de l'agent.
+func (a Agent) status() agentpolicy.AgentStatus {
+	return agentpolicy.AgentStatus{
 		Active: a.IsActive(), Reported: !a.ReportedAt.IsZero(), Rights: a.Capabilities, Unavailable: a.Unavailable,
 	}
-	return agentpolicy.Fit(status, right, value)
 }
 
 // CapabilitiesDiffer dit si le fichier de l'agent ne dit pas ce que le jeton

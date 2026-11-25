@@ -251,6 +251,16 @@ func HasCapability(capabilities []Capability, name string) bool {
 	return slices.ContainsFunc(capabilities, func(capability Capability) bool { return capability.Name == name })
 }
 
+// PathsOf rend la valeur que la liste porte pour ce droit ; rien s'il est
+// absent ou sans valeur.
+func PathsOf(capabilities []Capability, name string) []string {
+	index := slices.IndexFunc(capabilities, func(capability Capability) bool { return capability.Name == name })
+	if index < 0 {
+		return nil
+	}
+	return capabilities[index].Paths
+}
+
 // SameCapabilities dit si deux listes normalisées disent la même chose.
 func SameCapabilities(first, second []Capability) bool {
 	return FormatCapabilities(first) == FormatCapabilities(second)

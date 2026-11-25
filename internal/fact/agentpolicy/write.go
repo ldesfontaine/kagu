@@ -78,7 +78,7 @@ func (d Document) Grant(granted []Capability, term Term, clock Clock) (Document,
 func (d Document) Revoke(names []string) (Document, error) {
 	rights := slices.Clone(d.Rights)
 	for _, name := range names {
-		if name == CapabilityObserve {
+		if !revocable(name) {
 			return Document{}, ErrRevokeObserve
 		}
 		if known, ok := knownRightOf(name); !ok || known.readable > readInPolicy {
@@ -88,6 +88,11 @@ func (d Document) Revoke(names []string) (Document, error) {
 	}
 	d.Rights, d.Expiries = rights, expiriesWithout(d.Expiries, names)
 	return d, nil
+}
+
+// revocable dit si un droit se retire : tous, sauf observe.
+func revocable(name string) bool {
+	return name != CapabilityObserve
 }
 
 // SetServerKey remplace les clés du serveur par celle-ci, seule acceptée :

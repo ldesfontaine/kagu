@@ -79,10 +79,10 @@ test("Disponibilité : un seul chiffre pour les sondes et les incidents", () => 
 
 test("les onglets d'une machine : les fixes, puis ceux des modules qu'elle porte, dans l'ordre", () => {
   const slugs = (carried: ModuleID[]) => machineTabsOf(carried).map((tab) => tab.slug);
-  expect(slugs([])).toEqual(["", "reseau", "journaux", "agent"]);
-  expect(slugs(["containers", "probes", "ssh_keys"])).toEqual(["", "services", "disponibilite", "reseau", "ssh", "journaux", "agent"]);
-  expect(slugs(["hypervisor"])).toEqual(["", "reseau", "hyperviseur", "journaux", "agent"]);
-  expect(slugs(["guest"])).toEqual(["", "reseau", "journaux", "agent"]);
+  expect(slugs([])).toEqual(["", "reseau", "journaux", "droits", "agent"]);
+  expect(slugs(["containers", "probes", "ssh_keys"])).toEqual(["", "services", "disponibilite", "reseau", "ssh", "journaux", "droits", "agent"]);
+  expect(slugs(["hypervisor"])).toEqual(["", "reseau", "hyperviseur", "journaux", "droits", "agent"]);
+  expect(slugs(["guest"])).toEqual(["", "reseau", "journaux", "droits", "agent"]);
 });
 
 test("chaque onglet connu a son libellé : fixe, ou celui de son module", () => {

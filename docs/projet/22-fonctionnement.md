@@ -375,7 +375,7 @@ sinon), `terminal.container` et `service.free` sans valeur. `agentpolicy` tient 
 (Observer, Gérer, Gérer en root, figés par `TestR_A3_7_ThreeSetsAndOnlyThree`,
 posés par `grant --set`, « La politique de l'agent »)
 et les cinq groupes de l'onglet Droits (Voir, Déployer, Sauvegarder, Entrer,
-Réseau) ; aucun écran ne les montre encore.
+Réseau ; chaque droit en a un, `TestGroups_EveryRightHasExactlyOneGroup`).
 
 **« L'agent peut-il ce droit ? »** se tranche une fois, par
 `agentpolicy.Fit(statut, droit, valeur)` (appelé par `machine.Agent.Fit`) :
@@ -386,6 +386,29 @@ un producteur pour `backup.produce`), `unavailable` et sa raison quand son
 compte ne peut pas l'exercer, sinon `ok`. Déployer, recevoir une sauvegarde,
 restic et la fiche d'une machine (`agent.fit`, un verdict par droit connu) le
 lisent ; l'écran l'affiche sans le recalculer.
+
+**L'onglet Droits** de la fiche d'une machine (T03-08, R-A3-13) montre le jeu
+et les groupes, jamais une liste à plat de noms. Le serveur rend le bloc
+`agent.rights` (null tant que l'agent n'a rien rapporté, ou révoqué) :
+
+| Champ | D'où | Ce que l'écran en fait |
+| --- | --- | --- |
+| `set` | `agentpolicy.SetOf` : les droits de jeu rapportés sont ceux d'un jeu (partout ou sur un hôte Proxmox), valeurs, droits hors jeu et droits à échéance ignorés (un jeu se pose sans échéance) ; vide sinon | Le nom du jeu (ou « Personnalisé ») et sa phrase : `rights.observe_hint`, `rights.manage_risk`, `rights.root_risk`, `rights.custom_hint` |
+| `set_lines` | `agentpolicy.GrantSetLine` des deux autres jeux (des trois en personnalisé) | Chaque ligne à coller, avec `rights.paste_shows_change` |
+| `root_here` | La machine Kagu (`machine.LocalID`) couvre « Gérer en root » (`CoversSet`) | `rights.root_here` en tête (R-DROIT-5) |
+| `groups[]` | `agentpolicy.GroupFits` : un groupe est `ok` dès qu'un de ses droits s'exerce, `unavailable` s'il en porte sans pouvoir, `unknown` avant le rapport, `missing` sinon ; `until`, l'échéance de son dernier droit exercé (aucune si l'un est sans échéance) | La coche : permis, permis jusqu'à une heure, pas permis |
+| `groups[].grant_line` | Groupe `missing` : `GrantLine` du droit qui l'ouvre (`observe`, `docker.deploy`, `restic.produce`, `terminal.container`, `network.private`, colonne `opens` de `knownRights`) | La ligne qui l'ouvre |
+| `groups[].revoke_line` | `agentpolicy.RevokeLine` des droits qu'il porte, `observe` excepté | Sous « Voir le détail » |
+| `groups[].worth_root` | Déployer, quand un droit rapporté met l'agent dans le groupe `docker` (`NeedsDockerGroup`) | « vaut root », et `rights.worth_root_why` dans le détail (R-A3-12) |
+| `groups[].host_terminal` | Entrer, quand `terminal.host` est posé | `rights.host_terminal_risk` sous le groupe (R-A3-12, N-M6) |
+| `groups[].rights[]` | Le verdict de chaque droit (`Fit`), sa valeur et son échéance rapportées | Repliés sous « Voir le détail » |
+
+Aucune ligne ne porte une valeur rapportée par l'agent : seulement des noms de
+la table. Au-dessus des groupes, l'onglet dit d'où l'agent tient ses droits
+(politique et son empreinte ; `rights.unprotected` et la ligne
+`policy migrate` sur `identity.json` ; la politique refusée, `observe` seul),
+les droits que son compte ne peut pas exercer et l'écart avec le jeton.
+L'onglet Agent ne montre plus de droits : il y renvoie.
 
 | Droit | Portée | Ce qu'il permet |
 | --- | --- | --- |
@@ -437,8 +460,8 @@ lisent ; l'écran l'affiche sans le recalculer.
   le stocke dans `agent_capabilities`, en remplaçant le rapport précédent.
   Un en-tête illisible ne remplace rien, le flux s'ouvre quand même ; un
   agent d'avant les droits n'envoie rien, rien n'est stocké.
-- **L'écart** : la fiche de la machine montre les droits rapportés et ceux
-  que le jeton demandait, et le dit quand ils diffèrent
+- **L'écart** : l'onglet Droits de la fiche le dit quand les droits
+  rapportés diffèrent de ceux que le jeton demandait
   (`capabilities_differ` : le fichier a été modifié sur la machine, ou la
   ligne avant d'être jouée). Rien à comparer tant que l'un des deux manque, ni
   quand les droits viennent de la politique (root les a changés) ou qu'elle
@@ -619,7 +642,7 @@ ne sert plus qu'à changer la clé de l'agent.
 | La machine visée | Celle du fichier (`machine_id`) : un ordre pour une autre est refusé `wrong_machine` |
 | Sans politique | **Ni dossier** : droits, ancres et clé du serveur d'`identity.json` (source `identity`), une machine d'avant la politique. Dossier présent sans fichier : `observe` seul, aucune clé, aucune ancre (source `refused`, « the agent policy is missing from its directory »). Le dossier seul décide (R-A3-16), jamais une marque dans `identity.json`, que l'agent peut réécrire |
 | Politique refusée | Illisible, pas à root, inscriptible par le groupe ou les autres, un lien, ou un dossier au-dessus mal gardé (`checkChain`, comme l'état de l'agent) : **`observe` seul** (source `refused`), ni les droits d'avant ni ceux d'`identity.json` (R-A3-6). Un état d'agent mal gardé laisse aussi `observe` seul, quelle que soit la source |
-| Le rapport | En-têtes `OpenCloud-Agent-Policy-Source` (`policy`, `identity`, `refused`) et `OpenCloud-Agent-Policy-Digest` (SHA-256 du fichier en hexadécimal, ce que `sha256sum` affiche) à chaque ouverture du flux ; colonnes `agents.policy_source`, `agents.policy_digest` (migration `051`) ; `policy_source` et `policy_digest` dans l'agent de `GET /api/machines…`. Fiche, onglet Agent, sous « Droits » : « Politique » et son empreinte entière (à comparer à `agent rights`), une note rouge pour une politique refusée ; en source `identity`, la note « Droits non protégés » (`rights.unprotected`) et la ligne `sudo opencloud agent policy migrate` à copier (`migrate_line`, rendue par le serveur, vide hors source `identity`). Les échéances : en-tête `OpenCloud-Agent-Rights-Until` (`terminal.host=1764003720,…`, secondes Unix, `agentpolicy.FormatRightsUntil`), colonne `agents.rights_until` (migration `053`, JSON nom → heure, NULL sans échéance), `until` sur chaque droit rapporté de `GET /api/machines…` (null sans échéance) |
+| Le rapport | En-têtes `OpenCloud-Agent-Policy-Source` (`policy`, `identity`, `refused`) et `OpenCloud-Agent-Policy-Digest` (SHA-256 du fichier en hexadécimal, ce que `sha256sum` affiche) à chaque ouverture du flux ; colonnes `agents.policy_source`, `agents.policy_digest` (migration `051`) ; `policy_source` et `policy_digest` dans l'agent de `GET /api/machines…`. Fiche, onglet Droits (T03-08) : « Politique » et son empreinte entière (à comparer à `agent rights`), une note rouge pour une politique refusée ; en source `identity`, la note « Droits non protégés » (`rights.unprotected`) et la ligne `sudo opencloud agent policy migrate` à copier (`migrate_line`, rendue par le serveur, vide hors source `identity`). Les échéances : en-tête `OpenCloud-Agent-Rights-Until` (`terminal.host=1764003720,…`, secondes Unix, `agentpolicy.FormatRightsUntil`), colonne `agents.rights_until` (migration `053`, JSON nom → heure, NULL sans échéance), `until` sur chaque droit rapporté de `GET /api/machines…` (null sans échéance) |
 | Le pré-jugement | Le serveur n'envoie pas un ordre dont le droit échoit avant sa fin (`not_after`, 2 min) : `agentpolicy.HeldThrough` sur l'échéance rapportée, refus `right_missing` avec sa ligne. L'agent juge de nouveau à la réception |
 
 **Les commandes**, toutes en root (`RequireTrustRoot`, comme `agent trust`) :
@@ -991,6 +1014,7 @@ côté navigateur avec cela (`web/src/lib/machineTree.ts`), sans route de plus.
 | Fiche, résumé | Le bloc **À faire** en tête (agent absent ; agent en retard sur le serveur ; droits cochés que le compte ne peut pas exercer ; système en fin de support ; type inconnu hors agent en retard, dont le geste est déjà celui de l'agent ; hôte Proxmox à déclarer ou dont le relevé échoue), un bouton chacun ; sans rien à faire, il n'est pas là. Une machine archivée n'a rien à faire. Puis les tuiles et l'historique, la carte **Stockage** | `lib/machineTodo.ts`, `components/MachineTodoCard.tsx` |
 | Fiche, carte Stockage | Les volumes montés, les **disques physiques** (nom, modèle, nature, taille, amovible), les **pools** (genre, niveau, état, disques, taille ; « — » quand le noyau ne la dit pas), et, pour un hôte, le disque que chaque invité se fait allouer. **Aucun relevé SMART** | `components/MachineStorage.tsx`, `GET /api/machines/{id}/storage` |
 | Fiche, onglet Agent | La carte de l'agent et ses ordres, qui étaient dans le résumé | `pages/Machine.tsx` |
+| Fiche, onglet Droits (T03-08) | D'où l'agent tient ses droits, puis le jeu et les cinq groupes avec leurs lignes à coller (« Les droits d'un agent ») | `components/RightsList.tsx`, `pages/Machine.tsx` |
 | Fiche, onglet Hyperviseur (v0.5.2 P1, #459) | L'hôte en bande de faits ; si le jeton ne lit pas les archives, la carte « Les sauvegardes ne sont pas lisibles avec ce jeton » (deux commandes `pveum`, « Relire maintenant ») ; les **stockages** en cartes à jauge ; les **VM et conteneurs** en cartes (état, type, ressources allouées en jauges relatives à la plus grosse VM, machine liée, dernière sauvegarde en pastille : récente / ancienne / perdue de vue au-delà de 48 h et 7 j, « Aucune », « Inconnue »), les arrêtées repliées, les modèles à part ; les gestes au menu « … » de chaque carte. Le bloc « À faire » de la machine ajoute « jeton qui ne lit pas les sauvegardes » | `components/MachineHypervisor.tsx`, `EntityCard` (`to` facultatif, `children`, fait `wide`), `lib/proxmox.ts` (`groupGuests`, `allocationShares`, `backupTone`) ; maquette `docs/projet/maquettes/hyperviseur.html` |
 
 **Migration `026`** (`machine_placement`) : les colonnes `kind`, `kind_override`,
