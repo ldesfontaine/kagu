@@ -81,6 +81,7 @@ func TestAccountFailures_FollowTheAccount(t *testing.T) {
 	counted := func(failures auth.AccountFailures) auth.AccountFailures {
 		failures = addPasswordFailure(failures)
 		failures.TOTP = auth.TOTPFailures{Count: 3, LockedUntil: time.Unix(9_000, 0)}
+		failures.Password.LastAttempt = time.Unix(5_010, 0)
 		return failures
 	}
 	db := nativeTOTPDB(t)
@@ -93,7 +94,7 @@ func TestAccountFailures_FollowTheAccount(t *testing.T) {
 	if saved, err := db.SaveAuthStateIf(ctx, native, refreshed, time.Unix(2, 0)); err != nil || !saved {
 		t.Fatal(err)
 	}
-	if got, _ := db.GetAccountFailures(ctx); got.Password.Count != 1 || got.TOTP.Count != 3 {
+	if got, _ := db.GetAccountFailures(ctx); got.Password.Count != 1 || got.TOTP.Count != 3 || !got.Password.LastAttempt.Equal(time.Unix(5_010, 0)) {
 		t.Fatalf("a password reset cleared the failures: %+v", got)
 	}
 	another := refreshed

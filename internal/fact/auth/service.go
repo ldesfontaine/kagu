@@ -59,10 +59,6 @@ type Service struct {
 	// Les seuils des échecs par compte, et les alertes qu'ils ouvrent.
 	limits  AccountLimits
 	alerter AccountAlerter
-	// L'instant du dernier essai de mot de passe admis, pour l'intervalle d'un
-	// compte ralenti (failures.go).
-	paceMu              sync.Mutex
-	lastPasswordAttempt time.Time
 
 	// Tire et vérifie le code de première configuration, un à la fois.
 	setupMu sync.Mutex

@@ -97,10 +97,11 @@ func (f TOTPFailures) fail(at time.Time, limits AccountLimits) TOTPFailures {
 }
 
 // PasswordFailures : les mots de passe faux de l'heure comptée, qui commence
-// à WindowStart.
+// à WindowStart, et l'instant du dernier essai admis.
 type PasswordFailures struct {
 	Count       int
 	WindowStart time.Time
+	LastAttempt time.Time
 }
 
 // CountAt est le nombre de mots de passe faux de l'heure en cours ; une heure
@@ -116,9 +117,28 @@ func (f PasswordFailures) CountAt(at time.Time) int {
 // fenêtre.
 func (f PasswordFailures) fail(at time.Time) PasswordFailures {
 	if f.CountAt(at) == 0 {
-		return PasswordFailures{Count: 1, WindowStart: at}
+		f.Count = 0
+		f.WindowStart = at
 	}
-	return PasswordFailures{Count: f.Count + 1, WindowStart: f.WindowStart}
+	f.Count++
+	return f
+}
+
+// admit dit si un essai est admis à cet instant : ralenti, le compte n'en
+// admet qu'un par intervalle, quelle que soit la source. Chaque essai admis
+// devient « le dernier », ralenti ou non : celui qui franchit le seuil est
+// déjà suivi du délai. La base garde la seconde : l'instant est arrondi au-
+// dessus, pour que l'intervalle ne soit jamais plus court.
+func (f PasswordFailures) admit(at time.Time, limits AccountLimits) (PasswordFailures, bool) {
+	slowed := f.CountAt(at) > limits.PasswordFailuresPerHour
+	if slowed && at.Before(f.LastAttempt.Add(limits.PasswordPace)) {
+		return f, false
+	}
+	f.LastAttempt = at.Truncate(time.Second)
+	if f.LastAttempt.Before(at) {
+		f.LastAttempt = f.LastAttempt.Add(time.Second)
+	}
+	return f, true
 }
 
 // AccountFailures sont les compteurs du compte, tels que la base les garde.
@@ -130,7 +150,8 @@ type AccountFailures struct {
 // Same dit si deux relevés sont les mêmes, instants compris.
 func (f AccountFailures) Same(other AccountFailures) bool {
 	return f.TOTP.Count == other.TOTP.Count && f.TOTP.LockedUntil.Equal(other.TOTP.LockedUntil) &&
-		f.Password.Count == other.Password.Count && f.Password.WindowStart.Equal(other.Password.WindowStart)
+		f.Password.Count == other.Password.Count && f.Password.WindowStart.Equal(other.Password.WindowStart) &&
+		f.Password.LastAttempt.Equal(other.Password.LastAttempt)
 }
 
 // Ce que les échecs par compte attendent du store.
@@ -192,23 +213,22 @@ func (s *Service) judgePassword(ctx context.Context, state State, username, pass
 }
 
 // admitPasswordAttempt refuse l'essai quand le compte est ralenti et que le
-// dernier est trop proche, quelle que soit sa source. Chaque essai admis
-// compte comme « le dernier », ralenti ou non : celui qui franchit le seuil
-// est déjà suivi du délai. L'instant du dernier essai ne vit qu'en mémoire ;
-// un redémarrage de serve rend un essai de plus.
+// dernier est trop proche. L'instant du dernier essai s'écrit dans la même
+// transaction que la lecture : deux essais en même temps se suivent, et un
+// redémarrage de serve ne rend aucun essai.
 func (s *Service) admitPasswordAttempt(ctx context.Context) error {
-	failures, err := s.store.GetAccountFailures(ctx)
+	now := s.now()
+	admitted := false
+	_, _, err := s.store.ChangeAccountFailures(ctx, func(failures AccountFailures) AccountFailures {
+		failures.Password, admitted = failures.Password.admit(now, s.limits)
+		return failures
+	})
 	if err != nil {
 		return err
 	}
-	now := s.now()
-	s.paceMu.Lock()
-	defer s.paceMu.Unlock()
-	slowed := failures.Password.CountAt(now) > s.limits.PasswordFailuresPerHour
-	if slowed && now.Sub(s.lastPasswordAttempt) < s.limits.PasswordPace {
+	if !admitted {
 		return ErrAccountSlowed
 	}
-	s.lastPasswordAttempt = now
 	return nil
 }
 
@@ -268,9 +288,6 @@ func (s *Service) Unlock(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	s.paceMu.Lock()
-	s.lastPasswordAttempt = time.Time{}
-	s.paceMu.Unlock()
 	s.logger.Warn("interface account failures reset on the local channel", "username", current.Username)
 	s.auditor.Record(ctx, authEvent(audit.AuthUnlock, current))
 	s.notifyUnlocked(ctx, current.Username)
