@@ -8,7 +8,10 @@
     "step.enroll.rights": "Rights set by root",
     "step.enroll.system": "System recognised",
     "step.enroll.unit": "Agent started",
-    "step.enroll.workspace": "Services folder"
+    "step.enroll.workspace": "Services folder",
+    "step.setup.account": "Account kagu created",
+    "step.setup.agent": "Agent of this machine",
+    "step.setup.server": "Server started"
   },
   "fr": {
     "step.enroll.account": "Compte kagu-agent créé",
@@ -19,6 +22,9 @@
     "step.enroll.rights": "Droits posés par root",
     "step.enroll.system": "Système reconnu",
     "step.enroll.unit": "Agent démarré",
-    "step.enroll.workspace": "Dossier des services"
+    "step.enroll.workspace": "Dossier des services",
+    "step.setup.account": "Compte kagu créé",
+    "step.setup.agent": "Agent de cette machine",
+    "step.setup.server": "Serveur démarré"
   }
 }

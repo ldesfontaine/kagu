@@ -742,7 +742,7 @@ func installPreparation(capabilities []agentpolicy.Capability, number string, lo
 	asAccount := "runuser -u " + account + " -- "
 	source := "/tmp/" + brand.Command
 	if local {
-		source = "/usr/local/bin/" + brand.Command
+		source = brand.InstalledBinary
 	}
 	binDir := brand.AgentStateDir + "/" + brand.AgentBinDir
 	binaryName := brand.AgentBinaryPrefix + number

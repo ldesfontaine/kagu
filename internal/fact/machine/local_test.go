@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/edge/store/storetest"
@@ -178,5 +179,24 @@ func TestOfferLocalEnrollment_FallsBackToTheProductName(t *testing.T) {
 	_, token, err := machines.OfferLocalEnrollment(context.Background())
 	if err != nil || token.Name != brand.LocalMachineName {
 		t.Fatalf("token %+v %v", token, err)
+	}
+}
+
+// L'unité que setup pose est celle du fichier livré, commentaires mis à part :
+// un seul texte de référence.
+func TestServerUnitLines_MatchTheShippedUnit(t *testing.T) {
+	shipped, err := os.ReadFile("../../../docs/installation/kagu.service") // #nosec G304 -- le fichier livré, lu par un test.
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for line := range strings.SplitSeq(string(shipped), "\n") {
+		if !strings.HasPrefix(line, "#") {
+			want = append(want, line)
+		}
+	}
+	got := strings.Join(machine.ServerUnitLines(), "\n")
+	if strings.TrimRight(strings.Join(want, "\n"), "\n") != got {
+		t.Fatalf("setup et le fichier livré diffèrent.\nsetup :\n%s\nfichier :\n%s", got, strings.Join(want, "\n"))
 	}
 }

@@ -261,6 +261,12 @@ func localServer(t *testing.T, readPeer func(net.Conn) (uint32, error)) (configP
 // realServer monte le vrai serveur sur la base de state_dir, sans l'écouter.
 func realServer(t *testing.T, stateDir string) (*store.DB, *components, *server.Server) {
 	t.Helper()
+	return realServerLogging(t, stateDir, slog.New(slog.DiscardHandler))
+}
+
+// realServerLogging est realServer, son journal écrit par logger.
+func realServerLogging(t *testing.T, stateDir string, logger *slog.Logger) (*store.DB, *components, *server.Server) {
+	t.Helper()
 	root, err := openStateDir(stateDir)
 	if err != nil {
 		t.Fatal(err)
@@ -273,7 +279,7 @@ func realServer(t *testing.T, stateDir string) (*store.DB, *components, *server.
 	t.Cleanup(func() { db.Close() })
 	cfg := config.Default()
 	cfg.StateDir = stateDir
-	parts, err := buildComponents(cfg, root, db, slog.New(slog.DiscardHandler))
+	parts, err := buildComponents(cfg, root, db, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

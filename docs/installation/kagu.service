@@ -1,4 +1,6 @@
 # /etc/systemd/system/kagu.service — le serveur Kagu.
+# « kagu setup » pose ce texte, commentaires retirés
+# (machine.ServerUnitLines) : un test échoue si les deux diffèrent.
 [Unit]
 Description=Kagu (serveur)
 Documentation=https://github.com/ldesfontaine/kagu/blob/dev/docs/installation.md

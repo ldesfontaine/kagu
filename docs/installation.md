@@ -149,6 +149,7 @@ Les sous-commandes :
 
 | Commande | Rôle |
 | --- | --- |
+| `kagu setup [--rights observe\|manage\|root]` | Installe le serveur et l'agent de cette machine, en root, voir [En une commande : setup](#en-une-commande--setup) |
 | `kagu serve -config <chemin>` | Le serveur web. `-config` vaut `/etc/kagu/config.toml` par défaut |
 | `kagu agent [options]` | L'agent d'une machine, voir [Ajouter une machine](#ajouter-une-machine) |
 | `kagu auth status\|disable -config <chemin>` | L'état de l'authentification, ou la couper (mot de passe perdu) : l'interface revient à sa première configuration |
@@ -165,6 +166,42 @@ Les sous-commandes :
 | `kagu version` | La version et le commit |
 
 ## Installer le serveur
+
+### En une commande : setup
+
+Sur une Debian 12 ou 13, une Ubuntu 22.04 ou 24.04, en root, le binaire posé
+en `/usr/local/bin/kagu` ([Télécharger](#télécharger)) :
+
+```sh
+install -m 0755 kagu /usr/local/bin/kagu
+kagu setup                  # ou : kagu setup --rights observe|manage|root
+```
+
+Une seule question : ce que Kagu peut faire sur cette machine (sans
+terminal, « Gérer »). `setup` crée les comptes `kagu` et
+`kagu-agent`, `/etc/kagu/config.toml` (`listen = "127.0.0.1:8080"`),
+`state_dir` en `0700`, l'unité du serveur, puis l'agent de cette machine,
+enrôlé par sa socket locale, son jeu de droits et `backup.receive` (la
+sauvegarde de la base) posés dans sa politique. Chaque étape se coche ; une
+étape en échec dit pourquoi et quoi faire, et `setup` s'arrête là. Relancé,
+il reprend sans rien refaire. Il finit par la ligne du tunnel SSH, l'adresse
+à ouvrir et le code de première configuration :
+
+```text
+  Tunnel  ssh -L 8080:127.0.0.1:8080 root@<adresse>
+  Ouvre   http://localhost:8080
+
+Code de première configuration : 48219930
+```
+
+Le détail de chaque étape : [Fonctionnement](projet/22-fonctionnement.md),
+« L'installation par setup ». Ce que `setup` ne fait pas encore : Docker et
+restic (installez Docker avant, sans quoi « Gérer » s'arrête à « Dossier des
+services » ; « Observer » va jusqu'au bout), le domaine et le proxy
+(`--domain` et `--proxy` sont refusés). L'état de `setup` est dans
+`/etc/kagu/setup.json` (root, `0600`, aucun secret).
+
+### À la main
 
 Sur le VPS, en root. Un Debian minimal n'a pas `sudo` : les commandes
 « sous le compte du service » passent par `runuser`, toujours présent. La

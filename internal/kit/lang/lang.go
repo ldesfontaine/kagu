@@ -120,6 +120,7 @@ var placeholders = strings.NewReplacer(
 	"{example_url}", "https://"+brand.ID+".exemple.fr",
 	"{agent_unit}", brand.AgentUnit,
 	"{agent_account}", brand.AgentAccount,
+	"{server_account}", brand.ServerAccount,
 	"{agent_binary}", brand.AgentCurrentPath,
 	"{agent_state_dir}", brand.AgentStateDir,
 	"{workspace_marker}", brand.WorkspaceMarker,
