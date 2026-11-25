@@ -35,6 +35,8 @@ const remoteID = servertest.RemoteID
 // les monte, sans la chaîne de middlewares (server la teste de bout en bout).
 type bench struct {
 	http.Handler
+	// socket sert les mêmes routes comme la socket des agents locaux.
+	socket     http.Handler
 	handler    *Handler
 	logger     *slog.Logger
 	machines   *machine.Service
@@ -83,15 +85,21 @@ func (b *bench) mount() {
 		ClientAddress: httpx.PeerHost,
 		Clock:         func() time.Time { return testNow },
 	})
+	b.Handler = muxOf(b.handler.Routes)
+	b.socket = muxOf(b.handler.SocketRoutes)
+}
+
+// muxOf monte sur un mux les routes que déclare routes.
+func muxOf(routes func(add func(method, pattern string, handler http.HandlerFunc))) *http.ServeMux {
 	mux := http.NewServeMux()
-	b.handler.Routes(func(method, pattern string, handler http.HandlerFunc) {
+	routes(func(method, pattern string, handler http.HandlerFunc) {
 		if method == "*" {
 			mux.HandleFunc(pattern, handler)
 			return
 		}
 		mux.HandleFunc(method+" "+pattern, handler)
 	})
-	b.Handler = mux
+	return mux
 }
 
 func (b *bench) enroll(t *testing.T, name, id string) (machine.Machine, ed25519.PrivateKey) {
@@ -106,11 +114,17 @@ func (b *bench) openStream(t *testing.T, machineID string, private ed25519.Priva
 
 // postJSON poste comme un agent du protocole de ce binaire.
 func (b *bench) postJSON(path string, payload any) *httptest.ResponseRecorder {
+	return postJSONTo(b.Handler, path, payload)
+}
+
+// postJSONTo poste comme un agent du protocole de ce binaire, sur le montage
+// donné.
+func postJSONTo(handler http.Handler, path string, payload any) *httptest.ResponseRecorder {
 	body, _ := json.Marshal(payload)
 	request := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(agentwire.HeaderProtocol, agentwire.ProtocolVersion)
 	recorder := httptest.NewRecorder()
-	b.ServeHTTP(recorder, request)
+	handler.ServeHTTP(recorder, request)
 	return recorder
 }

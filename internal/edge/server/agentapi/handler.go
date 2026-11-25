@@ -212,11 +212,23 @@ func New(opts Options) *Handler {
 	return handler
 }
 
-// Routes déclare les routes de l'agent. Le serveur les monte à leur place
-// dans son arbre, que server/routes_test.go fige, et une seconde fois, seules,
-// sur la socket des agents locaux (Server.AgentSocketHandler).
+// Routes déclare les routes de l'agent servies par HTTPS. Le serveur les
+// monte à leur place dans son arbre, que server/routes_test.go fige.
 func (h *Handler) Routes(add func(method, pattern string, handler http.HandlerFunc)) {
-	add("POST", "/agent/enroll", h.enroll)
+	h.routes(false, add)
+}
+
+// SocketRoutes déclare les mêmes routes pour la socket des agents locaux
+// (Server.AgentSocketHandler), où elles sont montées seules. Seul ce montage
+// dit à l'enrôlement qu'il vient de la machine du serveur (R-B1-7).
+func (h *Handler) SocketRoutes(add func(method, pattern string, handler http.HandlerFunc)) {
+	h.routes(true, add)
+}
+
+func (h *Handler) routes(viaLocalSocket bool, add func(method, pattern string, handler http.HandlerFunc)) {
+	add("POST", "/agent/enroll", func(w http.ResponseWriter, r *http.Request) {
+		h.enroll(w, r, viaLocalSocket)
+	})
 	add("GET", "/agent/stream", h.stream)
 	add("POST", "/agent/signal", h.signal)
 	add("POST", "/agent/logs/{request}", h.logs)

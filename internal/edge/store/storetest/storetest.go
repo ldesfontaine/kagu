@@ -128,8 +128,9 @@ func PublishedProject(t testing.TB, db *store.DB, slug string) string {
 }
 
 // EnsureLocalMachine enrôle l'agent de la machine openCloud par le service
-// des machines, comme en vrai : un jeton, puis un agent qui présente
-// l'empreinte de la machine du serveur et prend LocalID.
+// des machines, comme en vrai : un jeton, puis un agent qui arrive par la
+// socket des agents locaux avec l'empreinte de la machine du serveur, et
+// prend LocalID.
 func EnsureLocalMachine(t testing.TB, machines *machine.Service) machine.Machine {
 	t.Helper()
 	ctx := context.Background()
@@ -147,7 +148,7 @@ func EnsureLocalMachine(t testing.TB, machines *machine.Service) machine.Machine
 		t.Fatal(err)
 	}
 	enrolled, err := machines.Enroll(ctx, machine.Enrollment{
-		MachineID: id, PublicKey: public, Token: cleartext, HostFingerprint: LocalFingerprint,
+		MachineID: id, PublicKey: public, Token: cleartext, HostFingerprint: LocalFingerprint, ViaLocalSocket: true,
 		Hostname: localHostname, Address: "10.8.0.1", OS: "Debian 12", Arch: "amd64", AgentVersion: "v0.0.1",
 	})
 	if err != nil {

@@ -33,34 +33,97 @@ func reading(at time.Time, cpu float64) sampler.Reading {
 	}
 }
 
-// L'agent qui présente l'empreinte de la machine du serveur s'enrôle comme
-// la machine openCloud : l'identifiant rendu est LocalID, que l'agent garde.
-// Un second, tant que le premier est actif, est refusé sans consommer son
-// jeton.
-func TestAgentEnroll_FromTheServerMachine_TakesTheStableID(t *testing.T) {
-	server := newBench(t)
-	// Le banc a déjà l'agent de la machine openCloud : révoqué, le suivant
-	// reprend sa ligne.
-	if err := server.machines.Remove(context.Background(), machine.LocalID, machine.RemoveOptions{KeepHistory: true}); err != nil {
+// enrollWithFingerprint présente un jeton de machine neuve sur le montage
+// donné, avec l'empreinte donnée, sous un identifiant tiré qu'il rend.
+func (b *bench) enrollWithFingerprint(t *testing.T, mount http.Handler, name, fingerprint string) (*httptest.ResponseRecorder, string) {
+	t.Helper()
+	cleartext, _, err := b.machines.CreateToken(context.Background(), name, machine.RoleGeneric, nil)
+	if err != nil {
 		t.Fatal(err)
 	}
-	server.machines.SetServerHost("f00d", "oc-host")
-	enroll := func(name, fingerprint string) *httptest.ResponseRecorder {
-		cleartext, _, err := server.machines.CreateToken(context.Background(), name, machine.RoleGeneric, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		public, _, _ := ed25519.GenerateKey(nil)
-		return server.postJSON("/agent/enroll", agentwire.EnrollRequest{
-			MachineID: remoteID, PublicKey: base64.StdEncoding.EncodeToString(public), Token: cleartext, Hostname: "oc-host", HostFingerprint: fingerprint,
-		})
+	drawn, err := machine.NewID()
+	if err != nil {
+		t.Fatal(err)
 	}
-	accepted := enroll("oc-host", "f00d")
+	public, _, _ := ed25519.GenerateKey(nil)
+	return postJSONTo(mount, "/agent/enroll", agentwire.EnrollRequest{
+		MachineID: drawn, PublicKey: base64.StdEncoding.EncodeToString(public), Token: cleartext, Hostname: "oc-host", HostFingerprint: fingerprint,
+	}), drawn
+}
+
+// withoutLocalAgent révoque l'agent de la machine openCloud que le banc a
+// déjà : le suivant peut reprendre sa ligne.
+func (b *bench) withoutLocalAgent(t *testing.T) {
+	t.Helper()
+	if err := b.machines.Remove(context.Background(), machine.LocalID, machine.RemoveOptions{KeepHistory: true}); err != nil {
+		t.Fatal(err)
+	}
+	b.machines.SetServerHost("f00d", "oc-host")
+}
+
+// enrolledID lit l'identifiant rendu par un enrôlement accepté.
+func enrolledID(t *testing.T, recorder *httptest.ResponseRecorder) string {
+	t.Helper()
 	var response agentwire.EnrollResponse
-	if accepted.Code != http.StatusCreated || json.Unmarshal(accepted.Body.Bytes(), &response) != nil || response.MachineID != machine.LocalID {
-		t.Fatalf("status %d: %s", accepted.Code, accepted.Body.String())
+	if recorder.Code != http.StatusCreated || json.Unmarshal(recorder.Body.Bytes(), &response) != nil {
+		t.Fatalf("status %d: %s", recorder.Code, recorder.Body.String())
 	}
-	refused := enroll("twin", "f00d")
+	return response.MachineID
+}
+
+// R-B1-7, N-F2 : par HTTPS, l'empreinte de la machine du serveur, lisible de
+// tous sur cette machine, ne rattache pas à la machine openCloud : l'agent
+// devient une machine neuve sous l'identifiant qu'il a tiré, et la ligne
+// locale reste sans agent. Le même enrôlement par la socket des agents
+// locaux rend LocalID. Un champ via_local_socket glissé dans le corps n'y
+// change rien : seul le montage le dit.
+func TestR_B1_7_HTTPSEnrollmentWithTheServerFingerprintGetsANewMachine(t *testing.T) {
+	server := newBench(t)
+	server.withoutLocalAgent(t)
+
+	overHTTPS, drawn := server.enrollWithFingerprint(t, server.Handler, "intruder", "f00d")
+	if got := enrolledID(t, overHTTPS); got != drawn {
+		t.Fatalf("over HTTPS the agent enrolled under %q, want the id it drew", got)
+	}
+	cleartext, _, err := server.machines.CreateToken(context.Background(), "forged", machine.RoleGeneric, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forgedID, err := machine.NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, _, _ := ed25519.GenerateKey(nil)
+	forged := server.postJSON("/agent/enroll", map[string]any{
+		"machine_id": forgedID, "public_key": base64.StdEncoding.EncodeToString(public), "token": cleartext,
+		"hostname": "oc-host", "host_fingerprint": "f00d", "via_local_socket": true, "ViaLocalSocket": true,
+	})
+	if got := enrolledID(t, forged); got != forgedID {
+		t.Fatalf("a field in the body must not make the agent local: enrolled under %q", got)
+	}
+	local, err := server.machines.Get(context.Background(), machine.LocalID)
+	if err != nil || local.Agent.IsActive() {
+		t.Fatalf("the server machine must stay without an agent: %+v %v", local.Agent, err)
+	}
+
+	throughSocket, _ := server.enrollWithFingerprint(t, server.socket, "oc-host", "f00d")
+	if got := enrolledID(t, throughSocket); got != machine.LocalID {
+		t.Fatalf("through the local socket the agent enrolled under %q, want %q", got, machine.LocalID)
+	}
+}
+
+// L'agent qui arrive par la socket des agents locaux avec l'empreinte de la
+// machine du serveur s'enrôle comme la machine openCloud : l'identifiant
+// rendu est LocalID, que l'agent garde. Un second, tant que le premier est
+// actif, est refusé sans consommer son jeton.
+func TestAgentEnroll_FromTheServerMachine_TakesTheStableID(t *testing.T) {
+	server := newBench(t)
+	server.withoutLocalAgent(t)
+	accepted, _ := server.enrollWithFingerprint(t, server.socket, "oc-host", "f00d")
+	if got := enrolledID(t, accepted); got != machine.LocalID {
+		t.Fatalf("enrolled under %q", got)
+	}
+	refused, _ := server.enrollWithFingerprint(t, server.socket, "twin", "f00d")
 	if refused.Code != http.StatusConflict || !strings.Contains(refused.Body.String(), agentwire.CodeLocalAgentActive) {
 		t.Fatalf("status %d: %s", refused.Code, refused.Body.String())
 	}

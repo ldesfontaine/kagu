@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/json"
 	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,8 +18,11 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/peercred"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // serveAgentSocket ouvre la socket des agents dans un dossier court, pour
@@ -136,6 +144,76 @@ func TestAgentSocket_ServesOnlyAgentRoutes(t *testing.T) {
 	if status := requestOver(t, socket, http.MethodPost, "/agent/enroll"); status == http.StatusNotFound || status < 400 {
 		t.Fatalf("POST /agent/enroll without a token: status %d, want a refusal from the route", status)
 	}
+}
+
+// R-B1-7, N-F2, câblé comme serve : par le port, l'empreinte de la machine
+// du serveur donne une machine neuve ; par la socket des agents locaux, la
+// même rend LocalID.
+func TestR_B1_7_OnlyTheAgentSocketEnrollsAsTheServerMachine(t *testing.T) {
+	const agentUID = 990
+	_, parts, srv := realServer(t, filepath.Join(shortDir(t), "state"))
+	parts.actions.SetKey(action.GenerateKey())
+	parts.machines.SetServerHost("sha256:server", "oc-host")
+	socket := serveAgentSocket(t, agentAccount{uid: agentUID, gid: os.Getgid()}, srv.AgentSocketHandler(), peerOf(agentUID))
+	socketClient := &http.Client{Transport: &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", socket)
+		},
+	}}
+
+	overPort := enrollRequest(t, parts, "intruder")
+	recorder := httptest.NewRecorder()
+	srv.ServeHTTP(recorder, overPort)
+	if got := enrolledMachine(t, recorder.Code, recorder.Body.Bytes()); got == machine.LocalID {
+		t.Fatal("over the port the server fingerprint must give a new machine")
+	}
+
+	response, err := socketClient.Do(enrollRequest(t, parts, "oc-host"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	var body bytes.Buffer
+	if _, err := body.ReadFrom(response.Body); err != nil {
+		t.Fatal(err)
+	}
+	if got := enrolledMachine(t, response.StatusCode, body.Bytes()); got != machine.LocalID {
+		t.Fatalf("through the agent socket: enrolled under %q, want %q", got, machine.LocalID)
+	}
+}
+
+// enrollRequest prépare l'enrôlement d'un agent qui présente l'empreinte de
+// la machine du serveur, par un jeton de machine neuve.
+func enrollRequest(t *testing.T, parts *components, name string) *http.Request {
+	t.Helper()
+	cleartext, _, err := parts.machines.CreateToken(context.Background(), name, machine.RoleGeneric, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := machine.NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	public, _, _ := ed25519.GenerateKey(nil)
+	payload, _ := json.Marshal(agentwire.EnrollRequest{
+		MachineID: id, PublicKey: base64.StdEncoding.EncodeToString(public), Token: cleartext,
+		Hostname: "oc-host", HostFingerprint: "sha256:server",
+	})
+	request := httptest.NewRequest(http.MethodPost, "http://localhost/agent/enroll", bytes.NewReader(payload))
+	request.RequestURI = ""
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(agentwire.HeaderProtocol, agentwire.ProtocolVersion)
+	return request
+}
+
+// enrolledMachine lit l'identifiant d'un enrôlement accepté.
+func enrolledMachine(t *testing.T, status int, body []byte) string {
+	t.Helper()
+	var enrolled agentwire.EnrollResponse
+	if status != http.StatusCreated || json.Unmarshal(body, &enrolled) != nil {
+		t.Fatalf("status %d: %s", status, body)
+	}
+	return enrolled.MachineID
 }
 
 // La socket porte le groupe de l'agent, pas celui de serve : c'est par lui

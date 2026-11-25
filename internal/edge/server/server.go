@@ -730,11 +730,12 @@ func (s *Server) AgentSocketHandler() http.Handler {
 	return s.agentSocketHandler
 }
 
-// agentSocketMux monte les routes d'agentapi.Handler.Routes une seconde fois,
-// hors de mux() : ni /api/, ni /control/, ni l'interface n'y passent.
+// agentSocketMux monte les routes de l'agent une seconde fois, par
+// agentapi.Handler.SocketRoutes, hors de mux() : ni /api/, ni /control/, ni
+// l'interface n'y passent.
 func (s *Server) agentSocketMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	s.agent.Routes(func(method, pattern string, handler http.HandlerFunc) {
+	s.agent.SocketRoutes(func(method, pattern string, handler http.HandlerFunc) {
 		bounded := boundByKind(method, pattern, handler)
 		if method != anyMethod {
 			pattern = method + " " + pattern
