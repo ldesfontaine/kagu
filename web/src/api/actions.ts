@@ -90,6 +90,13 @@ export async function pingAgent(machineID: string): Promise<ActionRun> {
   return api.send<ActionRun>(route("POST /api/machines/{id}/actions/ping", { id: machineID }));
 }
 
+// « Demander ce droit à la machine » (ARB-1) : l'ordre right.request part
+// sans jugement d'avance ; l'agent le refuse et le note pour « grant
+// --pending ». value : un producteur, seulement pour backup.produce.
+export async function requestRight(machineID: string, right: string, value = ""): Promise<ActionRun> {
+  return api.send<ActionRun>(route("POST /api/machines/{id}/actions/request-right", { id: machineID }), { right, value });
+}
+
 // Ce que la fiche d'une machine propose à son agent : la version du serveur,
 // ou pourquoi pas. reason est vide quand la mise à jour est disponible, sauf
 // « right_unavailable » : le compte de l'agent ne peut pas l'exercer, l'offre

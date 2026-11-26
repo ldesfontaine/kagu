@@ -302,6 +302,7 @@ type Notifier interface {
 // runs se lisent par le Reader.
 type ActionService interface {
 	Ping(ctx context.Context, machineID string) (action.Run, error)
+	RequestRight(ctx context.Context, machineID, right, value string) (action.Run, error)
 	ServerKey() (public []byte, fingerprint string, err error)
 	PreviousServerKey() string
 	Record(ctx context.Context, machineID string, report agentwire.ActionReport) error

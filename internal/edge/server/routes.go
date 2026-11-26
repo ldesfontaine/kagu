@@ -50,6 +50,7 @@ func (s *Server) routes() []route {
 		{"GET", "/api/machines/{id}/delete-plan", s.getMachineDeletePlan},
 		{"POST", "/api/machines/{id}/actions/reenroll", s.grantsAuthority(s.reenrollMachine)},
 		{"POST", "/api/machines/{id}/actions/ping", s.pingAgent},
+		{"POST", "/api/machines/{id}/actions/request-right", s.requestRight},
 		{"GET", "/api/machines/{id}/agent-update", s.getAgentUpdate},
 		{"POST", "/api/machines/{id}/actions/update-agent", s.updateAgent},
 		{"POST", "/api/machines/{id}/actions/rollback-agent", s.rollbackAgent},

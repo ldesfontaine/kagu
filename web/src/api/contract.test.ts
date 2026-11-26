@@ -154,6 +154,7 @@ const machine = shape<Machine>("Machine", {
         host_terminal: value,
         rights: shape<GroupRight>("GroupRight", { name: value, paths: value, state: value, until: value }),
         grant_line: value,
+        request_right: value,
         revoke_line: value,
       }),
       prepare_line: value,

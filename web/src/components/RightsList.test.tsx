@@ -10,7 +10,7 @@ vi.mock("../i18n/context", () => ({
 }));
 
 function group(over: Partial<RightsGroup>): RightsGroup {
-  return { name: "see", state: "ok", until: null, worth_root: false, host_terminal: false, rights: [], grant_line: "", revoke_line: "", ...over };
+  return { name: "see", state: "ok", until: null, worth_root: false, host_terminal: false, rights: [], grant_line: "", request_right: "", revoke_line: "", ...over };
 }
 
 // Une machine en « Gérer » qui a aussi terminal.host, jusqu'à une heure.
@@ -25,7 +25,7 @@ const rights: AgentRights = {
   groups: [
     group({ name: "see", rights: [{ name: "observe", paths: [], state: "ok", until: null }], revoke_line: "" }),
     group({ name: "deploy", worth_root: true, rights: [{ name: "docker.deploy", paths: [], state: "ok", until: null }], revoke_line: "sudo kagu agent revoke docker.deploy" }),
-    group({ name: "backup", state: "missing", rights: [{ name: "restic.produce", paths: [], state: "missing", until: null }], grant_line: "sudo kagu agent grant --pending" }),
+    group({ name: "backup", state: "missing", rights: [{ name: "restic.produce", paths: [], state: "missing", until: null }], grant_line: "sudo kagu agent grant --pending", request_right: "restic.produce" }),
     group({
       name: "enter",
       host_terminal: true,
@@ -33,14 +33,14 @@ const rights: AgentRights = {
       rights: [{ name: "terminal.host", paths: ["root"], state: "ok", until: "2026-11-25T16:42:00Z" }],
       revoke_line: "sudo kagu agent revoke terminal.host",
     }),
-    group({ name: "network", state: "missing", rights: [{ name: "network.private", paths: [], state: "missing", until: null }], grant_line: "sudo kagu agent grant --pending" }),
+    group({ name: "network", state: "missing", rights: [{ name: "network.private", paths: [], state: "missing", until: null }], grant_line: "sudo kagu agent grant --pending", request_right: "network.private" }),
   ],
 };
 
 function render(shown: AgentRights): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <RightsList rights={shown} machineName="vps-1" now={Date.parse("2026-11-25T12:00:00Z")} />
+      <RightsList rights={shown} machineID="m1" machineName="vps-1" now={Date.parse("2026-11-25T12:00:00Z")} />
     </MemoryRouter>,
   );
 }
@@ -105,7 +105,7 @@ test("les lignes viennent du serveur et la coche porte l'échéance", () => {
 function renderRefused(refusal: PolicyRefusal | null): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <RightsList rights={{ ...rights, set: "refused" }} refusal={refusal} machineName="vps-1" now={Date.parse("2026-11-25T12:00:00Z")} />
+      <RightsList rights={{ ...rights, set: "refused" }} refusal={refusal} machineID="m1" machineName="vps-1" now={Date.parse("2026-11-25T12:00:00Z")} />
     </MemoryRouter>,
   );
 }
@@ -121,4 +121,13 @@ test("TestE03_08_TheRefusalIsShown : la raison, le détail, la commande", () => 
   expect(unknown).not.toContain("<img");
   expect(unknown).not.toMatch(/sudo ch(own|mod)/);
   expect(renderRefused(null)).not.toContain("rights.refusal_");
+});
+
+// ARB-1 : à côté de la ligne constante d'un groupe pas permis, le geste
+// « Demander ce droit à la machine » ; aucun sur un groupe permis.
+test("TestARB1_AMissingGroupOffersToRequestItsRight", () => {
+  const markup = render(rights);
+  expect(markup.match(/rights\.request_right/g)?.length).toBe(2);
+  const allowed = { ...rights, groups: rights.groups.map((shown) => ({ ...shown, grant_line: "", request_right: "" })) };
+  expect(render(allowed)).not.toContain("rights.request_right");
 });

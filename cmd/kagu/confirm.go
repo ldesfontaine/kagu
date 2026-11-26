@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ldesfontaine/kagu/internal/edge/agent"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
@@ -28,14 +29,30 @@ func isYes(answer string) bool {
 	return false
 }
 
-// confirmChange est la question des commandes root qui écrivent : l'appelant
-// a déjà imprimé ce qui change. Avec -yes elle ne demande rien ; sans -yes et
-// sans terminal elle refuse, sans quoi rien ne s'écrit jamais sans accord.
-func confirmChange(out io.Writer, openTerminal terminalOpener, yes bool, text lang.Catalog) error {
-	if yes {
-		return nil
+// confirmChange est la question des commandes root qui changent les droits
+// ou la confiance de l'agent (grant, grant --set, revoke, policy migrate,
+// trust) : elle imprime ce qui change, puis demande [o/N] au clavier, N par
+// défaut (R-DROIT-8, R-A3-15). Le terminal s'ouvre d'abord : -yes ne vaut que
+// sans lui (script, cloud-init). Avec un terminal, -yes est ignoré, la
+// commande le dit et pose la question (Lucas, 25/11/2026). Sans terminal ni
+// -yes, elle refuse : rien ne s'écrit jamais sans accord.
+func confirmChange(out io.Writer, openTerminal terminalOpener, yes bool, text lang.Catalog) func(agent.PolicyChange) error {
+	return func(change agent.PolicyChange) error {
+		terminal, err := openTerminal()
+		if err != nil {
+			printPolicyChange(out, text, change)
+			if yes {
+				return nil
+			}
+			return &refusal{message: text.Get("agent.confirm_needs_tty")}
+		}
+		defer terminal.Close()
+		if yes {
+			fmt.Fprintln(out, text.Get("agent.confirm_yes_ignored"))
+		}
+		printPolicyChange(out, text, change)
+		return askOn(out, terminal, text)
 	}
-	return askOnTerminal(out, openTerminal, text, "agent.confirm_needs_tty")
 }
 
 // askOnTerminal pose la question sur le terminal de contrôle ; sans terminal
@@ -47,6 +64,12 @@ func askOnTerminal(out io.Writer, openTerminal terminalOpener, text lang.Catalog
 		return &refusal{message: text.Get(needsTerminalKey)}
 	}
 	defer terminal.Close()
+	return askOn(out, terminal, text)
+}
+
+// askOn demande [o/N] et lit la réponse sur ce terminal ; tout sauf un
+// accord est un refus.
+func askOn(out io.Writer, terminal io.Reader, text lang.Catalog) error {
 	fmt.Fprint(out, text.Get("agent.confirm"))
 	answer, _ := bufio.NewReader(terminal).ReadString('\n')
 	if !isYes(answer) {

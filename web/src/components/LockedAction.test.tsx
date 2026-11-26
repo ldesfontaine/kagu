@@ -58,3 +58,16 @@ test("un fix d'ancre montre la commande ; sans rien à lever, rien", () => {
   // Un droit sans machine ne mène nulle part.
   expect(render({ right: "docker.deploy" })).toBe("");
 });
+
+// ARB-1 : un droit manquant offre « Demander ce droit à la machine » à côté
+// de la ligne constante ; une ligne étroite garde la ligne seule.
+test("TestARB1_ALockedGestureOffersToRequestTheRight", () => {
+  expect(render({ right: "docker.deploy", machine: "m1" })).toContain("rights.request_right");
+  const short = renderToStaticMarkup(
+    <MemoryRouter>
+      <LockedAction fix={{ right: "docker.deploy", machine: "m1" }} short />
+    </MemoryRouter>,
+  );
+  expect(short).not.toContain("rights.request_right");
+  expect(render({ command: "sudo x agent trust list", machine: "m3" })).not.toContain("rights.request_right");
+});

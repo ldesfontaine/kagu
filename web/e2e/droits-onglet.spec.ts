@@ -31,6 +31,14 @@ async function servedGroups(page: Page): Promise<ServedGroup[]> {
   return groups ?? [];
 }
 
+// Les ordres de vps-droits, tels que l'historique les rend.
+async function machineRuns(page: Page): Promise<{ id: string; kind: string; params: { right?: string } }[]> {
+  const machines = (await (await page.request.get("/api/machines")).json()) as { machines: { id: string; name: string }[] };
+  const id = machines.machines.find((machine) => machine.name === machineName)?.id ?? "";
+  const answer = (await (await page.request.get(`/api/actions?machine=${id}`)).json()) as { runs: { id: string; kind: string; params: { right?: string } }[] };
+  return answer.runs;
+}
+
 function groupCard(main: Locator, name: string): Locator {
   return main.locator("section.card", { has: main.page().locator(".card-t").getByText(label(`rights.group_${name}`), { exact: true }) });
 }
@@ -82,6 +90,15 @@ test("onglet Droits : le jeu, cinq groupes, les noms repliés, les lignes du ser
   await expect(network).toContainText(label("rights.not_allowed"));
   await expect(network.locator(".token-box code")).toHaveText(/^sudo \S+ agent grant --pending$/);
   await expect(network).toContainText(label("rights.paste_shows_change"));
+  // ARB-1 : à côté de la ligne, « Demander ce droit à la machine » fait
+  // partir un ordre right.request, et lui seul ; le groupe reste pas permis.
+  const before = await machineRuns(page);
+  await network.getByRole("button", { name: label("rights.request_right") }).click();
+  findings.done.buttons++;
+  await expect(network).toContainText(label("rights.request_sent"));
+  await expect(network).toContainText(label("rights.not_allowed"));
+  const sent = (await machineRuns(page)).filter((run) => !before.some((known) => known.id === run.id));
+  expect(sent.map((run) => [run.kind, run.params.right])).toEqual([["right.request", "network.private"]]);
   const enter = groupCard(main, "enter");
   await expect(enter).toContainText(label("rights.host_terminal_risk"));
   // terminal.container est sans échéance : le groupe reste permis, sans heure.

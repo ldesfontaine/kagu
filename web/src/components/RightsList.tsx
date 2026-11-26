@@ -6,6 +6,7 @@ import { formatWhen } from "../lib/time";
 import { Card, CardBody, CardHeader, Note } from "./Card";
 import { Fold } from "./Disclosure";
 import { Pill } from "./Pill";
+import { RequestRight } from "./RequestRight";
 import { RightPill } from "./RightPill";
 import { RootCommand } from "./RootCommand";
 
@@ -15,7 +16,7 @@ import { RootCommand } from "./RootCommand";
 // détail ». Tout vient du serveur : les verdicts (agentpolicy) comme les
 // lignes à coller ; rien n'est jugé ni écrit ici. refusal : pourquoi l'agent
 // refuse sa politique, quand il le dit (essai E03-08).
-export function RightsList({ rights, refusal = null, machineName, now }: { rights: AgentRights; refusal?: PolicyRefusal | null; machineName: string; now: number }) {
+export function RightsList({ rights, refusal = null, machineID, machineName, now }: { rights: AgentRights; refusal?: PolicyRefusal | null; machineID: string; machineName: string; now: number }) {
   const t = useT();
   return (
     <>
@@ -29,7 +30,7 @@ export function RightsList({ rights, refusal = null, machineName, now }: { right
         </CardBody>
       </Card>
       {rights.groups.map((group) => (
-        <GroupCard key={group.name} group={group} now={now} />
+        <GroupCard key={group.name} group={group} machineID={machineID} now={now} />
       ))}
       <Card>
         <CardHeader title={t("rights.other_sets")} />
@@ -85,9 +86,10 @@ const refusalReasons: Record<PolicyRefusal["reason"], string> = {
   unreadable: "rights.refusal_unreadable",
 };
 
-// Un groupe : ce qu'il permet, sa coche, ses risques, la ligne qui l'ouvre ;
-// replié, ses droits, leurs échéances et la ligne qui les retire.
-function GroupCard({ group, now }: { group: RightsGroup; now: number }) {
+// Un groupe : ce qu'il permet, sa coche, ses risques, le geste qui demande
+// son droit à la machine et la ligne qui l'ouvre ; replié, ses droits, leurs
+// échéances et la ligne qui les retire.
+function GroupCard({ group, machineID, now }: { group: RightsGroup; machineID: string; now: number }) {
   const t = useT();
   const verdict = (
     <span className="cluster gap-8">
@@ -101,6 +103,7 @@ function GroupCard({ group, now }: { group: RightsGroup; now: number }) {
       <CardBody gap={10}>
         <p className="secondary">{t(`rights.group_${group.name}_hint`)}</p>
         {group.host_terminal && <Note tone="warn">{t("rights.host_terminal_risk")}</Note>}
+        {group.request_right !== "" && <RequestRight machineID={machineID} right={group.request_right} />}
         {group.grant_line !== "" && <RootCommand command={group.grant_line} notes={[t("rights.paste_only_pending"), t("rights.paste_shows_change")]} />}
         <Fold label={t("rights.see_detail")} initiallyOpen={false}>
           {group.worth_root && <p className="secondary">{t("rights.worth_root_why")}</p>}

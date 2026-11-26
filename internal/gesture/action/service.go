@@ -189,6 +189,21 @@ func (s *Service) Ping(ctx context.Context, machineID string) (Run, error) {
 	return s.Send(ctx, machineID, agentwire.KindAgentPing, nil)
 }
 
+// RequestRight envoie l'ordre right.request (R-DROIT-8, ARB-1) : il demande
+// ce droit à l'agent, qui le refuse et le note pour « agent grant
+// --pending », ou réussit à vide s'il le tient déjà. Le droit et sa valeur
+// se jugent par agentpolicy.CheckRequested avant tout run.
+func (s *Service) RequestRight(ctx context.Context, machineID, right, value string) (Run, error) {
+	if err := agentpolicy.CheckRequested(right, value); err != nil {
+		return Run{}, err
+	}
+	params, err := json.Marshal(agentwire.RightRequestParams{Right: right, Value: value})
+	if err != nil {
+		return Run{}, fmt.Errorf("encode right request: %w", err)
+	}
+	return s.Send(ctx, machineID, agentwire.KindRightRequest, params)
+}
+
 // Send écrit le run, le journalise, le signe, le marque envoyé, puis le
 // pousse par le flux de la machine : une trace existe avant que l'ordre ne
 // parte. Un ordre qui ne part pas finit failed, undelivered. C'est le geste
@@ -255,9 +270,10 @@ func (s *Service) send(ctx context.Context, order ServiceOrder) (Run, error) {
 	// porté jusqu'à la fin de l'ordre : un droit qui échoit avant not_after
 	// ne suffit pas (R-A3-5). Le producteur de backup.produce n'est pas jugé
 	// ici : backup le juge avant d'envoyer (judgeSource), l'agent à la
-	// réception.
+	// réception. Le seul genre que le registre exempte (right.request, ARB-1)
+	// part sans ce jugement : l'agent le refuse et le note.
 	reported := target.Agent
-	if !reported.ReportedAt.IsZero() && !agentpolicy.HeldThrough(reported.Capabilities, reported.RightsUntil, spec.Right, s.now().Add(OrderLifetime)) {
+	if !spec.AgentJudgesAlone && !reported.ReportedAt.IsZero() && !agentpolicy.HeldThrough(reported.Capabilities, reported.RightsUntil, spec.Right, s.now().Add(OrderLifetime)) {
 		return Run{}, refusal.Missing(ErrRightMissing, spec.Right, machineID)
 	}
 	// Une ancre que l'agent a dit tenir et que l'ordre ne satisfait pas : il le

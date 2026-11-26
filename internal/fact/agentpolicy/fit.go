@@ -1,5 +1,7 @@
 package agentpolicy
 
+import "slices"
+
 // FitState dit où en est un droit sur l'agent d'une machine : le seul type
 // d'état de cette question, que l'API rend et que l'écran affiche sans le
 // recalculer.
@@ -67,4 +69,21 @@ func Covers(rights []Capability, right, value string) bool {
 		return CoversProducer(rights, value)
 	}
 	return CoversPath(rights, right, value)
+}
+
+// CheckRequested juge un droit que le serveur demande à l'agent par l'ordre
+// right.request (R-DROIT-8, ARB-1) : un nom que la politique connaît, et une
+// valeur seulement quand elle vient de la liste fermée des producteurs,
+// pour backup.produce. Un chemin ne se demande jamais : root le choisit
+// lui-même. L'agent note la même valeur d'un ordre refusé.
+func CheckRequested(right, value string) error {
+	switch {
+	case !slices.Contains(Names(), right):
+		return ErrCapabilityUnknown
+	case value == "":
+		return nil
+	case right != CapabilityBackupProduce || !slices.Contains(Producers(), value):
+		return ErrCapabilityProducer
+	}
+	return nil
 }

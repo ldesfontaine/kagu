@@ -1439,6 +1439,20 @@ chemin qui ne servent plus ; les dossiers restent. `grant` ne touche à aucun
 autre drop-in (`produce.conf`, `root.conf`) : il les nomme, et ce qu'ils
 ouvrent s'ajoute au sien.
 
+**Une ligne venue de Kagu est une seule commande `sudo kagu agent …`, sans
+« ; », « | », « && » ni `--yes` : sinon, ne la collez pas.** Un serveur pris
+sert aussi l'écran ; cette page, il ne la réécrit pas. Pour un droit manquant,
+l'écran donne toujours la même ligne, `sudo kagu agent grant --pending`, et le
+bouton « Demander ce droit à la machine » : l'agent note le droit, la commande
+le montre en clair et ne le pose qu'après un « o » tapé au clavier.
+
+`grant`, `grant --set`, `grant --pending`, `revoke`, `policy migrate` et
+`trust` impriment ce qu'ils changent, puis demandent `[o/N]` au clavier, N par
+défaut ; `echo o | sudo …` ne répond pas. `--yes` ne vaut que **sans
+terminal** (un script, cloud-init) : dans un terminal, la commande dit
+« --yes ne vaut que sans terminal : la question est posée. » et pose la
+question. `grant --pending` refuse `--yes` dans tous les cas.
+
 **Le code de sortie 3** veut dire « mis à jour, relance-moi » : l'agent vient
 de changer de binaire (`agent.update`) ou de revenir en arrière
 (`agent.rollback`) et s'arrête pour que systemd relance le lanceur, qui lance

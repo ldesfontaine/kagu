@@ -175,8 +175,9 @@ export type RightsGroupName = "see" | "deploy" | "backup" | "enter" | "network";
 
 // Un groupe : son verdict (permis jusqu'à until, null sans échéance), « vaut
 // root » (worth_root), terminal.host posé (host_terminal), ses droits pour le
-// détail, la ligne constante qui l'ouvre (vide s'il est permis) et la ligne
-// revoke qui retire ce qu'il porte (vide sans rien à retirer).
+// détail, la ligne constante qui l'ouvre (vide s'il est permis), le droit
+// que « Demander ce droit à la machine » demande alors (vide s'il est permis)
+// et la ligne revoke qui retire ce qu'il porte (vide sans rien à retirer).
 export interface RightsGroup {
   name: RightsGroupName;
   state: RightState;
@@ -185,6 +186,7 @@ export interface RightsGroup {
   host_terminal: boolean;
   rights: GroupRight[];
   grant_line: string;
+  request_right: string;
   revoke_line: string;
 }
 

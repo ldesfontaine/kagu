@@ -79,21 +79,43 @@ func (v *Verdict) judgeBody(policy agentpolicy.Policy, now time.Time) string {
 	if !known {
 		return agentwire.ReasonUnknownKind
 	}
-	if !agentpolicy.HasCapability(policy.Rights, spec.Right) {
-		return agentwire.RightMissing(spec.Right)
+	// Un genre au droit calculé (right.request) se lit d'abord : son droit
+	// vient de ses paramètres décodés (R-A1-1). Les autres jugent le droit
+	// avant de lire.
+	right := spec.Right
+	if spec.RightIsComputed() {
+		if reason := v.decode(); reason != "" {
+			return reason
+		}
+		if right = v.Order.Right(); right == "" {
+			return agentwire.ReasonBadOrder
+		}
 	}
-	// Une clé inconnue, répétée ou d'une autre casse ne se lit pas : refusée
-	// ici, avant les ancres, qui jugent la valeur décodée.
+	if !agentpolicy.HasCapability(policy.Rights, right) {
+		return agentwire.RightMissing(right)
+	}
+	if !spec.RightIsComputed() {
+		if reason := v.decode(); reason != "" {
+			return reason
+		}
+	}
+	// Les ancres de la politique : le registre des genres dit lesquelles
+	// bornent l'ordre et sur quelle valeur.
+	if finding := anchor.Judge(anchor.FromFile(policy.Anchors), v.Order.Presented()); finding != nil {
+		return agentwire.AnchorRefusal(*finding)
+	}
+	return ""
+}
+
+// decode lit l'ordre et le garde ; une clé inconnue, répétée ou d'une autre
+// casse ne se lit pas : refusée avant les ancres, qui jugent la valeur
+// décodée.
+func (v *Verdict) decode() string {
 	order, err := Decode(v.Body)
 	if err != nil {
 		return agentwire.ReasonBadOrder
 	}
 	v.Order = order
-	// Les ancres de la politique : le registre des genres dit lesquelles
-	// bornent l'ordre et sur quelle valeur.
-	if finding := anchor.Judge(anchor.FromFile(policy.Anchors), order.Presented()); finding != nil {
-		return agentwire.AnchorRefusal(*finding)
-	}
 	return ""
 }
 
