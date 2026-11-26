@@ -23,3 +23,15 @@ var (
 	SetupServer  = Define("step.setup.server")
 	SetupAgent   = Define("step.setup.agent")
 )
+
+// Les coches de la montée du serveur (upgrade), dans l'ordre de B2 §5.
+var (
+	UpgradeFound     = Define("step.upgrade.found")
+	UpgradeSpace     = Define("step.upgrade.space")
+	UpgradeCopied    = Define("step.upgrade.copied")
+	UpgradeReplaced  = Define("step.upgrade.replaced")
+	UpgradeRestarted = Define("step.upgrade.restarted")
+	UpgradeAnswers   = Define("step.upgrade.answers")
+	UpgradeUnits     = Define("step.upgrade.units")
+	UpgradePolicy    = Define("step.upgrade.policy")
+)

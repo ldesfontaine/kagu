@@ -15,6 +15,8 @@ const usage = `Usage : {command} <commande> [options]
 Commandes :
   setup     installe le serveur et l'agent de cette machine, en root
             (option --rights observe|manage|root)
+  upgrade   monte le serveur de cette machine à une version signée, en root
+            (options --to <version>, --from <dossier>, --status)
   serve     démarre le serveur web (option -config)
   agent     tourne sur une machine gérée (options -server -lang -pin -allow-plain -state ; jeton d'enrôlement sur l'entrée standard) ;
             agent trust list | add | remove : les ancres de confiance locales de l'agent, en root (option -state)
@@ -56,6 +58,8 @@ func main() {
 	switch os.Args[1] {
 	case "setup":
 		err = runSetup(os.Args[2:])
+	case "upgrade":
+		err = runUpgrade(os.Args[2:])
 	case "serve":
 		err = runServe(os.Args[2:])
 	case "agent":

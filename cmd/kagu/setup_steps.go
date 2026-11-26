@@ -53,14 +53,6 @@ const (
 	noLoginShell = "/usr/sbin/nologin"
 )
 
-// Les routes de la socket de contrôle que setup appelle.
-const (
-	controlHealthPath          = "/control/admin/health"
-	controlLocalEnrollmentPath = "/control/admin/local-enrollment"
-	controlLocalAgentPath      = "/control/admin/local-agent"
-	controlReleaseImportPath   = "/control/admin/releases/import"
-)
-
 // setupSystem est ce que setup demande à la machine, en plus de ce que
 // « agent grant » lui demande ; un test en enregistre les gestes.
 type setupSystem interface {
@@ -85,10 +77,10 @@ type setupSystem interface {
 func (r *setupRun) checkSystem(context.Context) (step.State, string, error) {
 	name := r.system.OSName()
 	if !slices.Contains(supportedSystems, name) {
-		return "", "", &setupFailure{reason: r.text.Format("setup.system_unknown", name), todo: r.text.Format("setup.system_unknown_todo", brand.InstallDocURL)}
+		return "", "", &stepFailure{reason: r.text.Format("setup.system_unknown", name), todo: r.text.Format("setup.system_unknown_todo", brand.InstallDocURL)}
 	}
 	if !r.system.Systemd() {
-		return "", "", &setupFailure{reason: r.text.Get("setup.no_systemd"), todo: r.text.Format("setup.no_systemd_todo", brand.InstallDocURL)}
+		return "", "", &stepFailure{reason: r.text.Get("setup.no_systemd"), todo: r.text.Format("setup.no_systemd_todo", brand.InstallDocURL)}
 	}
 	under := filepath.Dir(r.paths.stateDir)
 	free, err := r.system.FreeBytes(under)
@@ -96,7 +88,7 @@ func (r *setupRun) checkSystem(context.Context) (step.State, string, error) {
 		return "", "", err
 	}
 	if free < minFreeBytes {
-		return "", "", &setupFailure{reason: r.text.Format("setup.disk_full", free>>20, under), todo: r.text.Format("setup.disk_full_todo", under)}
+		return "", "", &stepFailure{reason: r.text.Format("setup.disk_full", free>>20, under), todo: r.text.Format("setup.disk_full_todo", under)}
 	}
 	return step.StateDone, r.text.Format("setup.system_detail", name, runtime.GOARCH), nil
 }
@@ -268,7 +260,7 @@ func (r *setupRun) runServer(ctx context.Context) (string, error) {
 		return r.doneDetail(false, ""), nil
 	}
 	if _, err := os.Stat(r.paths.binary); err != nil {
-		return "", &setupFailure{reason: r.text.Format("setup.binary_missing", r.paths.binary), todo: r.text.Format("setup.binary_missing_todo", r.paths.binary)}
+		return "", &stepFailure{reason: r.text.Format("setup.binary_missing", r.paths.binary), todo: r.text.Format("setup.binary_missing_todo", r.paths.binary)}
 	}
 	// La règle que serve juge au démarrage, vérifiée avant de le lancer : un
 	// dossier ouvert l'arrêterait sans canal local.
@@ -289,7 +281,7 @@ func (r *setupRun) runServer(ctx context.Context) (string, error) {
 	}
 	if !answered {
 		silent := r.text.Format("setup.server_silent", r.control.socket, int(r.wait.Seconds()))
-		return "", &setupFailure{reason: silent, todo: r.text.Get("setup.server_silent_todo")}
+		return "", &stepFailure{reason: silent, todo: r.text.Get("setup.server_silent_todo")}
 	}
 	return r.text.Get("setup.server_detail"), nil
 }
@@ -312,7 +304,7 @@ func (r *setupRun) importDownloadedRelease(ctx context.Context) (string, error) 
 	if status != http.StatusOK {
 		// Le refus dit dans la langue de setup, comme admin le dit.
 		refused := adminRun{client: r.control, text: r.text, out: r.out}.refusalOf(status, body)
-		return "", &setupFailure{
+		return "", &stepFailure{
 			reason: r.text.Format("setup.release_refused", r.paths.releaseDir, refused.Error()),
 			todo:   r.text.Get("setup.release_refused_todo"),
 		}
@@ -344,7 +336,7 @@ func (r *setupRun) startUnit(unit string, lines []string) (bool, error) {
 
 // installUnit écrit l'unité si elle diffère, et la fait relire à systemd.
 func (r *setupRun) installUnit(unit string, lines []string) (bool, error) {
-	written, err := r.writeUnit(unit, lines)
+	written, err := writeUnitFile(r.paths.unitDir, unit, lines)
 	if err != nil || !written {
 		return false, err
 	}
@@ -363,8 +355,10 @@ func (r *setupRun) ensureRunning(unit string, changed bool) (bool, error) {
 	return false, nil
 }
 
-func (r *setupRun) writeUnit(unit string, lines []string) (bool, error) {
-	dir, err := os.OpenRoot(r.paths.unitDir)
+// writeUnitFile écrit l'unité si elle diffère de ces lignes ; ses drop-ins
+// ne sont jamais touchés. Rend vrai s'il a fallu l'écrire.
+func writeUnitFile(unitDir, unit string, lines []string) (bool, error) {
+	dir, err := os.OpenRoot(unitDir)
 	if err != nil {
 		return false, err
 	}
@@ -434,7 +428,7 @@ func (r *setupRun) installLocalAgent(ctx context.Context) (step.State, string, e
 		return "", "", err
 	}
 	if !reported {
-		return "", "", &setupFailure{reason: r.text.Format("setup.agent_silent", int(r.wait.Seconds())), todo: r.text.Get("setup.agent_silent_todo")}
+		return "", "", &stepFailure{reason: r.text.Format("setup.agent_silent", int(r.wait.Seconds())), todo: r.text.Get("setup.agent_silent_todo")}
 	}
 	detail := r.text.Format("setup.agent_detail", r.text.Get("rights."+string(r.rights)))
 	if !changed && !laid && !started {
@@ -517,7 +511,7 @@ func (r *setupRun) enrollLocalAgent(ctx context.Context, account fsx.Owner) erro
 	current := filepath.Join(r.paths.agentStateDir, brand.AgentBinDir, brand.AgentCurrentLink)
 	args := []string{current, "agent", "-enroll-only", "-server", "unix:" + r.paths.agentSocket, "-state", r.paths.agentStateDir}
 	if err := r.system.EnrollAgent(account, args, token); err != nil {
-		return &setupFailure{reason: r.text.Get("setup.enroll_failed") + " : " + err.Error(), todo: r.text.Get("setup.failed_todo")}
+		return &stepFailure{reason: r.text.Get("setup.enroll_failed") + " : " + err.Error(), todo: r.text.Get("setup.failed_todo")}
 	}
 	return nil
 }
@@ -531,7 +525,7 @@ func (r *setupRun) localEnrollmentToken(ctx context.Context) (string, error) {
 	}
 	if status != http.StatusCreated {
 		if isRefusal(body, machine.ErrLocalEnrolled) {
-			return "", &setupFailure{reason: r.text.Get("setup.local_enrolled"), todo: r.text.Get("setup.local_enrolled_todo")}
+			return "", &stepFailure{reason: r.text.Get("setup.local_enrolled"), todo: r.text.Get("setup.local_enrolled_todo")}
 		}
 		return "", serverRefusal(status, body)
 	}
@@ -578,7 +572,7 @@ func (r *setupRun) layLocalPolicy(stateRoot *os.Root, identity agent.Identity) (
 		change, err := gesture()
 		var partial *agent.PrerequisiteError
 		if errors.As(err, &partial) {
-			return false, &setupFailure{reason: partial.Err.Error(), todo: r.text.Get("setup.failed_todo")}
+			return false, &stepFailure{reason: partial.Err.Error(), todo: r.text.Get("setup.failed_todo")}
 		}
 		if err != nil {
 			return false, explainPolicyError(err, r.text)
@@ -640,9 +634,9 @@ func (r *setupRun) checkWorkspace(ctx context.Context) (step.State, string, erro
 		return step.StateDone, brand.WorkspaceRoot, nil
 	}
 	if last.Deploy.State == agentpolicy.FitUnavailable {
-		return "", "", &setupFailure{reason: r.unavailableText(last.Deploy.Reason), todo: r.text.Get("setup.workspace_todo")}
+		return "", "", &stepFailure{reason: r.unavailableText(last.Deploy.Reason), todo: r.text.Get("setup.workspace_todo")}
 	}
-	return "", "", &setupFailure{reason: r.text.Format("setup.workspace_unknown", int(r.wait.Seconds())), todo: r.text.Get("setup.workspace_todo")}
+	return "", "", &stepFailure{reason: r.text.Format("setup.workspace_unknown", int(r.wait.Seconds())), todo: r.text.Get("setup.workspace_todo")}
 }
 
 // unavailableText dit pourquoi l'agent ne peut pas exercer un droit, avec la

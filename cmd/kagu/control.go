@@ -30,6 +30,16 @@ const (
 	maxControlResponse = 4 << 20
 )
 
+// Les routes d'administration de la socket de contrôle que setup et upgrade
+// appellent, en root.
+const (
+	controlHealthPath          = "/control/admin/health"
+	controlLocalEnrollmentPath = "/control/admin/local-enrollment"
+	controlLocalAgentPath      = "/control/admin/local-agent"
+	controlPreUpgradePath      = "/control/admin/backup/pre-upgrade"
+	controlReleaseImportPath   = "/control/admin/releases/import"
+)
+
 // controlClient parle au serveur qui tourne par state_dir/control.sock : les
 // commandes du fichier de l'annuaire passent par lui, pour que les agents
 // reçoivent leurs sondes et que le direct se mette à jour.

@@ -11,7 +11,15 @@
     "step.enroll.workspace": "Services folder",
     "step.setup.account": "Account kagu created",
     "step.setup.agent": "Agent of this machine",
-    "step.setup.server": "Server started"
+    "step.setup.server": "Server started",
+    "step.upgrade.answers": "Server answers",
+    "step.upgrade.copied": "Database copied",
+    "step.upgrade.found": "Version found",
+    "step.upgrade.policy": "Agent policy",
+    "step.upgrade.replaced": "Binary replaced",
+    "step.upgrade.restarted": "Server restarted",
+    "step.upgrade.space": "Free space",
+    "step.upgrade.units": "Units up to date"
   },
   "fr": {
     "step.enroll.account": "Compte kagu-agent créé",
@@ -25,6 +33,14 @@
     "step.enroll.workspace": "Dossier des services",
     "step.setup.account": "Compte kagu créé",
     "step.setup.agent": "Agent de cette machine",
-    "step.setup.server": "Serveur démarré"
+    "step.setup.server": "Serveur démarré",
+    "step.upgrade.answers": "Serveur répond",
+    "step.upgrade.copied": "Base copiée",
+    "step.upgrade.found": "Version trouvée",
+    "step.upgrade.policy": "Politique de l'agent",
+    "step.upgrade.replaced": "Binaire remplacé",
+    "step.upgrade.restarted": "Serveur redémarré",
+    "step.upgrade.space": "Place libre",
+    "step.upgrade.units": "Unités à jour"
   }
 }

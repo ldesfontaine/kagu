@@ -150,6 +150,7 @@ Les sous-commandes :
 | Commande | Rôle |
 | --- | --- |
 | `kagu setup [--rights observe\|manage\|root] [--releases-url https://…]` | Installe le serveur et l'agent de cette machine, en root, voir [En une commande : setup](#en-une-commande--setup) ; `install.sh` le lance après avoir vérifié la version, voir [Par install.sh](#par-installsh) |
+| `kagu upgrade [--to <version>] [--from <dossier>] [--status]` | Monte le serveur de cette machine à une version signée, en root, voir [Le serveur : kagu upgrade](#le-serveur--kagu-upgrade) |
 | `kagu serve -config <chemin>` | Le serveur web. `-config` vaut `/etc/kagu/config.toml` par défaut |
 | `kagu agent [options]` | L'agent d'une machine, voir [Ajouter une machine](#ajouter-une-machine) |
 | `kagu auth status\|disable -config <chemin>` | L'état de l'authentification, ou la couper (mot de passe perdu) : l'interface revient à sa première configuration |
@@ -1736,6 +1737,63 @@ jeton en lecture sont indépendants : l'un sans l'autre est permis.
 
 Les notes de chaque version (à faire en mettant à jour, changements qui
 cassent) sont dans [`versions/`](versions/README.md).
+
+### Le serveur : `kagu upgrade`
+
+Sur la machine Kagu, en root :
+
+```sh
+sudo kagu upgrade                  # la version la plus récente
+sudo kagu upgrade --to v0.6.0      # une version précise
+sudo kagu upgrade --from /root/v0.6.0   # un dossier déjà téléchargé, sans réseau
+sudo kagu upgrade --status         # où en est la dernière montée
+```
+
+`upgrade` coche ses étapes l'une après l'autre :
+
+```
+  ✓ Version trouvée               v0.6.0, signée (v0.5.0 en place)
+  ✓ Place libre                   3120 Mio (il en faut 240)
+  ✓ Base copiée                   /var/lib/kagu/upgrade/avant-v0.5.0.db
+  ✓ Binaire remplacé              l'ancien gardé : /usr/local/lib/kagu/kagu.previous
+  ✓ Serveur redémarré
+  ✓ Serveur répond                v0.6.0
+  ✓ Unités à jour                 déjà à jour
+  ✓ Politique de l'agent          lanceur stable recopié de la version vérifiée
+```
+
+- **La version** vient de `--from`, sinon de la bibliothèque des versions
+  importées, sinon de l'adresse des versions (GitHub). Elle est vérifiée
+  **avec la clé du binaire en place**, jamais celle du binaire qui arrive :
+  une signature fausse, une autre clé ou un binaire qui n'a pas sa somme
+  arrêtent tout à « Version trouvée », avant la moindre copie.
+- **La base** est copiée par `serve` lui-même, sous son compte
+  (`state_dir/upgrade/avant-<version>.db`, les trois dernières gardées) :
+  root ne lit ni n'écrit la base.
+- **Une session SSH coupée** n'arrête rien : `upgrade` se relance dans une
+  unité transitoire (`kagu-upgrade`), qui finit seule ; `--status` dit
+  où elle en est.
+- **Les unités** posées par `setup` sont réécrites si la nouvelle version en
+  porte d'autres (`daemon-reload`, sans redémarrage) ; les drop-ins ne sont
+  jamais touchés. Une installation faite à la main garde ses unités.
+- **Le lanceur stable** de l'agent de la machine Kagu est recopié depuis la
+  version vérifiée, jamais depuis `bin/` de l'agent. Un agent qui lit encore
+  ses droits dans `identity.json` passe à la politique (`agent policy
+  migrate`, ce qui est recopié est affiché).
+
+Ce que `upgrade` ne fait pas encore : **revenir seul** si la nouvelle version
+ne répond pas en 60 s. Il s'arrête, et le message dit les trois gestes du
+retour à la main (ci-dessous). La **`v0.0.1`** n'embarque pas de clé de
+version : `upgrade` refuse, la première version signée s'installe à la main,
+une fois.
+
+Les autres machines se mettent ensuite à jour depuis l'interface (« Mettre à
+jour les agents depuis Kagu »).
+
+### Mettre à jour à la main
+
+Le secours, quand `upgrade` ne peut pas : la `v0.0.1`, une installation qui
+n'a pas d'unité `kagu.service`, ou un retour en arrière.
 
 Il n'y a ni paquet ni dépôt : on remplace le binaire, après l'avoir vérifié
 (`kagu release verify`, voir « Télécharger »). Les migrations de la

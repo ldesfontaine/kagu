@@ -314,3 +314,30 @@ func TestVersions_LeavesOutAVersionWhoseSumsNoLongerVerify(t *testing.T) {
 		t.Fatalf("changed sums: %v %v", versions, err)
 	}
 }
+
+// Read rend les octets vérifiés d'une version importée ; un binaire changé
+// depuis l'import, ou une version absente, ne rend rien.
+func TestRead_ReturnsTheVerifiedBytesOfAnImportedRelease(t *testing.T) {
+	fixture := newImportFixture(t, Version{0, 0, 2})
+	state := testkit.EmptyRoot(t)
+	library := NewLibrary(state, Keys{Current: fixture.publicKey})
+	if _, err := library.Import(fixture.dir); err != nil {
+		t.Fatal(err)
+	}
+	verified, err := library.Read(Version{0, 0, 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(verified.Binaries[BinaryName("arm64")]) != "an arm64 binary" || verified.Version != (Version{0, 0, 2}) {
+		t.Fatalf("read %v %q", verified.Version, verified.Binaries)
+	}
+	if _, err := library.Read(Version{0, 0, 3}); !errors.Is(err, ErrNoRelease) {
+		t.Fatalf("absent version: %v", err)
+	}
+	if err := state.WriteFile(filepath.Join(brand.ReleasesDir, "v0.0.2", BinaryName("amd64")), []byte("changed"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.Read(Version{0, 0, 2}); !errors.Is(err, ErrDigestMismatch) {
+		t.Fatalf("changed binary: %v", err)
+	}
+}

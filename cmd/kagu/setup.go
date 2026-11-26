@@ -45,7 +45,7 @@ const (
 	// Le jeu posé quand personne ne répond : celui que la question propose.
 	defaultSetupRights = agentpolicy.SetManage
 	setupStateMode     = 0o600
-	setupLockMode      = 0o600
+	lockMode           = 0o600
 )
 
 // setupPaths : où setup écrit. Chaque chemin se tire de brand ; un test les
@@ -138,7 +138,7 @@ func (r *setupRun) command(ctx context.Context, args []string) error {
 	if r.euid != 0 {
 		return rootOnlyRefusal(r.text)
 	}
-	release, held, err := holdSetupLock(r.paths.lockFile)
+	release, held, err := holdLock(r.paths.lockFile)
 	if err != nil {
 		return err
 	}
@@ -161,20 +161,20 @@ func (r *setupRun) command(ctx context.Context, args []string) error {
 	return r.finish(ctx)
 }
 
-// holdSetupLock prend le verrou de setup sans attendre, par flock comme le
-// verrou de l'identité de l'agent ; il tombe avec le processus. held est faux
-// quand un autre setup le tient.
-func holdSetupLock(path string) (release func(), held bool, err error) {
-	lock, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, setupLockMode) // #nosec G304 -- chemin de brand.
+// holdLock prend le verrou d'une commande root (setup, upgrade) sans
+// attendre, par flock comme le verrou de l'identité de l'agent ; il tombe
+// avec le processus. held est faux quand une autre le tient.
+func holdLock(path string) (release func(), held bool, err error) {
+	lock, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, lockMode) // #nosec G304 -- chemin de brand.
 	if err != nil {
-		return nil, false, fmt.Errorf("open the setup lock: %w", err)
+		return nil, false, fmt.Errorf("open the lock %s: %w", path, err)
 	}
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil { // #nosec G115 -- un descripteur tient dans un int.
 		_ = lock.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
 			return nil, false, nil
 		}
-		return nil, false, fmt.Errorf("take the setup lock: %w", err)
+		return nil, false, fmt.Errorf("take the lock %s: %w", path, err)
 	}
 	return func() { _ = lock.Close() }, true, nil
 }
@@ -270,14 +270,14 @@ func (r *setupRun) askRights(terminal io.Reader) (agentpolicy.Set, error) {
 	return sets[choice-1], nil
 }
 
-// setupFailure est une étape en échec : sa raison s'écrit sur la ligne, ce
-// qu'il faut faire dans le refus qui arrête setup (R-B1-2).
-type setupFailure struct {
+// stepFailure est une étape en échec : sa raison s'écrit sur la ligne, ce
+// qu'il faut faire dans le refus qui arrête la commande (R-B1-2).
+type stepFailure struct {
 	reason string
 	todo   string
 }
 
-func (f *setupFailure) Error() string {
+func (f *stepFailure) Error() string {
 	return f.reason
 }
 
@@ -303,7 +303,7 @@ func (r *setupRun) runSteps(ctx context.Context) error {
 	for _, current := range setupSteps {
 		state, detail, err := current.run(r, ctx)
 		if err != nil {
-			reason, todo := r.explainFailure(err)
+			reason, todo := explainStepFailure(err, r.text)
 			r.check(current.key, step.StateFailed, reason)
 			if err := r.saveSetupState(); err != nil {
 				return err
@@ -323,10 +323,11 @@ func (r *setupRun) runSteps(ctx context.Context) error {
 	return nil
 }
 
-// explainFailure rend la raison d'une étape en échec et ce qu'il faut faire.
-// Un refus de la commande (state_dir ouvert, listen public) dit déjà les deux.
-func (r *setupRun) explainFailure(err error) (reason, todo string) {
-	var failure *setupFailure
+// explainStepFailure rend la raison d'une étape en échec et ce qu'il faut
+// faire. Un refus de la commande (state_dir ouvert, listen public) dit déjà
+// les deux.
+func explainStepFailure(err error, text lang.Catalog) (reason, todo string) {
+	var failure *stepFailure
 	if errors.As(err, &failure) {
 		return failure.reason, failure.todo
 	}
@@ -334,26 +335,37 @@ func (r *setupRun) explainFailure(err error) (reason, todo string) {
 	if errors.As(err, &refused) {
 		return "", refused.message
 	}
-	return err.Error(), r.text.Get("setup.failed_todo")
+	return err.Error(), text.Get("setup.failed_todo")
 }
 
-// check imprime la ligne d'une étape et la retient pour setup.json, à la
-// place de celle d'un setup d'avant.
+// check imprime la ligne d'une étape et la retient pour setup.json.
 func (r *setupRun) check(key step.Key, state step.State, detail string) {
+	r.state.Steps = recordStep(r.out, r.text, r.state.Steps, key, state, detail)
+}
+
+// recordStep imprime la ligne d'une étape et rend steps où elle remplace
+// celle d'un passage d'avant.
+func recordStep(out io.Writer, text lang.Catalog, steps []step.Step, key step.Key, state step.State, detail string) []step.Step {
 	checked := step.Step{Key: key, State: state, Detail: untrusted.Bound(detail, step.MaxDetailRunes), At: time.Now().UTC()}
-	step.Print(r.out, r.text, checked)
-	kept := r.state.Steps[:0]
-	for _, previous := range r.state.Steps {
+	step.Print(out, text, checked)
+	kept := steps[:0]
+	for _, previous := range steps {
 		if previous.Key != key {
 			kept = append(kept, previous)
 		}
 	}
-	r.state.Steps = append(kept, checked)
+	return append(kept, checked)
 }
 
 // waitFor relit check jusqu'à ce qu'il réponde vrai, au plus r.wait.
 func (r *setupRun) waitFor(ctx context.Context, check func(context.Context) (bool, error)) (bool, error) {
-	deadline := time.Now().Add(r.wait)
+	return waitUntil(ctx, r.wait, r.poll, check)
+}
+
+// waitUntil relit check toutes les poll jusqu'à ce qu'il réponde vrai, au
+// plus limit.
+func waitUntil(ctx context.Context, limit, poll time.Duration, check func(context.Context) (bool, error)) (bool, error) {
+	deadline := time.Now().Add(limit)
 	for {
 		done, err := check(ctx)
 		if done || err != nil {
@@ -362,7 +374,7 @@ func (r *setupRun) waitFor(ctx context.Context, check func(context.Context) (boo
 		if time.Now().After(deadline) {
 			return false, nil
 		}
-		if !wait.For(ctx, r.poll) {
+		if !wait.For(ctx, poll) {
 			return false, ctx.Err()
 		}
 	}
