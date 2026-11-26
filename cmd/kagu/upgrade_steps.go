@@ -21,6 +21,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	refusals "github.com/ldesfontaine/kagu/internal/kit/refusal"
 	"github.com/ldesfontaine/kagu/internal/kit/release"
 	"github.com/ldesfontaine/kagu/internal/kit/step"
@@ -84,8 +85,15 @@ func (r *upgradeRun) findVersion(ctx context.Context) (step.State, string, error
 	if err := r.stage(); err != nil {
 		return "", "", err
 	}
+	// Importée par serve, la version est celle qu'il tend ensuite aux agents
+	// (R-B2-6).
 	if !r.fromLibrary {
-		if err := r.importStaged(ctx); err != nil {
+		_, err := importReleaseByServe(ctx, r.control, r.text, r.state.Staged)
+		var refused *refusal
+		if errors.As(err, &refused) {
+			return "", "", &stepFailure{reason: refused.Error(), todo: r.text.Get("upgrade.verify_todo")}
+		}
+		if err != nil {
 			return "", "", err
 		}
 	}
@@ -327,19 +335,6 @@ func (r *upgradeRun) stage() error {
 	return nil
 }
 
-// importStaged fait importer la version posée par serve, sous son compte et
-// avec ses clés : c'est elle qu'il tend ensuite aux agents (R-B2-6).
-func (r *upgradeRun) importStaged(ctx context.Context) error {
-	status, body, err := r.control.post(ctx, controlReleaseImportPath, map[string]string{"folder": r.state.Staged}, controlTimeout)
-	if err != nil {
-		return err
-	}
-	if status != http.StatusOK {
-		return serverRefusal(status, body)
-	}
-	return nil
-}
-
 // checkSpace : deux fois la base (la copie, et ce que les migrations
 // écrivent), plus le binaire, sous state_dir comme sous le binaire.
 func (r *upgradeRun) checkSpace(context.Context) (step.State, string, error) {
@@ -547,10 +542,10 @@ func (r *upgradeRun) migrateAgentPolicy() (migrated, pending bool, err error) {
 // le oui est écrit dans state.json, d'où l'unité le prend.
 func (r *upgradeRun) askPolicyMigration() error {
 	_, err := r.withPendingMigration(func(opts agent.PolicyOptions) error {
+		confirm := confirmChange(r.out, r.openTerminal, false, r.text)
 		ask := func(change agent.PolicyChange) error {
-			printPolicyChange(r.out, r.text, change)
-			if err := confirmChange(r.out, r.openTerminal, false, r.text); err != nil {
-				return &refusal{message: r.text.Format("upgrade.policy_by_hand", agentpolicy.MigrateLine())}
+			if err := confirm(change); err != nil {
+				return policyByHandRefusal(r.text)
 			}
 			return errPolicyConsented
 		}
@@ -565,6 +560,13 @@ func (r *upgradeRun) askPolicyMigration() error {
 		return explainPolicyError(err, r.text)
 	}
 	return err
+}
+
+// policyByHandRefusal dit la ligne canonique de la migration à lancer à la
+// main, avec l'avertissement qui suit toute ligne à coller en root
+// (R-DROIT-8, ARB-1).
+func policyByHandRefusal(text lang.Catalog) error {
+	return &refusal{message: text.Format("upgrade.policy_by_hand", agentpolicy.MigrateLine()) + "\n" + text.Get("rights.paste_only_pending")}
 }
 
 // errPolicyConsented arrête la migration après le oui de root : elle se fait

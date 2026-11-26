@@ -294,28 +294,15 @@ func (r *setupRun) importDownloadedRelease(ctx context.Context) (string, error) 
 	if _, err := os.Stat(r.paths.releaseDir); errors.Is(err, fs.ErrNotExist) {
 		return "", nil
 	}
-	request := struct {
-		Folder string `json:"folder"`
-	}{Folder: r.paths.releaseDir}
-	status, body, err := r.control.post(ctx, controlReleaseImportPath, request, controlTimeout)
-	if err != nil {
-		return "", err
-	}
-	if status != http.StatusOK {
-		// Le refus dit dans la langue de setup, comme admin le dit.
-		refused := adminRun{client: r.control, text: r.text, out: r.out}.refusalOf(status, body)
+	imported, err := importReleaseByServe(ctx, r.control, r.text, r.paths.releaseDir)
+	var refused *refusal
+	if errors.As(err, &refused) {
 		return "", &stepFailure{
 			reason: r.text.Format("setup.release_refused", r.paths.releaseDir, refused.Error()),
 			todo:   r.text.Get("setup.release_refused_todo"),
 		}
 	}
-	var imported struct {
-		Version string `json:"version"`
-	}
-	if err := json.Unmarshal(body, &imported); err != nil || imported.Version == "" {
-		return "", fmt.Errorf("read the imported release: %w", err)
-	}
-	return imported.Version, nil
+	return imported, err
 }
 
 func (r *setupRun) serverAnswers(ctx context.Context) bool {

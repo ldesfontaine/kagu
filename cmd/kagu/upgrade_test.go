@@ -660,7 +660,8 @@ func TestUpgrade_AsksBeforeMigratingTheAgentPolicy(t *testing.T) {
 			}
 			if !test.migrated {
 				var refused *refusal
-				if !errors.As(err, &refused) || !strings.Contains(refused.message, agentpolicy.MigrateLine()) {
+				warning := testCatalog(t).Get("rights.paste_only_pending")
+				if !errors.As(err, &refused) || !strings.Contains(refused.message, agentpolicy.MigrateLine()+", ") || !strings.HasSuffix(refused.message, "\n"+warning) {
 					t.Fatalf("upgrade: %v", err)
 				}
 				if b.system.unitArgs != nil || strings.Contains(printed, "Version trouvée") || policyContent(t, b.place) != "" {
