@@ -197,7 +197,7 @@ func TestDeclare_WritesTheHostAndReadsItAtOnce(t *testing.T) {
 	for _, guest := range reading.Guests {
 		linked[guest.VMID] = guest.LinkedMachineID
 	}
-	if linked[5012] != "m2" || linked[200] != "" {
+	if linked[312] != "m2" || linked[200] != "" {
 		t.Errorf("links: %v", linked)
 	}
 	if bench.watcher.count() < 2 {

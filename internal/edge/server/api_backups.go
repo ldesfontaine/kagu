@@ -58,7 +58,7 @@ type backupPlanJSON struct {
 	Schedule          string     `json:"schedule"`
 	LastAttemptAt     *time.Time `json:"last_attempt_at"`
 	// La clé du refus de la dernière tentative qui n'a pas pu partir, ou le
-	// premier souci de son passage (« backup.target_failed:5012:producer_failed »).
+	// premier souci de son passage (« backup.target_failed:312:producer_failed »).
 	LastError string `json:"last_error"`
 	// Le dernier ordre du plan : le backup.receive du dernier passage, ou
 	// l'ordre en cours pendant qu'il dure ; null s'il n'y en a pas ou plus.

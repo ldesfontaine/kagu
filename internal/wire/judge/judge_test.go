@@ -190,15 +190,15 @@ func TestJudge_TheFirstReasonWins(t *testing.T) {
 // d'elle, il est refusé ; dedans, il passe.
 func TestJudge_TheAnchorsOfThePolicyBoundTheOrder(t *testing.T) {
 	b := newJudgeBench(t, "restic.produce")
-	order := sign(t, vmBackup(t, 5012), b.private)
+	order := sign(t, vmBackup(t, 312), b.private)
 	if verdict := Judge(order, b.policy, judgeNow); verdict.Reason != "anchor_missing:"+anchor.BackupGuest || verdict.Order.Params == nil {
 		t.Fatalf("no anchor: %+v", verdict)
 	}
-	b.policy.Anchors = map[string][]string{anchor.BackupGuest: {"5013"}}
+	b.policy.Anchors = map[string][]string{anchor.BackupGuest: {"313"}}
 	if verdict := Judge(order, b.policy, judgeNow); verdict.Reason != "anchor_outside:"+anchor.BackupGuest {
 		t.Fatalf("outside: %+v", verdict)
 	}
-	b.policy.Anchors = map[string][]string{anchor.BackupGuest: {strconv.Itoa(5012)}}
+	b.policy.Anchors = map[string][]string{anchor.BackupGuest: {strconv.Itoa(312)}}
 	if verdict := Judge(order, b.policy, judgeNow); verdict.Reason != "" {
 		t.Fatalf("inside: %+v", verdict)
 	}

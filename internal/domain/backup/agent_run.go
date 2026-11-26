@@ -212,7 +212,7 @@ func (s *Service) resolveTargets(ctx context.Context, plan Plan) ([]string, erro
 	return targets, nil
 }
 
-// listedTargets lit « 5010,5012 » : chaque numéro une fois, dans l'ordre donné,
+// listedTargets lit « 310,312 » : chaque numéro une fois, dans l'ordre donné,
 // sans zéro de tête (007 et 7 sont la même machine virtuelle).
 func listedTargets(selector string) []string {
 	var targets []string

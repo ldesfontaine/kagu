@@ -74,7 +74,7 @@ func TestAnchors_AnAnchoredOrderStillRuns(t *testing.T) {
 	if final := results[len(results)-1]; final.State != agentwire.ActionSucceeded {
 		t.Fatalf("results %+v", results)
 	}
-	if !slices.Equal(b.produced, []string{"5012"}) {
+	if !slices.Equal(b.produced, []string{"312"}) {
 		t.Fatalf("produced %v", b.produced)
 	}
 }
@@ -95,7 +95,7 @@ func TestAnchors_NoAnchorMeansRefusalNamingTheMissingOne(t *testing.T) {
 func TestAnchors_UnreadableAnchorsAreADifferentRefusal(t *testing.T) {
 	b := newProduceRig(t)
 	b.countingProducer([]byte("x"))
-	b.trust(t, map[string][]string{anchor.BackupGuest: {"5012", "not a guest"}})
+	b.trust(t, map[string][]string{anchor.BackupGuest: {"312", "not a guest"}})
 	expectResult(t, b.run(t, 1, produceParams(b.identity)), agentwire.ActionRefused, "anchor_unreadable:backup.guest")
 	if len(b.produced) != 0 {
 		t.Fatalf("the producer ran on unreadable anchors: %v", b.produced)
@@ -150,18 +150,18 @@ func TestAnchors_ATrustAddIsReadByTheRunningAgentAndSurvivesItsWrites(t *testing
 	b := migrate(t, rig.orderBench)
 	expectResult(t, rig.run(t, 1, produceParams(rig.identity)), agentwire.ActionRefused, "anchor_missing:backup.guest")
 
-	change, err := Trust(b.opts, TrustRequest{Verb: TrustAdd, Kind: anchor.BackupGuest, Value: "5012"}, accept)
+	change, err := Trust(b.opts, TrustRequest{Verb: TrustAdd, Kind: anchor.BackupGuest, Value: "312"}, accept)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(change.After.Anchors[anchor.BackupGuest], []string{"5012"}) {
+	if !slices.Equal(change.After.Anchors[anchor.BackupGuest], []string{"312"}) {
 		t.Fatalf("stored %v", change.After.Anchors)
 	}
 	results := rig.run(t, 2, produceParams(rig.identity))
 	if final := results[len(results)-1]; final.State != agentwire.ActionSucceeded {
 		t.Fatalf("after the trust add: %+v", results)
 	}
-	if _, err := Trust(b.opts, TrustRequest{Verb: TrustRemove, Kind: anchor.BackupGuest, Value: "5012"}, accept); err != nil {
+	if _, err := Trust(b.opts, TrustRequest{Verb: TrustRemove, Kind: anchor.BackupGuest, Value: "312"}, accept); err != nil {
 		t.Fatal(err)
 	}
 	saved, err := LoadIdentity(b.stateDir)
@@ -183,7 +183,7 @@ var everyRight = []string{"observe", "agent.update", "docker.deploy", "docker.up
 // ancres à l'identique.
 func TestAnchors_NoOrderKindWritesAnAnchor(t *testing.T) {
 	b := newOrderBenchWithRights(t, everyRight)
-	posed := map[string][]string{anchor.BackupGuest: {"5012"}, anchor.BackupRecipient: {newAgeRecipient(t)}, anchor.ResticTargetCert: {strings.Repeat("ab", 32)}}
+	posed := map[string][]string{anchor.BackupGuest: {"312"}, anchor.BackupRecipient: {newAgeRecipient(t)}, anchor.ResticTargetCert: {strings.Repeat("ab", 32)}}
 	b.trust(t, posed)
 	hostile := map[string]any{
 		"anchors": map[string][]string{anchor.BackupGuest: {"1"}}, "anchor": "backup.guest", "backup.guest": []string{"1"},
@@ -325,7 +325,7 @@ func TestJournal_RecordsWhatWasSignedAndNeverASecret(t *testing.T) {
 		}
 	}
 	logged, _ := executed["params"].(map[string]any)
-	if logged["target"] != "5012" || logged["recipient"] != params.Recipient || logged["password"] != nil || logged["env"] != nil {
+	if logged["target"] != "312" || logged["recipient"] != params.Recipient || logged["password"] != nil || logged["env"] != nil {
 		t.Errorf("params %v", logged)
 	}
 	// Un ordre qui ne se décode pas n'a pas de valeur à écrire : le journal en
@@ -360,7 +360,7 @@ func TestR_A1_5_TheJournalWritesTheDecodedValues(t *testing.T) {
 	b.runner.journal.executed(judged)
 
 	unread := longOrder(2, agentwire.KindBackupProduce, nil)
-	unread.Params = json.RawMessage(`{"producer":"` + params.Producer + `","target":"5012","Target":"OTHER-TARGET","prefix":"` + params.Prefix +
+	unread.Params = json.RawMessage(`{"producer":"` + params.Producer + `","target":"312","Target":"OTHER-TARGET","prefix":"` + params.Prefix +
 		`","recipient":"` + params.Recipient + `","parcel":"` + params.Parcel + `"}`)
 	b.runner.receive(b.signed(t, unread))
 	b.until(t, unread.RunID)
@@ -569,7 +569,7 @@ func TestR_A1_3_TheProducerIsNeverCalledOnAKeyOfAnotherCaseOrRepeated(t *testing
 		{"Target outside the anchors", "Target", "9999"},
 		{"TARGET outside the anchors", "TARGET", "9999"},
 		{"target repeated, other value", "target", "9999"},
-		{"target repeated, same value", "target", "5012"},
+		{"target repeated, same value", "target", "312"},
 		{"Recipient outside the anchors", "Recipient", testIdentity(t).Recipient().String()},
 		{"recipient repeated, same value", "recipient", params.Recipient},
 	}

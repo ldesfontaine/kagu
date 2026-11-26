@@ -12,7 +12,7 @@ import (
 )
 
 // runsBench déclare un hôte Proxmox par l'API, comme l'opérateur : son
-// relevé contient la VM 5012, dont l'archive est sur le stockage « local », et
+// relevé contient la VM 312, dont l'archive est sur le stockage « local », et
 // le conteneur 200, qui n'en a pas. Deux lignes d'historique y sont posées.
 func runsBench(t *testing.T) *testServer {
 	t.Helper()
@@ -23,7 +23,7 @@ func runsBench(t *testing.T) *testServer {
 	size := int64(4096)
 	at := time.Unix(1_800_000_000, 0)
 	for _, record := range []backup.RunRecord{
-		{Subject: "pve", PassAt: at, Source: backup.GuestSourceKey(pveID, 5012), StartedAt: at, FinishedAt: at.Add(time.Minute),
+		{Subject: "pve", PassAt: at, Source: backup.GuestSourceKey(pveID, 312), StartedAt: at, FinishedAt: at.Add(time.Minute),
 			Result: backup.ResultOK, SizeBytes: &size, DestinationID: "bkd_1", DestinationName: "store-1", ActionRunID: "run_1"},
 		{Subject: "pve", PassAt: at, Source: backup.GuestSourceKey(pveID, 200), StartedAt: at, FinishedAt: at.Add(time.Minute),
 			Result: backup.ResultFailed, Reason: "producer_failed", DestinationID: "bkd_1", DestinationName: "store-1"},
@@ -47,7 +47,7 @@ func TestBackupRuns_FiltersAndRefusesABadLimit(t *testing.T) {
 	}
 	goldentest.Compare(t, filepath.Join("testdata", "backups_runs.golden.json"), normalizeBackups(all.Body.String()))
 
-	filtered := callBearer(server.Server, "/api/backups/runs?plan=pve&source="+backup.GuestSourceKey(pveID, 5012)+"&limit=1", bearer)
+	filtered := callBearer(server.Server, "/api/backups/runs?plan=pve&source="+backup.GuestSourceKey(pveID, 312)+"&limit=1", bearer)
 	decodeAPI(t, filtered, &runs)
 	if filtered.Code != http.StatusOK || len(runs.Runs) != 1 || runs.Runs[0].Result != "ok" {
 		t.Fatalf("filtered %d %s", filtered.Code, filtered.Body.String())

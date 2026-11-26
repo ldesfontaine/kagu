@@ -158,7 +158,7 @@ func TestSend_BackupOrdersNeedTheBackupRight(t *testing.T) {
 // l'agent à la réception. Des paramètres illisibles passent : l'agent les
 // refusera (bad_order).
 func TestSend_ProduceNeedsItsRight(t *testing.T) {
-	produce, err := json.Marshal(agentwire.BackupProduceParams{Producer: "proxmox-vzdump", Target: "5012", Prefix: "pve-vm-5012", Recipient: "age1x", Parcel: "colis"})
+	produce, err := json.Marshal(agentwire.BackupProduceParams{Producer: "proxmox-vzdump", Target: "312", Prefix: "pve-vm-312", Recipient: "age1x", Parcel: "colis"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -49,7 +49,7 @@ func TestPlanDefinition_Validate(t *testing.T) {
 	}{
 		{"the database plan", database, nil},
 		{"an agent plan", agent, nil},
-		{"a selector of identifiers", with(agent, func(d *backup.PlanDefinition) { d.Selector = "5010,5012" }), nil},
+		{"a selector of identifiers", with(agent, func(d *backup.PlanDefinition) { d.Selector = "310,312" }), nil},
 		{"a single identifier", with(agent, func(d *backup.PlanDefinition) { d.Selector = "100" }), nil},
 		{"a subject in capitals", with(agent, func(d *backup.PlanDefinition) { d.Subject = "Pve" }), backup.ErrPlanInvalid},
 		{"a subject with a slash", with(agent, func(d *backup.PlanDefinition) { d.Subject = "pve/vm" }), backup.ErrPlanInvalid},
@@ -211,12 +211,12 @@ func TestSavePlan_ChangesAnAgentPlanWithoutLosingItsHistory(t *testing.T) {
 		t.Fatal("an agent plan cannot run while its source is offline")
 	}
 	changed := agentPlan("pve-vm", destination.ID)
-	changed.Name, changed.Selector, changed.Keep = "", "5010,5012", 30
+	changed.Name, changed.Selector, changed.Keep = "", "310,312", 30
 	saved, err := b.backups.SavePlan(operator(), changed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.ID != first.ID || saved.Name != "" || saved.Selector != "5010,5012" || saved.Keep != 30 ||
+	if saved.ID != first.ID || saved.Name != "" || saved.Selector != "310,312" || saved.Keep != 30 ||
 		saved.LastError != "backup.source_offline" || saved.LastAttemptAt.IsZero() || !saved.CreatedAt.Equal(first.CreatedAt) {
 		t.Fatalf("saved %+v, first %+v", saved, first)
 	}

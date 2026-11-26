@@ -271,7 +271,7 @@ test("assistant : sauvegarder une VM entière, de bout en bout, puis y accéder"
   await expect(access).toContainText(label("backup.access_password_kept").split("{product}")[0] ?? "");
   await expect(access).toContainText(filled("backup.access_run_from", "pve"));
   await expect(access).toContainText(label("backup.access_restore_vm"));
-  await expect(access).toContainText("qmrestore - 6012");
+  await expect(access).toContainText("qmrestore - 1312");
   await expect(access).toContainText(label("backup.access_observed"));
   await access.getByRole("button", { name: label("machine.copy") }).first().click();
   expect(findings.unknown()).toEqual([]);

@@ -49,7 +49,7 @@ func TestAgentLine_KeepsTheRealValues(t *testing.T) {
 	values := []string{
 		"SHA256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU",
 		"age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p",
-		"5012",
+		"312",
 		"/srv/restore",
 		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}

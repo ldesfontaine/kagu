@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	producedPrefix = "pve-vm-5012"
-	producedEntry  = "vzdump-qemu-5012-2026_10_21-12_00_00.vma.zst"
+	producedPrefix = "pve-vm-312"
+	producedEntry  = "vzdump-qemu-312-2026_10_21-12_00_00.vma.zst"
 )
 
 // producedName est le nom de l'archive que l'ordre de test produit : l'horloge
@@ -92,7 +92,7 @@ func openArchive(t *testing.T, archive []byte, identity age.Identity) (string, [
 
 func produceParams(identity *age.X25519Identity) agentwire.BackupProduceParams {
 	return agentwire.BackupProduceParams{
-		Producer: agentpolicy.ProducerProxmoxVzdump, Target: "5012", Prefix: producedPrefix,
+		Producer: agentpolicy.ProducerProxmoxVzdump, Target: "312", Prefix: producedPrefix,
 		Recipient: identity.Recipient().String(), Parcel: "colis1",
 	}
 }
@@ -128,7 +128,7 @@ func newProduceRig(t *testing.T) *produceRig {
 // trousseau et la VM que les tests sauvegardent.
 func (b *produceRig) trustTheKeyringAndTheGuest(t *testing.T) {
 	t.Helper()
-	b.trust(t, map[string][]string{anchor.BackupRecipient: {b.identity.Recipient().String()}, anchor.BackupGuest: {"5012"}})
+	b.trust(t, map[string][]string{anchor.BackupRecipient: {b.identity.Recipient().String()}, anchor.BackupGuest: {"312"}})
 }
 
 func (b *produceRig) useProducer(chosen producer) {
@@ -748,14 +748,14 @@ func (f fakeVzdump) arguments(t *testing.T) []string {
 
 func TestVzdumpProducer_RunsSudoOnTheWrapperAndStreamsItsOutput(t *testing.T) {
 	t.Setenv("KAGU_TEST_LEAK", "ne-doit-pas-passer")
-	fake := newFakeVzdump(t, `printf 'VMA\000\377octets de vzdump' ; printf 'INFO: Starting Backup of VM 5012 (qemu)\nINFO: transferred 1 GiB\n' >&2`)
+	fake := newFakeVzdump(t, `printf 'VMA\000\377octets de vzdump' ; printf 'INFO: Starting Backup of VM 312 (qemu)\nINFO: transferred 1 GiB\n' >&2`)
 	b := newProduceRig(t)
 	b.useProducer(fake.producer())
 	results := b.run(t, 1, produceParams(b.identity))
 	if len(results) != 2 || results[1].State != agentwire.ActionSucceeded {
 		t.Fatalf("results %+v", results)
 	}
-	wantArguments := []string{"-n", fake.wrapper, "5012", "--mode", "snapshot", "--compress", "zstd", "--stdout", "--quiet", "1"}
+	wantArguments := []string{"-n", fake.wrapper, "312", "--mode", "snapshot", "--compress", "zstd", "--stdout", "--quiet", "1"}
 	if got := fake.arguments(t); !slices.Equal(got, wantArguments) {
 		t.Errorf("sudo ran with %q, want %q", got, wantArguments)
 	}
@@ -782,12 +782,12 @@ func TestVzdumpProducer_RunsSudoOnTheWrapperAndStreamsItsOutput(t *testing.T) {
 // d'abord ; à défaut, lxc si une ligne en parle, sinon une machine virtuelle.
 func TestVzdumpProducer_NamesTheEntryAfterTheGuestType(t *testing.T) {
 	for name, c := range map[string]struct{ stderr, entry string }{
-		"a container":          {`printf 'INFO: Starting Backup of VM 5012 (lxc)\n' >&2`, "vzdump-lxc-5012-2026_10_21-12_00_00.tar.zst"},
-		"a virtual machine":    {`printf 'INFO: Starting Backup of VM 5012 (qemu)\n' >&2`, "vzdump-qemu-5012-2026_10_21-12_00_00.vma.zst"},
-		"no line at all":       {`:`, "vzdump-qemu-5012-2026_10_21-12_00_00.vma.zst"},
-		"lxc without the line": {`printf 'INFO: creating archive from lxc rootfs\n' >&2`, "vzdump-lxc-5012-2026_10_21-12_00_00.tar.zst"},
-		"the line wins":        {`printf 'INFO: lxc is mentioned\nINFO: Starting Backup of VM 5012 (qemu)\n' >&2`, "vzdump-qemu-5012-2026_10_21-12_00_00.vma.zst"},
-		"no end of line":       {`printf 'INFO: Starting Backup of VM 5012 (lxc)' >&2`, "vzdump-lxc-5012-2026_10_21-12_00_00.tar.zst"},
+		"a container":          {`printf 'INFO: Starting Backup of VM 312 (lxc)\n' >&2`, "vzdump-lxc-312-2026_10_21-12_00_00.tar.zst"},
+		"a virtual machine":    {`printf 'INFO: Starting Backup of VM 312 (qemu)\n' >&2`, "vzdump-qemu-312-2026_10_21-12_00_00.vma.zst"},
+		"no line at all":       {`:`, "vzdump-qemu-312-2026_10_21-12_00_00.vma.zst"},
+		"lxc without the line": {`printf 'INFO: creating archive from lxc rootfs\n' >&2`, "vzdump-lxc-312-2026_10_21-12_00_00.tar.zst"},
+		"the line wins":        {`printf 'INFO: lxc is mentioned\nINFO: Starting Backup of VM 312 (qemu)\n' >&2`, "vzdump-qemu-312-2026_10_21-12_00_00.vma.zst"},
+		"no end of line":       {`printf 'INFO: Starting Backup of VM 312 (lxc)' >&2`, "vzdump-lxc-312-2026_10_21-12_00_00.tar.zst"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			fake := newFakeVzdump(t, "printf 'octets'\n"+c.stderr)
@@ -796,7 +796,7 @@ func TestVzdumpProducer_NamesTheEntryAfterTheGuestType(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer raw.Close()
-			result, err := fake.producer().run(context.Background(), producerRequest{target: "5012", raw: raw, now: orderNow})
+			result, err := fake.producer().run(context.Background(), producerRequest{target: "312", raw: raw, now: orderNow})
 			if err != nil || result.entry != c.entry {
 				t.Fatalf("entry %q (%v), want %q", result.entry, err, c.entry)
 			}
@@ -807,7 +807,7 @@ func TestVzdumpProducer_NamesTheEntryAfterTheGuestType(t *testing.T) {
 // vzdump qui sort en erreur : l'ordre échoue en producer_failed, sa sortie
 // d'erreur est dans le résultat, rien n'est envoyé.
 func TestVzdumpProducer_AFailingVzdumpFailsTheOrder(t *testing.T) {
-	fake := newFakeVzdump(t, "printf 'début' ; printf 'INFO: starting\\nERROR: Backup of VM 5012 failed - no such VM\\n' >&2 ; exit 3")
+	fake := newFakeVzdump(t, "printf 'début' ; printf 'INFO: starting\\nERROR: Backup of VM 312 failed - no such VM\\n' >&2 ; exit 3")
 	b := newProduceRig(t)
 	b.useProducer(fake.producer())
 	results := b.run(t, 1, produceParams(b.identity))
@@ -815,7 +815,7 @@ func TestVzdumpProducer_AFailingVzdumpFailsTheOrder(t *testing.T) {
 	if final.State != agentwire.ActionFailed || final.Reason != agentwire.ReasonProducerFailed {
 		t.Fatalf("results %+v", results)
 	}
-	if got := lines(final.Output); !slices.Equal(got, []string{"INFO: starting", "ERROR: Backup of VM 5012 failed - no such VM"}) {
+	if got := lines(final.Output); !slices.Equal(got, []string{"INFO: starting", "ERROR: Backup of VM 312 failed - no such VM"}) {
 		t.Errorf("output %q", got)
 	}
 	if uploaded, _ := b.server.received(); len(uploaded) != 0 {
@@ -858,7 +858,7 @@ func TestVzdumpProducer_WithoutSudoNothingRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer raw.Close()
-	if _, err := (vzdumpProducer{wrapper: "/nulle/part"}).run(context.Background(), producerRequest{target: "5012", raw: raw, now: orderNow}); err == nil {
+	if _, err := (vzdumpProducer{wrapper: "/nulle/part"}).run(context.Background(), producerRequest{target: "312", raw: raw, now: orderNow}); err == nil {
 		t.Fatal("a producer ran without sudo")
 	}
 }

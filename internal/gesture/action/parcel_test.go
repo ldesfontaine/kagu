@@ -193,7 +193,7 @@ func TestParcelWriter_RemoveForgetsAStagedFile(t *testing.T) {
 
 const (
 	producerID    = "99999999-8888-4777-8666-555555555555"
-	uploadedName  = "pve-vm-5012-20261021-030000.tar.age"
+	uploadedName  = "pve-vm-312-20261021-030000.tar.age"
 	uploadedBytes = "archive chiffrée de test"
 )
 
@@ -324,7 +324,7 @@ func TestOutbox_ReceiveOnlyTakesProducedArchiveNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{
-		"", "autre.txt", "../pve-vm-5012-20261021-030000.tar.age", "a/b-20261021-030000.tar.age",
+		"", "autre.txt", "../pve-vm-312-20261021-030000.tar.age", "a/b-20261021-030000.tar.age",
 		"kagu-key-0123456789abcdef.age", uploadedName + ".part", "PVE-20261021-030000.tar.age",
 		"pve-20261021-030000.tar", "-pve-20261021-030000.tar.age", uploadedName + "\n",
 	} {
@@ -374,7 +374,7 @@ func TestOutbox_ReceiveRefusesAFileTooLargeOrADiskTooFull(t *testing.T) {
 	}
 	// Une mesure impossible ne bloque pas : l'écriture dira si elle échoue.
 	outbox.SetFreeBytes(func(string) (uint64, error) { return 0, errors.New("statfs") })
-	if err := receive(outbox, producerID, upload.ID(), "pve-vm-5013-20261021-030000.tar.age", uploadedBytes); err != nil {
+	if err := receive(outbox, producerID, upload.ID(), "pve-vm-313-20261021-030000.tar.age", uploadedBytes); err != nil {
 		t.Fatalf("an unreadable free space blocks: %v", err)
 	}
 }
@@ -400,7 +400,7 @@ func TestOutbox_ReceiveWritesOneFileAtATimeAndNeverTwice(t *testing.T) {
 	if _, err := writer.Write([]byte(uploadedBytes[:1])); err != nil {
 		t.Fatal(err)
 	}
-	other := "pve-vm-5013-20261021-030000.tar.age"
+	other := "pve-vm-313-20261021-030000.tar.age"
 	if err := receive(outbox, producerID, upload.ID(), other, uploadedBytes); !errors.Is(err, action.ErrUploadConflict) {
 		t.Fatalf("a second file while one is in flight: %v", err)
 	}
@@ -518,7 +518,7 @@ func TestUpload_StageThenHandoverListsEverythingAndClosesTheParcelToTheProducer(
 		t.Fatalf("the destination has a full lifetime from the handover: %v", err)
 	}
 	_ = file.Close()
-	if err := receive(outbox, producerID, upload.ID(), "pve-vm-5012-20261021-120001.tar.age", "autre"); !errors.Is(err, action.ErrParcelNotFound) {
+	if err := receive(outbox, producerID, upload.ID(), "pve-vm-312-20261021-120001.tar.age", "autre"); !errors.Is(err, action.ErrParcelNotFound) {
 		t.Fatalf("the producer writes after the handover: %v", err)
 	}
 	*now = benchNow.Add(action.ParcelLifetime - time.Minute + action.ParcelLifetime)

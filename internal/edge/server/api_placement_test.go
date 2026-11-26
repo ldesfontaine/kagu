@@ -230,7 +230,7 @@ func TestPlacement_ARenamedGuestIsFoundByItsMAC(t *testing.T) {
 	}
 	var response machineJSON
 	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/machines/"+dockerVMID, nil), &response)
-	if response.Host == nil || response.Host.MachineID != pveID || response.Proxmox.Hosted == nil || response.Proxmox.Hosted.VMID != 5012 {
+	if response.Host == nil || response.Host.MachineID != pveID || response.Proxmox.Hosted == nil || response.Proxmox.Hosted.VMID != 312 {
 		t.Fatalf("la VM renommée n'est pas retrouvée : %+v", response)
 	}
 }

@@ -159,7 +159,7 @@ func TestR_A3_7_GrantSetReplacesTheSetAndKeepsTheRest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := Document{MachineID: "m", Anchors: map[string][]string{"backup.guest": {"5012"}}, ServerKeys: []ServerKey{{Key: []byte("k")}}}
+	before := Document{MachineID: "m", Anchors: map[string][]string{"backup.guest": {"312"}}, ServerKeys: []ServerKey{{Key: []byte("k")}}}
 	before, err = before.Grant(rights, Term{}, clock)
 	if err != nil {
 		t.Fatal(err)

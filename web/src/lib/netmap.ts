@@ -233,7 +233,7 @@ export function entryAnchorID(serviceID: string): string {
 export const homeAnchorID = "home";
 
 // Le mot du badge d'une machine : son type, avec le numéro d'invité quand
-// l'hôte en donne un (« VM 5010 »).
+// l'hôte en donne un (« VM 310 »).
 export function badgeText(t: Translate, box: Pick<MapBox, "kind" | "vmid">): string {
   const kind = t(`machine.kind_${box.kind}`);
   return box.vmid > 0 ? `${kind} ${box.vmid}` : kind;

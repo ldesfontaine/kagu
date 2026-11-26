@@ -16,10 +16,10 @@ import (
 
 var proxmoxVerbIDs = []string{"proxmox.vm.start", "proxmox.vm.shutdown", "proxmox.vm.snapshot", "proxmox.vm.snapshot_delete"}
 
-// Les invités du faux hôte : 200 est arrêté, 5012 en marche.
+// Les invités du faux hôte : 200 est arrêté, 312 en marche.
 const (
 	stoppedVMID = "200"
-	runningVMID = "5012"
+	runningVMID = "312"
 )
 
 // proxmoxTokenBench déclare l'hôte du faux Proxmox et ouvre le flux de son

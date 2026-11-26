@@ -48,7 +48,7 @@ const (
 const PrepareFailedKey = "backup.prepare_failed"
 
 // Les clés de last_error qui disent une cible précise d'un plan machine. Elles
-// portent leurs arguments après des deux-points (« backup.target_failed:5012:
+// portent leurs arguments après des deux-points (« backup.target_failed:312:
 // producer_failed ») : la page les compose, et seul ce qui a une forme fermée
 // y entre (voir targetReason).
 const (
@@ -127,7 +127,7 @@ func (p Plan) FilePrefix() string {
 }
 
 // TargetPrefix est le préfixe des fichiers d'une cible du plan : un invité par
-// numéro (« pve » donne « pve-vm-5012 »). L'élagage d'une cible ne touche pas
+// numéro (« pve » donne « pve-vm-312 »). L'élagage d'une cible ne touche pas
 // à celles des autres.
 func (p Plan) TargetPrefix(target string) string {
 	return agentwire.BackupFilePrefix(p.Subject, "vm-"+target)

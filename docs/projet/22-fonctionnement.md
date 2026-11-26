@@ -1304,7 +1304,7 @@ sur la fiche d'une machine, l'hôte Proxmox qu'elle porte ; Kagu interroge
 l'API de l'hyperviseur et montre ses VM et conteneurs, ses stockages et la
 dernière sauvegarde de chaque VM (onglet « Hyperviseur » de la machine), et, sur
 la fiche d'une machine qui est une de ces VM, son identité (« Comment Kagu
-sait où tourne une machine » : hôte, nœud, invité 5012, « 2 vCPU · 2 Gio · 32 Gio »
+sait où tourne une machine » : hôte, nœud, invité 312, « 2 vCPU · 2 Gio · 32 Gio »
 alloués, dernière sauvegarde (233 Mio)). **Le
 serveur ne donne aucun ordre à Proxmox** (ses gestes passent par l'agent de
 l'hôte, « Comment un hôte Proxmox agit ») : ni démarrage, ni arrêt, ni sauvegarde lancée, ni
@@ -7142,7 +7142,7 @@ a sa carte, jamais « dans » son hôte).
 | Un invité d'une machine « ailleurs » | **Ailleurs** : un invité suit son hôte |
 | Sans hôte connu, à adresse privée, sans adresse ou nommée plutôt qu'adressée, de type inconnu ou non | **Chez vous**, dans le couloir de sa zone |
 | Hôte d'invités (Proxmox ou « hôte » posé à la main) | Une carte dans le couloir de **sa** zone, qui dit « héberge N machines » |
-| Invité rapproché d'une machine enrôlée | Une carte dans le couloir de **sa** zone, avec son numéro (`VM 5010`) et « VM sur pve » ; jamais dans l'hôte |
+| Invité rapproché d'une machine enrôlée | Une carte dans le couloir de **sa** zone, avec son numéro (`VM 310`) et « VM sur pve » ; jamais dans l'hôte |
 | Invité que seul l'hôte connaît (sans agent) | Idem, sans service, son état tel que l'hôte le dit |
 | Un modèle de VM | Nulle part |
 | Une chaîne d'hôtes qui boucle, un hôte inconnu | À plat, sans hôte |
@@ -7185,7 +7185,7 @@ la mise en page ci-dessous : régions, couloirs, cartes).
 | Trois régions, de gauche à droite | **Internet** (une carte par entrée publique : service, machine, ports, « vue d'Internet »), **Ailleurs** (les machines hors de la maison, en cartes ; sans machine dehors, la région disparaît), **Chez vous** ; sous 860 px elles s'empilent dans le même ordre |
 | Pare-feu | Un **bandeau** en tête de « Chez vous » : tunnels, nom (lien vers sa fiche), WAN, nombre de zones. Plus de colonne d'interfaces |
 | Couloirs | Un couloir par zone qui contient une machine (nom, VLAN, sous-réseau, teinte) ; en colonnes de 300 px au moins, à la ligne sur un écran étroit. Les zones sans machine : une puce « N zones sans machine » qui se déplie au clic |
-| Machine | Une **carte** : état, nom (lien vers la fiche), type (`VM 5010`), adresse, « VM sur pve » (bouton), ses services en **puces** (état en mot si ce n'est pas « en marche ») ; sans service : « Aucun service » |
+| Machine | Une **carte** : état, nom (lien vers la fiche), type (`VM 310`), adresse, « VM sur pve » (bouton), ses services en **puces** (état en mot si ce n'est pas « en marche ») ; sans service : « Aucun service » |
 | Hôte | Une carte comme les autres, avec « héberge N machines » : le survol ou ce bouton met l'hôte et ses invités en évidence (les autres s'effacent) ; « VM sur pve » amène à l'hôte et fige la mise en évidence |
 | Repli | À 40 machines : un hôte replié cache les cartes de ses invités et dit ses services, son pire état et leurs zones ; un bouton le déplie, « Tout replier / Tout déplier » en tête |
 | Traits | Entrées d'Internet (de la carte de l'entrée à la puce du service ; un clic sur la carte met la puce en évidence), liens (plein : déclaré, pointillé court : déduit, pointillé long : observé ; « ? » : à confirmer ; pâle : ancien), **un trait de tunnel** nommé (« WireGuard · chiffré », épais, cadenas) de la carte de la machine « ailleurs » à l'interface du tunnel du bandeau. **Aucun trait d'interface vers une machine** : la zone se lit au couloir |

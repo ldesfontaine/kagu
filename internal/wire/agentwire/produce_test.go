@@ -8,11 +8,11 @@ import (
 // Les étiquettes JSON de l'ordre sont figées par les agents installés : un
 // champ renommé ne serait plus lu.
 func TestBackupProduceParams_JSONLabelsAreFrozen(t *testing.T) {
-	encoded, err := json.Marshal(BackupProduceParams{Producer: "proxmox-vzdump", Target: "5012", Prefix: "pve-vm-5012", Recipient: "age1abc", Parcel: "colis"})
+	encoded, err := json.Marshal(BackupProduceParams{Producer: "proxmox-vzdump", Target: "312", Prefix: "pve-vm-312", Recipient: "age1abc", Parcel: "colis"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = `{"producer":"proxmox-vzdump","target":"5012","prefix":"pve-vm-5012","recipient":"age1abc","parcel":"colis"}`
+	const want = `{"producer":"proxmox-vzdump","target":"312","prefix":"pve-vm-312","recipient":"age1abc","parcel":"colis"}`
 	if string(encoded) != want {
 		t.Fatalf("got %s", encoded)
 	}

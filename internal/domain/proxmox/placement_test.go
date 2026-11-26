@@ -59,8 +59,8 @@ func configHandler(configs map[string]string, clusterBody string) func(w http.Re
 func TestClient_Read_GuestMACsAndClusterName(t *testing.T) {
 	api := newFakeAPI(t)
 	api.handler = configHandler(map[string]string{
-		"/nodes/pve/qemu/5012/config": `{"data":{"name":"docker1","net0":"virtio=BC:24:11:AA:BB:CC,bridge=vmbr0","net1":"e1000=BC:24:11:AA:BB:CD,bridge=vmbr1","memory":2048}}`,
-		"/nodes/pve/lxc/200/config":   `{"data":{"hostname":"dns","net0":"name=eth0,bridge=vmbr0,hwaddr=BC:24:11:AA:BB:DD,ip=dhcp"}}`,
+		"/nodes/pve/qemu/312/config": `{"data":{"name":"docker1","net0":"virtio=BC:24:11:AA:BB:CC,bridge=vmbr0","net1":"e1000=BC:24:11:AA:BB:CD,bridge=vmbr1","memory":2048}}`,
+		"/nodes/pve/lxc/200/config":  `{"data":{"hostname":"dns","net0":"name=eth0,bridge=vmbr0,hwaddr=BC:24:11:AA:BB:DD,ip=dhcp"}}`,
 	}, `{"data":[{"type":"cluster","name":"homelab","nodes":2,"quorate":1},{"type":"node","name":"pve","online":1}]}`)
 
 	reading, err := NewClient(api.credentials(api.pin())).Read(context.Background())
@@ -74,7 +74,7 @@ func TestClient_Read_GuestMACsAndClusterName(t *testing.T) {
 	for _, guest := range reading.Guests {
 		byVMID[guest.VMID] = guest
 	}
-	docker := byVMID[5012].MACs
+	docker := byVMID[312].MACs
 	if len(docker) != 2 || !containsAll(docker, "bc:24:11:aa:bb:cc", "bc:24:11:aa:bb:cd") {
 		t.Errorf("docker1 : %v", docker)
 	}

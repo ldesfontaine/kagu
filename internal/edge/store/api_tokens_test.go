@@ -266,7 +266,7 @@ func TestAPITokens_ReachRoundTripAndCascades(t *testing.T) {
 	exec(t, db, `INSERT INTO machines (id, name, created_at) VALUES ('m1', 'un', 1), ('m2', 'deux', 1)`)
 	limited := newAPIToken("lim", "h-lim", time.Time{})
 	limited.Scope = apitoken.ScopeWrite
-	limited.Reach = apitoken.Reach{OnlyMachines: true, Machines: []string{"m1", "m2"}, OnlyGuests: true, Guests: []int{200, 5012}}
+	limited.Reach = apitoken.Reach{OnlyMachines: true, Machines: []string{"m1", "m2"}, OnlyGuests: true, Guests: []int{200, 312}}
 	empty := newAPIToken("vide", "h-vide", time.Time{})
 	empty.Scope = apitoken.ScopeWrite
 	empty.Reach = apitoken.Reach{OnlyMachines: true}
@@ -279,7 +279,7 @@ func TestAPITokens_ReachRoundTripAndCascades(t *testing.T) {
 	}
 
 	got, err := db.GetAPIToken(ctx, "h-lim")
-	if err != nil || !got.Reach.OnlyMachines || !got.Reach.OnlyGuests || len(got.Reach.Machines) != 2 || got.Reach.Machines[0] != "m1" || got.Reach.Guests[1] != 5012 {
+	if err != nil || !got.Reach.OnlyMachines || !got.Reach.OnlyGuests || len(got.Reach.Machines) != 2 || got.Reach.Machines[0] != "m1" || got.Reach.Guests[1] != 312 {
 		t.Fatalf("get: %+v %v", got.Reach, err)
 	}
 	listed, err := db.ListAPITokens(ctx)

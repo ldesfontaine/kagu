@@ -1323,7 +1323,7 @@ refuse donc rien : la fiche le dit, mettez-le à jour pour qu'il protège.
 **À l'installation**, les cases cochées ouvrent des champs (la clé du trousseau de
 sauvegarde est déjà proposée) et l'écran écrit les drapeaux au bout de la ligne
 d'enrôlement, après `-rights` : un drapeau par ancre, des valeurs séparées par des
-virgules, par exemple `-backup-guest 5012,5013` pour deux VM. Ils ne servent qu'au
+virgules, par exemple `-backup-guest 312,313` pour deux VM. Ils ne servent qu'au
 premier lancement ; une valeur mal écrite arrête l'agent avant l'enrôlement, sans
 consommer le jeton.
 
@@ -2584,7 +2584,7 @@ shred -u cle.txt
 
 Une VM sauvegardée par un [plan](#sauvegarder-des-vm-proxmox) se restaure sans
 Kagu, ni serveur ni base : il faut l'archive
-`pve-vm-5012-AAAAMMJJ-HHMMSS.tar.age` (le sujet du plan, `-vm-`, le numéro de
+`pve-vm-312-AAAAMMJJ-HHMMSS.tar.age` (le sujet du plan, `-vm-`, le numéro de
 la VM, la date en UTC), la clé `kagu-key-<empreinte>.age` **de la même
 sauvegarde**, la phrase de passe, et un hôte Proxmox pour la dernière étape. La
 clé se descelle comme ci-dessus ; l'archive est un `tar` d'une seule entrée,
@@ -2592,7 +2592,7 @@ l'archive de `vzdump` :
 
 ```sh
 age -d -o cle.txt kagu-key-0123456789abcdef.age                # demande la phrase
-age -d -i cle.txt pve-vm-5012-20261024-030000.tar.age | tar -x      # vzdump-qemu-5012-2026_10_24-03_00_00.vma.zst
+age -d -i cle.txt pve-vm-312-20261024-030000.tar.age | tar -x      # vzdump-qemu-312-2026_10_24-03_00_00.vma.zst
 shred -u cle.txt
 ```
 
@@ -2601,8 +2601,8 @@ la VM : placez-vous sur un disque qui a la place. Sur l'hôte Proxmox, un numér
 et un stockage de destination (`local-zfs` est l'exemple) :
 
 ```sh
-qmrestore vzdump-qemu-5012-2026_10_24-03_00_00.vma.zst 5012 --storage local-zfs   # une VM
-pct restore 5011 vzdump-lxc-5011-2026_10_24-03_00_00.tar.zst --storage local-zfs  # un conteneur
+qmrestore vzdump-qemu-312-2026_10_24-03_00_00.vma.zst 312 --storage local-zfs   # une VM
+pct restore 311 vzdump-lxc-311-2026_10_24-03_00_00.tar.zst --storage local-zfs  # un conteneur
 ```
 
 Le nom de l'entrée dit le type : `vzdump-qemu-…vma.zst` est une VM,
@@ -2779,7 +2779,7 @@ jour](#mettre-à-jour)).
 | Libellé | Facultatif : ce que la page affiche à la place du sujet |
 | Machine | L'hôte Proxmox |
 | Producteur | « Proxmox (vzdump) » |
-| Sélecteur | « Toutes les VM et tous les conteneurs » (`all`), ou « Seulement ceux que je coche » (`5010,5012`). La liste vient du dernier relevé de l'hôte déclaré, modèles exclus ; `all` se relit à **chaque passage**, une VM créée entre-temps part la nuit suivante. Sans hôte déclaré, le champ est un texte : les numéros séparés par des virgules, sans espace |
+| Sélecteur | « Toutes les VM et tous les conteneurs » (`all`), ou « Seulement ceux que je coche » (`310,312`). La liste vient du dernier relevé de l'hôte déclaré, modèles exclus ; `all` se relit à **chaque passage**, une VM créée entre-temps part la nuit suivante. Sans hôte déclaré, le champ est un texte : les numéros séparés par des virgules, sans espace |
 | Destination | Celle du geste 2 |
 | Sauvegardes gardées | 14 par défaut, de 1 à 365, **par VM** |
 
@@ -2793,28 +2793,28 @@ serveur), à la suite des autres.
 **Sauvegarder maintenant**, sur la carte du plan, lance un passage tout de
 suite : un seul à la fois sur la machine Kagu (`backup.run_in_progress`
 sinon). La carte suit l'avancement ; son « Dernier passage » dit « n OK » et
-« m en échec », et « Problème » donne le premier échec du passage (« La VM 5012
+« m en échec », et « Problème » donne le premier échec du passage (« La VM 312
 n'a pas été sauvegardée : … » ; l'API le porte sous la forme fermée
-`backup.target_failed:5012:producer_failed`). **Ces deux comptes vivent en
+`backup.target_failed:312:producer_failed`). **Ces deux comptes vivent en
 mémoire** : ils valent 0 et 0 après un redémarrage de `serve`.
 
 Pour le détail, lisez les ordres de chaque machine (fiche › Ordres) :
 
 | Où | Ordre | Ce qu'on y lit |
 | --- | --- | --- |
-| La fiche de l'**hôte** | « Produire une sauvegarde » (`backup.produce`) | `written pve-vm-5012-… <taille> sha256:…` puis `uploaded pve-vm-5012-…`. En échec, la fin de la sortie d'erreur de `vzdump` : **la carte du plan ne la montre jamais**, seulement une raison fermée |
+| La fiche de l'**hôte** | « Produire une sauvegarde » (`backup.produce`) | `written pve-vm-312-… <taille> sha256:…` puis `uploaded pve-vm-312-…`. En échec, la fin de la sortie d'erreur de `vzdump` : **la carte du plan ne la montre jamais**, seulement une raison fermée |
 | La fiche de la **destination** | « Recevoir une sauvegarde » (`backup.receive`) | une ligne `written` par fichier : l'archive et la clé |
 | La fiche de la **destination** | « Élaguer les sauvegardes » (`backup.prune`) | `removed <nom>` pour chaque copie écartée, puis `kept <n>` |
 
-Sur la destination, pour la VM 5012 du plan `pve` (dates en UTC) :
+Sur la destination, pour la VM 312 du plan `pve` (dates en UTC) :
 
 ```sh
 ls -l /srv/backups
-# pve-vm-5012-20261024-030000.tar.age     l'archive, chiffrée
+# pve-vm-312-20261024-030000.tar.age     l'archive, chiffrée
 # kagu-key-0123456789abcdef.age      la clé privée, scellée par la phrase
 ```
 
-L'élagage ne touche que `pve-vm-5012-AAAAMMJJ-HHMMSS.tar.age` : jamais une clé,
+L'élagage ne touche que `pve-vm-312-AAAAMMJJ-HHMMSS.tar.age` : jamais une clé,
 jamais une autre VM, jamais la base. Un test de restauration, de temps en
 temps, sur un numéro libre, vaut mieux que de croire la page :
 [restaurer une VM](#une-vm-proxmox-sans-kagu).
@@ -2898,7 +2898,7 @@ Les messages sont ceux que le binaire écrit, tels quels.
 | Agent : `tls: failed to verify certificate` | Certificat auto-signé sans `-pin` | `-pin`, ou un certificat reconnu |
 | « L'agent n'a pas le droit de lire la socket Docker de cette machine. » (`docker_denied`) | Le compte de l'agent n'est pas dans le groupe `docker`, ou y a été mis après le démarrage de l'agent : un groupe se lit au démarrage du processus | `usermod -aG docker kagu-agent` puis `systemctl restart kagu-agent`. Le groupe `docker` équivaut à root ([ce que cela donne](#le-groupe-docker-équivaut-à-root)) ; sinon, [garder l'agent en root](#garder-lagent-en-root) |
 | Agent : `WARN rights not exercisable` au journal, un droit « indisponible » sur la fiche de la machine, un ordre « Refusé » avec la même raison | Un droit coché que le compte de l'agent ne peut pas exercer : `docker_denied` (socket fermée au compte, ligne ci-dessus), `docker_missing` (pas de Docker, ou pas de `/usr/bin/docker`), `path_denied` (le dossier du droit, ou celui qui le contient, n'appartient pas au compte : la préparation ne l'a pas créé, ou une machine passée sous le compte n'a pas eu son `chown`), `path_unwritable` (l'unité ne l'ouvre pas : `ReadWritePaths=`), `not_self_updatable` (`bin/` n'appartient pas au compte) ; pour `backup.produce`, `sudo_missing` (pas de `sudo`), `producer_missing` (le script de root, ou `/usr/bin/vzdump`, manque) et `sudo_denied` (la règle `sudoers` manque, ou l'unité n'a pas son drop-in `produce.conf`) ; pour `restic.docker`, `docker_denied`, `docker_missing` (socket Docker et binaire `docker`) et `restic_missing` ; pour `restic.target`, `restic.produce`, `restic.verify`, `restic.browse` et `restic.restore`, `rest_server_missing` (la cible seule) et `restic_missing` (le binaire n'est ni dans le PATH de l'agent ni au chemin déclaré par `-rest-server` ou `-restic` : l'agent ne télécharge rien) | `path_denied` : `chown -h kagu-agent:kagu-agent <dossier>` ([Passer un agent installé en root sous son compte](#passer-un-agent-installé-en-root-sous-son-compte) dit lesquels), puis `systemctl restart kagu-agent` ; `path_unwritable` : le drop-in `droits.conf` ; `not_self_updatable` : `chown -hR kagu-agent:kagu-agent /var/lib/kagu-agent` ; `sudo_missing` : `apt install sudo` ; `producer_missing` et `sudo_denied` : rejouer la préparation de la page du jeton (les six lignes de [`backup.produce` équivaut à root](#backupproduce-équivaut-à-root)), puis `systemctl restart kagu-agent`, car le drop-in ne se lit qu'au démarrage de l'unité ; `rest_server_missing`, `restic_missing` : installer le binaire (paquet de la distribution ou version publiée, somme vérifiée par l'opérateur), puis `systemctl restart kagu-agent` |
-| Un plan de VM : « La VM 5012 n'a pas été sauvegardée : Le producteur de sauvegarde a échoué… » (`backup.target_failed:5012:producer_failed`) | `vzdump` a échoué sur la VM, ou n'a rien écrit. La carte du plan ne montre **pas** sa sortie d'erreur : seule une raison fermée y figure | Fiche de la **machine source** (l'hôte) › Ordres › l'ordre « Produire une sauvegarde » en échec : les dernières lignes de la sortie d'erreur de `vzdump` y sont (VM verrouillée, stockage, numéro inconnu…). Rien n'a été envoyé |
+| Un plan de VM : « La VM 312 n'a pas été sauvegardée : Le producteur de sauvegarde a échoué… » (`backup.target_failed:312:producer_failed`) | `vzdump` a échoué sur la VM, ou n'a rien écrit. La carte du plan ne montre **pas** sa sortie d'erreur : seule une raison fermée y figure | Fiche de la **machine source** (l'hôte) › Ordres › l'ordre « Produire une sauvegarde » en échec : les dernières lignes de la sortie d'erreur de `vzdump` y sont (VM verrouillée, stockage, numéro inconnu…). Rien n'a été envoyé |
 | Même plan : `upload_failed` | L'archive n'est pas arrivée sur la machine Kagu. Le plus courant : Traefik coupe un envoi plus long que son `readTimeout` (60 s par défaut en v3). Sinon la ligne `upload:` de l'ordre donne le code du serveur (`parcel_too_large`, `disk_full`) | [Régler le `readTimeout` de l'entrée](#les-envois-darchives), puis relancer ; pour `disk_full` côté serveur, libérer le disque de `state_dir` (1 Gio libre de plus que l'archive) |
 | Même plan : `disk_full` | L'**hôte** a moins de 1 Gio libre sous `/var/lib/kagu-agent`, ou n'a pas la place pour l'archive : `produce/` en garde deux copies (le flux de `vzdump` et l'archive chiffrée) | Libérer le disque de l'état de l'agent ([l'espace disque](#lespace-disque-le-temps)), puis relancer |
 | Un plan de VM refuse de partir : `backup.destination_agent_outdated`, `backup.source_offline`, `backup.source_right_missing`, `backup.selector_needs_list`, `backup.run_in_progress` | La destination est plus ancienne que v0.2.0 ; l'hôte est hors ligne ; son agent n'a pas `backup.produce=proxmox-vzdump` ; `all` sans hôte Proxmox relevé ; un autre passage court | [Mettre à jour](#mettre-à-jour) la destination ; l'hôte en ligne ; [donner le droit](#1-le-droit-backupproduce-sur-lhôte) ; [déclarer l'hôte](#déclarer-un-hôte-proxmox) ou écrire les numéros ; attendre la fin du passage |

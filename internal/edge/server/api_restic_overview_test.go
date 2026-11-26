@@ -41,7 +41,7 @@ func TestOverview_ShowsWhatProxmoxBacksUpWithoutAnyPlan(t *testing.T) {
 	}
 	retention := overviewRetentionJSON{Known: true, Applied: true, KeepDaily: 14, KeepWeekly: 8, KeepMonthly: 3}
 	next := time.Unix(1793329200, 0).UTC()
-	for _, vmid := range []int{5012, 200} {
+	for _, vmid := range []int{312, 200} {
 		source := sources[backup.GuestSourceKey(pveID, vmid)]
 		if len(source.Protections) != 1 {
 			t.Fatalf("VM %d : %+v", vmid, source)
@@ -52,11 +52,11 @@ func TestOverview_ShowsWhatProxmoxBacksUpWithoutAnyPlan(t *testing.T) {
 			t.Errorf("VM %d : %+v", vmid, observed)
 		}
 	}
-	// La VM 5012 a une archive sur « local » : sa taille et sa date ; le
+	// La VM 312 a une archive sur « local » : sa taille et sa date ; le
 	// conteneur 200 n'en a aucune encore.
-	withArchive := sources[backup.GuestSourceKey(pveID, 5012)].Protections[0]
+	withArchive := sources[backup.GuestSourceKey(pveID, 312)].Protections[0]
 	if withArchive.State != restic.ProtectionOK || withArchive.SizeBytes == nil || *withArchive.SizeBytes != 244318208 || withArchive.Copies == nil || *withArchive.Copies != 1 {
-		t.Errorf("5012 : %+v", withArchive)
+		t.Errorf("312 : %+v", withArchive)
 	}
 	if never := sources[backup.GuestSourceKey(pveID, 200)].Protections[0]; never.State != restic.ProtectionNever || never.LastAt != nil {
 		t.Errorf("200 : %+v", never)
