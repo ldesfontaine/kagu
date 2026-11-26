@@ -519,8 +519,10 @@ func (r *upgradeRun) updateAgentPolicy(context.Context) (step.State, string, err
 // migrateAgentPolicy joue « agent policy migrate » sur un agent qui lit
 // encore ses droits dans identity.json, si root a dit oui au terminal avant
 // la relance (askPolicyMigration) : ce qui est recopié est redit, la question
-// ne se repose pas. Sans cet accord, rien n'est migré : pending le dit.
+// ne se repose pas. Sans cet accord, rien n'est migré : pending le dit. Le
+// oui est consommé, migration faite ou refusée.
 func (r *upgradeRun) migrateAgentPolicy() (migrated, pending bool, err error) {
+	defer func() { r.state.PolicyConsent = false }()
 	pending, err = r.withPendingMigration(func(opts agent.PolicyOptions) error {
 		if !r.state.PolicyConsent {
 			return nil
@@ -541,10 +543,10 @@ func (r *upgradeRun) migrateAgentPolicy() (migrated, pending bool, err error) {
 // askPolicyMigration pose, dans le terminal de root et avant la relance, la
 // question de la migration de la politique : le changement affiché, puis
 // [o/N] par le chemin de confirmChange. Non, ou pas de terminal : upgrade
-// s'arrête avant la première coche, la ligne à lancer à la main dite.
-// consented est vrai quand root a dit oui ; rien n'est encore écrit.
-func (r *upgradeRun) askPolicyMigration() (consented bool, err error) {
-	_, err = r.withPendingMigration(func(opts agent.PolicyOptions) error {
+// s'arrête avant la première coche, la ligne à lancer à la main dite. Oui :
+// le oui est écrit dans state.json, d'où l'unité le prend.
+func (r *upgradeRun) askPolicyMigration() error {
+	_, err := r.withPendingMigration(func(opts agent.PolicyOptions) error {
 		ask := func(change agent.PolicyChange) error {
 			printPolicyChange(r.out, r.text, change)
 			if err := confirmChange(r.out, r.openTerminal, false, r.text); err != nil {
@@ -556,13 +558,13 @@ func (r *upgradeRun) askPolicyMigration() (consented bool, err error) {
 		return err
 	})
 	if errors.Is(err, errPolicyConsented) {
-		return true, nil
+		return r.recordPolicyConsent()
 	}
 	var refused *refusal
 	if err != nil && !errors.As(err, &refused) {
-		return false, explainPolicyError(err, r.text)
+		return explainPolicyError(err, r.text)
 	}
-	return false, err
+	return err
 }
 
 // errPolicyConsented arrête la migration après le oui de root : elle se fait

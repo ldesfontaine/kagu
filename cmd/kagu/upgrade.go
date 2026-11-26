@@ -50,8 +50,6 @@ const (
 	// suite jouée par le nouveau binaire.
 	inUnitFlag = "in-unit"
 	finishFlag = "finish"
-	// L'accord de root, donné au terminal, à migrer la politique de l'agent.
-	policyConsentFlag = "policy-consented"
 )
 
 // upgradePaths : où upgrade lit et écrit. Chaque chemin se tire de brand ou
@@ -91,7 +89,8 @@ type upgradeState struct {
 	Copy     string      `json:"copy,omitempty"`
 	Steps    []step.Step `json:"steps"`
 	Finished bool        `json:"finished"`
-	// Root a dit oui, au terminal, à la migration de la politique.
+	// Root a dit oui, au clavier, à la migration de la politique : écrit
+	// avant la relance, consommé par l'unité. Aucune option ne le pose.
 	PolicyConsent bool `json:"policy_consent,omitempty"`
 }
 
@@ -165,7 +164,6 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 	status := flags.Bool("status", false, "")
 	inUnit := flags.Bool(inUnitFlag, false, "")
 	finish := flags.Bool(finishFlag, false, "")
-	consented := flags.Bool(policyConsentFlag, false, "")
 	if err := flags.Parse(args); err != nil || flags.NArg() > 0 {
 		return &refusal{message: r.text.Get("upgrade.usage")}
 	}
@@ -176,11 +174,10 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 		return r.printStatus()
 	}
 	if !*inUnit {
-		consent, err := r.askPolicyMigration()
-		if err != nil {
+		if err := r.askPolicyMigration(); err != nil {
 			return err
 		}
-		return r.relaunchInUnit(*to, *from, consent)
+		return r.relaunchInUnit(*to, *from)
 	}
 	// Dans l'unité, la sortie est le terminal de systemd-run : la session
 	// coupée, l'écrire échoue, et la montée continue (R-B2-5).
@@ -200,8 +197,13 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 		defer unlock()
 		return r.finish(ctx)
 	}
+	consented, err := r.takePolicyConsent()
+	if err != nil {
+		unlock()
+		return err
+	}
 	r.to, r.from = *to, *from
-	handOver, err := r.start(ctx, *consented)
+	handOver, err := r.start(ctx, consented)
 	// Le verrou tombe avant la passation : le nouveau binaire le reprend.
 	unlock()
 	if err != nil || !handOver {
@@ -212,11 +214,8 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 
 // relaunchInUnit relance la commande dans l'unité transitoire et rend son
 // code de sortie. --from se donne en chemin absolu : l'unité part de /.
-func (r *upgradeRun) relaunchInUnit(to, from string, policyConsent bool) error {
+func (r *upgradeRun) relaunchInUnit(to, from string) error {
 	args := []string{"--" + inUnitFlag}
-	if policyConsent {
-		args = append(args, "--"+policyConsentFlag)
-	}
 	if to != "" {
 		args = append(args, "--to", to)
 	}
@@ -248,6 +247,36 @@ func (r *upgradeRun) start(ctx context.Context, policyConsent bool) (handOver bo
 	fmt.Fprintln(r.out, r.text.Format("upgrade.title", r.running))
 	fmt.Fprintln(r.out)
 	return r.runSteps(ctx, startSteps)
+}
+
+// takePolicyConsent retire de state.json le oui de root à la migration, et le
+// rend : la montée qui commence le garde pour sa fin (le nouveau binaire le
+// relit dans l'état), aucune autre ne le retrouve.
+func (r *upgradeRun) takePolicyConsent() (bool, error) {
+	consented := r.state.PolicyConsent
+	if !consented {
+		return false, nil
+	}
+	r.state.PolicyConsent = false
+	return true, r.saveState()
+}
+
+// recordPolicyConsent écrit le oui de root dans state.json, sous le verrou,
+// juste avant la relance : c'est le seul chemin qui le pose.
+func (r *upgradeRun) recordPolicyConsent() error {
+	unlock, held, err := holdLock(r.paths.lockFile)
+	if err != nil {
+		return err
+	}
+	if !held {
+		return &refusal{message: r.text.Format("upgrade.locked", r.paths.lockFile)}
+	}
+	defer unlock()
+	if r.state, err = readUpgradeState(r.paths.stateFile); err != nil {
+		return err
+	}
+	r.state.PolicyConsent = true
+	return r.saveState()
 }
 
 // interrupted : une montée a remplacé le binaire sans finir.
@@ -299,6 +328,8 @@ func (r *upgradeRun) runSteps(ctx context.Context, steps []upgradeStep) (done bo
 		state, detail, err := current.run(r, ctx)
 		if err != nil {
 			reason, todo := explainStepFailure(err, r.text)
+			// Un oui ne survit pas à une montée arrêtée.
+			r.state.PolicyConsent = false
 			r.check(current.key, step.StateFailed, reason)
 			if r.state.Target != "" {
 				if err := r.saveState(); err != nil {

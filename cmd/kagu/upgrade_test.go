@@ -294,7 +294,9 @@ type upgradeSystemFake struct {
 	free     uint64
 	calls    []string
 	unitArgs []string
-	handOver []string
+	// Le oui de root lu dans state.json au moment de la relance.
+	consentAtRelaunch bool
+	handOver          []string
 }
 
 func (s *upgradeSystemFake) Run(name string, args ...string) error {
@@ -317,6 +319,11 @@ func (s *upgradeSystemFake) FreeBytes(string) (uint64, error) { return s.free, n
 
 func (s *upgradeSystemFake) RunInUnit(args []string) error {
 	s.unitArgs = upgradeUnitLine(s.bench.paths.binary, args)
+	state, err := readUpgradeState(s.bench.paths.stateFile)
+	if err != nil {
+		return err
+	}
+	s.consentAtRelaunch = state.PolicyConsent
 	return s.bench.newRun(version.Number()).command(context.Background(), args)
 }
 
@@ -665,8 +672,14 @@ func TestUpgrade_AsksBeforeMigratingTheAgentPolicy(t *testing.T) {
 			if err != nil {
 				t.Fatalf("upgrade: %v\n%s", err, printed)
 			}
-			if !slices.Contains(b.system.unitArgs, "--"+policyConsentFlag) || strings.Count(printed, "[o/N]") != 1 || !strings.Contains(printed, "politique migrée") {
-				t.Fatalf("unit %v\n%s", b.system.unitArgs, printed)
+			if !b.system.consentAtRelaunch || strings.Count(printed, "[o/N]") != 1 || !strings.Contains(printed, "politique migrée") {
+				t.Fatalf("consent at relaunch %v, unit %v\n%s", b.system.consentAtRelaunch, b.system.unitArgs, printed)
+			}
+			if strings.Contains(strings.Join(b.system.unitArgs, " "), "consent") {
+				t.Fatalf("the consent rides on the command line: %v", b.system.unitArgs)
+			}
+			if state, err := readUpgradeState(b.paths.stateFile); err != nil || state.PolicyConsent || !state.Finished {
+				t.Fatalf("the consent is not consumed: %+v %v", state, err)
 			}
 			if stored := storedPolicy(t, b.place); !slices.ContainsFunc(stored.Rights, func(right agentpolicy.Capability) bool { return right.Name == "docker.deploy" }) {
 				t.Fatalf("stored %+v", stored)
@@ -686,5 +699,20 @@ func TestUpgrade_DoesNotMigrateWithoutConsent(t *testing.T) {
 	}
 	if policyContent(t, b.place) != "" || !strings.Contains(b.terminal.String(), "politique non migrée") {
 		t.Fatalf("printed %q", b.terminal)
+	}
+}
+
+// ARB-1 : aucune option ne pose le oui de root ; l'ancien drapeau interne est
+// refusé par l'analyse des options.
+func TestUpgrade_NoOptionCarriesThePolicyConsent(t *testing.T) {
+	b := newUpgradeBench(t)
+	b.paths.agentStateDir, b.place = legacyState(t, "docker.deploy")
+	var refused *refusal
+	err := b.upgrade("--"+inUnitFlag, "--policy-consented")
+	if !errors.As(err, &refused) || refused.message != testCatalog(t).Get("upgrade.usage") {
+		t.Fatalf("upgrade: %v", err)
+	}
+	if policyContent(t, b.place) != "" {
+		t.Fatal("the policy was migrated")
 	}
 }

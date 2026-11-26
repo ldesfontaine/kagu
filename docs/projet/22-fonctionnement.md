@@ -1136,7 +1136,7 @@ fichier, et dit si la montée tourne encore (le verrou est tenu).
 | Serveur redémarré (`step.upgrade.restarted`) | `systemctl restart kagu.service` |
 | Serveur répond (`step.upgrade.answers`) | `GET /control/admin/health` rend la version visée, 60 s au plus. Puis la main passe au **nouveau binaire** (`exec`, même unité) : `upgrade --finish` relit `state.json` |
 | Unités à jour (`step.upgrade.units`) | Avec `setup.json` : `kagu.service` et `kagu-agent.service` comparées à celles du nouveau binaire (`machine.ServerUnitLines`, `machine.AgentUnitLines`), réécrites si elles diffèrent, `daemon-reload`. Drop-ins jamais touchés. Sans `setup.json` : sautée |
-| Politique de l'agent (`step.upgrade.policy`) | Un agent enrôlé dont le dossier de la politique n'existe pas : `agent.MigratePolicy`, si root a dit oui avant la relance (l'accord passe à l'unité par `--policy-consented`, puis dans `state.json`) ; ce qui est recopié est redit, la question ne se repose pas. Sans cet accord : non migrée, la ligne dite. Le lanceur stable, s'il est posé : recopié depuis la version posée, **revérifiée au moment de la copie** avec les clés du nouveau binaire, jamais depuis `bin/` de l'agent (R-B2-12). La version posée est ensuite effacée |
+| Politique de l'agent (`step.upgrade.policy`) | Un agent enrôlé dont le dossier de la politique n'existe pas : `agent.MigratePolicy`, si root a dit oui avant la relance : le oui est écrit dans `state.json` (`policy_consent`), jamais passé en option, et l'unité le consomme (remis à faux, migration faite ou refusée, ou montée arrêtée) ; ce qui est recopié est redit, la question ne se repose pas. Sans ce oui dans l'état : non migrée, la ligne dite. Le lanceur stable, s'il est posé : recopié depuis la version posée, **revérifiée au moment de la copie** avec les clés du nouveau binaire, jamais depuis `bin/` de l'agent (R-B2-12). La version posée est ensuite effacée |
 
 **Ce qui est refusé avant toute copie** : une signature fausse ou d'une autre
 clé, un binaire qui n'a pas sa somme, une version téléchargée qui n'est pas
@@ -1156,7 +1156,10 @@ calculer la migration **avant** la relance, dans le terminal de root : le
 changement imprimé (`printPolicyChange`), puis `[o/N]` par `confirmChange`,
 N par défaut, réponse lue sur `/dev/tty`. Non, ou pas de terminal :
 `upgrade` s'arrête avant la première coche, rien n'est touché, et dit de
-lancer `sudo kagu agent policy migrate`. Pas d'option `--yes`.
+lancer `sudo kagu agent policy migrate`. Oui : le oui est écrit dans
+`state.json` (root, `0600`, sous le verrou) juste avant `systemd-run`.
+Aucune option ne le pose, pas même une option interne : `--yes` n'existe
+pas, et `--in-unit` lancé à la main ne migre rien sans ce oui.
 
 ## Comment les modules et le rôle d'une machine décident de l'écran
 
