@@ -91,3 +91,38 @@ func withoutComments(yaml string) string {
 	}
 	return strings.Join(kept, "\n")
 }
+
+// R-DROIT-8 (ARB-1) : un serveur pris sert aussi l'écran et peut retirer
+// l'avertissement ; la doc, qui vient du dépôt, le porte à son tour, dans la
+// section posée avant le premier grant, et la doc de fonctionnement le cite.
+func TestR_DROIT_8_DocsCarryThePasteWarning(t *testing.T) {
+	catalogs, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	warning := catalogs.For("fr").Get("rights.paste_only_pending")
+	if !strings.Contains(warning, "sinon, ne la collez pas") {
+		t.Fatalf("the fr catalog lost the warning: %q", warning)
+	}
+	guide := readDoc(t, "../../../docs/installation.md")
+	heading := strings.Index(guide, "#### Coller une ligne de Kagu en root")
+	if heading < 0 {
+		t.Fatal("docs/installation.md has no « Coller une ligne de Kagu en root » section")
+	}
+	if strings.Count(guide, warning) != 1 {
+		t.Errorf("docs/installation.md must say the warning once, exactly: %q", warning)
+	}
+	section := guide[heading:]
+	if end := strings.Index(section[1:], "\n#"); end > 0 {
+		section = section[:end+1]
+	}
+	if !strings.Contains(section, warning) {
+		t.Errorf("the section lacks the warning %q", warning)
+	}
+	if first := strings.Index(guide, "grant"); first < heading {
+		t.Errorf("« grant » appears at %d, before the section at %d", first, heading)
+	}
+	if !strings.Contains(readDoc(t, "../../../docs/projet/22-fonctionnement.md"), warning) {
+		t.Errorf("docs/projet/22-fonctionnement.md lacks the warning %q", warning)
+	}
+}

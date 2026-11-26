@@ -46,7 +46,7 @@ test("short : la ligne seule, tronquée, entière dans l'infobulle avec l'averti
     </MemoryRouter>,
   );
   expect(markup).toContain("token-box-short");
-  expect(markup).toContain('title="anchor.run_command sudo x agent grant --pending rights.missing_right(restic.verify) rights.paste_only_pending rights.paste_shows_change"');
+  expect(markup).toContain('title="anchor.run_command sudo x agent grant --pending rights.paste_only_pending rights.missing_right(restic.verify) rights.paste_shows_change"');
   expect(markup).not.toContain("<p");
 });
 
@@ -54,6 +54,8 @@ test("un fix d'ancre montre la commande ; sans rien à lever, rien", () => {
   const markup = render({ command: "sudo x agent trust list", machine: "m3" });
   expect(markup).toContain("sudo x agent trust list");
   expect(markup).toContain('href="/machines/m3/agent"');
+  // R-DROIT-8 : la ligne de trust porte l'avertissement comme celle d'un droit.
+  expect(markup).toContain("rights.paste_only_pending");
   expect(render({})).toBe("");
   // Un droit sans machine ne mène nulle part.
   expect(render({ right: "docker.deploy" })).toBe("");

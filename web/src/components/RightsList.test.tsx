@@ -89,9 +89,9 @@ test("les lignes viennent du serveur et la coche porte l'échéance", () => {
     expect(markup).toContain(line);
   }
   expect(markup.match(/rights\.paste_shows_change/g)?.length).toBe(6);
-  // R-DROIT-8 (E03-07) : sous chaque ligne d'un groupe pas permis,
-  // l'avertissement de ne coller aucune autre ligne.
-  expect(markup.match(/rights\.paste_only_pending/g)?.length).toBe(2);
+  // R-DROIT-8 (ARB-1) : sous chaque ligne à coller (grant --pending, --set,
+  // revoke, policy migrate), l'avertissement de ne coller aucune autre ligne.
+  expect(markup.match(/rights\.paste_only_pending/g)?.length).toBe(6);
   expect(markup).toContain("rights.allowed_until(");
   expect(markup).toContain("rights.not_allowed");
   expect(markup).not.toContain("rights.root_here");
