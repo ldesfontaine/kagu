@@ -443,12 +443,12 @@ func TestCreate_JudgesTheReach(t *testing.T) {
 
 	_, token, err := service.Create(ctx, writeRequest("limité", apitoken.Reach{
 		OnlyMachines: true, Machines: []string{machineLocal, machineLocal},
-		OnlyGuests: true, Guests: []int{5012, 200, 5012},
+		OnlyGuests: true, Guests: []int{312, 200, 312},
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !token.Reach.OnlyMachines || !slices.Equal(token.Reach.Machines, []string{machineLocal}) || !slices.Equal(token.Reach.Guests, []int{200, 5012}) {
+	if !token.Reach.OnlyMachines || !slices.Equal(token.Reach.Machines, []string{machineLocal}) || !slices.Equal(token.Reach.Guests, []int{200, 312}) {
 		t.Fatalf("reach %+v", token.Reach)
 	}
 

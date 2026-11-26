@@ -40,7 +40,7 @@ func legacyState(t *testing.T, rights ...string) (stateDir string, place agent.P
 	defer root.Close()
 	identity := agent.Identity{
 		MachineID: "m", Language: lang.French, Rights: rights, PolicyFormat: agentpolicy.FormatVersion,
-		ServerKey: testServerPublicKey(t), Anchors: map[string][]string{anchor.BackupGuest: {"5012"}},
+		ServerKey: testServerPublicKey(t), Anchors: map[string][]string{anchor.BackupGuest: {"312"}},
 	}
 	if err := agent.SaveIdentity(root, identity); err != nil {
 		t.Fatal(err)

@@ -131,7 +131,7 @@ export function selectableGuests(guests: readonly ProxmoxGuest[]): ProxmoxGuest[
   return guests.filter((guest) => !guest.template).sort((a, b) => a.vmid - b.vmid);
 }
 
-// Les numéros d'un sélecteur « 5010,5012 » ; « all » n'en nomme aucun.
+// Les numéros d'un sélecteur « 310,312 » ; « all » n'en nomme aucun.
 export function selectorIds(selector: string): number[] {
   if (selector === "all") {
     return [];

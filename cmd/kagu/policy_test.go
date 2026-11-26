@@ -33,7 +33,7 @@ func TestRunAgentPolicyMigrate_TellsWhatItCopiesThenErasesIt(t *testing.T) {
 	if !errors.As(err, &refused) || !strings.Contains(refused.message, "-yes") {
 		t.Fatalf("without terminal: %v", err)
 	}
-	for _, want := range []string{"+ docker.deploy", "+ " + anchor.BackupGuest + " 5012", "+ clé du serveur   " + agentwire.KeyFingerprint(legacy.ServerKey)} {
+	for _, want := range []string{"+ docker.deploy", "+ " + anchor.BackupGuest + " 312", "+ clé du serveur   " + agentwire.KeyFingerprint(legacy.ServerKey)} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q is not told:\n%s", want, out)
 		}
@@ -49,7 +49,7 @@ func TestRunAgentPolicyMigrate_TellsWhatItCopiesThenErasesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored := storedPolicy(t, place)
-	if len(stored.ServerKeys) != 1 || string(stored.ServerKeys[0].Key) != string(legacy.ServerKey) || stored.Anchors[anchor.BackupGuest][0] != "5012" {
+	if len(stored.ServerKeys) != 1 || string(stored.ServerKeys[0].Key) != string(legacy.ServerKey) || stored.Anchors[anchor.BackupGuest][0] != "312" {
 		t.Fatalf("stored %+v", stored)
 	}
 	erased, err := agent.LoadIdentity(root)

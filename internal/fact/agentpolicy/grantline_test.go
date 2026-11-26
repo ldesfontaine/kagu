@@ -49,7 +49,7 @@ func TestAgentLine_KeepsTheRealValues(t *testing.T) {
 	values := []string{
 		"SHA256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU",
 		"age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p",
-		"5012",
+		"312",
 		"/srv/restore",
 		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}
@@ -76,7 +76,7 @@ func TestR_DROIT_8_AgentLineRefusesYes(t *testing.T) {
 		{"grant", "--yes=true", "docker.deploy"},
 		{"grant", "-yes=1", "docker.deploy"},
 		{"policy", "migrate", "--yes=false"},
-		{"trust", "add", "backup.guest", "5012 --yes"},
+		{"trust", "add", "backup.guest", "312 --yes"},
 		{"grant", "--set", "manage -yes"},
 	} {
 		if line := AgentLine(words...); line != "" {

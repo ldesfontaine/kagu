@@ -16,7 +16,7 @@ const clusterBackupAnswer = `{"data":[
 	{"id":"nuit-pi","type":"vzdump","schedule":"03:00","next-run":1793329200,"storage":"pi-sauvegardes","enabled":1,
 	 "all":1,"exclude":"9000","mode":"snapshot","compress":"zstd","prune-backups":"keep-daily=14,keep-weekly=8,keep-monthly=3",
 	 "comment":"chaque nuit vers le Pi","notes-template":"{{guestname}}"},
-	{"id":"backup-5c1e2a7b-0d4e","type":"vzdump","schedule":"sun 01:00","storage":"local","enabled":0,"vmid":"200,5012",
+	{"id":"backup-5c1e2a7b-0d4e","type":"vzdump","schedule":"sun 01:00","storage":"local","enabled":0,"vmid":"200,312",
 	 "prune-backups":"keep-last=2"},
 	{"id":"ancienne","type":"vzdump","starttime":"02:30","dow":"mon,tue","storage":"local","node":"pve2","all":"1",
 	 "prune-backups":{"keep-yearly":"1","keep-monthly":2}}
@@ -56,7 +56,7 @@ func TestBackupJobs_ReadsTheVzdumpJobsOfTheCluster(t *testing.T) {
 		t.Errorf("rétention %+v, attendue %+v", night.Retention, want)
 	}
 	listed := jobs[1]
-	if listed.Enabled || listed.AllGuests || !slices.Equal(listed.VMIDs, []int{200, 5012}) || listed.Retention.Last != 2 || !listed.NextRun.IsZero() {
+	if listed.Enabled || listed.AllGuests || !slices.Equal(listed.VMIDs, []int{200, 312}) || listed.Retention.Last != 2 || !listed.NextRun.IsZero() {
 		t.Errorf("tâche coupée : %+v", listed)
 	}
 	old := jobs[2]

@@ -67,7 +67,7 @@ func TestAPI_NetworkMap_GuestsHaveTheirCardInTheZoneLaneAndNameTheirHost(t *test
 	if container == nil || container.HostID != host.ID || container.Kind != "lxc" || container.Managed || container.GuestStatus != "stopped" {
 		t.Errorf("le conteneur sans agent : %+v", container)
 	}
-	if vm == nil || vm.HostID != host.ID || vm.VMID != 5012 || vm.Kind != "vm" || !vm.Managed {
+	if vm == nil || vm.HostID != host.ID || vm.VMID != 312 || vm.Kind != "vm" || !vm.Managed {
 		t.Errorf("la VM rapprochée : %+v", vm)
 	}
 	zone := mapZoneByID(result, container.ZoneID)

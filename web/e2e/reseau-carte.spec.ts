@@ -53,7 +53,7 @@ test("la forme d'un vrai réseau : le VPS de type inconnu est ailleurs, le pare-
   await expect(home.locator(".netmap-box")).toHaveCount(12);
   // Le Pi, sans service, est une carte comme les autres, dans sa zone.
   await expect(card(page, "pi")).toContainText(label("network.map_no_service"));
-  await expect(page.locator(".netmap-lane", { hasText: "BACKUP" }).locator(".netmap-box")).toHaveCount(1);
+  await expect(page.locator(".netmap-lane", { hasText: "SAUVEGARDE" }).locator(".netmap-box")).toHaveCount(1);
   // Aucun hôte replié, aucun bouton pour replier : la carte est petite.
   await expect(page.locator(".netmap-box.is-folded")).toHaveCount(0);
   await expect(page.locator(".netmap-fold")).toHaveCount(0);
@@ -119,8 +119,8 @@ test("les zones sans machine se replient en une puce qui se déplie au clic", as
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator(".netmap-empty-zone")).toHaveCount(4);
-  await expect(page.locator(".netmap-empty-list")).toContainText("RESCUE");
-  await expect(page.locator(".netmap-lane", { hasText: "RESCUE" })).toHaveCount(0);
+  await expect(page.locator(".netmap-empty-list")).toContainText("SECOURS");
+  await expect(page.locator(".netmap-lane", { hasText: "SECOURS" })).toHaveCount(0);
   await toggle.click();
   await expect(page.locator(".netmap-empty-zone")).toHaveCount(0);
   expect(findings.unknown()).toEqual([]);

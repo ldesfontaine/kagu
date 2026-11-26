@@ -118,7 +118,7 @@ func TestBackupPlans_ListsTheDatabaseFirstAndRoundTripsAnAgentSource(t *testing.
 	for _, subject := range []string{"zeta", "alpha"} {
 		plan := backup.Plan{
 			ID: "bkp_" + subject, Subject: subject, Name: "Libellé " + subject, SourceKind: backup.SourceAgent, SourceMachineID: source,
-			Producer: agentpolicy.ProducerProxmoxVzdump, Selector: "5010,5012", DestinationID: destination.ID, Keep: 5,
+			Producer: agentpolicy.ProducerProxmoxVzdump, Selector: "310,312", DestinationID: destination.ID, Keep: 5,
 			Schedule: backup.ScheduleDaily, CreatedAt: backupsNow, UpdatedAt: backupsNow,
 		}
 		if err := db.SaveBackupPlan(ctx, plan); err != nil {
@@ -134,7 +134,7 @@ func TestBackupPlans_ListsTheDatabaseFirstAndRoundTripsAnAgentSource(t *testing.
 	}
 	alpha := plans[1]
 	if alpha.Name != "Libellé alpha" || alpha.SourceKind != backup.SourceAgent || alpha.SourceMachineID != source || alpha.SourceMachineName != "pve" ||
-		alpha.Producer != agentpolicy.ProducerProxmoxVzdump || alpha.Selector != "5010,5012" || alpha.Keep != 5 {
+		alpha.Producer != agentpolicy.ProducerProxmoxVzdump || alpha.Selector != "310,312" || alpha.Keep != 5 {
 		t.Fatalf("alpha %+v", alpha)
 	}
 
@@ -154,7 +154,7 @@ func TestBackupPlans_ListsTheDatabaseFirstAndRoundTripsAnAgentSource(t *testing.
 		t.Fatalf("again %+v %v", again, err)
 	}
 	// Les autres plans n'ont pas bougé.
-	if zeta, _ := db.GetBackupPlan(ctx, "zeta"); zeta.LastError != "" || zeta.Selector != "5010,5012" {
+	if zeta, _ := db.GetBackupPlan(ctx, "zeta"); zeta.LastError != "" || zeta.Selector != "310,312" {
 		t.Fatalf("zeta %+v", zeta)
 	}
 	if err := db.DeleteBackupPlan(ctx, "alpha"); err != nil {

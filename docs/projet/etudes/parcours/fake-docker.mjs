@@ -37,7 +37,7 @@ const inspect = (c) => ({
   State: { Status: "running", ExitCode: 0, OOMKilled: false, StartedAt: started, FinishedAt: "0001-01-01T00:00:00Z", ...(c.health ? { Health: { Status: c.health } } : {}) },
   Config: { Image: c.image, Tty: false, Labels: c.labels, ...(c.health ? { Healthcheck: { Test: ["CMD", "true"] } } : {}) },
   HostConfig: { NetworkMode: `${project}_default`, Privileged: false },
-  NetworkSettings: { Ports: {}, Networks: { [`${project}_default`]: { NetworkID: "d".repeat(64), IPAddress: "172.30.0.2", Aliases: [c.name] } } },
+  NetworkSettings: { Ports: {}, Networks: { [`${project}_default`]: { NetworkID: "d".repeat(64), IPAddress: "172.31.0.2", Aliases: [c.name] } } },
   Mounts: [],
 });
 

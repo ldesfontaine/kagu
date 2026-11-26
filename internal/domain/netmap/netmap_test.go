@@ -12,7 +12,7 @@ func homeFirewall() Firewall {
 		{Name: "wan", Device: "igb0", Role: "WAN", Address: "203.0.113.2/24", Up: true},
 		{Name: "lan", Device: "igb1", Role: "SERVICES", Address: "10.1.50.1/24", Up: true},
 		{Name: "opt1", Device: "igb2_vlan60", Role: "DMZ", Address: "10.1.60.1/24", Up: true},
-		{Name: "opt2", Device: "wg0", Role: "TUNNEL", Address: "10.77.0.2/30", Up: true},
+		{Name: "opt2", Device: "wg0", Role: "TUNNEL", Address: "192.168.77.2/30", Up: true},
 	}}
 }
 
@@ -67,9 +67,9 @@ func fullInput() Input {
 			{ID: "vps", Name: "vps", Kind: KindVPS, Online: true, Address: "198.51.100.7"},
 		},
 		Hypervisors: []Hypervisor{{MachineID: "pve", Node: "pve", Guests: []Guest{
-			{VMID: 5010, Kind: "qemu", Name: "vault", MachineID: "vault", VLAN: 50},
-			{VMID: 6010, Kind: "qemu", Name: "proxy", MachineID: "proxy", VLAN: 60},
-			{VMID: 5011, Kind: "lxc", Name: "forge", Status: "running", VLAN: 50},
+			{VMID: 310, Kind: "qemu", Name: "vault", MachineID: "vault", VLAN: 50},
+			{VMID: 210, Kind: "qemu", Name: "proxy", MachineID: "proxy", VLAN: 60},
+			{VMID: 311, Kind: "lxc", Name: "forge", Status: "running", VLAN: 50},
 			{VMID: 9000, Kind: "qemu", Name: "modele", Template: true},
 		}}},
 		Firewalls: []Firewall{homeFirewall()},
@@ -99,7 +99,7 @@ func TestBuild_EveryGuestHasItsCardInTheLaneOfItsZoneAndNamesItsHost(t *testing.
 	for name, want := range map[string]struct {
 		zone string
 		vmid int
-	}{"vault": {services.ID, 5010}, "forge": {services.ID, 5011}, "proxy": {dmz.ID, 6010}} {
+	}{"vault": {services.ID, 310}, "forge": {services.ID, 311}, "proxy": {dmz.ID, 210}} {
 		got := box(t, result, name)
 		if got.ZoneID != want.zone || got.VMID != want.vmid || got.HostID != host.ID {
 			t.Errorf("%s : %+v", name, got)
@@ -150,7 +150,7 @@ func TestBuild_UnhostedMachineWithPublicAddressIsOutsideWhateverItsKind(t *testi
 	}{
 		{"type inconnu, adresse publique", Machine{ID: "a", Name: "a", Kind: KindUnknown, Address: "198.51.100.24:8443"}, true},
 		{"physique, adresse publique", Machine{ID: "a", Name: "a", Kind: KindPhysical, Address: "198.51.100.24"}, true},
-		{"VPS, adresse privée (derrière un tunnel)", Machine{ID: "a", Name: "a", Kind: KindVPS, Address: "10.77.0.1"}, true},
+		{"VPS, adresse privée (derrière un tunnel)", Machine{ID: "a", Name: "a", Kind: KindVPS, Address: "192.168.77.1"}, true},
 		{"type inconnu, adresse privée", Machine{ID: "a", Name: "a", Kind: KindUnknown, Address: "10.1.50.9"}, false},
 		{"type inconnu, sans adresse", Machine{ID: "a", Name: "a", Kind: KindUnknown}, false},
 		{"type inconnu, nom plutôt qu'adresse", Machine{ID: "a", Name: "a", Kind: KindUnknown, Address: "nas.lan"}, false},

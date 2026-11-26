@@ -45,7 +45,7 @@ var (
 	repositoryPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]{0,200}$`)
 	dayPattern        = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 	// Un nom de branche ou de version : « 16 », « 3.1 », « 24.04 »,
-	// « 2.9.2.1 ». Ce qui n'y ressemble pas n'est pas gardé : ces textes
+	// « 2.9.2-1 ». Ce qui n'y ressemble pas n'est pas gardé : ces textes
 	// viennent d'un tiers et finissent à l'écran, et chez un agent IA.
 	versionPattern = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$`)
 )

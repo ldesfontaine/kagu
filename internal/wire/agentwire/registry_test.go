@@ -34,7 +34,7 @@ func serverSamples(t *testing.T) map[Kind]any {
 		KindBackupReceive: BackupReceiveParams{Parcel: "p1", Path: "/srv/receive", Files: files, Archive: ArchiveGuest},
 		KindBackupPrune:   BackupPruneParams{Path: "/srv/receive", Prefix: "plan-é", Keep: 7},
 		KindBackupProduce: BackupProduceParams{
-			Producer: agentpolicy.ProducerProxmoxVzdump, Target: "5012", Prefix: "p", Recipient: "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p", Parcel: "p2",
+			Producer: agentpolicy.ProducerProxmoxVzdump, Target: "312", Prefix: "p", Recipient: "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p", Parcel: "p2",
 		},
 		KindDockerDeploy:          docker,
 		KindDockerUpdate:          DockerParams{ServiceID: "svc_1", Project: "wiki", Compose: "x y"},

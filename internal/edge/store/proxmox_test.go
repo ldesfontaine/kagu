@@ -36,7 +36,7 @@ func sampleReading() proxmox.Reading {
 		Version: "8.2.5",
 		Node:    "pve",
 		Guests: []proxmox.Guest{
-			{VMID: 5012, Kind: proxmox.KindQEMU, Name: "docker1", Status: "running", CPUs: 2, MaxMem: 2 << 30, MaxDisk: 32 << 30, Node: "pve",
+			{VMID: 312, Kind: proxmox.KindQEMU, Name: "docker1", Status: "running", CPUs: 2, MaxMem: 2 << 30, MaxDisk: 32 << 30, Node: "pve",
 				LinkedMachineID: "docker", LastBackupAt: proxmoxAt.Add(-time.Hour), LastBackupBytes: 244318208,
 				LastBackupStorage: "local", BackupCount: 3, BackupTotalBytes: 700000000},
 			{VMID: 200, Kind: proxmox.KindLXC, Name: "dns", Status: "stopped", CPUs: 0.5, MaxMem: 512 << 20, Node: "pve"},
@@ -77,7 +77,7 @@ func TestProxmox_DeclareReadAndView(t *testing.T) {
 	if view.Host.Version != "8.2.5" || view.Host.Node != "pve" || !view.Host.LastReadAt.Equal(proxmoxAt) {
 		t.Errorf("host after the reading: %+v", view.Host)
 	}
-	if len(view.Guests) != 3 || view.Guests[0].VMID != 200 || view.Guests[1].VMID != 5012 || view.Guests[2].VMID != 9000 {
+	if len(view.Guests) != 3 || view.Guests[0].VMID != 200 || view.Guests[1].VMID != 312 || view.Guests[2].VMID != 9000 {
 		t.Fatalf("guests must come by vmid: %+v", view.Guests)
 	}
 	docker := view.Guests[1]
@@ -113,7 +113,7 @@ func TestProxmox_ListGuestIDsSkipsTemplatesAndAnUnreadHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	ids, err := db.ListProxmoxGuestIDs(ctx, "pve-host")
-	if err != nil || !reflect.DeepEqual(ids, []int{200, 5012}) {
+	if err != nil || !reflect.DeepEqual(ids, []int{200, 312}) {
 		t.Fatalf("ids %v %v", ids, err)
 	}
 	if other, err := db.ListProxmoxGuestIDs(ctx, "docker"); err != nil || len(other) != 0 {
@@ -237,7 +237,7 @@ func TestProxmox_Summaries(t *testing.T) {
 	if vm.Declared || vm.Hosted == nil {
 		t.Fatalf("vm summary: %+v", vm)
 	}
-	if vm.Hosted.HostMachineID != "pve-host" || vm.Hosted.HostName != "Proxmox" || vm.Hosted.VMID != 5012 || vm.Hosted.Kind != proxmox.KindQEMU ||
+	if vm.Hosted.HostMachineID != "pve-host" || vm.Hosted.HostName != "Proxmox" || vm.Hosted.VMID != 312 || vm.Hosted.Kind != proxmox.KindQEMU ||
 		vm.Hosted.CPUs != 2 || vm.Hosted.MaxMem != 2<<30 || vm.Hosted.LastBackupBytes != 244318208 {
 		t.Errorf("hosted: %+v", vm.Hosted)
 	}
@@ -329,8 +329,8 @@ func TestProxmox_BlindStoragesSurviveAFailureAndMakeBackupsUnknown(t *testing.T)
 	for _, guest := range view.Guests {
 		unknown[guest.VMID] = guest.BackupUnknown
 	}
-	// 5012 a des archives lisibles : elles restent vraies. 200 n'en a aucune connue.
-	if unknown[5012] || !unknown[200] {
+	// 312 a des archives lisibles : elles restent vraies. 200 n'en a aucune connue.
+	if unknown[312] || !unknown[200] {
 		t.Errorf("unknown backups: %v", unknown)
 	}
 
@@ -376,7 +376,7 @@ func TestProxmox_TheInventoryKnowsWhenArchivesCouldNotBeRead(t *testing.T) {
 	for _, guest := range guests {
 		unknown[guest.VMID] = guest.ArchivesUnknown
 	}
-	if len(guests) != 2 || unknown[5012] || !unknown[200] {
+	if len(guests) != 2 || unknown[312] || !unknown[200] {
 		t.Errorf("observed guests: %v", unknown)
 	}
 }

@@ -61,7 +61,7 @@ func (api *fakeAPI) serve(w http.ResponseWriter, r *http.Request) {
 		body = `{"data":{"version":"8.2.4","release":"8.2","repoid":"abc"}}`
 	case r.URL.Path == "/api2/json/cluster/resources" && r.URL.Query().Get("type") == "vm":
 		body = `{"data":[
-			{"type":"qemu","vmid":5012,"name":"docker1","node":"pve","status":"running","template":0,"maxcpu":2,"maxmem":2147483648,"maxdisk":34359738368},
+			{"type":"qemu","vmid":312,"name":"docker1","node":"pve","status":"running","template":0,"maxcpu":2,"maxmem":2147483648,"maxdisk":34359738368},
 			{"type":"lxc","vmid":200,"name":"dns","node":"pve","status":"stopped","template":0,"maxcpu":1,"maxmem":536870912,"maxdisk":8589934592},
 			{"type":"qemu","vmid":9000,"name":"debian-12","node":"pve","status":"stopped","template":1,"maxcpu":2,"maxmem":1073741824,"maxdisk":4294967296}]}`
 	case r.URL.Path == "/api2/json/cluster/resources" && r.URL.Query().Get("type") == "storage":
@@ -75,8 +75,8 @@ func (api *fakeAPI) serve(w http.ResponseWriter, r *http.Request) {
 		body = fmt.Sprintf(`{"data":{%q:{"Datastore.Audit":1,"Datastore.Allocate":1}}}`, path)
 	case r.URL.Path == "/api2/json/nodes/pve/storage/local/content" && r.URL.Query().Get("content") == "backup":
 		body = `{"data":[
-			{"vmid":5012,"ctime":1790000000,"size":100,"volid":"local:backup/old"},
-			{"vmid":5012,"ctime":1790086400,"size":244318208,"volid":"local:backup/new"},
+			{"vmid":312,"ctime":1790000000,"size":100,"volid":"local:backup/old"},
+			{"vmid":312,"ctime":1790086400,"size":244318208,"volid":"local:backup/new"},
 			{"vmid":0,"ctime":1790086400,"size":1,"volid":"local:backup/orphan"}]}`
 	default:
 		http.NotFound(w, r)
@@ -133,7 +133,7 @@ func TestClient_ReadsTheHostWithThePinnedCertificate(t *testing.T) {
 		t.Fatalf("guests: %+v", reading.Guests)
 	}
 	docker := reading.Guests[0]
-	if docker.VMID != 5012 || docker.Kind != KindQEMU || docker.Name != "docker1" || docker.Status != "running" || docker.CPUs != 2 || docker.MaxMem != 2<<30 || docker.Template {
+	if docker.VMID != 312 || docker.Kind != KindQEMU || docker.Name != "docker1" || docker.Status != "running" || docker.CPUs != 2 || docker.MaxMem != 2<<30 || docker.Template {
 		t.Errorf("first guest: %+v", docker)
 	}
 	if !reading.Guests[2].Template || reading.Guests[1].Kind != KindLXC {

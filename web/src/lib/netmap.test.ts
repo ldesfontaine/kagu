@@ -164,7 +164,7 @@ test("serviceIndex nomme la machine de chaque puce, invités compris", () => {
 const translate = (key: string, ...args: unknown[]) => [key, ...args].join(":");
 
 test("badgeText ajoute le numéro d'invité au type", () => {
-  expect(badgeText(translate, { kind: "vm", vmid: 5010 })).toBe("machine.kind_vm 5010");
+  expect(badgeText(translate, { kind: "vm", vmid: 310 })).toBe("machine.kind_vm 310");
   expect(badgeText(translate, { kind: "physical", vmid: 0 })).toBe("machine.kind_physical");
 });
 

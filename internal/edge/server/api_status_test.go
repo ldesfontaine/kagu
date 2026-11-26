@@ -123,7 +123,7 @@ func TestStatusPublic_LeaksNothingOfTheObjects(t *testing.T) {
 	server := newTestServer(t)
 	server.seedAll(t)
 	secrets := []string{
-		"vps-paris-1", "kagu-host", "51.15.20.114", "10.8.0.1", remoteID, `"local"`,
+		"vps-paris-1", "kagu-host", "203.0.113.114", "10.8.0.1", remoteID, `"local"`,
 		"nextcloud", "postgres", "cloud.exemple.fr", "5432", "sauvegarde", "certbot", "hb_",
 		strings.Repeat("a", 12), strings.Repeat("b", 12), "Kagu dev", "Silence",
 	}

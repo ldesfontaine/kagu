@@ -17,12 +17,12 @@ func (b *unreadBody) Read(p []byte) (int, error) {
 }
 
 // guardedServer remet la garde du pair que le banc lève, derrière le
-// mandataire 10.10.80.10 : la configuration du banc d'E02-07.
+// mandataire 198.51.100.10 : la configuration du banc d'E02-07.
 func guardedServer(t *testing.T) *testServer {
 	t.Helper()
 	server := newTestServer(t)
 	server.operatorFromAnyPeer = false
-	server.trustedProxies = parsePrefixes(t, "10.10.80.10/32")
+	server.trustedProxies = parsePrefixes(t, "198.51.100.10/32")
 	return server
 }
 
@@ -45,7 +45,7 @@ func fromPeer(server *Server, method, path string, body io.Reader, peer string, 
 // la connexion, dont le corps (le mot de passe) n'est pas lu.
 func TestR_CNX_5_TheInterfaceIsRefusedToAPeerThatBypassesTheProxy(t *testing.T) {
 	server := guardedServer(t)
-	const neighbour = "10.10.80.11:41000"
+	const neighbour = "198.51.100.11:41000"
 	for _, path := range []string{"/", "/machines", "/api/auth", "/api/machines", "/api/unknown"} {
 		got := fromPeer(server.Server, http.MethodGet, path, nil, neighbour, nil)
 		if got.Code != http.StatusForbidden {
@@ -75,17 +75,17 @@ func TestR_CNX_5_TheProxyAndLoopbackAreServedAgentRoutesUnchanged(t *testing.T) 
 		request.Header.Set("X-Forwarded-Proto", "https")
 	}
 	for _, path := range []string{"/", "/api/auth"} {
-		if got := fromPeer(server.Server, http.MethodGet, path, nil, "10.10.80.10:41000", viaProxy); got.Code == http.StatusForbidden {
+		if got := fromPeer(server.Server, http.MethodGet, path, nil, "198.51.100.10:41000", viaProxy); got.Code == http.StatusForbidden {
 			t.Errorf("GET %s through the proxy: 403 %s", path, got.Body.String())
 		}
 		if got := fromPeer(server.Server, http.MethodGet, path, nil, "127.0.0.1:41000", nil); got.Code == http.StatusForbidden {
 			t.Errorf("GET %s from loopback: 403 %s", path, got.Body.String())
 		}
 	}
-	if got := fromPeer(server.Server, http.MethodGet, "/api/auth", nil, "10.10.80.10:41000", viaProxy); got.Code != http.StatusOK {
+	if got := fromPeer(server.Server, http.MethodGet, "/api/auth", nil, "198.51.100.10:41000", viaProxy); got.Code != http.StatusOK {
 		t.Fatalf("/api/auth through the proxy: %d", got.Code)
 	}
-	const neighbour = "10.10.80.11:41000"
+	const neighbour = "198.51.100.11:41000"
 	if got := fromPeer(server.Server, http.MethodGet, "/ping/"+job.Token, nil, neighbour, nil); got.Code != http.StatusOK {
 		t.Fatalf("a ping from a neighbour: %d", got.Code)
 	}

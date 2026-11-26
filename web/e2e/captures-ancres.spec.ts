@@ -36,7 +36,7 @@ test("la fenêtre Ré-enrôler ouverte : les ancres demandées avec le droit", a
   const dialog = page.locator("dialog[open]");
   await dialog.getByLabel(label("machine.capability_backup_produce")).check();
   await dialog.getByLabel(label("machine.capability_restic_produce")).check();
-  await dialog.getByLabel(label("anchor.label_backup_guest")).fill("5012, 5013");
+  await dialog.getByLabel(label("anchor.label_backup_guest")).fill("312, 313");
   await expect(dialog.getByLabel(label("anchor.label_backup_recipient"))).toHaveValue(/^age1/);
   await shoot(page, "reenroler");
 });

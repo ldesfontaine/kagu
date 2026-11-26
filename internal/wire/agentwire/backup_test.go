@@ -18,7 +18,7 @@ func TestIsBackupFile_OnlyTheExactForm(t *testing.T) {
 		{"kagu-key-0123456789abcdef.age", false},
 		{".kagu-20261021-030000.tar.age.part", false},
 		{"kagu-20261021-030000.tar.age.part", false},
-		{"pve-vm-5010-20261021-030000.tar.age", true},
+		{"pve-vm-310-20261021-030000.tar.age", true},
 		{"-20261021-030000.tar.age", false},
 		{"Pve-20261021-030000.tar.age", false},
 		{"20261021-030000.tar.age", false},
@@ -99,7 +99,7 @@ func TestBackupFilePrefix_TheDatabaseKeepsItsOldName(t *testing.T) {
 	for _, c := range []struct{ subject, suffix, want string }{
 		{"database", "", "kagu"},
 		{"pve", "", "pve"},
-		{"pve", "vm-5010", "pve-vm-5010"},
+		{"pve", "vm-310", "pve-vm-310"},
 	} {
 		if got := BackupFilePrefix(c.subject, c.suffix); got != c.want {
 			t.Errorf("BackupFilePrefix(%q, %q) = %q, want %q", c.subject, c.suffix, got, c.want)
@@ -144,7 +144,7 @@ func TestIsBackupFileOf_TheRestIsExactlyTheInstant(t *testing.T) {
 func TestIsBackupPrefix_AWordMadeOfLowercaseDigitsAndDashes(t *testing.T) {
 	for prefix, want := range map[string]bool{
 		"kagu":                  true,
-		"pve-vm-5010":           true,
+		"pve-vm-310":            true,
 		"":                      false,
 		"-pve":                  false,
 		"Pve":                   false,

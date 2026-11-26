@@ -98,19 +98,19 @@ func TestMachine_SaysTheAnchorsItsAgentReports(t *testing.T) {
 func TestProtectionFix_ExactForAnArchivePlanListOtherwise(t *testing.T) {
 	const recipient = "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"
 	archive := restic.Protection{Origin: restic.OriginArchive, Reason: "anchor_missing:backup.guest"}
-	fix := protectionFix(archive, restic.Source{VMID: 5012}, recipient)
-	if fix == nil || !fix.Exact || !strings.HasSuffix(fix.Command, " agent trust add backup.guest 5012") {
+	fix := protectionFix(archive, restic.Source{VMID: 312}, recipient)
+	if fix == nil || !fix.Exact || !strings.HasSuffix(fix.Command, " agent trust add backup.guest 312") {
 		t.Fatalf("%+v", fix)
 	}
 	archive.Reason = "anchor_outside:backup.recipient"
-	if fix = protectionFix(archive, restic.Source{VMID: 5012}, recipient); fix == nil || !fix.Exact || !strings.HasSuffix(fix.Command, " agent trust add backup.recipient "+recipient) {
+	if fix = protectionFix(archive, restic.Source{VMID: 312}, recipient); fix == nil || !fix.Exact || !strings.HasSuffix(fix.Command, " agent trust add backup.recipient "+recipient) {
 		t.Fatalf("%+v", fix)
 	}
-	if fix = protectionFix(archive, restic.Source{VMID: 5012}, ""); fix == nil || fix.Exact || !strings.HasSuffix(fix.Command, " agent trust list") {
+	if fix = protectionFix(archive, restic.Source{VMID: 312}, ""); fix == nil || fix.Exact || !strings.HasSuffix(fix.Command, " agent trust list") {
 		t.Fatalf("no keyring: %+v", fix)
 	}
 	resticOrigin := restic.Protection{Origin: restic.OriginRestic, Reason: "anchor_missing:restic.target-cert"}
-	if fix = protectionFix(resticOrigin, restic.Source{VMID: 5012}, recipient); fix == nil || fix.Exact || !strings.HasSuffix(fix.Command, " agent trust list") {
+	if fix = protectionFix(resticOrigin, restic.Source{VMID: 312}, recipient); fix == nil || fix.Exact || !strings.HasSuffix(fix.Command, " agent trust list") {
 		t.Fatalf("restic: %+v", fix)
 	}
 	missing := restic.Protection{Origin: restic.OriginRestic, Reason: "restic.source_right_missing", Fix: &refusal.Fix{Right: "restic.produce", Machine: "m-src"}}

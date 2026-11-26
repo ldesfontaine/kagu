@@ -106,7 +106,7 @@ func TestParcel_ServesItsMachineOnly(t *testing.T) {
 
 const (
 	otherMachineID = "22222222-3333-4444-8555-666666666666"
-	archiveName    = "pve-vm-5012-20261021-030000.tar.age"
+	archiveName    = "pve-vm-312-20261021-030000.tar.age"
 	archiveContent = "age-encryption.org/v1\nune archive de test"
 )
 
@@ -251,7 +251,7 @@ func TestParcelUpload_TheProducerFillsAndTheDestinationReads(t *testing.T) {
 
 	// Un disque sans la place répond 413 disk_full, rien n'est écrit.
 	outbox.SetFreeBytes(func(string) (uint64, error) { return 0, nil })
-	second := "pve-vm-5013-20261021-030000.tar.age"
+	second := "pve-vm-313-20261021-030000.tar.age"
 	request := httptest.NewRequest(http.MethodPut, agentwire.ParcelPath(upload.ID(), second), strings.NewReader(archiveContent))
 	request.Header.Set(agentwire.HeaderProtocol, agentwire.ProtocolVersion)
 	request.Header.Set("Authorization", "Bearer "+producerSession)

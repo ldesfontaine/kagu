@@ -57,9 +57,9 @@ func (b reachBench) issueReachToken(t *testing.T, name string, verbs []string, r
 }
 
 // Le numéro d'invité que chaque geste Proxmox vise, choisi pour que le geste
-// soit possible sur le faux hôte : 200 est arrêté, 5012 en marche.
+// soit possible sur le faux hôte : 200 est arrêté, 312 en marche.
 var reachGuests = map[string]int{
-	"proxmox.vm.start": 200, "proxmox.vm.shutdown": 5012, "proxmox.vm.snapshot": 5012, "proxmox.vm.snapshot_delete": 200,
+	"proxmox.vm.start": 200, "proxmox.vm.shutdown": 312, "proxmox.vm.snapshot": 312, "proxmox.vm.snapshot_delete": 200,
 }
 
 // request compose la requête d'un verbe contre une machine, et le corps que
@@ -222,10 +222,10 @@ func TestReach_AProxmoxGestureNeedsTheHostAndTheGuest(t *testing.T) {
 		host  string
 		want  bool
 	}{
-		{"host and guest in reach", apitoken.Reach{OnlyMachines: true, Machines: []string{reachA}, OnlyGuests: true, Guests: []int{200, 5012}}, reachA, true},
+		{"host and guest in reach", apitoken.Reach{OnlyMachines: true, Machines: []string{reachA}, OnlyGuests: true, Guests: []int{200, 312}}, reachA, true},
 		{"host in reach, guest out", apitoken.Reach{OnlyMachines: true, Machines: []string{reachA}, OnlyGuests: true, Guests: []int{999}}, reachA, false},
-		{"guest in reach, host out", apitoken.Reach{OnlyMachines: true, Machines: []string{reachB}, OnlyGuests: true, Guests: []int{200, 5012}}, reachA, false},
-		{"only guests limited, guest in", apitoken.Reach{OnlyGuests: true, Guests: []int{200, 5012}}, reachA, true},
+		{"guest in reach, host out", apitoken.Reach{OnlyMachines: true, Machines: []string{reachB}, OnlyGuests: true, Guests: []int{200, 312}}, reachA, false},
+		{"only guests limited, guest in", apitoken.Reach{OnlyGuests: true, Guests: []int{200, 312}}, reachA, true},
 		{"only guests limited, guest out", apitoken.Reach{OnlyGuests: true, Guests: []int{999}}, reachA, false},
 		{"only machines limited, host in", apitoken.Reach{OnlyMachines: true, Machines: []string{reachA}}, reachA, true},
 		{"empty guest list", apitoken.Reach{OnlyGuests: true}, reachA, false},
@@ -423,7 +423,7 @@ func TestReach_TheOperatorIsRefusedWhatIsInvalid(t *testing.T) {
 func TestReach_CreationAndListCarryTheReach(t *testing.T) {
 	bench := newReachBench(t)
 	got := callAPI(bench.Server, http.MethodPost, "/api/settings/api-tokens", map[string]any{
-		"name": "limité", "scope": "write", "verbs": []string{"proxmox.vm.start"}, "machines": []string{reachA}, "guests": []int{5012, 200},
+		"name": "limité", "scope": "write", "verbs": []string{"proxmox.vm.start"}, "machines": []string{reachA}, "guests": []int{312, 200},
 	})
 	if got.Code != http.StatusCreated {
 		t.Fatalf("create: %d %s", got.Code, got.Body.String())

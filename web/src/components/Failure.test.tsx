@@ -45,9 +45,9 @@ test("sans valeur connue, la commande est « trust list » et un lien mène à l
 });
 
 test("un refus par ancre locale montre la commande à lancer en root sur la machine", () => {
-  const refused = new ApiError(409, "anchor.backup_guest_missing", { error: "anchor.backup_guest_missing", fix: { command: "sudo x agent trust add backup.guest 5012", exact: true } });
+  const refused = new ApiError(409, "anchor.backup_guest_missing", { error: "anchor.backup_guest_missing", fix: { command: "sudo x agent trust add backup.guest 312", exact: true } });
   const markup = render(refused);
   expect(markup).toContain("anchor.backup_guest_missing");
   expect(markup).toContain("anchor.run_command");
-  expect(markup).toContain("sudo x agent trust add backup.guest 5012");
+  expect(markup).toContain("sudo x agent trust add backup.guest 312");
 });

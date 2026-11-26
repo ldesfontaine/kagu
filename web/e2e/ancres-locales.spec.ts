@@ -67,12 +67,12 @@ test("Ré-enrôler : les ancres se demandent avec le droit, la clé du trousseau
   await dialog.getByRole("button", { name: label("machine.rights_submit") }).click();
   await expect(dialog).toContainText(label("machine.anchor_invalid"));
 
-  await fields.getByLabel(label("anchor.label_backup_guest")).fill("5012, 5013");
+  await fields.getByLabel(label("anchor.label_backup_guest")).fill("312, 313");
   await fields.getByLabel(label("anchor.label_restic_target_cert")).fill("ab".repeat(32));
   await dialog.getByRole("button", { name: label("machine.rights_submit") }).click();
   const enroll = dialog.locator(".checklist-item").filter({ hasText: label("machine.install_enroll_title") });
   const line = await enroll.locator(".token-box").innerText();
-  expect(line).toMatch(/ -backup-recipient age1[a-z0-9]+ -backup-guest 5012,5013 -restic-target-cert (ab){32}/);
+  expect(line).toMatch(/ -backup-recipient age1[a-z0-9]+ -backup-guest 312,313 -restic-target-cert (ab){32}/);
   await dialog.getByRole("button", { name: label("wizard.next") }).click();
   await dialog.locator(".modal-foot").getByRole("button", { name: label("modal.close") }).click();
   expect(findings.unknown()).toEqual([]);

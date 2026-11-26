@@ -191,7 +191,7 @@ func EnrollMachineWithKey(t testing.TB, machines *machine.Service, id, name stri
 	}
 	enrolled, err := machines.Enroll(ctx, machine.Enrollment{
 		MachineID: id, PublicKey: public, Token: cleartext,
-		Hostname: name, Address: "51.15.20.114", OS: "Debian 12", Arch: "amd64", AgentVersion: "v0.0.1",
+		Hostname: name, Address: "203.0.113.114", OS: "Debian 12", Arch: "amd64", AgentVersion: "v0.0.1",
 	})
 	if err != nil {
 		t.Fatal(err)

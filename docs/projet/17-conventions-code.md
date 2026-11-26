@@ -618,6 +618,11 @@ scripts relus.
   `go test ./internal/edge/server -update` pour les réécrire après vérification ; la comparaison est `goldentest.Compare`, qui déclare le drapeau `-update`),
   relues aussi par le front (`web/src/api/contract.test.ts`). Tout
   changement casse un test — c'est voulu.
+- **Des données inventées** : le dépôt est miroité en public ; les jeux de
+  test, `testdata/`, `web/e2e/` et `docs/` n'ont ni l'adresse, ni le domaine,
+  ni le numéro de VM d'une vraie installation (plages de documentation ou
+  `192.168.x`, numéros neutres). `TestR_NETMAPDEMO_NoRealInstallationInPublicFixtures`
+  (`internal/edge/server/fixtures_private_test.go`) le tient, sans exception.
 - **La vraie base** : un composant et ses consommateurs se testent sur une
   SQLite temporaire, ouverte par `storetest.Open(t)`
   (`internal/edge/store/storetest`, avec `EnrollMachine`,

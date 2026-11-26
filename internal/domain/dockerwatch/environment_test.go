@@ -85,7 +85,7 @@ func benchDaemon(t *testing.T, requests *atomic.Int64) *http.ServeMux {
 		{id: idWeb, name: "shop-web-1", service: "web", network: netShop, ip: "172.20.0.2", aliases: []string{"shop-web-1", "web"}, env: seededEnvironment()},
 		{id: idDB, name: "shop-db-1", service: "db", network: netShop, ip: "172.20.0.3", aliases: []string{"shop-db-1", "db"}},
 		{id: idCache, name: "shop-cache-1", service: "cache", network: netShop, ip: "172.20.0.4", aliases: []string{"shop-cache-1", "cache"}},
-		{id: idStranger, name: "stranger", network: netOther, ip: "172.30.0.2", aliases: []string{"stranger"}},
+		{id: idStranger, name: "stranger", network: netOther, ip: "172.31.0.2", aliases: []string{"stranger"}},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1.41/containers/json", func(w http.ResponseWriter, r *http.Request) {

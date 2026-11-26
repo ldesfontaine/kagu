@@ -302,11 +302,11 @@ const firewall = {
 const vpsEdge = VPS("vps-edge", "203.0.113.10", "chez un hébergeur · 2 vCPU", [
   S("caddy", "caddy", "compose"), S("wg", "wireguard", "systemd"), S("vf2b", "fail2ban", "systemd")]);
 const pi = HW("pi", "10.20.90.2", [S("restic-srv", "restic-serveur", "systemd"), S("nodeexp", "node-exporter", "systemd", "missing"), S("smartd", "smartd", "systemd", "unknown")]);
-const proxy = VM("proxy", 6010, "10.20.60.10", [S("haproxy", "haproxy", "compose", "running", 2), S("keycloak", "keycloak", "compose"), S("f2b", "fail2ban", "systemd", "failed")]);
-const forge = LXC("forge", 5011, "10.20.50.11", [S("gitea", "gitea", "compose"), S("postgres", "postgres", "container")]);
-const vault = VM("vault", 5010, "10.20.50.10", [S("passbolt", "passbolt", "compose")]);
-const pilote = VM("pilote", 5014, "10.20.50.14", [S("opencloud", "opencloud", "systemd"), S("restic", "restic", "systemd", "degraded")]);
-const consoleVm = VM("console", 5001, "10.20.11.20", [S("sshd", "sshd", "systemd")]);
+const proxy = VM("proxy", 210, "10.20.60.10", [S("haproxy", "haproxy", "compose", "running", 2), S("keycloak", "keycloak", "compose"), S("f2b", "fail2ban", "systemd", "failed")]);
+const forge = LXC("forge", 311, "10.20.50.11", [S("gitea", "gitea", "compose"), S("postgres", "postgres", "container")]);
+const vault = VM("vault", 310, "10.20.50.10", [S("passbolt", "passbolt", "compose")]);
+const pilote = VM("pilote", 314, "10.20.50.14", [S("opencloud", "opencloud", "systemd"), S("restic", "restic", "systemd", "degraded")]);
+const consoleVm = VM("console", 301, "10.20.11.20", [S("sshd", "sshd", "systemd")]);
 
 const variants = {
   A: {
@@ -317,7 +317,7 @@ const variants = {
         { zone: "admin", machines: [consoleVm] },
         { zone: "services", machines: [vault, forge, pilote] },
         { zone: "dmz", machines: [proxy] },
-        { zone: "ia", machines: [VM("notes", 8010, "10.20.80.10", [S("hedgedoc", "hedgedoc", "compose"), S("ollama", "ollama", "container", "stopped")])], bare: ["vm-test-1", "vm-test-2"] },
+        { zone: "ia", machines: [VM("notes", 510, "10.20.80.10", [S("hedgedoc", "hedgedoc", "compose"), S("ollama", "ollama", "container", "stopped")])], bare: ["vm-test-1", "vm-test-2"] },
       ] },
       { zone: "users", machines: [], bare: ["switch", "borne-wifi", "imprimante"] },
       { zone: "backup", machines: [pi] },
@@ -382,9 +382,9 @@ variants.C = {
   out: [vpsEdge, VPS("vps-relais", "203.0.113.25", "chez un hébergeur · 1 vCPU", [S("smtp", "smtp-relais", "compose"), S("statut", "statut", "compose")])],
   home: [
     { host: "pve-1", ip: "10.20.11.2", zones: [
-      { zone: "admin", machines: [consoleVm, LXC("dns", 5002, "10.20.11.21", [S("unbound", "unbound", "systemd")])] },
-      { zone: "services", machines: [vault, forge, pilote, LXC("wiki", 5015, "10.20.50.15", [S("bookstack", "bookstack", "compose")]), VM("mail", 5016, "10.20.50.16", [S("postfix", "postfix", "systemd"), S("dovecot", "dovecot", "systemd")])] },
-      { zone: "dmz", machines: [proxy, LXC("waf", 6011, "10.20.60.11", [S("modsec", "modsecurity", "container")])] },
+      { zone: "admin", machines: [consoleVm, LXC("dns", 302, "10.20.11.21", [S("unbound", "unbound", "systemd")])] },
+      { zone: "services", machines: [vault, forge, pilote, LXC("wiki", 315, "10.20.50.15", [S("bookstack", "bookstack", "compose")]), VM("mail", 316, "10.20.50.16", [S("postfix", "postfix", "systemd"), S("dovecot", "dovecot", "systemd")])] },
+      { zone: "dmz", machines: [proxy, LXC("waf", 211, "10.20.60.11", [S("modsec", "modsecurity", "container")])] },
     ] },
     { host: "pve-2", ip: "10.20.11.3", zones: pve2 },
     { host: "pve-3", ip: "10.20.11.4", zones: pve3 },

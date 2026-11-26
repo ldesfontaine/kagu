@@ -148,8 +148,8 @@ func TestR_A3_15(t *testing.T) {
 			t.Errorf("answer %q: change and question missing:\n%s", answer, out)
 		}
 	}
-	out, err = runTrust(t, place, noTerminal, 0, "-state", stateDir, "remove", anchor.BackupGuest, "5012")
-	if !errors.As(err, &refused) || !strings.Contains(out, "- backup.guest 5012") || policyContent(t, place) != before {
+	out, err = runTrust(t, place, noTerminal, 0, "-state", stateDir, "remove", anchor.BackupGuest, "312")
+	if !errors.As(err, &refused) || !strings.Contains(out, "- backup.guest 312") || policyContent(t, place) != before {
 		t.Errorf("remove without terminal: %v\n%s", err, out)
 	}
 }
@@ -168,7 +168,7 @@ func TestR_DROIT_8(t *testing.T) {
 		t.Fatalf("unknown type: %v", err)
 	}
 	out, err := runTrust(t, place, noTerminal, 0, "-state", stateDir, "list")
-	if err != nil || !strings.Contains(out, "backup.guest\t5012 101") || !strings.Contains(out, agentpolicy.TrustServerKey+"\tSHA256:") {
+	if err != nil || !strings.Contains(out, "backup.guest\t312 101") || !strings.Contains(out, agentpolicy.TrustServerKey+"\tSHA256:") {
 		t.Fatalf("list: %v\n%s", err, out)
 	}
 }

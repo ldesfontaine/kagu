@@ -32,7 +32,7 @@ const agentPlan: BackupPlan = {
   source_machine_id: "m2",
   source_machine_name: "pve",
   producer: "proxmox-vzdump",
-  selector: "5010,5012",
+  selector: "310,312",
   keep: 7,
 };
 
@@ -70,7 +70,7 @@ describe("sourceLabel", () => {
 
   it("names the machine, the producer and what it takes", () => {
     expect(sourceLabel(t, { ...agentPlan, selector: "all" })).toBe("backup.source_agent:pve:backup.producer_proxmox-vzdump:backup.selector_all");
-    expect(sourceLabel(t, agentPlan)).toBe("backup.source_agent:pve:backup.producer_proxmox-vzdump:backup.selector_some:5010,5012");
+    expect(sourceLabel(t, agentPlan)).toBe("backup.source_agent:pve:backup.producer_proxmox-vzdump:backup.selector_some:310,312");
   });
 });
 
@@ -83,7 +83,7 @@ describe("the form of a plan", () => {
 
   it("is filled from a plan, and gives it back unchanged", () => {
     const values = planFormOf(agentPlan);
-    expect(values).toMatchObject({ subject: "pve-vm", kind: "agent", machine: "m2", selector: "5010,5012", destination: "bkd_1", keep: "7" });
+    expect(values).toMatchObject({ subject: "pve-vm", kind: "agent", machine: "m2", selector: "310,312", destination: "bkd_1", keep: "7" });
     expect(planRequestOf(values, values.destination)).toEqual({
       subject: "pve-vm",
       request: {
@@ -91,7 +91,7 @@ describe("the form of a plan", () => {
         source_kind: "agent",
         source_machine_id: "m2",
         producer: "proxmox-vzdump",
-        selector: "5010,5012",
+        selector: "310,312",
         destination_id: "bkd_1",
         keep: 7,
       },
@@ -155,8 +155,8 @@ describe("lastErrorText", () => {
   });
 
   it("names the virtual machine and the reason of a target that failed", () => {
-    expect(lastErrorText(t, "backup.target_failed:5010:producer_failed", describeReason)).toBe("backup.target_failed:5010:reason(producer_failed)");
-    expect(lastErrorText(t, "backup.prune_failed:5010:path_unwritable", describeReason)).toBe("backup.prune_failed:5010:reason(path_unwritable)");
+    expect(lastErrorText(t, "backup.target_failed:310:producer_failed", describeReason)).toBe("backup.target_failed:310:reason(producer_failed)");
+    expect(lastErrorText(t, "backup.prune_failed:310:path_unwritable", describeReason)).toBe("backup.prune_failed:310:reason(path_unwritable)");
   });
 
   it("keeps the right that a reason names after its own colon", () => {
@@ -204,7 +204,7 @@ describe("the choice of virtual machines", () => {
   });
 
   it("reads the numbers of a selector, and none for all", () => {
-    expect(selectorIds("5010,5012")).toEqual([5010, 5012]);
+    expect(selectorIds("310,312")).toEqual([310, 312]);
     expect(selectorIds("all")).toEqual([]);
     expect(selectorIds("")).toEqual([]);
   });

@@ -43,15 +43,15 @@ func demoNetworkInput() netmap.Input {
 		kind string
 		ip   string
 	}{
-		{"bastion", 1120, "qemu", "10.10.11.20"}, {"dns", 1121, "lxc", "10.10.11.21"},
-		{"proxy", 6010, "qemu", "10.10.60.10"}, {"mail-gw", 6011, "lxc", "10.10.60.11"},
-		{"vault", 5010, "qemu", "10.10.50.10"}, {"notes", 5014, "qemu", "10.10.50.14"}, {"files", 5015, "lxc", "10.10.50.15"},
-		{"forge", 7010, "lxc", "10.10.70.10"}, {"ci", 7011, "qemu", "10.10.70.11"},
-		{"lab", 8010, "qemu", "10.10.80.10"},
+		{"bastion", 110, "qemu", "192.168.10.20"}, {"dns", 111, "lxc", "192.168.10.21"},
+		{"proxy", 210, "qemu", "192.168.50.10"}, {"mail-gw", 211, "lxc", "192.168.50.11"},
+		{"vault", 310, "qemu", "192.168.40.10"}, {"notes", 314, "qemu", "192.168.40.14"}, {"files", 315, "lxc", "192.168.40.15"},
+		{"forge", 410, "lxc", "192.168.60.10"}, {"ci", 411, "qemu", "192.168.60.11"},
+		{"lab", 510, "qemu", "192.168.70.10"},
 	}
 	input := netmap.Input{Machines: []netmap.Machine{
-		{ID: "pve", Name: "pve", Kind: netmap.KindPhysical, Online: true, Address: "10.10.11.2:8006"},
-		{ID: "pi", Name: "pi", Kind: netmap.KindPhysical, Online: true, Address: "10.10.90.2"},
+		{ID: "pve", Name: "pve", Kind: netmap.KindPhysical, Online: true, Address: "192.168.10.2:8006"},
+		{ID: "pi", Name: "pi", Kind: netmap.KindPhysical, Online: true, Address: "192.168.80.2"},
 		{ID: relay, Name: "vps-relais", Kind: netmap.KindUnknown, Online: true, Address: "198.51.100.24"},
 	}}
 	hypervisor := netmap.Hypervisor{MachineID: "pve", Node: "pve"}
@@ -67,17 +67,17 @@ func demoNetworkInput() netmap.Input {
 	input.Firewalls = []netmap.Firewall{{ID: "fw", Name: "pare-feu", Interfaces: []netmap.Interface{
 		demoInterface("lo0", "lo0", "Loopback", "127.0.0.1/8"),
 		demoInterface("wan", "igc0", "WAN", "203.0.113.2/24"),
-		demoInterface("wg", "wg0", "WG_RELAIS", "10.77.0.2/30"),
-		demoInterface("rescue", "igc1", "RESCUE", "10.10.99.1/24"),
-		demoInterface("switch", "igc2", "SWITCH_MGMT", "10.10.2.1/24"),
-		demoInterface("users", "igc3_vlan20", "USERS", "10.10.20.1/24"),
-		demoInterface("admin", "igc3_vlan11", "ADMIN", "10.10.11.1/24"),
-		demoInterface("projects", "igc3_vlan70", "PROJETS", "10.10.70.1/24"),
-		demoInterface("edge", "igc3_vlan60", "EDGE", "10.10.60.1/24"),
-		demoInterface("services", "igc3_vlan50", "SERVICES", "10.10.50.1/24"),
-		demoInterface("backup", "igc3_vlan90", "BACKUP", "10.10.90.1/24"),
-		demoInterface("ai", "igc3_vlan80", "IA", "10.10.80.1/24"),
-		demoInterface("guest", "igc3_vlan30", "INVITES", "10.10.30.1/24"),
+		demoInterface("wg", "wg0", "TUNNEL_VPS", "192.168.77.2/30"),
+		demoInterface("rescue", "igc1", "SECOURS", "192.168.99.1/24"),
+		demoInterface("switch", "igc2", "COMMUTATEUR", "192.168.1.1/24"),
+		demoInterface("users", "igc3_vlan20", "POSTES", "192.168.20.1/24"),
+		demoInterface("admin", "igc3_vlan10", "GESTION", "192.168.10.1/24"),
+		demoInterface("projects", "igc3_vlan60", "ATELIER", "192.168.60.1/24"),
+		demoInterface("edge", "igc3_vlan50", "FRONTAL", "192.168.50.1/24"),
+		demoInterface("services", "igc3_vlan40", "APPLIS", "192.168.40.1/24"),
+		demoInterface("backup", "igc3_vlan80", "SAUVEGARDE", "192.168.80.1/24"),
+		demoInterface("ai", "igc3_vlan70", "LABO", "192.168.70.1/24"),
+		demoInterface("guest", "igc3_vlan30", "VISITEURS", "192.168.30.1/24"),
 	}}}
 	traefik := demoInstance(proxy, "compose:edge/traefik", "running")
 	traefik.PublicPorts, traefik.SeenFromInternet = []int{443}, true

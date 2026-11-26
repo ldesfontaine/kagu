@@ -30,7 +30,7 @@ func TestEffectiveKind_TheStrongestSourceWins(t *testing.T) {
 		"l'hôte avant l'agent":           {Placement{GuestKind: KindLXC, Reported: KindUnknown, HasHost: true}, KindLXC},
 		"VM avec hôte":                   {Placement{Reported: KindVM, HasHost: true}, KindVM},
 		"VM sans hôte, adresse publique": {Placement{Reported: KindVM, Address: "203.0.113.7:51234"}, KindVPS},
-		"VM sans hôte, adresse privée":   {Placement{Reported: KindVM, Address: "10.10.80.12:51234"}, KindVM},
+		"VM sans hôte, adresse privée":   {Placement{Reported: KindVM, Address: "192.168.1.12:51234"}, KindVM},
 		"VM sans hôte, adresse inconnue": {Placement{Reported: KindVM}, KindVM},
 		"VM sans hôte, adresse partagée": {Placement{Reported: KindVM, Address: "100.64.1.2"}, KindVM},
 		"VM sans hôte, ULA":              {Placement{Reported: KindVM, Address: "[fd12:3456::5]:443"}, KindVM},

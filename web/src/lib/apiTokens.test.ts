@@ -117,9 +117,9 @@ test("limiter aux machines cochées envoie la liste, même vide", () => {
 });
 
 test("les invités ne partent qu'avec un verbe Proxmox coché, triés et sans doublon", () => {
-  const form = { ...emptyTokenForm(30), name: "ci", scope: "write" as const, guestsMode: "some" as const, guests: "5012, 200 200" };
+  const form = { ...emptyTokenForm(30), name: "ci", scope: "write" as const, guestsMode: "some" as const, guests: "312, 200 200" };
   expect(tokenRequestOf({ ...form, verbs: ["agent.ping"] })).not.toHaveProperty("guests");
-  expect(tokenRequestOf({ ...form, verbs: ["proxmox.vm.start"] })).toMatchObject({ guests: [200, 5012] });
+  expect(tokenRequestOf({ ...form, verbs: ["proxmox.vm.start"] })).toMatchObject({ guests: [200, 312] });
 });
 
 test("un numéro d'invité invalide bloque la demande", () => {
@@ -144,11 +144,11 @@ test("hasProxmoxVerb ne reconnaît que les verbes proxmox.", () => {
 
 test("reachFormOf relit la portée d'un jeton, et null reste « toutes »", () => {
   expect(reachFormOf(token({ scope: "write" }))).toEqual(emptyReachForm());
-  expect(reachFormOf(token({ scope: "write", machines: ["m1"], guests: [200, 5012] }))).toEqual({
+  expect(reachFormOf(token({ scope: "write", machines: ["m1"], guests: [200, 312] }))).toEqual({
     machinesMode: "some",
     machines: ["m1"],
     guestsMode: "some",
-    guests: "200 5012",
+    guests: "200 312",
   });
   expect(reachRequestOf(reachFormOf(token({ scope: "write", machines: [] })), false)).toEqual({ machines: [] });
 });

@@ -16,7 +16,7 @@ import (
 var (
 	subjectPattern  = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 	selectorPattern = regexp.MustCompile(`^\d{1,9}(,\d{1,9})*$`)
-	// Le suffixe des archives par machine virtuelle (« pve » + « vm-5012 ») :
+	// Le suffixe des archives par machine virtuelle (« pve » + « vm-312 ») :
 	// un sujet qui le porterait déjà nommerait ses fichiers comme celles d'un
 	// autre plan, et l'élagage de l'un toucherait l'autre.
 	guestSuffixPattern = regexp.MustCompile(`-vm-\d+$`)

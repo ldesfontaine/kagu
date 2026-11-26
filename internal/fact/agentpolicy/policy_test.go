@@ -33,7 +33,7 @@ const boot = "9a6c1d2e-0b7f-4e3a-8c5d-1f2e3a4b5c6d"
 func TestR_A3_2_ThePolicyCarriesMachineRightsAnchorsAndOneKey(t *testing.T) {
 	accepted, kept := testKey(t), testKey(t)
 	document := Document{MachineID: "m", Rights: []Capability{{Name: CapabilityObserve}, {Name: CapabilityFilesWrite, Paths: []string{"/srv/a", "/srv/b"}}},
-		Anchors: map[string][]string{"backup.guest": {"5012"}}}.SetServerKey(accepted)
+		Anchors: map[string][]string{"backup.guest": {"312"}}}.SetServerKey(accepted)
 	content, err := Encode(document)
 	if err != nil {
 		t.Fatal(err)

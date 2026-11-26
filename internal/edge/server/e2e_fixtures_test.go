@@ -319,7 +319,7 @@ func seedE2ESystemd(t *testing.T, ts *testServer) {
 // un jeton PVEAuditor : les archives ne sont pas lisibles, la fiche dit le droit
 // qui manque, les VM disent « Inconnue ». Son jeton « !complet » (même secret
 // fictif) lit aussi les archives : le parcours s'en sert pour déclarer un second
-// hôte sur la machine Kagu. La VM 5012 porte le nom d'hôte de la machine
+// hôte sur la machine Kagu. La VM 312 porte le nom d'hôte de la machine
 // Kagu : le rapprochement la lie.
 func seedE2EProxmox(t *testing.T, ts *testServer) {
 	t.Helper()
@@ -504,7 +504,7 @@ func seedE2EAnchors(t *testing.T, ts *testServer) {
 	go e2eIgnoreOrders(none)
 	go e2eIgnoreOrders(broken)
 
-	// Un plan de sauvegarde de la VM 5012 de pve-ancres : sa dernière passe est
+	// Un plan de sauvegarde de la VM 312 de pve-ancres : sa dernière passe est
 	// refusée par les ancres (le serveur n'envoie pas l'ordre), la page
 	// Sauvegardes dit pourquoi et donne la commande.
 	created := callAPI(ts.Server, http.MethodPost, "/api/backups/destinations", map[string]any{"name": "sauvegardes-ancres", "machine_id": e2eAnchorsNoneID, "path": "/srv/sauvegardes"})
@@ -515,7 +515,7 @@ func seedE2EAnchors(t *testing.T, ts *testServer) {
 	decodeAPI(t, created, &destination)
 	plan := map[string]any{
 		"name": "compta", "source_kind": "agent", "source_machine_id": e2eAnchorsNoneID, "producer": "proxmox-vzdump",
-		"selector": "5012", "destination_id": destination.ID, "keep": 7,
+		"selector": "312", "destination_id": destination.ID, "keep": 7,
 	}
 	if got := callAPI(ts.Server, http.MethodPut, "/api/backups/plans/compta", plan); got.Code != http.StatusOK {
 		t.Fatalf("plan compta: %d %s", got.Code, got.Body.String())

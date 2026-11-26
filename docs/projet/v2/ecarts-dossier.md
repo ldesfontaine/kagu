@@ -173,7 +173,7 @@ Lignes sur `3e79bb1`. Tests lus, pas lancés.
 | 03:47 (§2, A1) | « Une autre casse contourne les ancres » | Fermé (`internal/anchor/anchor.go:337-370`) ; la double lecture reste | TU-01 (PR #535) (N-2) |
 | 03:48 (§2, A2) | « Le premier venu crée le compte » | Code exigé | TU-03 (PR #536) |
 | 03:48 (§2, A2) | « Aucun moyen de refaire un mot de passe perdu » | `opencloud auth disable` (`cmd/opencloud/auth.go:22-35`) ; 01:271 le dit déjà | Toujours ; `auth disable` retiré par T02-08, remplacé par `sudo opencloud admin reset-password` |
-| 03:53 (§2, A5) | Règle `sudo` à `docs/installation.md:1105-1121` | Désormais `docs/installation.md:1138-1170` | TU-03, TU-05 (renvoi) |
+| 03:53 (§2, A5) | Règle `sudo` à `docs/installation.md:1105-111` | Désormais `docs/installation.md:1138-1170` | TU-03, TU-05 (renvoi) |
 | 03:63 (§3) | Version vérifiée à `internal/agent/update.go:312-334` | `verifyDownload`, `internal/agent/update.go:377` | TU-02 (renvoi) |
 
 ## Non vérifié

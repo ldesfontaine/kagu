@@ -52,8 +52,8 @@ export interface BackupPlan {
   last_attempt_at: string | null;
   // Ce qui a gêné la dernière tentative, vide sinon : la clé d'un refus
   // (« backup.source_offline »), ou, pour un plan agent, le premier souci du
-  // passage avec sa cible et sa raison (« backup.target_failed:5010:timeout »,
-  // « backup.prune_failed:5010:… ») ; lastErrorText la lit.
+  // passage avec sa cible et sa raison (« backup.target_failed:310:timeout »,
+  // « backup.prune_failed:310:… ») ; lastErrorText la lit.
   last_error: string;
   // Le dernier ordre backup.receive du plan ; null s'il n'y en a pas ou plus.
   last_run: ActionRun | null;

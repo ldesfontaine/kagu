@@ -39,7 +39,7 @@ const (
 const pveBackupJobs = `{"data":[{"id":"nuit-pi","type":"vzdump","schedule":"03:00","next-run":1793329200,
 	"storage":"pi-sauvegardes","enabled":1,"all":1,"mode":"snapshot","prune-backups":"keep-daily=14,keep-weekly=8,keep-monthly=3"}]}`
 
-// L'adresse de la carte de la VM 5012, telle que l'hôte la dit dans sa configuration.
+// L'adresse de la carte de la VM 312, telle que l'hôte la dit dans sa configuration.
 const pveGuestMAC = "BC:24:11:AA:BB:CC"
 
 // fakeProxmox joue l'API d'un hôte Proxmox sur une adresse locale : aucun test
@@ -53,7 +53,7 @@ type fakeProxmox struct {
 	// rich : un hôte garni (plusieurs VM, un modèle, des stockages dont un NFS de
 	// sauvegardes) pour le parcours navigateur et les captures.
 	rich bool
-	// Le nom de la VM 5012, que le rapprochement lie à une machine du même nom d'hôte.
+	// Le nom de la VM 312, que le rapprochement lie à une machine du même nom d'hôte.
 	runningName string
 }
 
@@ -88,13 +88,13 @@ func newFakeProxmox(t *testing.T) *fakeProxmox {
 			body = richArchives()
 		case r.URL.Path == "/api2/json/cluster/resources" && r.URL.Query().Get("type") == "vm":
 			body = `{"data":[
-				{"type":"qemu","vmid":5012,"name":"` + runningName + `","node":"pve","status":"running","template":0,"maxcpu":2,"maxmem":2147483648,"maxdisk":34359738368},
+				{"type":"qemu","vmid":312,"name":"` + runningName + `","node":"pve","status":"running","template":0,"maxcpu":2,"maxmem":2147483648,"maxdisk":34359738368},
 				{"type":"lxc","vmid":200,"name":"dns","node":"pve","status":"stopped","template":0,"maxcpu":1,"maxmem":536870912,"maxdisk":8589934592}]}`
 		case r.URL.Path == "/api2/json/cluster/resources" && r.URL.Query().Get("type") == "storage":
 			body = `{"data":[{"type":"storage","storage":"local","node":"pve","plugintype":"dir","status":"available","content":"iso,backup","maxdisk":1000,"disk":400}]}`
 		case r.URL.Path == "/api2/json/cluster/status":
 			body = `{"data":[{"type":"cluster","name":"homelab","nodes":1},{"type":"node","name":"pve","local":1}]}`
-		case r.URL.Path == "/api2/json/nodes/pve/qemu/5012/config":
+		case r.URL.Path == "/api2/json/nodes/pve/qemu/312/config":
 			body = `{"data":{"name":"` + runningName + `","net0":"virtio=` + pveGuestMAC + `,bridge=vmbr0,firewall=1,tag=50"}}`
 		case r.URL.Path == "/api2/json/nodes/pve/lxc/200/config":
 			body = `{"data":{"net0":"name=eth0,bridge=vmbr0,hwaddr=BC:24:11:AA:BB:DD,tag=50,ip=dhcp"}}`
@@ -105,7 +105,7 @@ func newFakeProxmox(t *testing.T) *fakeProxmox {
 			}
 			body = `{"data":{"` + r.URL.Query().Get("path") + `":{` + privileges + `}}}`
 		case r.URL.Path == "/api2/json/nodes/pve/storage/local/content":
-			body = `{"data":[{"vmid":5012,"ctime":1790086400,"size":244318208}]}`
+			body = `{"data":[{"vmid":312,"ctime":1790086400,"size":244318208}]}`
 		case r.URL.Path == "/api2/json/cluster/backup":
 			body = pveBackupJobs
 		default:
@@ -256,7 +256,7 @@ func TestProxmox_DeclareReadAndRemove(t *testing.T) {
 	if host.LastError != "" || host.LastReadAt == nil || host.Version != "8.2.4" || host.Node != "pve" || len(host.Guests) != 2 || len(host.Storages) != 1 {
 		t.Fatalf("host: %+v", host)
 	}
-	if host.Guests[1].VMID != 5012 || host.Guests[1].LinkedMachineID == nil || *host.Guests[1].LinkedMachineID != dockerVMID || host.Guests[1].LastBackupAt == nil {
+	if host.Guests[1].VMID != 312 || host.Guests[1].LinkedMachineID == nil || *host.Guests[1].LinkedMachineID != dockerVMID || host.Guests[1].LastBackupAt == nil {
 		t.Fatalf("the VM named like the machine must be linked and carry its backup: %+v", host.Guests)
 	}
 	if host.Guests[0].LinkedMachineID != nil {
@@ -277,7 +277,7 @@ func TestProxmox_DeclareReadAndRemove(t *testing.T) {
 				t.Errorf("carrier: %+v", entry.Proxmox)
 			}
 		case dockerVMID:
-			if entry.Proxmox.Declared || entry.Proxmox.Hosted == nil || entry.Proxmox.Hosted.HostMachineName != "pve" || entry.Proxmox.Hosted.VMID != 5012 {
+			if entry.Proxmox.Declared || entry.Proxmox.Hosted == nil || entry.Proxmox.Hosted.HostMachineName != "pve" || entry.Proxmox.Hosted.VMID != 312 {
 				t.Errorf("guest: %+v", entry.Proxmox)
 			}
 		}
@@ -442,7 +442,7 @@ func postGuestAction(server *testServer, id, vmid, verb, body string) *httptest.
 // instantané qui n'est pas de ce produit. Aucun run n'est écrit.
 func TestProxmox_GuestActionRefusesBeforeSending(t *testing.T) {
 	server, api, _ := proxmoxBench(t)
-	if got := postGuestAction(server, pveID, "5012", "shutdown", "{}"); got.Code != http.StatusNotFound {
+	if got := postGuestAction(server, pveID, "312", "shutdown", "{}"); got.Code != http.StatusNotFound {
 		t.Fatalf("undeclared host: %d %s", got.Code, got.Body.String())
 	}
 	if got := putProxmox(server, pveID, api.request(pveTokenSecret)); got.Code != http.StatusOK {
@@ -453,11 +453,11 @@ func TestProxmox_GuestActionRefusesBeforeSending(t *testing.T) {
 		status           int
 		key              string
 	}{
-		"unknown verb":       {"5012", "reboot", "{}", http.StatusNotFound, "not_found"},
-		"forced stop":        {"5012", "stop", "{}", http.StatusNotFound, "not_found"},
+		"unknown verb":       {"312", "reboot", "{}", http.StatusNotFound, "not_found"},
+		"forced stop":        {"312", "stop", "{}", http.StatusNotFound, "not_found"},
 		"vmid not a number":  {"abc", "start", "{}", http.StatusNotFound, "not_found"},
 		"unknown guest":      {"9999", "start", "{}", http.StatusConflict, "proxmox.guest_unknown"},
-		"start a running":    {"5012", "start", "{}", http.StatusConflict, "proxmox.state_mismatch"},
+		"start a running":    {"312", "start", "{}", http.StatusConflict, "proxmox.state_mismatch"},
 		"shutdown a stopped": {"200", "shutdown", "{}", http.StatusConflict, "proxmox.state_mismatch"},
 		"not our snapshot":   {"200", "snapshot-delete", `{"snapshot":"avant-migration"}`, http.StatusUnprocessableEntity, "proxmox.snapshot_invalid"},
 		"bad body":           {"200", "start", "{", http.StatusBadRequest, "bad_json"},
@@ -539,7 +539,7 @@ func TestProxmox_RefreshNowReadsAgainAndKeepsARefusalOnTheCard(t *testing.T) {
 // marche ou arrêtés, un modèle, trois stockages dont un NFS de sauvegardes.
 func richGuests(linkedName string) string {
 	return `{"data":[
-		{"type":"qemu","vmid":5012,"name":"` + linkedName + `","node":"pve","status":"running","template":0,"maxcpu":4,"maxmem":8589934592,"maxdisk":68719476736},
+		{"type":"qemu","vmid":312,"name":"` + linkedName + `","node":"pve","status":"running","template":0,"maxcpu":4,"maxmem":8589934592,"maxdisk":68719476736},
 		{"type":"qemu","vmid":102,"name":"vpn","node":"pve","status":"running","template":0,"maxcpu":2,"maxmem":2147483648,"maxdisk":17179869184},
 		{"type":"lxc","vmid":104,"name":"dns","node":"pve","status":"running","template":0,"maxcpu":1,"maxmem":536870912,"maxdisk":8589934592},
 		{"type":"qemu","vmid":105,"name":"immich","node":"pve","status":"running","template":0,"maxcpu":4,"maxmem":17179869184,"maxdisk":274877906944},
@@ -559,7 +559,7 @@ const richStorages = `{"data":[
 func richArchives() string {
 	at := func(age time.Duration) int64 { return time.Now().Add(-age).Unix() }
 	return fmt.Sprintf(`{"data":[
-		{"vmid":5012,"ctime":%d,"size":13300000000,"volid":"pi-sauvegardes:backup/vzdump-qemu-5012-a"},
+		{"vmid":312,"ctime":%d,"size":13300000000,"volid":"pi-sauvegardes:backup/vzdump-qemu-312-a"},
 		{"vmid":102,"ctime":%d,"size":3300000000,"volid":"pi-sauvegardes:backup/vzdump-qemu-102-a"},
 		{"vmid":104,"ctime":%d,"size":640000000,"volid":"pi-sauvegardes:backup/vzdump-lxc-104-a"},
 		{"vmid":105,"ctime":%d,"size":44000000000,"volid":"pi-sauvegardes:backup/vzdump-qemu-105-a"},

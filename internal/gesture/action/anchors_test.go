@@ -17,7 +17,7 @@ import (
 
 func produceOrder(t *testing.T, recipient, target string) []byte {
 	t.Helper()
-	params, err := json.Marshal(agentwire.BackupProduceParams{Producer: "proxmox-vzdump", Target: target, Prefix: "pve-vm-5012", Recipient: recipient, Parcel: "colis"})
+	params, err := json.Marshal(agentwire.BackupProduceParams{Producer: "proxmox-vzdump", Target: target, Prefix: "pve-vm-312", Recipient: recipient, Parcel: "colis"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,9 +52,9 @@ func TestSend_AnOrderTheReportedAnchorsWouldRefuseIsNotSent(t *testing.T) {
 		key      string
 		command  string
 	}{
-		{"no anchor posed", "none", "5012", "anchor.backup_recipient_missing", "agent trust add backup.recipient " + recipient},
-		{"a guest outside", "backup.recipient=" + recipient + ",backup.guest=101:102", "5012", "anchor.backup_guest_outside", "agent trust add backup.guest 5012"},
-		{"unreadable guests", "backup.recipient=" + recipient + ",backup.guest=!", "5012", "anchor.backup_guest_unreadable", "agent trust add backup.guest 5012"},
+		{"no anchor posed", "none", "312", "anchor.backup_recipient_missing", "agent trust add backup.recipient " + recipient},
+		{"a guest outside", "backup.recipient=" + recipient + ",backup.guest=101:102", "312", "anchor.backup_guest_outside", "agent trust add backup.guest 312"},
+		{"unreadable guests", "backup.recipient=" + recipient + ",backup.guest=!", "312", "anchor.backup_guest_unreadable", "agent trust add backup.guest 312"},
 	}
 	for _, c := range cases {
 		reportAnchors(t, b, c.reported)
@@ -74,8 +74,8 @@ func TestSend_AnOrderTheReportedAnchorsWouldRefuseIsNotSent(t *testing.T) {
 		t.Fatalf("a refused order left: %d sent, %d runs", len(b.pusher.sent), len(b.runs(t)))
 	}
 
-	reportAnchors(t, b, "backup.recipient="+recipient+",backup.guest=5012:5013")
-	if _, err := b.service.Send(operator(), machineID, agentwire.KindBackupProduce, produceOrder(t, recipient, "5012")); err != nil {
+	reportAnchors(t, b, "backup.recipient="+recipient+",backup.guest=312:313")
+	if _, err := b.service.Send(operator(), machineID, agentwire.KindBackupProduce, produceOrder(t, recipient, "312")); err != nil {
 		t.Fatalf("an anchored order: %v", err)
 	}
 }
@@ -83,7 +83,7 @@ func TestSend_AnOrderTheReportedAnchorsWouldRefuseIsNotSent(t *testing.T) {
 // Un agent d'avant les ancres ne les applique pas : le serveur n'en juge aucune.
 func TestSend_AnAgentThatReportsNoAnchorIsNotJudgedByThem(t *testing.T) {
 	b := newBenchReporting(t, "observe,backup.produce=proxmox-vzdump")
-	if _, err := b.service.Send(operator(), machineID, agentwire.KindBackupProduce, produceOrder(t, "age1x", "5012")); err != nil {
+	if _, err := b.service.Send(operator(), machineID, agentwire.KindBackupProduce, produceOrder(t, "age1x", "312")); err != nil {
 		t.Fatalf("v0.6.0 agent: %v", err)
 	}
 	if _, err := b.service.Send(operator(), machineID, agentwire.KindAgentPing, nil); err != nil {

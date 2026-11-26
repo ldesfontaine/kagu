@@ -103,7 +103,7 @@ func enrollWithArch(t *testing.T, machines *machine.Service, arch string) machin
 	}
 	enrolled, err := machines.Enroll(ctx, machine.Enrollment{
 		MachineID: machineID, PublicKey: public, Token: cleartext,
-		Hostname: "vps-paris-1", Address: "51.15.20.114", OS: "Debian 12", Arch: arch, AgentVersion: "v0.0.1",
+		Hostname: "vps-paris-1", Address: "203.0.113.114", OS: "Debian 12", Arch: arch, AgentVersion: "v0.0.1",
 	})
 	if err != nil {
 		t.Fatal(err)

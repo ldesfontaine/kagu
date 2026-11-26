@@ -81,7 +81,7 @@ func TestRenderCompose_RefusesEachHostileValueFieldByField(t *testing.T) {
 			t.Errorf("data path %q: %v", target, err)
 		}
 	}
-	for _, port := range []string{"0:80", "65536:80", "80:0", "1.2.3.4:80:80", "80/sctp"} {
+	for _, port := range []string{"0:80", "65536:80", "80:0", "198.51.100.4:80:80", "80/sctp"} {
 		units := composeUnits()
 		units[0].Ports = []string{port}
 		if _, _, err := RenderCompose("nextcloud", "svc_1", units); !errors.Is(err, ErrComposePort) {
