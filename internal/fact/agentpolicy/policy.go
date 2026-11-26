@@ -3,6 +3,8 @@ package agentpolicy
 import (
 	"errors"
 	"time"
+
+	"github.com/ldesfontaine/kagu/internal/kit/refusal"
 )
 
 // Policy est ce que root permet à l'agent d'une machine (fiche A3, §5) : la
@@ -75,19 +77,31 @@ type Clock struct {
 	Uptime time.Duration
 }
 
+// Monotonic dit si la lecture porte l'horloge monotone : vide quand
+// boot_id ou /proc/uptime ne se lit pas (hostinfo.MonotonicClock).
+func (c Clock) Monotonic() bool {
+	return c.Boot != ""
+}
+
+// ErrNoMonotonicClock : l'horloge monotone de la machine ne se lit pas ; une
+// échéance n'y tiendrait qu'à l'heure affichée (R-A3-5, N-F5), elle ne se
+// pose pas.
+var ErrNoMonotonicClock = refusal.Conflict("agent.policy_no_monotonic_clock", "the monotonic clock of this machine is unreadable: no expiry can be set")
+
 // Lapsed dit si une échéance posée à granted est passée à now (R-A3-5) : à
 // l'heure ; ou, depuis le même démarrage, quand le temps monotone écoulé
 // depuis la pose dépasse sa durée, quelle que soit l'heure affichée ; après
 // un redémarrage, une pose dans le futur (horloge reculée) est échue aussi.
-// Une échéance nulle ne tombe jamais.
+// Sans horloge monotone à now, elle est échue : l'heure seule ne suffit pas
+// (N-F5). Une échéance nulle ne tombe jamais.
 func Lapsed(until time.Time, granted, now Clock) bool {
 	if until.IsZero() {
 		return false
 	}
-	if !now.Now.Before(until) {
+	if !now.Monotonic() || !now.Now.Before(until) {
 		return true
 	}
-	if granted.Boot != "" && granted.Boot == now.Boot {
+	if granted.Boot == now.Boot {
 		return now.Uptime-granted.Uptime >= until.Sub(granted.Now)
 	}
 	return granted.Now.After(now.Now)

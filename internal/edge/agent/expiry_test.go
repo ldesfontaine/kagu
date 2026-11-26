@@ -3,8 +3,10 @@ package agent
 import (
 	"bytes"
 	"context"
+	"log/slog"
 	"slices"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -87,5 +89,41 @@ func TestR_DROIT_2_AnExpiredRightFallsWithoutTheServer(t *testing.T) {
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("agent stopped with %v", err)
+	}
+}
+
+// R-A3-5, N-F5 : un droit à durée posé, puis l'horloge monotone de la machine
+// ne se lit plus : l'agent le tient pour échu, avant son heure, et refuse
+// l'ordre qui l'exige ; au démarrage, il le dit au journal.
+func TestR_A3_5_WithoutTheMonotonicClockTheAgentFailsClosed(t *testing.T) {
+	b := migrate(t, newOrderBench(t))
+	granted := []agentpolicy.Capability{{Name: agentpolicy.CapabilityAgentUpdate}}
+	if _, err := GrantRights(b.opts, granted, agentpolicy.Term{Duration: time.Hour}, accept); err != nil {
+		t.Fatal(err)
+	}
+	rollback := func(seq int64) agentwire.ActionResult {
+		body := order(seq)
+		body.Kind = agentwire.KindAgentRollback
+		body.NotAfter = b.clock.now.Add(time.Minute).Unix()
+		return b.send(t, body, b.private)
+	}
+	missing := agentwire.RightMissing(agentpolicy.CapabilityAgentUpdate)
+	if result := rollback(1); result.Reason == missing {
+		t.Fatalf("the right fell with the monotonic clock: %+v", result)
+	}
+	b.runner.monotonic = func() (string, time.Duration) { return "", 0 }
+	if result := rollback(2); result.State != agentwire.ActionRefused || result.Reason != missing {
+		t.Fatalf("without the monotonic clock, a right with an expiry let the order through: %+v", result)
+	}
+
+	var logs bytes.Buffer
+	warnWithoutMonotonicClock(b.runner.clock(), slog.New(slog.NewTextHandler(&logs, nil)))
+	if !strings.Contains(logs.String(), "level=WARN") || !strings.Contains(logs.String(), "monotonic clock unreadable") {
+		t.Fatalf("no line at start:\n%s", logs.String())
+	}
+	logs.Reset()
+	warnWithoutMonotonicClock(b.clock.read(), slog.New(slog.NewTextHandler(&logs, nil)))
+	if logs.Len() != 0 {
+		t.Fatalf("a readable clock was logged:\n%s", logs.String())
 	}
 }

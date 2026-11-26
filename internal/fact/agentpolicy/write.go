@@ -66,7 +66,11 @@ func (d Document) Grant(granted []Capability, term Term, clock Clock) (Document,
 	expiries := expiriesWithout(d.Expiries, names)
 	for _, name := range names {
 		if duration := term.DurationOf(name); duration != 0 && name != CapabilityObserve {
-			expiries[name] = expiryAfter(clock, duration)
+			expiry, err := expiryAfter(clock, duration)
+			if err != nil {
+				return Document{}, err
+			}
+			expiries[name] = expiry
 		}
 	}
 	d.Rights, d.Expiries = rights, expiries
@@ -116,8 +120,11 @@ func (d Document) KeepServerKey(key []byte, keepOld time.Duration, granted Clock
 	if slices.Equal(accepted, key) {
 		return Document{}, ErrServerKeyAlreadyAccepted
 	}
-	kept := ServerKey{Key: accepted, Expiry: expiryAfter(granted, keepOld)}
-	d.ServerKeys = []ServerKey{{Key: slices.Clone(key)}, kept}
+	expiry, err := expiryAfter(granted, keepOld)
+	if err != nil {
+		return Document{}, err
+	}
+	d.ServerKeys = []ServerKey{{Key: slices.Clone(key)}, {Key: accepted, Expiry: expiry}}
 	return d, nil
 }
 

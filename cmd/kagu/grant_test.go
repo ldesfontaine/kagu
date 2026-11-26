@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"io/fs"
 	"os"
@@ -288,6 +289,51 @@ func TestN_M6_GrantHostTerminalTellsItsRiskAndTakesTwoHours(t *testing.T) {
 	out, err = runPolicy(t, place, noTerminal, policyGrant, "-state", stateDir, "-yes", "--for", "permanent", "terminal.host=admin")
 	if err != nil || !strings.Contains(out, "terminal.host   sans échéance") || strings.Contains(policyContent(t, place), "until") {
 		t.Fatalf("--for permanent: %v\n%s\n%s", err, out, policyContent(t, place))
+	}
+}
+
+// R-A3-5, N-F5 : sur une machine dont l'horloge monotone ne se lit pas,
+// « grant --for », la durée de terminal.host et « trust add … -keep-old »
+// sont refusés par leur phrase, avant la question ; rien n'est écrit.
+// --for permanent passe.
+func TestR_A3_5_GrantForIsRefusedWithoutTheMonotonicClock(t *testing.T) {
+	stateDir, place := policyState(t)
+	before := policyContent(t, place)
+	wallClockOnly := func() agentpolicy.Clock { return agentpolicy.Clock{Now: time.Now()} }
+	catalogs, err := lang.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := catalogs.For(lang.French).Get("agent.policy_no_monotonic_clock")
+	run := func(verb string, args ...string) (string, error) {
+		var out bytes.Buffer
+		placer := func(*os.Root) (agent.PolicyPlace, error) { return place, nil }
+		command := policyCommand{out: &out, openTerminal: noTerminal, euid: 0, place: placer, system: &quietSystem{}, clock: wallClockOnly}
+		var err error
+		if verb == "trust" {
+			err = runAgentTrust(args, command)
+		} else {
+			err = runAgentPolicy(verb, args, command)
+		}
+		return out.String(), err
+	}
+	newer := base64.StdEncoding.EncodeToString(testServerPublicKey(t))
+	for _, args := range [][]string{
+		{policyGrant, "-state", stateDir, "-yes", "observe.env", "--for", "1h"},
+		{policyGrant, "-state", stateDir, "-yes", "terminal.host"},
+		{"trust", "-state", stateDir, "-yes", "add", agentpolicy.TrustServerKey, newer, "-keep-old", "1h"},
+	} {
+		out, err := run(args[0], args[1:]...)
+		var refused *refusal
+		if !errors.As(err, &refused) || refused.message != want || strings.Contains(out, "[o/N]") {
+			t.Errorf("%v: %v\n%s", args, err, out)
+		}
+		if policyContent(t, place) != before {
+			t.Fatalf("%v wrote the policy:\n%s", args, policyContent(t, place))
+		}
+	}
+	if _, err := run(policyGrant, "-state", stateDir, "-yes", "terminal.host", "--for", "permanent"); err != nil {
+		t.Fatalf("--for permanent: %v", err)
 	}
 }
 
