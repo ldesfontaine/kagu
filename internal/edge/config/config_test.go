@@ -286,7 +286,7 @@ func TestParse_AccountLimits_ABadValueStopsTheStart(t *testing.T) {
 // locale. setup --domain (listen sur docker0) et une installation derrière
 // son mandataire démarrent ; public_url en http:// ne déclare pas d'HTTPS.
 func TestR_CNX_5_ServeListensOnLoopbackWithoutAnHTTPSProxy(t *testing.T) {
-	const proxied = "public_url = \"https://kagu.example.org\"\ntrusted_proxies = [\"172.30.0.2/32\"]\n"
+	const proxied = "public_url = \"https://kagu.example.org\"\ntrusted_proxies = [\"172.31.0.2/32\"]\n"
 	cases := []struct {
 		name    string
 		content string
@@ -299,7 +299,7 @@ func TestR_CNX_5_ServeListensOnLoopbackWithoutAnHTTPSProxy(t *testing.T) {
 		{"a host name", "listen = \"kagu.example.org:8080\"\n", false},
 		{"docker0 without a proxy", "listen = \"172.17.0.1:8080\"\n", false},
 		{"https but no proxy", "listen = \"0.0.0.0:8080\"\npublic_url = \"https://kagu.example.org\"\n", false},
-		{"a proxy over http", "listen = \"172.17.0.1:8080\"\npublic_url = \"http://kagu.example.org\"\ntrusted_proxies = [\"172.30.0.2/32\"]\n", false},
+		{"a proxy over http", "listen = \"172.17.0.1:8080\"\npublic_url = \"http://kagu.example.org\"\ntrusted_proxies = [\"172.31.0.2/32\"]\n", false},
 		{"the default", "", true},
 		{"IPv4 loopback", "listen = \"127.0.0.1:8080\"\n", true},
 		{"IPv6 loopback", "listen = \"[::1]:8080\"\n", true},

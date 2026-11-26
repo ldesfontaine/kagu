@@ -82,7 +82,7 @@ func (ts *testServer) seedJobs(t *testing.T) string {
 	}
 	zero := 0
 	for _, ping := range []heartbeat.Ping{{Kind: heartbeat.KindStart}, {Kind: heartbeat.KindExitCode, ExitCode: &zero}} {
-		ping.Source = "51.15.20.114"
+		ping.Source = "203.0.113.114"
 		ping.Method = "GET"
 		if _, err := ts.heartbeats.Receive(ctx, backup.Token, ping); err != nil {
 			t.Fatal(err)

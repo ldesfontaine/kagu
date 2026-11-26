@@ -479,7 +479,7 @@ http:
 | Cas | `listen` | URL du service Traefik | `trusted_proxies` |
 | --- | --- | --- | --- |
 | Traefik en mode host (`network_mode: host`, ou paquet sur l'hôte) | `127.0.0.1:8080` | `http://127.0.0.1:8080` | `["127.0.0.1/32", "::1/128"]` : cette adresse couvre tous les processus de la machine, pas Traefik seul. Sans mode `forward`, ça suffit ; avec, ajoutez `forward_secret_file` |
-| Traefik en conteneur, réseau créé par Compose, IP fixe | `172.17.0.1:8080` | `http://host.docker.internal:8080` | cette IP seule, par exemple `["172.30.0.2/32"]` |
+| Traefik en conteneur, réseau créé par Compose, IP fixe | `172.17.0.1:8080` | `http://host.docker.internal:8080` | cette IP seule, par exemple `["172.31.0.2/32"]` |
 | Traefik en conteneur, réseau `bridge` par défaut | À éviter : l'IP du conteneur change au redémarrage, et seul un sous-réseau la couvrirait | | |
 
 Pour un Traefik en conteneur ([extrait Compose](installation/compose.traefik.yml)) :
@@ -492,7 +492,7 @@ Pour un Traefik en conteneur ([extrait Compose](installation/compose.traefik.yml
   conteneur. Vérifiez la vôtre avec
   `docker network inspect bridge --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}'`.
 - Kagu voit Traefik arriver depuis l'IP de **son** réseau. L'extrait
-  la fixe (`ipv4_address: 172.30.0.2` sur un réseau `172.30.0.0/24`) :
+  la fixe (`ipv4_address: 172.31.0.2` sur un réseau `172.31.0.0/24`) :
   c'est cette adresse seule qui va dans `trusted_proxies`, en `/32`.
   Vérifiez-la avec `docker inspect <conteneur>`.
 - `docker0` doit exister quand `serve` démarre : l'unité démarre après
@@ -686,7 +686,7 @@ Le secret partagé ferme ce cas, et il est recommandé dans tous les autres.
 | Prérequis | Pourquoi |
 | --- | --- |
 | **Un secret partagé** (`forward_secret_file`), que le mandataire pose dans l'en-tête `X-Kagu-Proxy-Secret` | Il prouve que la requête est passée par le mandataire. **Obligatoire** si `trusted_proxies` couvre la boucle locale : Kagu refuse alors d'activer le mode `forward` (`auth.forward_secret_required`). Sans lui, tout processus local est l'opérateur |
-| `trusted_proxies` = l'adresse du mandataire **seul**, en `/32` (par exemple `["172.30.0.2/32"]`), pas le sous-réseau | Tout pair de cette liste est cru sur parole : avec un `/24`, un voisin du réseau écrirait l'en-tête lui-même |
+| `trusted_proxies` = l'adresse du mandataire **seul**, en `/32` (par exemple `["172.31.0.2/32"]`), pas le sous-réseau | Tout pair de cette liste est cru sur parole : avec un `/24`, un voisin du réseau écrirait l'en-tête lui-même |
 | Le mandataire **écrase** l'en-tête envoyé par le client | Sinon un visiteur envoie `Remote-User: admin`. Traefik `forwardAuth` avec `authResponseHeaders: ["Remote-User"]` remplace la valeur du client par celle d'Authelia |
 | Deux Traefik en chaîne : `trusted_proxies` vise celui qui joint Kagu, l'en-tête est nettoyé par celui qui appelle Authelia | Le second ne doit être joignable que par le premier : sinon on le contourne, en-tête forgé compris |
 | Choisir « SSO en amont » sur l'écran de première configuration, ouvert **à travers** le mandataire | Garde-fou : Kagu refuse l'activation (`auth.forward_header_missing`) si la requête ne porte pas déjà l'en-tête, et le secret s'il est configuré, depuis un pair de confiance. On ne peut pas s'enfermer dehors. Derrière Authelia, l'écran lui-même est déjà gardé : pas de course au premier venu |
@@ -809,7 +809,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: admin' -H 'X-Kagu-Prox
 # 401
 # depuis un autre conteneur du même réseau, en-tête forgé : refusé
 docker run --rm --network <réseau> curlimages/curl -s -o /dev/null -w '%{http_code}\n' \
-  -H 'Remote-User: admin' http://172.30.0.1:8080/api/machines
+  -H 'Remote-User: admin' http://172.31.0.1:8080/api/machines
 # 401
 # par le nom public, sans session Authelia, en-tête forgé : redirigé vers Authelia, jamais 200
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Remote-User: admin' https://kagu.example.org/api/machines

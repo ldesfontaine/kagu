@@ -76,7 +76,7 @@ func TestR_DROIT_8_AgentLineRefusesYes(t *testing.T) {
 		{"grant", "--yes=true", "docker.deploy"},
 		{"grant", "-yes=1", "docker.deploy"},
 		{"policy", "migrate", "--yes=false"},
-		{"trust", "add", "backup.guest", "5012 --yes"},
+		{"trust", "add", "backup.guest", "312 --yes"},
 		{"grant", "--set", "manage -yes"},
 	} {
 		if line := AgentLine(words...); line != "" {

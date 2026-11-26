@@ -341,7 +341,7 @@ func TestRecordConnection_UpdatesAddressVersionAndLastSeen(t *testing.T) {
 		t.Fatal(err)
 	}
 	later := now.Add(time.Minute)
-	connection := machine.Connection{MachineID: enrolled.ID, AgentID: enrolled.Agent.ID, Address: "51.15.20.114", Version: "v0.0.2", At: later}
+	connection := machine.Connection{MachineID: enrolled.ID, AgentID: enrolled.Agent.ID, Address: "203.0.113.114", Version: "v0.0.2", At: later}
 	if err := db.RecordConnection(ctx, connection); err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +349,7 @@ func TestRecordConnection_UpdatesAddressVersionAndLastSeen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Address != "51.15.20.114" || got.Agent.Version != "v0.0.2" || !got.LastSeenAt.Equal(later) || !got.Agent.LastSeenAt.Equal(later) {
+	if got.Address != "203.0.113.114" || got.Agent.Version != "v0.0.2" || !got.LastSeenAt.Equal(later) || !got.Agent.LastSeenAt.Equal(later) {
 		t.Fatalf("got %+v", got)
 	}
 	// Sans droits rapportés (un agent d'avant les droits), rien n'est écrit.
@@ -363,7 +363,7 @@ func TestRecordConnection_UpdatesAddressVersionAndLastSeen(t *testing.T) {
 	if err := db.RecordSystem(ctx, enrolled.ID, "Debian GNU/Linux 13"); err != nil {
 		t.Fatal(err)
 	}
-	if got, err = db.GetMachine(ctx, enrolled.ID); err != nil || got.OS != "Debian GNU/Linux 13" || got.Address != "51.15.20.114" {
+	if got, err = db.GetMachine(ctx, enrolled.ID); err != nil || got.OS != "Debian GNU/Linux 13" || got.Address != "203.0.113.114" {
 		t.Fatalf("got %+v, %v", got, err)
 	}
 	if err := db.RecordSystem(ctx, "nobody", "Debian GNU/Linux 13"); !errors.Is(err, machine.ErrNotFound) {

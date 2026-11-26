@@ -129,7 +129,7 @@ export function VisualSystem() {
                   <span className="mono muted">{t("visual.type.label_spec")}</span>
                 </div>
                 <div className="kv">
-                  <span className="mono">51.15.20.114 · nextcloud:29.0.4</span>
+                  <span className="mono">203.0.113.114 · nextcloud:29.0.4</span>
                   <span className="mono muted">Geist Mono 12</span>
                 </div>
                 <div className="kv">
@@ -435,7 +435,7 @@ export function VisualSystem() {
                   <Select icon="server" aria-label={t("machine.select")} value={machine} options={machineOptions(demoMachines.slice(0, 2))} onChange={setMachine} />
                   <Pill tone="ok">{t("state.online")}</Pill>
                   <div className="meta">
-                    <span className="mono">51.15.20.114</span>
+                    <span className="mono">203.0.113.114</span>
                     <span className="sep" />
                     <span>Debian 12</span>
                     <span className="sep" />
@@ -787,7 +787,7 @@ function CardsSample() {
               kind={t("visual.cards.kind_machine")}
               state={<Pill tone="ok">{t("state.online")}</Pill>}
               facts={[
-                { label: t("visual.cards.address"), value: "51.15.20.4" },
+                { label: t("visual.cards.address"), value: "203.0.113.4" },
                 { label: t("visual.cards.os"), value: "Debian 12" },
                 { label: t("visual.cards.agent"), value: "v0.0.1" },
                 { label: t("visual.cards.seen"), value: t("visual.cards.seen_value"), mono: false },
@@ -805,7 +805,7 @@ function CardsSample() {
               kind={t("visual.cards.kind_machine")}
               state={<Pill tone="danger">{t("state.offline")}</Pill>}
               facts={[
-                { label: t("visual.cards.address"), value: "62.210.8.17" },
+                { label: t("visual.cards.address"), value: "203.0.113.17" },
                 { label: t("visual.cards.os"), value: "Ubuntu 24.04" },
                 { label: t("visual.cards.agent"), value: "v0.0.1" },
                 { label: t("visual.cards.seen"), value: t("visual.cards.seen_old"), mono: false },
@@ -841,7 +841,7 @@ function CardsSample() {
                       vps-paris-1
                     </RowLink>
                   </td>
-                  <td className="num">51.15.20.4</td>
+                  <td className="num">203.0.113.4</td>
                   <td>
                     <Pill tone="ok">{t("state.online")}</Pill>
                   </td>
@@ -852,7 +852,7 @@ function CardsSample() {
                       vps-lyon-2
                     </RowLink>
                   </td>
-                  <td className="num">62.210.8.17</td>
+                  <td className="num">203.0.113.17</td>
                   <td>
                     <Pill tone="danger">{t("state.offline")}</Pill>
                   </td>

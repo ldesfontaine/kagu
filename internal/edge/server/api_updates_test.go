@@ -149,7 +149,7 @@ func TestAgentSignal_RecordsImageChecks(t *testing.T) {
 func TestCheckUpdates_FullQueueIsNotOffline(t *testing.T) {
 	server := newTestServer(t)
 	enrolled, _ := server.enroll(t, "vps-paris-1", remoteID)
-	session, err := server.machines.Connect(context.Background(), enrolled, "51.15.20.114", "v0.0.1", "", "", "", "")
+	session, err := server.machines.Connect(context.Background(), enrolled, "203.0.113.114", "v0.0.1", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

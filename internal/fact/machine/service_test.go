@@ -525,12 +525,12 @@ func TestConnectSignalDisconnect_DriveOnlineAndLastSeen(t *testing.T) {
 	if status, _ := h.service.Get(context.Background(), m.ID); status.Online {
 		t.Fatal("online before any connection")
 	}
-	session, err := h.service.Connect(context.Background(), m, "51.15.20.114", "v0.0.1", "", "", "", "")
+	session, err := h.service.Connect(context.Background(), m, "203.0.113.114", "v0.0.1", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	status, _ := h.service.Get(context.Background(), m.ID)
-	if !status.Online || status.Address != "51.15.20.114" {
+	if !status.Online || status.Address != "203.0.113.114" {
 		t.Fatalf("after connect: %+v", status)
 	}
 	h.now = h.now.Add(30 * time.Second)
@@ -722,7 +722,7 @@ func TestEnroll_RefusesAFieldBeforeConsumingTheToken(t *testing.T) {
 
 func TestIsHostname(t *testing.T) {
 	for host, want := range map[string]bool{
-		"vps": true, "vps-1.example.org": true, "1.2.3.4": true, strings.Repeat("a", 63): true,
+		"vps": true, "vps-1.example.org": true, "198.51.100.4": true, strings.Repeat("a", 63): true,
 		"": false, "-a": false, "a-": false, "a..b": false, "a b": false, "a\nb": false, "a_b": false,
 		strings.Repeat("a", 64): false, strings.Repeat("a.", 127) + "a": false,
 	} {

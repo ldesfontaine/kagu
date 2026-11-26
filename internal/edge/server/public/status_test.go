@@ -16,7 +16,7 @@ func TestStatusPublic_LeaksNothingOfTheObjects(t *testing.T) {
 	server := newBench(t)
 	server.seed(t)
 	secrets := []string{
-		"vps-paris-1", "51.15.20.114", servertest.RemoteID, `"local"`,
+		"vps-paris-1", "203.0.113.114", servertest.RemoteID, `"local"`,
 		"nextcloud", "cloud.exemple.fr", "sauvegarde", "hb_",
 	}
 	for _, path := range []string{"/statut/statut/api/status", "/statut/statut/api/i18n", "/statut/statut"} {

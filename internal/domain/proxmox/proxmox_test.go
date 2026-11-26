@@ -17,7 +17,7 @@ func TestDefinition_NormalizeKeepsAValidInputAndPutsItInShape(t *testing.T) {
 	for name, tc := range map[string]struct{ in, want string }{
 		"trailing slash": {"https://pve.lan:8006/", "https://pve.lan:8006"},
 		"spaces":         {"  https://pve.lan:8006  ", "https://pve.lan:8006"},
-		"no port":        {"https://192.168.10.2", "https://192.168.10.2"},
+		"no port":        {"https://192.0.2.10", "https://192.0.2.10"},
 		"ipv6":           {"https://[fd00::2]:8006", "https://[fd00::2]:8006"},
 		"uppercase host": {"https://PVE.lan:8006", "https://PVE.lan:8006"},
 	} {
