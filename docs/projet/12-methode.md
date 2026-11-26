@@ -47,8 +47,14 @@ taguée par le workflow ci-dessous ; rien n'est tagué avant que Lucas décide.
 ### Le jour où Lucas décide d'une version
 
 Une version est un **tag `vX.Y.Z` poussé sur un commit de `main`**. Elle
-porte les binaires, `SHA256SUMS`, sa signature `SHA256SUMS.minisig` et une
-attestation de provenance GitHub, et **ne se réécrit jamais**.
+porte les binaires, `SHA256SUMS`, sa signature `SHA256SUMS.minisig`,
+`install.sh` et une attestation de provenance GitHub, et **ne se réécrit
+jamais**. `install.sh` n'est pas dans `SHA256SUMS` (la signature ne couvre
+que les binaires) : `publish` le prend dans `rebuild` et y écrit
+`MIN_VERSION`, la version du tag ; il refuse toute version signée plus
+ancienne (`docs/installation.md`, « Par install.sh »). Ce pas attend le
+patch `docs/projet/patch-release-T04-10.diff`, que Lucas fusionne dans
+`release.yml`.
 
 **1. Une fois : les deux paires de clés.**
 
@@ -58,7 +64,7 @@ attestation de provenance GitHub, et **ne se réécrit jamais**.
 | Tirer la paire de secours | **hors ligne**, sur le poste de Lucas : `minisign -G -p kagu-secours.pub -s kagu-secours.key` (mot de passe demandé). `kagu-secours.key` et son mot de passe vont dans le coffre de Lucas, **jamais dans GitHub** ni dans le dépôt : elle ne sert que si GitHub ou la clé courante est pris |
 | Créer l'environnement | Settings › Environments › New : nom `release` ; *Required reviewers* = Lucas, **sans** cocher *Prevent self-review* (c'est Lucas qui pousse le tag et qui approuve) ; *Deployment branches and tags* = *Selected branches and tags*, une seule règle de type *Tag*, motif `v*`. Le job `sign` s'y exécute après `build` et attend l'approbation. La règle réserve l'environnement, donc la clé, aux tags de version : un job lancé d'une branche qui le nommerait est refusé ; une règle qui n'admet pas le tag fait échouer `sign`. Sans l'environnement, GitHub en crée un vide au premier usage, sans relecteur : le job échoue faute de secret et rien ne se publie, **si** le secret du dépôt n'existe pas (sinon il le lit) |
 | Poser la clé privée | secret **d'environnement** `RELEASE_SIGNING_KEY` (dans `release`, pas un secret du dépôt) = contenu de `release.key` ; une copie de `release.key` dans le coffre. Supprimer le secret du dépôt s'il existe : un secret du dépôt du même nom sert quand l'environnement n'a pas le sien, et seul le job `sign`, derrière le relecteur, doit pouvoir lire la clé |
-| Poser les clés publiques | dans `internal/kit/release/key.go`, par une pull request : `CurrentPublicKey` = la clé publique de `release.key`, `BackupPublicKey` = la seconde ligne de `kagu-secours.pub`. Sans courante, le binaire refuse de vérifier ; sans secours, `make release` ne compile pas (tag `release`, `key_release.go`) : rien ne se publie sans les deux |
+| Poser les clés publiques | dans `internal/kit/release/key.go`, par une pull request : `CurrentPublicKey` = la clé publique de `release.key`, `BackupPublicKey` = la seconde ligne de `kagu-secours.pub` ; les mêmes dans `CURRENT_KEY` et `BACKUP_KEY` d'`install.sh` (`TestInstallScriptCarriesTheEmbeddedKeys` refuse un écart). Sans courante, le binaire refuse de vérifier ; sans secours, `make release` ne compile pas (tag `release`, `key_release.go`) : rien ne se publie sans les deux |
 | Régler le dépôt | ruleset de tags `v*` : création réservée aux administrateurs, ni mise à jour ni suppression ; Settings › General › « Releases immuables ». Ce sont des réglages du dépôt : le code ne peut pas les poser |
 
 **État** : la paire courante est tirée et posée depuis le 23/10/2026 ; la
@@ -98,6 +104,7 @@ depuis la version précédente.
 | Le relecteur de l'environnement refuse, ou la règle ne laisse pas passer le tag | `sign` n'a pas lieu, rien ne se publie |
 | L'approbation arrive plus d'un jour après `build` | l'artefact `dist-release` a expiré : relancer tout le workflow (*Re-run all jobs*), pas seulement `sign` |
 | La clé publique courante est vide, ou n'est pas celle de la clé privée | `release verify` refuse les deux binaires |
+| `install.sh` ne porte pas `MIN_VERSION=""` à remplacer | `publish` n'écrit pas la version du tag : un script sans version minimale ne se publie pas |
 
 **4. Sortir la clé de secours.** Quand la clé privée courante est perdue, ou
 que GitHub (environnement, secret, workflow) est peut-être pris. Une version
@@ -109,11 +116,11 @@ note l'ancienne courante comme retirée et refuse ensuite ce qu'elle signe
 | --- | --- |
 | Couper la clé prise | GitHub › Settings › Environments › `release` › *Environment secrets* : supprimer `RELEASE_SIGNING_KEY` |
 | Tirer deux paires neuves | hors ligne : `kagu release keygen -o release-2.key` (la future courante) et `minisign -G -p kagu-secours-2.pub -s kagu-secours-2.key` (la future secours, au coffre) |
-| Les embarquer | pull request : `CurrentPublicKey` = clé publique de `release-2.key`, `BackupPublicKey` = seconde ligne de `kagu-secours-2.pub` ; jusqu'à `main` |
+| Les embarquer | pull request : `CurrentPublicKey` = clé publique de `release-2.key`, `BackupPublicKey` = seconde ligne de `kagu-secours-2.pub`, et les mêmes dans `install.sh` ; jusqu'à `main` |
 | Construire sur son poste | `git checkout vX.Y.Z` (tag poussé ; dans GitHub, `sign` attend : *Reject*), puis `make release VERSION=vX.Y.Z` |
 | Signer hors ligne | `minisign -S -s kagu-secours.key -m dist-release/SHA256SUMS -x dist-release/SHA256SUMS.minisig -t "$(printf 'timestamp:%s\tfile:SHA256SUMS\tversion:vX.Y.Z' "$(date +%s)")"` |
 | Vérifier | avec un binaire **déjà installé** (il embarque l'ancienne secours) : `kagu release verify dist-release/kagu-linux-amd64`, idem `arm64` |
-| Distribuer | `release import dist-release` sur la machine Kagu, puis mettre à jour les agents ; publier les quatre fichiers sur la page de la version à la main |
+| Distribuer | `release import dist-release` sur la machine Kagu, puis mettre à jour les agents ; publier les quatre fichiers sur la page de la version à la main, avec `install.sh` où `MIN_VERSION` vaut `X.Y.Z` (et la clé de secours du script est celle qui a signé, la courante celle de `release-2.key`, comme le binaire) |
 | Reprendre | `RELEASE_SIGNING_KEY` = contenu de `release-2.key` dans l'environnement `release`. La secours qui a servi est usée : les versions suivantes ne l'embarquent plus |
 
 ## La CI

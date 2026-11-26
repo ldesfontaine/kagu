@@ -37,14 +37,15 @@ type installTarget struct {
 // l'a déjà), la préparation, l'enrôlement, l'unité, et les dossiers que les
 // droits autorisent (seulement quand un droit écrit hors de l'état). Le jeton
 // n'est que dans l'enrôlement. L'unité vient après lui : elle relit
-// l'identité que le premier lancement a écrite.
-func installSteps(publicURL, token string, code lang.Code, capabilities []agentpolicy.Capability, target installTarget) []installStepJSON {
+// l'identité que le premier lancement a écrite. Le binaire se télécharge à
+// l'adresse des versions, releasesURL.
+func installSteps(publicURL, releasesURL, token string, code lang.Code, capabilities []agentpolicy.Capability, target installTarget) []installStepJSON {
 	var steps []installStepJSON
 	if target.reenroll {
 		steps = append(steps, installStepJSON{ID: stepStop, Command: installStop()})
 	}
 	if !target.local {
-		steps = append(steps, installStepJSON{ID: stepBinary, Command: installBinary()})
+		steps = append(steps, installStepJSON{ID: stepBinary, Command: installBinary(releasesURL)})
 	}
 	steps = append(steps,
 		installStepJSON{ID: stepPrepare, Command: installPreparation(capabilities, version.Number(), target.local)},
@@ -63,11 +64,12 @@ func installStop() string {
 	return "systemctl stop " + brand.AgentUnit + "\nrm -f " + brand.AgentStateDir + "/" + brand.AgentIdentityFile
 }
 
-// installBinary télécharge le binaire publié de cette version et vérifie sa
-// somme (machine.ReleaseDownloadLines) : le serveur n'offre pas le sien par
-// HTTP, et rien n'est supposé déjà copié sur la machine.
-func installBinary() string {
-	return strings.Join(machine.ReleaseDownloadLines(version.Number()), "\n")
+// installBinary télécharge le binaire publié de cette version à l'adresse des
+// versions et vérifie sa somme (machine.ReleaseDownloadLines) : le serveur
+// n'offre pas le sien par HTTP, et rien n'est supposé déjà copié sur la
+// machine.
+func installBinary(releasesURL string) string {
+	return strings.Join(machine.ReleaseDownloadLines(releasesURL, version.Number()), "\n")
 }
 
 // installUnit pose l'unité de l'agent et l'active. Le contenu est celui de

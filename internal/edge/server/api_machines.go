@@ -579,8 +579,8 @@ func (s *Server) getAgentMigration(w http.ResponseWriter, _ *http.Request) {
 	number := version.Number()
 	s.writeAPI(w, http.StatusOK, agentMigrationJSON{
 		Version:      number,
-		Commands:     machine.GuardMigrationText(number, false),
-		RootCommands: machine.GuardMigrationText(number, true),
+		Commands:     machine.GuardMigrationText(s.releasesURL, number, false),
+		RootCommands: machine.GuardMigrationText(s.releasesURL, number, true),
 	})
 }
 
@@ -671,7 +671,7 @@ func (s *Server) writeToken(w http.ResponseWriter, r *http.Request, token machin
 	s.writeAPI(w, http.StatusCreated, tokenResponse{
 		Name:            token.Name,
 		Token:           cleartext,
-		Steps:           installSteps(address.URL, cleartext, language, token.Capabilities, target),
+		Steps:           installSteps(address.URL, s.releasesURL, cleartext, language, token.Capabilities, target),
 		ProxmoxCommands: proxmoxCommands(token.Capabilities),
 		ExpiresAt:       token.ExpiresAt.UTC(),
 		URLLocal:        address.Local,

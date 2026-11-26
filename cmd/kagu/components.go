@@ -284,6 +284,7 @@ func (c *components) serverOptions(cfg config.Config) server.Options {
 		ResticRelay:     c.relay,
 		Deploy:          c.deployer,
 		PublicURL:       cfg.PublicURL,
+		ReleasesURL:     cfg.ReleasesURL,
 		Listen:          cfg.Listen,
 		TrustedProxies:  cfg.TrustedPrefixes(),
 		ForwardUsers:    cfg.ForwardUsers,

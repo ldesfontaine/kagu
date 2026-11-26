@@ -44,6 +44,7 @@ func TestValues_AreFrozen(t *testing.T) {
 		"AgentUnit":                  {AgentUnit, "kagu-agent.service"},
 		"InstallDocURL":              {InstallDocURL, "https://github.com/ldesfontaine/kagu/blob/dev/docs/installation.md"},
 		"ReleaseBaseURL":             {ReleaseBaseURL, "https://github.com/ldesfontaine/kagu/releases/download"},
+		"SetupReleaseDir":            {SetupReleaseDir, "/var/lib/kagu-setup/release"},
 		"AgentIdentityFile":          {AgentIdentityFile, "identity.json"},
 		"Command":                    {Command, "kagu"},
 		"UserAgent":                  {UserAgent, "Kagu"},

@@ -23,6 +23,9 @@ const (
 	// Ce que setup retient d'une installation : ses réponses et ses étapes
 	// faites (root, 0600, aucun secret) ; la montée de version le relit.
 	SetupStateFile = ConfigDir + "/setup.json"
+	// Les fichiers de la version qu'install.sh a vérifiée (sommes, signature,
+	// binaires) : setup les fait importer par serve dans la bibliothèque.
+	SetupReleaseDir = "/var/lib/" + ID + "-setup/release"
 	// Le verrou de setup : un second setup lancé pendant le premier s'arrête.
 	SetupLockPath = "/run/" + ID + "-setup.lock"
 	StateDir      = "/var/lib/" + ID
@@ -143,6 +146,8 @@ var AgentGuardEnv = EnvPrefix + "AGENT_GUARD"
 const repositoryURL = "https://github.com/ldesfontaine/" + ID
 
 // Les fichiers d'une version publiée, et le commentaire de sa signature.
+// ReleaseBaseURL est l'adresse des versions par défaut : releases_url de la
+// configuration la remplace, install.sh la lit dans KAGU_RELEASES.
 const (
 	ReleaseBaseURL          = repositoryURL + "/releases/download"
 	ReleaseBinaryPrefix     = ID + "-linux-"

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/shell"
 )
 
 // Le lanceur stable de l'agent : une copie du binaire que root pose une fois
@@ -28,17 +29,18 @@ func GuardInstallLines(source string) []string {
 	}
 }
 
-// ReleaseDownloadLines télécharge le binaire de la version {number} publiée,
+// ReleaseDownloadLines télécharge le binaire de la version {number} publiée à
+// l'adresse des versions releasesURL (releases_url de la configuration),
 // vérifie sa somme SHA-256 contre SHA256SUMS et le pose dans /tmp/kagu :
 // là où la préparation et la migration le prennent. Un bloc, joué en root ; il
 // s'arrête au premier échec (réseau, 404, somme fausse) sans rien poser.
 // L'architecture est celle de la machine (uname -m). La signature d'une version
 // signée se vérifie à part (installation.md) : ici, la somme.
-func ReleaseDownloadLines(number string) []string {
+func ReleaseDownloadLines(releasesURL, number string) []string {
 	binary := brand.ReleaseBinaryPrefix + "$arch"
 	return []string{
 		"(cd \"$(mktemp -d)\" &&",
-		"base=" + brand.ReleaseBaseURL + "/" + number + " &&",
+		"base=" + shell.Quote(strings.TrimRight(releasesURL, "/")+"/"+number) + " &&",
 		`arch=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') &&`,
 		`curl -fLO "$base/` + binary + `" -fLO "$base/` + brand.ReleaseSumsFile + `" &&`,
 		"sha256sum -c --ignore-missing " + brand.ReleaseSumsFile + " &&",
@@ -79,9 +81,10 @@ func GuardMigrationLines(source, number string, root bool) []string {
 }
 
 // GuardMigrationText est la migration en un bloc à copier : le téléchargement
-// vérifié du binaire, puis GuardMigrationLines. Rien n'est supposé déjà copié.
-func GuardMigrationText(number string, root bool) string {
+// vérifié du binaire à l'adresse des versions, puis GuardMigrationLines. Rien
+// n'est supposé déjà copié.
+func GuardMigrationText(releasesURL, number string, root bool) string {
 	source := "/tmp/" + brand.Command
-	lines := append(ReleaseDownloadLines(number), GuardMigrationLines(source, number, root)...)
+	lines := append(ReleaseDownloadLines(releasesURL, number), GuardMigrationLines(source, number, root)...)
 	return strings.Join(lines, "\n")
 }

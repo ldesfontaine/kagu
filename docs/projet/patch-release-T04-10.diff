@@ -1,0 +1,76 @@
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+index 72929b1..5dbe4b7 100644
+--- a/.github/workflows/release.yml
++++ b/.github/workflows/release.yml
+@@ -8,7 +8,9 @@
+ # recompile depuis le tag avec ce paquet et refuse au moindre octet d'écart.
+ # « sign » tient la clé, sous l'environnement protégé « release » : il ne
+ # récupère pas le dépôt, n'installe rien, et ne fait que signer SHA256SUMS.
+-# « publish » vérifie, atteste et publie, sans la clé.
++# « publish » vérifie, atteste et publie, sans la clé ; il publie aussi
++# install.sh, pris dans rebuild (sans npm), où il écrit MIN_VERSION. Le
++# script n'est pas dans SHA256SUMS : la signature ne couvre que les binaires.
+ # Déclenché seulement par un tag vX.Y.Z poussé sur un commit de main. Une
+ # version publiée ne se réécrit jamais : un job échoue si elle existe.
+ # Actions épinglées par SHA, comme ci.yml.
+@@ -178,6 +180,16 @@ jobs:
+           sommes=$(sha256sum "$RUNNER_TEMP/dist-rebuild/SHA256SUMS" | cut -d' ' -f1)
+           echo "sums_sha256=$sommes" >> "$GITHUB_OUTPUT"
+ 
++      # install.sh du tag, pris ici et pas dans build : npm n'a pas tourné
++      # sur ce runner. Ses clés sont celles de key.go
++      # (TestInstallScriptCarriesTheEmbeddedKeys, joué par build).
++      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
++        with:
++          name: install-script
++          path: install.sh
++          retention-days: 1
++          if-no-files-found: error
++
+   sign:
+     needs: rebuild
+     runs-on: ubuntu-24.04
+@@ -253,6 +265,11 @@ jobs:
+           name: signature
+           path: dist-release
+ 
++      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
++        with:
++          name: install-script
++          path: ${{ runner.temp }}/script
++
+       - name: les fichiers sont ceux que rebuild a recompilés
+         working-directory: dist-release
+         env:
+@@ -269,6 +286,19 @@ jobs:
+           "$verificateur" release verify dist-release/opencloud-linux-amd64
+           "$verificateur" release verify dist-release/opencloud-linux-arm64
+ 
++      # Après les contrôles des fichiers : install.sh n'est pas dans
++      # SHA256SUMS, il s'ajoute à la liste publiée.
++      - name: écrire MIN_VERSION dans install.sh
++        env:
++          TAG: ${{ github.ref_name }}
++        run: |
++          version="${TAG#v}"
++          sed "s/^MIN_VERSION=\"\"\$/MIN_VERSION=\"$version\"/" "$RUNNER_TEMP/script/install.sh" > dist-release/install.sh
++          if [ "$(grep -c '^MIN_VERSION=' dist-release/install.sh)" != 1 ] || ! grep -qx "MIN_VERSION=\"$version\"" dist-release/install.sh; then
++            echo "install.sh ne porte pas MIN_VERSION=\"$version\""
++            exit 1
++          fi
++
+       - name: la version n'existe toujours pas
+         env:
+           TAG: ${{ github.ref_name }}
+@@ -290,9 +320,9 @@ jobs:
+           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+           GH_REPO: ${{ github.repository }}
+         run: |
+-          notes="Binaires statiques Linux, signés. Vérifier : opencloud release verify <binaire>, ou minisign -Vm SHA256SUMS -P <clé de docs/installation.md>, puis sha256sum -c --ignore-missing SHA256SUMS. Installation : docs/installation.md."
++          notes="Binaires statiques Linux, signés. Installer : curl -fsSLO https://github.com/$GH_REPO/releases/download/$TAG/install.sh puis sudo sh install.sh (il vérifie la signature globale et la version). Vérifier à la main : opencloud release verify <binaire>, ou minisign -Vm SHA256SUMS -P <clé de docs/installation.md>, puis sha256sum -c --ignore-missing SHA256SUMS. Installation : docs/installation.md."
+           # La liste exacte, pas dist-release/* : rien d'autre ne se publie.
+-          fichiers=(dist-release/SHA256SUMS dist-release/SHA256SUMS.minisig dist-release/opencloud-linux-amd64 dist-release/opencloud-linux-arm64)
++          fichiers=(dist-release/SHA256SUMS dist-release/SHA256SUMS.minisig dist-release/opencloud-linux-amd64 dist-release/opencloud-linux-arm64 dist-release/install.sh)
+           if [ "${TAG#v0.}" != "$TAG" ]; then
+             gh release create "$TAG" "${fichiers[@]}" --verify-tag --title "$TAG" --prerelease --notes "$notes"
+           else

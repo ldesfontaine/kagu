@@ -265,7 +265,9 @@ func realServer(t *testing.T, stateDir string) (*store.DB, *components, *server.
 }
 
 // realServerLogging est realServer, son journal écrit par logger.
-func realServerLogging(t *testing.T, stateDir string, logger *slog.Logger) (*store.DB, *components, *server.Server) {
+// adjust change les composants avant que le serveur les reçoive : un banc y
+// pose ce que la machine de test n'a pas (des clés de version de test).
+func realServerLogging(t *testing.T, stateDir string, logger *slog.Logger, adjust ...func(*components)) (*store.DB, *components, *server.Server) {
 	t.Helper()
 	root, err := openStateDir(stateDir)
 	if err != nil {
@@ -284,6 +286,9 @@ func realServerLogging(t *testing.T, stateDir string, logger *slog.Logger) (*sto
 		t.Fatal(err)
 	}
 	parts.operator.SetHashCost(bcrypt.MinCost)
+	for _, change := range adjust {
+		change(parts)
+	}
 	options := parts.serverOptions(cfg)
 	options.Live = live.New()
 	options.PublicLive = live.New()

@@ -61,6 +61,8 @@ type setupPaths struct {
 	binary        string
 	guardPath     string
 	agentSocket   string
+	// Les fichiers de la version qu'install.sh a vérifiée.
+	releaseDir string
 }
 
 func systemSetupPaths() setupPaths {
@@ -68,7 +70,7 @@ func systemSetupPaths() setupPaths {
 		configFile: brand.ConfigPath, stateFile: brand.SetupStateFile, lockFile: brand.SetupLockPath,
 		stateDir: brand.StateDir, agentStateDir: brand.AgentStateDir, policyDir: brand.AgentPolicyDir,
 		unitDir: filepath.Dir(machine.ServerUnitFile), binary: brand.InstalledBinary,
-		guardPath: brand.AgentGuardPath, agentSocket: brand.AgentSocketPath,
+		guardPath: brand.AgentGuardPath, agentSocket: brand.AgentSocketPath, releaseDir: brand.SetupReleaseDir,
 	}
 }
 
@@ -95,10 +97,13 @@ type setupRun struct {
 	// y coupe setup, comme une session SSH perdue.
 	afterStep func(step.Key) error
 
-	rights  agentpolicy.Set
-	state   setupState
-	listen  string
-	control *controlClient
+	rights agentpolicy.Set
+	// L'adresse des versions qu'install.sh passe (--releases-url) ; vide :
+	// celle par défaut.
+	releasesURL string
+	state       setupState
+	listen      string
+	control     *controlClient
 }
 
 func runSetup(args []string) error {
@@ -119,6 +124,7 @@ func (r *setupRun) command(ctx context.Context, args []string) error {
 	// L'aide se dit par setup.usage, dans la langue de la commande.
 	flags.SetOutput(io.Discard)
 	rights := flags.String("rights", "", "")
+	flags.StringVar(&r.releasesURL, "releases-url", "", "")
 	flags.String("domain", "", "")
 	flags.String("proxy", "", "")
 	if err := flags.Parse(args); err != nil || flags.NArg() > 0 {
