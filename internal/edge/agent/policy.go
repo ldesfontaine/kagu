@@ -234,3 +234,13 @@ func SystemClock() agentpolicy.Clock {
 	boot, uptime := hostinfo.MonotonicClock()
 	return agentpolicy.Clock{Now: time.Now(), Boot: boot, Uptime: uptime}
 }
+
+// warnWithoutMonotonicClock dit au journal, au démarrage, que l'horloge
+// monotone ne se lit pas : sur cette machine, un droit à durée est échu et
+// aucune échéance ne se pose (R-A3-5, N-F5).
+func warnWithoutMonotonicClock(clock agentpolicy.Clock, logger *slog.Logger) {
+	if clock.Monotonic() {
+		return
+	}
+	logger.Warn("monotonic clock unreadable (boot_id or /proc/uptime): rights with an expiry are lapsed, grant --for and -keep-old are refused")
+}

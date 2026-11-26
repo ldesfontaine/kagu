@@ -81,6 +81,49 @@ func TestR_A3_5_AFutureGrantedAtAfterRebootFalls(t *testing.T) {
 	}
 }
 
+// R-A3-5, N-F5 : sur une machine dont l'horloge monotone ne se lit plus, un
+// droit à durée déjà posé est échu, même avant son heure, et une clé gardée
+// aussi ; aucune échéance ne s'y pose, par --for, par la durée d'un droit ou
+// par -keep-old. Un droit sans échéance tient.
+func TestR_A3_5_WithoutTheMonotonicClockAnExpiryFailsClosed(t *testing.T) {
+	granted := Clock{Now: grantedAt, Boot: boot, Uptime: time.Hour}
+	document := grantFor(t, Document{MachineID: "m"}, "terminal.host,docker.deploy", Term{}, granted)
+	unreadable := Clock{Now: grantedAt.Add(time.Minute)}
+	if holds(document, CapabilityTerminalHost, unreadable) {
+		t.Fatal("without the monotonic clock, a right with an expiry still holds")
+	}
+	if !holds(document, CapabilityDockerDeploy, unreadable) {
+		t.Fatal("without the monotonic clock, a right without expiry fell")
+	}
+	if !Lapsed(grantedAt.Add(time.Hour), granted, Clock{Now: grantedAt, Uptime: time.Hour}) {
+		t.Fatal("an uptime without boot_id was taken for the monotonic clock")
+	}
+	kept, err := document.SetServerKey(testKey(t)).KeepServerKey(testKey(t), time.Hour, granted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if live := kept.LiveServerKeys(unreadable); len(live) != 1 {
+		t.Fatalf("without the monotonic clock, the kept key still holds: %d keys", len(live))
+	}
+
+	rights, err := ParsePolicyRights("terminal.host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, term := range []Term{{Duration: time.Hour}, {}} {
+		if _, err := document.Grant(rights, term, unreadable); !errors.Is(err, ErrNoMonotonicClock) {
+			t.Errorf("term %+v without the monotonic clock: %v", term, err)
+		}
+	}
+	if _, err := kept.KeepServerKey(testKey(t), time.Hour, unreadable); !errors.Is(err, ErrNoMonotonicClock) {
+		t.Errorf("-keep-old without the monotonic clock: %v", err)
+	}
+	permanent, err := document.Grant(rights, Term{Permanent: true}, unreadable)
+	if err != nil || !holds(permanent, CapabilityTerminalHost, unreadable) {
+		t.Fatalf("a permanent grant without the monotonic clock: %v", err)
+	}
+}
+
 // R-A3-5 : de cinq minutes à sept jours, ou permanent ; sans --for, chaque
 // droit prend sa durée (terminal.host : deux heures, les autres : sans
 // échéance). Un grant sans durée retire l'échéance, revoke aussi.

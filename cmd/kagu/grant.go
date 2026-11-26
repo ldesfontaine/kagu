@@ -39,13 +39,15 @@ type policyPlacer func(stateDir *os.Root) (agent.PolicyPlace, error)
 
 // policyCommand est ce qu'une commande de la politique reçoit, ses arguments
 // à part : où elle écrit, le terminal de la question, le compte qui la lance,
-// où vit la politique et le système que grant prépare (nil : la machine).
+// où vit la politique, le système que grant prépare et l'horloge où une
+// échéance se pose (nil : la machine).
 type policyCommand struct {
 	out          io.Writer
 	openTerminal terminalOpener
 	euid         int
 	place        policyPlacer
 	system       agent.System
+	clock        func() agentpolicy.Clock
 }
 
 func runAgentPolicy(verb string, args []string, command policyCommand) error {
@@ -95,7 +97,7 @@ func runAgentPolicy(verb string, args []string, command policyCommand) error {
 	if err != nil {
 		return err
 	}
-	opts := agent.PolicyOptions{StateDir: root, StatePath: *stateDir, Place: place, EUID: command.euid, Audit: auditToSystemJournal, System: command.system}
+	opts := agent.PolicyOptions{StateDir: root, StatePath: *stateDir, Place: place, EUID: command.euid, Audit: auditToSystemJournal, System: command.system, Clock: command.clock}
 	if verb == policyRights {
 		report, err := agent.ReadPolicyAsRoot(opts)
 		if err != nil {
@@ -443,8 +445,10 @@ func explainPolicyError(err error, text lang.Catalog) error {
 	case errors.Is(err, agentpolicy.ErrUnreadable):
 		return &refusal{message: text.Format("agent.policy_unreadable", err.Error())}
 	case errors.Is(err, agentpolicy.ErrCapabilityUnknown), errors.Is(err, agentpolicy.ErrCapabilityPath), errors.Is(err, agentpolicy.ErrCapabilityScope),
-		errors.Is(err, agentpolicy.ErrCapabilityAccount), errors.Is(err, agentpolicy.ErrCapabilityPeers), errors.Is(err, agentpolicy.ErrSetUnknown):
-		// Un droit mal écrit se dit avec la phrase de son refus.
+		errors.Is(err, agentpolicy.ErrCapabilityAccount), errors.Is(err, agentpolicy.ErrCapabilityPeers), errors.Is(err, agentpolicy.ErrSetUnknown),
+		errors.Is(err, agentpolicy.ErrNoMonotonicClock):
+		// Un droit mal écrit, ou une échéance sans horloge monotone, se dit
+		// avec la phrase de son refus.
 		key, _ := kitrefusal.KeyOf(err)
 		return &refusal{message: text.Get(key)}
 	}

@@ -192,6 +192,7 @@ func Run(ctx context.Context, opts Options) error {
 		place = *opts.policyPlace
 	}
 	orders := newOrderRunner(opts.StateDir, identity, place, opts.Version, opts.DockerSocket, actions, opts.Logger)
+	warnWithoutMonotonicClock(orders.clock(), opts.Logger)
 	go orders.watchPolicy(ctx, opts.Hangups, policyRereadInterval)
 	// Le veilleur Docker aussi ; ses rapports attendent dans le leur.
 	observed := &reports{}

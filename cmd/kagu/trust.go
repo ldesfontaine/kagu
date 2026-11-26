@@ -67,7 +67,7 @@ func runAgentTrust(args []string, command policyCommand) error {
 	if err != nil {
 		return err
 	}
-	opts := agent.PolicyOptions{StateDir: root, StatePath: *stateDir, Place: place, EUID: command.euid, Audit: auditToSystemJournal}
+	opts := agent.PolicyOptions{StateDir: root, StatePath: *stateDir, Place: place, EUID: command.euid, Audit: auditToSystemJournal, Clock: command.clock}
 	if request.Verb == agent.TrustList {
 		report, err := agent.ReadPolicyAsRoot(opts)
 		if err != nil {
@@ -140,6 +140,8 @@ func explainTrustError(err error, request agent.TrustRequest, text lang.Catalog)
 		return &refusal{message: text.Format("agent.trust_keep_old_required", agentpolicy.AgentLine("trust", agent.TrustSet, agentpolicy.TrustServerKey, request.Value))}
 	case errors.Is(err, agentpolicy.ErrDurationOutOfBounds):
 		return &refusal{message: text.Get("agent.trust_keep_old_bounds")}
+	case errors.Is(err, agentpolicy.ErrNoMonotonicClock):
+		return explainPolicyError(err, text)
 	case errors.Is(err, agentpolicy.ErrServerKeyInvalid):
 		return &refusal{message: text.Get("agent.trust_server_key_invalid")}
 	case errors.Is(err, agentpolicy.ErrNoServerKeyToKeep):

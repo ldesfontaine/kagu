@@ -138,7 +138,6 @@ func TestLapsed_FollowsTheMonotonicClock(t *testing.T) {
 		{"clock moved back, time left", Clock{Now: grantedAt.Add(-50 * time.Minute), Boot: boot, Uptime: time.Hour + 9*time.Minute}, false},
 		{"rebooted, before the hour", Clock{Now: grantedAt.Add(5 * time.Minute), Boot: "other", Uptime: time.Minute}, false},
 		{"rebooted, granted in the future", Clock{Now: grantedAt.Add(-time.Minute), Boot: "other", Uptime: time.Minute}, true},
-		{"no monotonic clock", Clock{Now: grantedAt.Add(5 * time.Minute)}, false},
 	}
 	for _, c := range cases {
 		if got := Lapsed(until, granted, c.now); got != c.want {

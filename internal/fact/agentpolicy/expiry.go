@@ -19,11 +19,15 @@ type Expiry struct {
 }
 
 // expiryAfter pose une échéance à duration de l'horloge granted, à la
-// seconde : le fichier ne garde pas mieux.
-func expiryAfter(granted Clock, duration time.Duration) Expiry {
+// seconde : le fichier ne garde pas mieux. Sans horloge monotone, elle est
+// refusée : Lapsed la tiendrait pour échue.
+func expiryAfter(granted Clock, duration time.Duration) (Expiry, error) {
+	if !granted.Monotonic() {
+		return Expiry{}, ErrNoMonotonicClock
+	}
 	granted.Now = granted.Now.UTC().Truncate(time.Second)
 	granted.Uptime = granted.Uptime.Truncate(time.Second)
-	return Expiry{Until: granted.Now.Add(duration), Granted: granted}
+	return Expiry{Until: granted.Now.Add(duration), Granted: granted}, nil
 }
 
 func (e Expiry) equal(other Expiry) bool {
