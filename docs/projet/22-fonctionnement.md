@@ -167,9 +167,13 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `lifecycle.json` | La dernière lecture d'endoflife.date : quel dépôt d'images est quel produit, et les branches des produits que les services utilisent (nom, maintenue ou non, date de fin, dernière version). Absent tant que la fin de support n'a jamais été activée | Données publiques, 0600, écriture atomique, remplacé d'un bloc à chaque lecture réussie ; l'effacer coûte une lecture de la source |
 | Machine Kagu, `state_dir` | `upgrade/avant-<version>.db` | La copie de la base d'avant une montée de `serve`, nommée par la version qui tournait : une base entière, écrite par `serve` sous son compte (`VACUUM INTO`, « Préparer une montée de serve ») | Mode 0600 dans un dossier 0700, au compte du service. Les trois plus récentes restent, la quatrième efface la plus ancienne. Mêmes données que la base, **en clair** comme elle |
 | Machine Kagu, `/run/kagu` | `agent.sock` | La socket des agents locaux, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/agent/…` (« La socket des agents locaux ») | Mode 0660, groupe `kagu-agent` ; seul l'uid de ce compte passe. Elle n'est pas à sauvegarder |
-| Machine Kagu, `/etc/kagu` | `setup.json` | Ce que `kagu setup` retient : le jeu de droits choisi (`rights`) et chaque ligne cochée (`steps` : clé, état, détail, heure). Rien d'autre : ni jeton ni code | root, `0600`, écrit d'un coup après chaque ligne. Un setup relancé reprend la réponse au lieu de reposer la question (`--rights` la remplace). La montée de version le relira |
+| Machine Kagu, `/etc/kagu` | `setup.json` | Ce que `kagu setup` retient : le jeu de droits choisi (`rights`) et chaque ligne cochée (`steps` : clé, état, détail, heure). Rien d'autre : ni jeton ni code | root, `0600`, écrit d'un coup après chaque ligne. Un setup relancé reprend la réponse au lieu de reposer la question (`--rights` la remplace). `upgrade` le relit : présent, les unités sont celles de setup, et il les tient à jour |
 | Machine Kagu, `/run` | `kagu-setup.lock` | Le verrou de `setup` (`flock`) : aucune donnée | root, `0600` ; le verrou tombe avec le processus, le fichier avec le redémarrage |
 | Machine Kagu, `/var/lib/kagu-setup/release` | `SHA256SUMS`, `SHA256SUMS.minisig`, `kagu-linux-*` | La version qu'`install.sh` a vérifiée, que `setup` fait importer par `serve` dans la bibliothèque | root, dossier `0755`, fichiers `0644` : publics, lus par le compte du serveur. Récrits par le prochain `install.sh` ; rien ne les efface |
+| Machine Kagu, `/var/lib/kagu-upgrade` (root, `0755`) | `state.json` | Ce que `kagu upgrade` retient de la dernière montée : la version d'avant (`running`) et la version visée (`target`), les chemins (binaire, ancien binaire, `state_dir`, version posée, copie de la base), chaque ligne cochée, `finished`. Aucun secret | root, `0600`, écrit d'un coup après chaque ligne ; `upgrade --status` le relit. Une montée arrêtée après « Binaire remplacé » empêche d'en relancer une autre |
+| Machine Kagu, `/var/lib/kagu-upgrade` | `<version>/` | La version que `upgrade` installe, telle qu'il l'a vérifiée : `SHA256SUMS`, sa signature, les binaires. `serve` l'importe de là ; le nouveau binaire y reprend le lanceur stable | root, dossier `0755`, fichiers `0644` : des fichiers publics. Effacé quand la montée finit |
+| Machine Kagu, `/run` | `kagu-upgrade.lock` | Le verrou de `upgrade` (`flock`) : aucune donnée | Comme celui de `setup` |
+| Machine Kagu, `/usr/local/lib/kagu` | `kagu.previous` | Le binaire du serveur d'avant la dernière montée | root, `0755` ; remplacé à chaque montée |
 | Machine Kagu, `state_dir` | `control.sock` | La socket de commande, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/api/manifest/…` et, pour root seul, `/control/admin/…`. Une socket que personne n'écoute (arrêt brutal) est remplacée au démarrage suivant ; celle d'un `serve` vivant n'est jamais touchée | Mode 0600, et `state_dir` fermé au groupe et aux autres, sans quoi `serve` ne démarre pas. Elle n'est pas à sauvegarder |
 | Toute machine, la machine Kagu comprise, `/var/lib/kagu-agent` (au compte de l'agent, `kagu-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, identifiant de la machine et de l'agent (`agent_id`), adresse de Kagu (`https://…`, `http://…` ou `unix:<chemin absolu>`), empreinte du certificat, langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul ; ignorés dès que le dossier de la politique existe), les ancres (`anchors`), la version de politique que son binaire sait lire (`policy_format`), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`). `agent policy migrate` recopie droits, ancres et clé dans la politique puis les efface d'ici | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (aucun ordre ne change la clé) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/kagu`**, que le compte du serveur possède sur la machine Kagu : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
 | Toute machine, la machine Kagu comprise, `/var/lib/kagu-agent` | `pending-rights.json` | Les droits que l'agent a refusés : nom, valeur d'un producteur, heure du dernier refus ; 32 au plus, 24 h chacun | Mode 0600, écrit par l'agent seul ; lu par `agent grant --pending` en root. L'effacer ne change aucun droit |
@@ -1109,6 +1113,53 @@ s'arrête sur le verrou `/run/kagu-setup.lock` (`flock`, sans attendre).
 **Le coût** : sans Docker, « Gérer » et « Gérer en root » s'arrêtent à
 « Dossier des services » tant que l'installation de Docker n'est pas dans
 setup ; « Observer » va jusqu'au code.
+
+#### La montée du serveur : upgrade
+
+`sudo kagu upgrade [--to <version>] [--from <dossier>]` monte le serveur de
+la machine Kagu (B2). Lancé dans un terminal, il pose d'abord, s'il le
+faut, la question de la politique de l'agent (ci-dessous), puis se relance par
+`systemd-run --unit=kagu-upgrade --pipe --wait --collect` : l'unité
+transitoire ne dépend pas de la session SSH, la sortie suit tant que le
+terminal est ouvert, et l'outil, dans l'unité, ignore `SIGHUP` et `SIGPIPE`
+(R-B2-5). Il prend `/run/kagu-upgrade.lock` (`flock`, sans attendre), puis
+coche ses lignes par `step.Print` (clés `step.upgrade.*`) et les écrit une à
+une dans `/var/lib/kagu-upgrade/state.json`. `upgrade --status` relit ce
+fichier, et dit si la montée tourne encore (le verrou est tenu).
+
+| Ligne (clé) | Ce que fait upgrade |
+| --- | --- |
+| Version trouvée (`step.upgrade.found`) | L'installation : avec `setup.json`, `/usr/local/bin/kagu` et `/etc/kagu/config.toml` ; sans lui, l'`ExecStart` de `kagu.service` (binaire et `-config`). La version : `--from`, sinon la plus haute de la bibliothèque de `serve` au-dessus de celle en place (lue par root, jamais écrite), sinon l'adresse des versions (`releases/latest` donne le numéro, les fichiers viennent de `releases/download/<version>/` ; une redirection n'est suivie que vers une adresse https, dix au plus, comme `install.sh`). Tout est lu en mémoire et vérifié par `release.ReadVerified` avec les **clés du binaire en place** (R-B2-1) ; la version posée dans `/var/lib/kagu-upgrade/<version>/` est faite de ces octets-là, puis importée par `serve` (`releases/import`) quand elle ne vient pas de sa bibliothèque |
+| Place libre (`step.upgrade.space`) | Deux fois la base plus le binaire, libres sous `state_dir` et sous le dossier du binaire |
+| Base copiée (`step.upgrade.copied`) | `POST /control/admin/backup/pre-upgrade` : `serve` copie, sous son compte (R-B2-2) |
+| Binaire remplacé (`step.upgrade.replaced`) | L'ancien recopié en `/usr/local/lib/kagu/kagu.previous`, le nouveau posé par `rename` |
+| Serveur redémarré (`step.upgrade.restarted`) | `systemctl restart kagu.service` |
+| Serveur répond (`step.upgrade.answers`) | `GET /control/admin/health` rend la version visée, 60 s au plus. Puis la main passe au **nouveau binaire** (`exec`, même unité) : `upgrade --finish` relit `state.json` |
+| Unités à jour (`step.upgrade.units`) | Avec `setup.json` : `kagu.service` et `kagu-agent.service` comparées à celles du nouveau binaire (`machine.ServerUnitLines`, `machine.AgentUnitLines`), réécrites si elles diffèrent, `daemon-reload`. Drop-ins jamais touchés. Sans `setup.json` : sautée |
+| Politique de l'agent (`step.upgrade.policy`) | Un agent enrôlé dont le dossier de la politique n'existe pas : `agent.MigratePolicy`, si root a dit oui avant la relance : le oui est écrit dans `state.json` (`policy_consent`), jamais passé en option, et l'unité le consomme (remis à faux, migration faite ou refusée, ou montée arrêtée) ; ce qui est recopié est redit, la question ne se repose pas. Sans ce oui dans l'état : non migrée, la ligne dite. Le lanceur stable, s'il est posé : recopié depuis la version posée, **revérifiée au moment de la copie** avec les clés du nouveau binaire, jamais depuis `bin/` de l'agent (R-B2-12). La version posée est ensuite effacée |
+
+**Ce qui est refusé avant toute copie** : une signature fausse ou d'une autre
+clé, un binaire qui n'a pas sa somme, une version téléchargée qui n'est pas
+celle demandée, une redirection vers une adresse qui n'est pas https, un
+binaire sans clé de version (la `v0.0.1` : installation à la main, une
+fois), `--to` qui ne monte pas. **Une montée arrêtée après « Binaire
+remplacé »** (la nouvelle version muette, une machine éteinte) : `upgrade`
+refuse d'en lancer une autre, et le message de l'échec donne le retour à la
+main (l'ancien binaire et la copie de la base). **Le coût** : un processus
+root parle à l'adresse des versions (décision de Lucas, QA-16) ; `--from`
+s'en passe. Les unités réécrites ne valent qu'au prochain redémarrage du
+service. Le retour seul et `--resume` viendront (T04-14).
+
+**La politique de l'agent** (décision de Lucas du 25/11, ARB-1) : un agent
+de la machine Kagu qui lit encore ses droits dans `identity.json` fait
+calculer la migration **avant** la relance, dans le terminal de root : le
+changement imprimé (`printPolicyChange`), puis `[o/N]` par `confirmChange`,
+N par défaut, réponse lue sur `/dev/tty`. Non, ou pas de terminal :
+`upgrade` s'arrête avant la première coche, rien n'est touché, et dit de
+lancer `sudo kagu agent policy migrate`. Oui : le oui est écrit dans
+`state.json` (root, `0600`, sous le verrou) juste avant `systemd-run`.
+Aucune option ne le pose, pas même une option interne : `--yes` n'existe
+pas, et `--in-unit` lancé à la main ne migre rien sans ce oui.
 
 ## Comment les modules et le rôle d'une machine décident de l'écran
 
@@ -5613,7 +5664,7 @@ même refus.
 | `auth-mode forward [-header Remote-User]` | `auth-mode` | Passe derrière le SSO, ou change l'en-tête en `forward`. Ferme toutes les sessions |
 | `sessions close-all` | `sessions/close-all` | Ferme toutes les sessions (un `WARN` au journal de `serve`, pas de ligne d'audit) |
 | `tokens revoke-all` | `tokens/revoke-all` | Révoque tous les jetons d'API |
-| — (`upgrade`, à venir) | `GET health`, `POST backup/pre-upgrade`, `POST releases/import` | Préparent une montée de `serve` (ci-dessous) ; `setup` appelle `health`, et `releases/import` sur la version qu'`install.sh` a laissée |
+| — (`upgrade`) | `GET health`, `POST backup/pre-upgrade`, `POST releases/import` | Préparent une montée de `serve` (ci-dessous, et « La montée du serveur : upgrade ») ; `setup` appelle `health`, et `releases/import` sur la version qu'`install.sh` a laissée |
 | — (`setup`) | `POST local-enrollment` | `201 {"token","expires_at"}` : le jeton de l'agent de la machine Kagu (`OfferLocalEnrollment`, celui qui attend encore, sinon un neuf). `409 machine.local_enrolled` quand elle a, ou a eu, un agent. Le clair ne part que vers root et n'entre jamais au journal |
 | — (`setup`) | `GET local-agent` | `200 {"enrolled","online","reported","deploy":{"state","reason"}}` : où en est l'agent de la machine Kagu ; `deploy` est le verdict de `agentpolicy.Fit` pour `docker.deploy` (`ok`, `missing`, `unavailable` avec la raison de l'agent, `unknown` tant qu'il n'a rien rapporté) |
 

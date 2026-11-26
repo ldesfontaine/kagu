@@ -29,6 +29,15 @@ const (
 	// Le verrou de setup : un second setup lancé pendant le premier s'arrête.
 	SetupLockPath = "/run/" + ID + "-setup.lock"
 	StateDir      = "/var/lib/" + ID
+	// La montée du serveur (upgrade), en root : son unité transitoire, qui
+	// survit au terminal ; son verrou ; son dossier (root, 0755), où vivent
+	// son état (0600) et la version vérifiée qu'elle installe, lisible du
+	// compte du serveur qui l'importe ; l'ancien binaire, gardé à côté.
+	UpgradeUnit      = ID + "-upgrade"
+	UpgradeLockPath  = "/run/" + ID + "-upgrade.lock"
+	UpgradeStateDir  = "/var/lib/" + ID + "-upgrade"
+	UpgradeStateFile = UpgradeStateDir + "/state.json"
+	PreviousBinary   = "/usr/local/lib/" + ID + "/" + Command + ".previous"
 	// Le compte système sous lequel tourne serve.
 	ServerAccount = ID
 	// Le binaire installé, que l'unité du serveur lance et dont setup copie
@@ -149,7 +158,10 @@ const repositoryURL = "https://github.com/ldesfontaine/" + ID
 // ReleaseBaseURL est l'adresse des versions par défaut : releases_url de la
 // configuration la remplace, install.sh la lit dans KAGU_RELEASES.
 const (
-	ReleaseBaseURL          = repositoryURL + "/releases/download"
+	ReleaseBaseURL = repositoryURL + "/releases/download"
+	// La page de la dernière version : elle renvoie vers celle de son tag,
+	// d'où upgrade lit le numéro.
+	ReleaseLatestURL        = repositoryURL + "/releases/latest"
 	ReleaseBinaryPrefix     = ID + "-linux-"
 	ReleaseSumsFile         = "SHA256SUMS"
 	ReleaseSignatureFile    = ReleaseSumsFile + ".minisig"

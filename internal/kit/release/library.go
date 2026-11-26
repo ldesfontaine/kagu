@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -72,10 +73,9 @@ func versionDir(version Version) string {
 
 // Import copie sous l'état la version que contient dir, un chemin absolu
 // (SHA256SUMS, sa signature et chaque binaire listé), après avoir tout
-// vérifié : la signature avec les clés de confiance, puis la somme de chaque
-// binaire. Rien n'est écrit d'une version qui ne passe pas. Importer deux fois
-// la même version ne change rien ; la même version avec d'autres sommes est
-// refusée.
+// vérifié (ReadVerified). Rien n'est écrit d'une version qui ne passe pas.
+// Importer deux fois la même version ne change rien ; la même version avec
+// d'autres sommes est refusée.
 func (library *Library) Import(dir string) (Release, error) {
 	if !filepath.IsAbs(dir) {
 		return Release{}, ErrFolderNotAbsolute
@@ -85,29 +85,61 @@ func (library *Library) Import(dir string) (Release, error) {
 		return Release{}, unreadable(fmt.Errorf("open release folder: %w", err))
 	}
 	defer source.Close()
-	sums, err := readSmallIn(source, brand.ReleaseSumsFile)
+	verified, err := ReadVerified(RootOpener(source), library.keys)
 	if err != nil {
 		return Release{}, unreadable(err)
 	}
-	signature, err := readSmallIn(source, brand.ReleaseSignatureFile)
-	if err != nil {
-		return Release{}, unreadable(err)
-	}
-	signed, err := VerifySums(sums, signature, library.keys)
-	if err != nil {
+	if err := library.refuseOtherSums(verified.Version, verified.SumsFile); err != nil {
 		return Release{}, err
 	}
-	binaries, err := readBinaries(source, signed)
+	if err := library.store(verified); err != nil {
+		return Release{}, err
+	}
+	return verified.Release, nil
+}
+
+// Opener ouvre un fichier d'une version par son nom : dans un dossier, ou à
+// l'adresse des versions.
+type Opener func(name string) (io.ReadCloser, error)
+
+// RootOpener ouvre les fichiers sous root, sans jamais en sortir.
+func RootOpener(root *os.Root) Opener {
+	return func(name string) (io.ReadCloser, error) {
+		return root.Open(name)
+	}
+}
+
+// Verified est une version lue en entier et vérifiée : ses sommes, leur
+// signature et chacun de ses binaires, tels qu'ils ont été vérifiés.
+type Verified struct {
+	Release
+	SumsFile  []byte
+	Signature []byte
+	Binaries  map[string][]byte
+}
+
+// ReadVerified lit SHA256SUMS et sa signature, les vérifie avec keys, puis lit
+// chaque binaire listé et vérifie sa somme. Les octets rendus sont ceux qui
+// ont été vérifiés : celui qui les pose ne relit rien. Rien n'est rendu d'une
+// version qui ne passe pas.
+func ReadVerified(open Opener, keys Keys) (Verified, error) {
+	sums, err := readSmallFrom(open, brand.ReleaseSumsFile)
 	if err != nil {
-		return Release{}, unreadable(err)
+		return Verified{}, err
 	}
-	if err := library.refuseOtherSums(signed.Version, sums); err != nil {
-		return Release{}, err
+	signature, err := readSmallFrom(open, brand.ReleaseSignatureFile)
+	if err != nil {
+		return Verified{}, err
 	}
-	if err := library.store(signed, sums, signature, binaries); err != nil {
-		return Release{}, err
+	signed, err := VerifySums(sums, signature, keys)
+	if err != nil {
+		return Verified{}, err
 	}
-	return signed, nil
+	binaries, err := readBinaries(open, signed)
+	if err != nil {
+		return Verified{}, err
+	}
+	return Verified{Release: signed, SumsFile: sums, Signature: signature, Binaries: binaries}, nil
 }
 
 // unreadable fait d'un fichier absent ou interdit du dossier importé le refus
@@ -133,14 +165,14 @@ func (release Release) BinaryNames() []string {
 
 // readBinaries lit chaque binaire listé et vérifie sa somme ; tous sont
 // attendus dans le dossier.
-func readBinaries(source *os.Root, signed Release) (map[string][]byte, error) {
+func readBinaries(open Opener, signed Release) (map[string][]byte, error) {
 	names := signed.BinaryNames()
 	if len(names) == 0 {
 		return nil, ErrNothingToImport
 	}
 	binaries := make(map[string][]byte, len(names))
 	for _, name := range names {
-		file, err := source.Open(name)
+		file, err := open(name)
 		if err != nil {
 			return nil, fmt.Errorf("open %s: %w", name, err)
 		}
@@ -178,20 +210,20 @@ func (library *Library) refuseOtherSums(version Version, sums []byte) error {
 // store écrit chaque fichier qui diffère de celui déjà là. Les sommes viennent
 // en dernier : une coupure laisse une version sans SHA256SUMS, que la
 // bibliothèque dit non importée, et que la reprise de l'import complète.
-func (library *Library) store(signed Release, sums, signature []byte, binaries map[string][]byte) error {
-	dir := versionDir(signed.Version)
+func (library *Library) store(verified Verified) error {
+	dir := versionDir(verified.Version)
 	if err := library.root.MkdirAll(dir, libraryDirMode); err != nil {
 		return fmt.Errorf("create release folder: %w", err)
 	}
-	for _, name := range signed.BinaryNames() {
-		if err := library.write(path.Join(dir, name), binaries[name]); err != nil {
+	for _, name := range verified.BinaryNames() {
+		if err := library.write(path.Join(dir, name), verified.Binaries[name]); err != nil {
 			return err
 		}
 	}
-	if err := library.write(path.Join(dir, brand.ReleaseSignatureFile), signature); err != nil {
+	if err := library.write(path.Join(dir, brand.ReleaseSignatureFile), verified.Signature); err != nil {
 		return err
 	}
-	return library.write(path.Join(dir, brand.ReleaseSumsFile), sums)
+	return library.write(path.Join(dir, brand.ReleaseSumsFile), verified.SumsFile)
 }
 
 func (library *Library) write(name string, content []byte) error {
@@ -297,6 +329,27 @@ func (library *Library) Versions() ([]Version, error) {
 	return versions, nil
 }
 
+// Read relit une version importée en entier et la revérifie (ReadVerified) :
+// ce que la montée du serveur installe. ErrNoRelease si elle manque.
+func (library *Library) Read(version Version) (Verified, error) {
+	folder, err := library.root.OpenRoot(versionDir(version))
+	if errors.Is(err, fs.ErrNotExist) {
+		return Verified{}, fmt.Errorf("%w: %s", ErrNoRelease, version)
+	}
+	if err != nil {
+		return Verified{}, fmt.Errorf("open %s: %w", versionDir(version), err)
+	}
+	defer folder.Close()
+	verified, err := ReadVerified(RootOpener(folder), library.keys)
+	if err != nil {
+		return Verified{}, err
+	}
+	if verified.Version != version {
+		return Verified{}, fmt.Errorf("%w: folder %s holds %s", ErrMalformed, version, verified.Version)
+	}
+	return verified, nil
+}
+
 func (library *Library) checkBinary(signed Release, name, binaryPath string) (int64, error) {
 	file, err := library.root.Open(binaryPath)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -319,15 +372,15 @@ func (library *Library) checkBinary(signed Release, name, binaryPath string) (in
 // readImported lit un fichier de sommes ou de signature de la bibliothèque ;
 // absent, c'est que la version n'est pas importée.
 func (library *Library) readImported(name string) ([]byte, error) {
-	content, err := readSmallIn(library.root, name)
+	content, err := readSmallFrom(RootOpener(library.root), name)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("%w: %s", ErrNoRelease, name)
 	}
 	return content, err
 }
 
-func readSmallIn(root *os.Root, name string) ([]byte, error) {
-	file, err := root.Open(name)
+func readSmallFrom(open Opener, name string) ([]byte, error) {
+	file, err := open(name)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", name, err)
 	}

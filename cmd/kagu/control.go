@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
 const (
@@ -28,6 +29,16 @@ const (
 	applyTimeout = 3 * time.Minute
 	// Ce qu'on lit d'une réponse : le fichier d'un annuaire, et de la marge.
 	maxControlResponse = 4 << 20
+)
+
+// Les routes d'administration de la socket de contrôle que setup et upgrade
+// appellent, en root.
+const (
+	controlHealthPath          = "/control/admin/health"
+	controlLocalEnrollmentPath = "/control/admin/local-enrollment"
+	controlLocalAgentPath      = "/control/admin/local-agent"
+	controlPreUpgradePath      = "/control/admin/backup/pre-upgrade"
+	controlReleaseImportPath   = "/control/admin/releases/import"
 )
 
 // controlClient parle au serveur qui tourne par state_dir/control.sock : les
@@ -110,6 +121,30 @@ func (c *controlClient) explainDial(err error) error {
 		return fmt.Errorf("ce compte n'a pas le droit d'ouvrir %s : lancez la commande sous le compte du service, ou en root", c.socket)
 	}
 	return fmt.Errorf("talk to the server through %s: %w", c.socket, err)
+}
+
+// importReleaseByServe fait importer par serve, sous son compte et avec les
+// clés de son binaire, la version du dossier folder, un chemin absolu ; rend
+// la version importée. setup et upgrade l'appellent ; un refus de serve se
+// dit dans la langue de la commande (adminRun.refusalOf), en *refusal.
+func importReleaseByServe(ctx context.Context, client *controlClient, text lang.Catalog, folder string) (string, error) {
+	request := struct {
+		Folder string `json:"folder"`
+	}{Folder: folder}
+	status, body, err := client.post(ctx, controlReleaseImportPath, request, controlTimeout)
+	if err != nil {
+		return "", err
+	}
+	if status != http.StatusOK {
+		return "", adminRun{client: client, text: text}.refusalOf(status, body)
+	}
+	var imported struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(body, &imported); err != nil || imported.Version == "" {
+		return "", fmt.Errorf("read the imported release: %w", err)
+	}
+	return imported.Version, nil
 }
 
 // serverRefusal traduit un refus du serveur en une phrase. Le corps d'une

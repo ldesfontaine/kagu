@@ -422,7 +422,7 @@ func lineOf(t *testing.T, output, label string) string {
 // rien toucher.
 func TestR_B1_3_SecondSetupStopsOnTheLock(t *testing.T) {
 	b := newSetupBench(t)
-	release, held, err := holdSetupLock(b.paths.lockFile)
+	release, held, err := holdLock(b.paths.lockFile)
 	if err != nil || !held {
 		t.Fatalf("the first setup did not take the lock: %v %v", held, err)
 	}
