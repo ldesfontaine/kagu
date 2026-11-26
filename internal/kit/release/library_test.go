@@ -341,3 +341,35 @@ func TestRead_ReturnsTheVerifiedBytesOfAnImportedRelease(t *testing.T) {
 		t.Fatalf("changed binary: %v", err)
 	}
 }
+
+// La route des versions ne sert que les sommes, leur signature et les
+// binaires listés, chacun revérifié : un binaire changé depuis l'import
+// n'est jamais ouvert.
+func TestOpenServed_OnlyTheVerifiedFilesOfAVersion(t *testing.T) {
+	fixture := newImportFixture(t, Version{0, 0, 2})
+	library := NewLibrary(testkit.EmptyRoot(t), Keys{Current: fixture.publicKey})
+	if _, err := library.Import(fixture.dir); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{brand.ReleaseSumsFile, brand.ReleaseSignatureFile, BinaryName("arm64")} {
+		file, err := library.OpenServed(Version{0, 0, 2}, name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		_ = file.Close()
+	}
+	for _, name := range []string{"", "..", "../../server.key", "identity.json", BinaryName("riscv64"), BinaryName("../arm64")} {
+		if file, err := library.OpenServed(Version{0, 0, 2}, name); !errors.Is(err, ErrNoRelease) {
+			if file != nil {
+				_ = file.Close()
+			}
+			t.Errorf("%q is served: %v", name, err)
+		}
+	}
+	if err := library.root.WriteFile("releases/v0.0.2/kagu-linux-amd64", []byte("an amd64 binarY"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.OpenServed(Version{0, 0, 2}, BinaryName("amd64")); !errors.Is(err, ErrDigestMismatch) {
+		t.Fatalf("a changed binary: %v", err)
+	}
+}

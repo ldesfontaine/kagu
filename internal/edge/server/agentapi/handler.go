@@ -229,6 +229,7 @@ func (h *Handler) routes(viaLocalSocket bool, add func(method, pattern string, h
 	add("POST", "/agent/enroll", func(w http.ResponseWriter, r *http.Request) {
 		h.enroll(w, r, viaLocalSocket)
 	})
+	add("GET", agentwire.ServerKeyRoute, h.getServerKey)
 	add("GET", "/agent/stream", h.stream)
 	add("POST", "/agent/signal", h.signal)
 	add("POST", "/agent/logs/{request}", h.logs)

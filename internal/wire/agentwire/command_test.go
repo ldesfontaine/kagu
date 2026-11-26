@@ -57,11 +57,3 @@ func TestCommand_TheListIsClosed(t *testing.T) {
 		t.Error("IsOrder")
 	}
 }
-
-// L'empreinte est celle d'OpenSSH : « SHA256: » et 43 caractères.
-func TestKeyFingerprint_HasTheOpenSSHForm(t *testing.T) {
-	got := KeyFingerprint(make([]byte, 32))
-	if got != "SHA256:Zmh6rfhivXdsj8GLjp+OIAiXFIVu4jOzkCpZHQ1fKSU" {
-		t.Fatalf("got %s", got)
-	}
-}

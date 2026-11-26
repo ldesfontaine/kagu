@@ -197,9 +197,6 @@ func TestLoad_ExpandsPlaceholders(t *testing.T) {
 		if got := catalog.Get("agent.token_missing"); !strings.Contains(got, "runuser -u "+brand.AgentAccount+" -- "+brand.AgentCurrentPath+" agent") {
 			t.Errorf("%s: agent.token_missing = %q, want the install line", code, got)
 		}
-		if got := catalog.Get("machine.prepare_docker_note"); !strings.Contains(got, brand.AgentAccount) {
-			t.Errorf("%s: machine.prepare_docker_note = %q, want the account %q", code, got, brand.AgentAccount)
-		}
 		if got := catalog.Get("channel.secret_help"); !strings.Contains(got, brand.WebhookSignatureHeader) {
 			t.Errorf("%s: channel.secret_help = %q, want the header %q", code, got, brand.WebhookSignatureHeader)
 		}

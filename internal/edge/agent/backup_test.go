@@ -139,7 +139,7 @@ func (p *parcelServer) client(t *testing.T) *Client {
 	t.Helper()
 	server := httptest.NewServer(p.handler())
 	t.Cleanup(server.Close)
-	client, err := NewClient(server.URL, "", "v0.0.1", false)
+	client, err := NewClient(server.URL, "v0.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}

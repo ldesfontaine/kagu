@@ -1,12 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { label } from "./support/catalog";
-import { createFirstAccount, mockFirstSetup } from "./support/firstSetup";
 
 // Les captures de U3 (docs/projet/refonte-ux/captures/U3-*.png) : les
 // assistants d'un seul écran (sonde, tâche, canal, silence, projet, plan),
 // leur pli « Réglages » ouvert, un menu ouvert dans une fenêtre, et la note de
-// l'adresse locale, neutre, puis rouge quand la page est publique. Données
+// l'adresse locale, rouge quand la page est publique. Données
 // fictives seulement. Hors `make ci` : `E2E_CAPTURES=1 npm run e2e`.
 test.skip(process.env.E2E_CAPTURES !== "1", "captures demandées par E2E_CAPTURES=1");
 
@@ -102,13 +101,6 @@ const shots: Shot[] = [
       await expect(page.locator(".note-danger")).toBeVisible();
     },
   },
-  {
-    name: "premiere-configuration",
-    url: "/",
-    ready: ".note-neutral",
-    prepare: (page) => mockFirstSetup(page, { local: true, suggestion: "" }),
-    open: async () => undefined,
-  },
 ];
 
 for (const theme of ["light", "dark"] as const) {
@@ -118,9 +110,6 @@ for (const theme of ["light", "dark"] as const) {
       await page.setViewportSize({ width: 1280, height: 800 });
       await shot.prepare?.(page);
       await page.goto(shot.url);
-      if (shot.name === "premiere-configuration") {
-        await createFirstAccount(page);
-      }
       await expect(page.locator(shot.ready).first()).toBeVisible();
       await shot.open?.(page);
       const folder = new URL("../../docs/projet/refonte-ux/captures/", import.meta.url);

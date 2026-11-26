@@ -121,11 +121,6 @@ const (
 	// son état : posé par l'opérateur sur l'hôte, à l'agent seul, 0600. Il ne
 	// voyage jamais, le serveur ne le garde pas.
 	AgentProxmoxFile = "proxmox.json"
-	// Ce que l'opérateur crée dans Proxmox pour ce jeton : un rôle réduit, un
-	// compte qui ne sert qu'à cela, le nom du jeton.
-	ProxmoxRole      = ProductName + "Agent"
-	ProxmoxUser      = ID + "-agent@pve"
-	ProxmoxTokenName = "agent"
 	// Les instantanés que l'agent crée portent ce préfixe : il ne supprime que
 	// ceux-là, jamais ceux de l'opérateur.
 	SnapshotPrefix = TokenPrefix + "-"
@@ -166,6 +161,9 @@ const (
 	ReleaseSumsFile         = "SHA256SUMS"
 	ReleaseSignatureFile    = ReleaseSumsFile + ".minisig"
 	ReleaseSignatureComment = "signature from " + ID + " release key"
+	// Le script publié avec chaque version, que les lignes d'installation et
+	// d'ajout lancent.
+	ReleaseInstallScript = "install.sh"
 )
 
 // SecretKeyIDDomain sépare l'identifiant d'une clé de toute autre empreinte

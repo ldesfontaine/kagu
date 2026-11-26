@@ -13,6 +13,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -81,7 +82,7 @@ func generateSigningKey() *signingKey {
 func signingKeyFromSeed(seed []byte) *signingKey {
 	private := ed25519.NewKeyFromSeed(seed)
 	public, _ := private.Public().(ed25519.PublicKey)
-	return &signingKey{private: private, fingerprint: agentwire.KeyFingerprint(public)}
+	return &signingKey{private: private, fingerprint: ident.KeyFingerprint(public)}
 }
 
 func (k *signingKey) public() ed25519.PublicKey {
@@ -94,7 +95,7 @@ func (k *Key) PublicKey() ed25519.PublicKey {
 	return k.current.public()
 }
 
-// Fingerprint est l'empreinte que l'opérateur compare (agentwire.KeyFingerprint).
+// Fingerprint est l'empreinte que l'opérateur compare (ident.KeyFingerprint).
 func (k *Key) Fingerprint() string {
 	return k.current.fingerprint
 }

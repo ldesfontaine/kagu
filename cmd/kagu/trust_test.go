@@ -15,7 +15,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
-	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // runTrust lance « agent trust » avec ce terminal, sous ce compte.
@@ -198,7 +198,7 @@ func TestR_A3_15_TrustSetPrintsBothFingerprints(t *testing.T) {
 		t.Fatal(err)
 	}
 	question := strings.Index(out, "[o/N]")
-	for _, want := range []string{"- clé du serveur   " + agentwire.KeyFingerprint(old), "+ clé du serveur   " + agentwire.KeyFingerprint(fresh), brand.Command + " secrets server-key"} {
+	for _, want := range []string{"- clé du serveur   " + ident.KeyFingerprint(old), "+ clé du serveur   " + ident.KeyFingerprint(fresh), brand.Command + " secrets server-key"} {
 		if index := strings.Index(out, want); index < 0 || index > question {
 			t.Errorf("%q is not told before the question:\n%s", want, out)
 		}
@@ -209,7 +209,7 @@ func TestR_A3_15_TrustSetPrintsBothFingerprints(t *testing.T) {
 
 	newer := base64.StdEncoding.EncodeToString(testServerPublicKey(t))
 	out, err = runTrust(t, place, noTerminal, 0, "-state", stateDir, "add", agentpolicy.TrustServerKey, newer, "-keep-old", "1h", "-yes")
-	if err != nil || !strings.Contains(out, agentwire.KeyFingerprint(fresh)+"   gardée jusqu'au") {
+	if err != nil || !strings.Contains(out, ident.KeyFingerprint(fresh)+"   gardée jusqu'au") {
 		t.Fatalf("add -keep-old: %v\n%s", err, out)
 	}
 	if keys := storedPolicy(t, place).ServerKeys; len(keys) != 2 || keys[1].Until.IsZero() {

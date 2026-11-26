@@ -67,8 +67,6 @@ func TestValues_AreFrozen(t *testing.T) {
 		"AgentGuardEnv":              {AgentGuardEnv, "KAGU_AGENT_GUARD"},
 		"AgentPolicyDir":             {AgentPolicyDir, "/etc/kagu-agent"},
 		"AgentBinaryPrefix":          {AgentBinaryPrefix, "kagu-"},
-		"ProxmoxRole":                {ProxmoxRole, "KaguAgent"},
-		"ProxmoxUser":                {ProxmoxUser, "kagu-agent@pve"},
 		"ReleaseBinaryPrefix":        {ReleaseBinaryPrefix, "kagu-linux-"},
 		"ReleaseSignatureComment":    {ReleaseSignatureComment, "signature from kagu release key"},
 		"SessionCookie":              {SessionCookie, "__Host-kagu_session"},

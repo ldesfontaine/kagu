@@ -43,7 +43,7 @@ func TestResticAgent_NeverLeaksSecrets(t *testing.T) {
 
 	// Une requête relayée : l'événement et la réponse rendue au serveur.
 	server := newRelayAgentServer(t, "paquet")
-	client, err := NewClient(server.URL, "", "v0.0.1", false)
+	client, err := NewClient(server.URL, "v0.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -525,7 +525,7 @@ func TestResticTarget_ServesARelayedRequestOnTheSameAuthenticatedRestServer(t *t
 	restServer := startTargetRestServer(t, b, params.Port, seededRESTPassword)
 
 	server := newRelayAgentServer(t, "paquet")
-	client, err := NewClient(server.URL, "", "v0.0.1", false)
+	client, err := NewClient(server.URL, "v0.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +560,7 @@ func TestResticTarget_ServesARelayedRequestOnTheSameAuthenticatedRestServer(t *t
 func TestResticTarget_RelayIsRefusedWithoutTheRight(t *testing.T) {
 	b := newResticBench(t, "restic.produce")
 	server := newRelayAgentServer(t, "")
-	client, err := NewClient(server.URL, "", "v0.0.1", false)
+	client, err := NewClient(server.URL, "v0.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}

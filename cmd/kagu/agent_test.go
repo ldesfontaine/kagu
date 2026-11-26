@@ -78,7 +78,7 @@ func TestEnrollmentTokenFor_RefusesAnEmptyOrClosedInput(t *testing.T) {
 
 func TestEnrollmentTokenFor_NeverReadsInputOfAnEnrolledAgent(t *testing.T) {
 	root := testkit.EmptyRoot(t)
-	identity, err := agent.NewIdentity("https://kagu.example.org", "", lang.French, nil)
+	identity, err := agent.NewIdentity("https://kagu.example.org", lang.French, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

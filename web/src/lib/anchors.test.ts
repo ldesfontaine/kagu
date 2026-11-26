@@ -1,18 +1,7 @@
 import { expect, test } from "vitest";
 
 import type { AgentAnchors } from "../api/machines";
-import {
-  anchorFieldsOf,
-  anchorKinds,
-  anchorKindsFor,
-  anchorLabelKey,
-  anchorOfReason,
-  anchorsOf,
-  areAnchorsModified,
-  blockingAnchors,
-  splitAnchorValues,
-  withKeyringRecipient,
-} from "./anchors";
+import { anchorKinds, anchorKindsFor, anchorLabelKey, anchorOfReason, blockingAnchors } from "./anchors";
 
 // La réponse figée de la fiche d'une machine (internal/edge/server/testdata) : le
 // registre du serveur y est écrit, type par type.
@@ -27,28 +16,10 @@ test("les clés du catalogue d'un type suivent son nom", () => {
   expect(anchorLabelKey("restic.target-cert")).toBe("anchor.label_restic_target_cert");
 });
 
-test("le formulaire ne demande que les ancres des droits cochés", () => {
+test("seules les ancres des droits portés comptent", () => {
   expect(anchorKindsFor(["probe.lan"]).map((kind) => kind.name)).toEqual([]);
   expect(anchorKindsFor(["backup.produce"]).map((kind) => kind.name)).toEqual(["backup.recipient", "backup.guest"]);
   expect(anchorKindsFor(["restic.produce"]).map((kind) => kind.name)).toEqual(["restic.target-cert"]);
-});
-
-test("les valeurs d'un champ se séparent par virgules, espaces ou lignes", () => {
-  expect(splitAnchorValues(" 101, 102\n103  ,, ")).toEqual(["101", "102", "103"]);
-  expect(splitAnchorValues("")).toEqual([]);
-});
-
-test("la requête ne porte que les ancres des droits cochés, non vides", () => {
-  const fields = { "backup.recipient": "age1abc", "backup.guest": "101, 102", "restic.target-cert": "ab" };
-  expect(anchorsOf(fields, ["backup.produce"])).toEqual({ "backup.recipient": ["age1abc"], "backup.guest": ["101", "102"] });
-  expect(anchorsOf({ "backup.guest": "  " }, ["backup.produce"])).toEqual({});
-  expect(anchorsOf(fields, [])).toEqual({});
-});
-
-test("cocher la production propose la clé du trousseau sans effacer la saisie", () => {
-  expect(withKeyringRecipient({}, "age1key")).toEqual({ "backup.recipient": "age1key" });
-  expect(withKeyringRecipient({ "backup.recipient": "age1mine" }, "age1key")).toEqual({ "backup.recipient": "age1mine" });
-  expect(withKeyringRecipient({}, undefined)).toEqual({});
 });
 
 const reported: AgentAnchors = {
@@ -59,13 +30,6 @@ const reported: AgentAnchors = {
     { name: "restic.target-cert", right: "restic.produce", max: 4, state: "unreadable", values: [] },
   ],
 };
-
-test("un ré-enrôlement redonne les ancres posées, pas les illisibles", () => {
-  expect(anchorFieldsOf(reported)).toEqual({ "backup.recipient": "age1key" });
-  expect(anchorFieldsOf(undefined)).toEqual({});
-  expect(areAnchorsModified({ "backup.recipient": "age1key" }, anchorFieldsOf(reported))).toBe(false);
-  expect(areAnchorsModified({ "backup.recipient": "age1key", "backup.guest": "101" }, anchorFieldsOf(reported))).toBe(true);
-});
 
 test("deux états distincts bloquent un ordre : aucune posée, illisibles", () => {
   expect(blockingAnchors(reported, ["backup.produce", "restic.produce"]).map((kind) => `${kind.name}:${kind.state}`)).toEqual(["backup.guest:none", "restic.target-cert:unreadable"]);

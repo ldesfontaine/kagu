@@ -378,11 +378,6 @@ func ParseList(kind Kind, text string) ([]string, error) {
 	return values, nil
 }
 
-// FormatList écrit des valeurs pour un drapeau.
-func FormatList(values []string) string {
-	return strings.Join(values, listSeparator)
-}
-
 // Add ajoute une valeur au type, sans doublon, dans les bornes du type.
 func Add(stored map[string][]string, kind Kind, value string) (map[string][]string, error) {
 	if !kind.Valid(value) {

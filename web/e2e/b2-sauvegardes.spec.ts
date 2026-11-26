@@ -115,24 +115,6 @@ test("accéder : la base et le volume d'un service entier se restaurent, command
   expect(findings.unknown()).toEqual([]);
 });
 
-test("ajouter une machine : le droit restic.docker se coche, avec sa note, et part dans la ligne d'installation", async ({ page, findings }) => {
-  findings.where = "/machines/nouvelle (restic.docker)";
-  await page.goto("/machines/nouvelle");
-  const dialog = page.locator("dialog[open]");
-  await dialog.getByLabel(label("machine.name_label")).fill("vps-essai-2");
-  await dialog.getByText(label("machine.rights_advanced")).click();
-  const right = dialog.getByLabel(label("machine.capability_restic_docker"));
-  await expect(right).not.toBeChecked();
-  await right.check();
-  await expect(dialog).toContainText(label("machine.capability_restic_docker_note"));
-  await dialog.getByRole("button", { name: label("machine.create_token") }).click();
-  await expect(dialog.locator(".token-box", { hasText: "restic.docker" }).first()).toBeVisible();
-  await dialog.getByRole("button", { name: label("wizard.next") }).click();
-  await dialog.locator(".modal-foot").getByRole("button", { name: label("modal.close") }).click();
-  await expect(dialog).toHaveCount(0);
-  expect(findings.unknown()).toEqual([]);
-});
-
 // La clé d'une source de l'aperçu, lue comme l'écran la lit.
 async function sourceKey(page: Page, name: string): Promise<string> {
   const response = await page.request.get("/api/backups/overview");

@@ -21,12 +21,13 @@ export function CopyButton({ text, ghost = false }: { text: string; ghost?: bool
 // Un texte en mono avec son bouton pour le copier. `lines` : plusieurs
 // commandes, une par ligne, que le bloc fait défiler plutôt que de les couper.
 // `short` : dans une carte étroite, le texte tient sur une ligne, tronqué ;
-// `title` le donne entier à l'infobulle.
-export function TokenBox({ value, lines = false, short = false, title }: { value: string; lines?: boolean; short?: boolean; title?: string }) {
+// `title` le donne entier à l'infobulle. `copy` : ce que le bouton copie,
+// quand c'est plus que le texte montré (la ligne join et son jeton).
+export function TokenBox({ value, lines = false, short = false, title, copy = value }: { value: string; lines?: boolean; short?: boolean; title?: string; copy?: string }) {
   return (
     <div className={short ? "token-box token-box-short" : "token-box"} title={title}>
       {lines ? <pre className="mono">{value}</pre> : <code className="mono">{value}</code>}
-      <CopyButton text={value} />
+      <CopyButton text={copy} />
     </div>
   );
 }

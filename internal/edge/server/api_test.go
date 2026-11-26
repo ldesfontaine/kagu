@@ -248,6 +248,8 @@ var (
 	// Un fichier rendu dans une chaîne JSON (le compose d'un plan de
 	// déploiement) : ses identifiants y sont dans le texte, pas entre guillemets.
 	yamlInJSONDirectoryID = regexp.MustCompile(`\b(svc|prj)_[0-9a-f]{16}\b`)
+	// La clé d'un agent est tirée à son enrôlement : son empreinte aussi.
+	agentKeyFingerprint = regexp.MustCompile(`"key_fingerprint":"SHA256:[A-Za-z0-9+/]{43}"`)
 )
 
 // Les identifiants de tâche et de jeton, les jetons de ping et
@@ -259,6 +261,7 @@ func normalize(body string) string {
 	body = probeKey.ReplaceAllString(body, `"ID":[`)
 	body = directoryID.ReplaceAllString(body, `"${1}_ID"`)
 	body = yamlInJSONDirectoryID.ReplaceAllString(body, "${1}_ID")
+	body = agentKeyFingerprint.ReplaceAllString(body, `"key_fingerprint":"SHA256:KEY"`)
 	return tokenValue.ReplaceAllString(body, "kg_TOKEN")
 }
 

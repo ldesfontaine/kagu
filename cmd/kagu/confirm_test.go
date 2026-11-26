@@ -9,7 +9,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/edge/agent"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
-	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // rightsCommand est une commande qui change les droits ou la confiance de
@@ -109,7 +109,7 @@ func changeLines(before, after agentpolicy.Document) []string {
 	keys := func(document agentpolicy.Document) []string {
 		var texts []string
 		for _, key := range document.ServerKeys {
-			texts = append(texts, agentwire.KeyFingerprint(key.Key))
+			texts = append(texts, ident.KeyFingerprint(key.Key))
 		}
 		return texts
 	}

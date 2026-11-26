@@ -101,3 +101,28 @@ func (g GroupFit) HeldNames() []string {
 	}
 	return names
 }
+
+// SetGroup est ce qu'un jeu pose dans un groupe de l'onglet Droits : le
+// détail replié d'une carte de « Ajouter une machine ».
+type SetGroup struct {
+	Group  Group
+	Rights []string
+}
+
+// Groups rend les droits que le jeu pose partout, groupés et rangés comme
+// l'onglet Droits ; un groupe où il ne pose rien n'y est pas.
+func (s Set) Groups() []SetGroup {
+	var grouped []SetGroup
+	for _, group := range groups {
+		current := SetGroup{Group: group}
+		for _, known := range knownRights {
+			if known.group == group && slices.ContainsFunc(sets[s].everywhere, func(right SetRight) bool { return right.Name == known.name }) {
+				current.Rights = append(current.Rights, known.name)
+			}
+		}
+		if len(current.Rights) > 0 {
+			grouped = append(grouped, current)
+		}
+	}
+	return grouped
+}

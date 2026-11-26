@@ -151,7 +151,7 @@ const absentFromShowcase: string[] = [
   "components/Icon.tsx : Mark",
   "components/ImageName.tsx : ImageName",
   "components/Inspector.tsx : Inspector",
-  "components/InstallSteps.tsx : InstallSteps",
+  "components/JoinNeedsDomain.tsx : JoinNeedsDomain",
   "components/Layout.tsx : Brand",
   "components/Layout.tsx : Layout",
   "components/Loaded.tsx : Loaded",
@@ -188,7 +188,7 @@ const absentFromShowcase: string[] = [
   "components/Resources.tsx : ResourceHistory",
   "components/Resources.tsx : ResourceStats",
   "components/Rich.tsx : Rich",
-  "components/RightsFields.tsx : RightsFields",
+  "components/RightsSetChoice.tsx : RightsSetChoice",
   "components/RoleCard.tsx : RoleCard",
   "components/RunStrip.tsx : RunStrip",
   "components/Select.tsx : EnumSelect",
@@ -244,6 +244,34 @@ const serverRuleCeilings: Record<string, number> = {
   "lib/rights.ts": 1,
 };
 
+// ARB-4 : RootCommand porte l'avertissement des lignes de droits ; il ne
+// reçoit que des commandes de l'agent, une seule « sudo kagu agent … » sans
+// « ; », « | », « && », « $( » ni « --yes ». Le serveur les écrit toutes par
+// agentpolicy.AgentLine, qui refuse l'enchaînement et -yes. La liste est
+// fermée : une ligne d'une autre sorte (join, ré-enrôlement, chmod, setup)
+// passe par TokenBox.
+const agentCommandSources = [
+  'components/LockedAction.tsx : fix.command', // grant --pending, ou trust (anchor.TrustCommand)
+  "components/LockedAction.tsx : line", // grant --pending (agentpolicy.PendingLine)
+  "components/RightsList.tsx : group.grant_line", // grant --pending
+  "components/RightsList.tsx : group.revoke_line", // revoke (agentpolicy.RevokeLine)
+  "components/RightsList.tsx : setLine.line", // grant --set (agentpolicy.GrantSetLine)
+  "pages/Machine.tsx : agent.rights.prepare_line", // grant --set
+  'pages/VisualSystem.tsx : t("anchor.cmd_list")', // sudo kagu agent trust list
+];
+
+// rootCommandLines : chaque expression donnée à RootCommand, « fichier :
+// expression », une par appel.
+function rootCommandLines(files: Source[]): string[] {
+  const found: string[] = [];
+  for (const file of files) {
+    for (const match of file.text.matchAll(/<RootCommand\b[^>]*?\bcommand=\{([^}]*)\}/g)) {
+      found.push(`${file.path} : ${match[1]?.trim() ?? ""}`);
+    }
+  }
+  return [...new Set(found)].sort();
+}
+
 describe("composition", () => {
   it("sees the sources it guards", () => {
     expect(pageSources.length).toBeGreaterThan(10);
@@ -285,6 +313,10 @@ describe("composition", () => {
     expect(ceilingProblems(countsPerFile(library, serverRules), serverRuleCeilings)).toEqual([]);
   });
 
+  it("gives RootCommand agent commands only", () => {
+    expect(listProblems(rootCommandLines(sources), agentCommandSources)).toEqual([]);
+  });
+
   it("catches each fault it guards", () => {
     const faulty = (path: string, text: string): Source[] => [{ path, text }];
     expect(countsPerFile(faulty("pages/X.tsx", "<button>"), bareTags)).toEqual({ "pages/X.tsx": 1 });
@@ -302,5 +334,6 @@ describe("composition", () => {
     expect(listProblems(["a : B"], [])).toHaveLength(1);
     expect(listProblems([], ["a : B"])).toHaveLength(1);
     expect(listProblems(["a : C"], ["a : B"])).toHaveLength(2);
+    expect(rootCommandLines(faulty("pages/X.tsx", '<RootCommand command={token.reenroll_line} short />'))).toEqual(["pages/X.tsx : token.reenroll_line"]);
   });
 });

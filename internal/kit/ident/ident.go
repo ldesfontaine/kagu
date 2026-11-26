@@ -3,7 +3,9 @@ package ident
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"strings"
 )
 
 // randomBytes : 64 bits, seize hexadécimaux. Le format est figé : les
@@ -44,4 +46,26 @@ func NewSecret() (string, error) {
 func HashToken(cleartext string) string {
 	sum := sha256.Sum256([]byte(cleartext))
 	return hex.EncodeToString(sum[:])
+}
+
+// keyFingerprintPrefix ouvre l'empreinte d'une clé, comme chez OpenSSH.
+const keyFingerprintPrefix = "SHA256:"
+
+// KeyFingerprint est l'empreinte d'une clé publique telle que l'opérateur la
+// compare : « SHA256: » suivi du condensé en base64 sans remplissage. La clé
+// du serveur et celle d'un agent s'écrivent ainsi, à l'écran comme au
+// terminal.
+func KeyFingerprint(publicKey []byte) string {
+	sum := sha256.Sum256(publicKey)
+	return keyFingerprintPrefix + base64.RawStdEncoding.EncodeToString(sum[:])
+}
+
+// IsKeyFingerprint dit si le texte a la forme de KeyFingerprint.
+func IsKeyFingerprint(text string) bool {
+	digest, found := strings.CutPrefix(text, keyFingerprintPrefix)
+	if !found || len(digest) != base64.RawStdEncoding.EncodedLen(sha256.Size) {
+		return false
+	}
+	_, err := base64.RawStdEncoding.Strict().DecodeString(digest)
+	return err == nil
 }

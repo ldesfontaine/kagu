@@ -33,7 +33,7 @@ func answeringServer(t *testing.T, status int, body string) *Client {
 		_, _ = io.WriteString(w, body)
 	}))
 	t.Cleanup(server.Close)
-	client, err := NewClient(server.URL, "", "v", false)
+	client, err := NewClient(server.URL, "v")
 	if err != nil {
 		t.Fatal(err)
 	}

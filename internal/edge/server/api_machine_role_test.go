@@ -17,13 +17,13 @@ import (
 // l'inscrit sur la machine, et la machine dit les modules de son rôle. Un rôle
 // hors liste se refuse avant tout jeton ; absent, c'est le rôle générique.
 func TestAPI_MachineRole_ChosenAtTheTokenAndSaidByTheMachine(t *testing.T) {
-	server := newTestServer(t)
+	server := joinServer(t)
 	for _, chosen := range []struct {
 		body map[string]any
 		role machine.Role
 	}{
-		{map[string]any{"name": "pve-1", "role": "proxmox"}, machine.RoleProxmox},
-		{map[string]any{"name": "plain-1"}, machine.RoleGeneric},
+		{map[string]any{"name": "pve-1", "role": "proxmox", "set": "manage"}, machine.RoleProxmox},
+		{map[string]any{"name": "plain-1", "set": "observe"}, machine.RoleGeneric},
 	} {
 		if got := callAPI(server.Server, http.MethodPost, "/api/machines/tokens", chosen.body); got.Code != http.StatusCreated {
 			t.Fatalf("%v : %d %s", chosen.body, got.Code, got.Body.String())

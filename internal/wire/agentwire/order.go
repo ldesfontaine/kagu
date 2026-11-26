@@ -1,8 +1,6 @@
 package agentwire
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -95,13 +93,6 @@ func DecodeSignedOrder(data []byte) (SignedOrder, error) {
 		return SignedOrder{}, fmt.Errorf("decode order: %w", err)
 	}
 	return order, nil
-}
-
-// KeyFingerprint est l'empreinte d'une clé publique telle que l'opérateur
-// la compare : « SHA256: » suivi du condensé en base64, comme OpenSSH.
-func KeyFingerprint(publicKey []byte) string {
-	sum := sha256.Sum256(publicKey)
-	return "SHA256:" + base64.RawStdEncoding.EncodeToString(sum[:])
 }
 
 // L'état qu'un agent rapporte d'un ordre, dans la section actions de son

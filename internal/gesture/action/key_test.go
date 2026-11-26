@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/testkit"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -27,7 +28,7 @@ func TestLoadOrCreateKey_CreatesOnceThenReloads(t *testing.T) {
 	if err != nil || created || again.Fingerprint() != first.Fingerprint() {
 		t.Fatalf("second start: created %v, %q vs %q, %v", created, again.Fingerprint(), first.Fingerprint(), err)
 	}
-	if first.Fingerprint() != agentwire.KeyFingerprint(first.PublicKey()) {
+	if first.Fingerprint() != ident.KeyFingerprint(first.PublicKey()) {
 		t.Fatal("the fingerprint is not the protocol's")
 	}
 }

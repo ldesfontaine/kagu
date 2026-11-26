@@ -84,7 +84,7 @@ Trait double : chiffré. Trait simple : en clair, mais sans quitter la machine.
 | Interface | navigateur → Traefik | TLS de Traefik | L'opérateur, par une session (mode `native`) : la page de connexion échange le compte créé à la première configuration contre un cookie `__Host-kagu_session` (`Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`) que le navigateur joint à chaque requête, `/api/events` et les flux de journaux compris ; le mot de passe ne voyage qu'à la connexion. Un en-tête `Authorization: Basic` n'est lu par aucun mode. En mode `forward`, le SSO qui authentifie (Authelia derrière Traefik) : Kagu ne croit l'en-tête d'identité (`Remote-User` par défaut), présent une seule fois, que d'un pair de `trusted_proxies` qui porte aussi le secret partagé quand il est configuré (`forward_secret_file`, en-tête `X-Kagu-Proxy-Secret`), et répond `401` à tout le reste ; c'est au mandataire (Traefik) d'écraser l'en-tête envoyé par le client. La première requête admise ouvre aussi une session et pose le même cookie : elle lie flux et audit, **sans jamais remplacer l'en-tête**, que chaque requête repasse (R-A2-17). Une identité ainsi prouvée mais absente d'une liste `forward_users` non vide reçoit `403 auth.forward_forbidden`. Un jeton d'API (`Authorization: Bearer`) remplace l'un et l'autre mode, sur sa liste fermée de lectures, plus les verbes qu'il porte en écriture (« Comment un agent IA lit Kagu »). Mode `none` (installation neuve ; rien n'y ramène, R-A2-10) : aucun compte, le serveur ne sert que la première configuration et répond `401 auth.setup_required` au reste ; la création du compte exige le code de première configuration (« Comment l'opérateur entre dans l'interface »). Le front charge la page, puis parle à `/api/…` en JSON |
 | Interface | Traefik → Kagu | En clair, sur `127.0.0.1` de la même machine | Toute écriture de l'API exige `Content-Type: application/json`, même sans corps, et un `Sec-Fetch-Site` présent doit valoir `same-origin` ou `none`. Toute requête sous `/api/…` exige un `Host` reconnu (hôte de `public_url`, `localhost`, IP littérale, hôte de `listen`), contre le DNS rebinding : sinon `403 bad_host`. Un `%2F` dans le chemin brut d'une route `/api/…` est refusé `400 bad_path` avant tout routage ; les fichiers du front compilé ne s'ouvrent sans session que sur la route du front, jugée sur le chemin encodé (R-A2-13). Le cookie de session est `SameSite=Strict` : une page tierce ne l'emporte pas ; cette garde s'y ajoute. Un flux de l'opérateur (`GET /api/events`, `GET /api/containers/{id}/logs/stream`) exige en plus `Sec-Fetch-Site` absent ou `same-origin` (`none` compris refusé) et un `Origin`, s'il est présent, égal à celui de `public_url` (sans `public_url`, à l'adresse de la page) : sinon `403 bad_origin`, jugé avant l'accès. Le flux public de la page de statut et celui de l'agent n'ont pas cette garde |
 | Direct | navigateur → `/api/events`, une connexion par onglet | TLS de Traefik | L'opérateur, par sa session ou par le SSO, comme l'interface ; refusé en mode `none` (`401 auth.setup_required`). Le flux ne dit que « les machines ont changé », « les tâches ont changé », jamais lesquelles. Il se ferme dans la seconde où meurt la session qui l'a ouvert (R-A2-12), et au ping de 15 s si l'état de l'accès a changé. Plafond de 64 onglets, comptés par le serveur et non par les abonnés du bus (la page de statut y est abonnée aussi), `503` au-delà |
-| Agent | machine → Traefik | TLS de Traefik, ou empreinte épinglée par `-pin` si pas de domaine | Ed25519 : l'agent signe un aléa qu'il tire, l'identifiant de sa machine et l'heure (protocole 2), Kagu vérifie avec la clé enrôlée. Le signal porte les mesures de la machine et ce que son Docker a montré, dans un débit borné par machine ; les journaux d'un conteneur remontent par `POST /agent/logs/…`, jeton de session |
+| Agent | machine → Traefik | TLS de Traefik, certificat reconnu par le système (un domaine) ; la clé du serveur comparée à l'empreinte de la ligne avant l'envoi du jeton (R-B1-13) | Ed25519 : l'agent signe un aléa qu'il tire, l'identifiant de sa machine et l'heure (protocole 2), Kagu vérifie avec la clé enrôlée. Le signal porte les mesures de la machine et ce que son Docker a montré, dans un débit borné par machine ; les journaux d'un conteneur remontent par `POST /agent/logs/…`, jeton de session |
 | Agent, sens retour | Kagu → machine, sur le flux ouvert | Le même flux | Le serveur pousse des **commandes d'observation** (« suis les journaux du conteneur X », « arrête », le jeu de sondes, les images à ne pas interroger) : des lectures, **non signées**, que l'agent ne reçoit que du serveur qui tient son flux. Elles ne sont pas crues pour autant : l'agent rejuge le jeu de sondes et n'ouvre que le journal d'un conteneur qu'il a lui-même rapporté, quatre suivis au plus à la fois (le cinquième est refusé `service.logs_busy`), quinze minutes chacun (le front rouvre un suivi encore affiché) ; ces bornes sont à l'agent, qui les tient sans attendre le serveur, séparées des quatre suivis par machine du serveur (« Comment une cible est sondée », « Comment les conteneurs sont suivis »). Les **ordres** voyagent dans une enveloppe **signée Ed25519 par la clé du serveur** (`server.key`), que l'agent vérifie avec la clé épinglée à l'enrôlement avant d'en lire un champ : qui tient le flux sans la clé (un mandataire, un faux serveur) peut couper ou retarder un ordre, pas en fabriquer ; un ordre périmé ou rejoué est refusé (« Comment un ordre part et revient ») |
 | Sauvegarde, le départ | `serve` → agent d'une autre machine : l'ordre signé `backup.receive` sur le flux, puis `GET /agent/parcels/{colis}/{nom}` sous le jeton de session de l'agent | TLS de Traefik ; le fichier est **déjà** chiffré (age, pour la clé publique de sauvegarde) avant de quitter `serve` | L'ordre est signé par `server.key` et porte la taille et le SHA-256 de chaque fichier : l'agent ne garde que ce qui correspond. Le colis ne se sert qu'à la machine pour laquelle il est écrit (`404` sinon), 30 requêtes par minute et par machine |
 | Sauvegarde produite par un agent | agent producteur → `serve` : `PUT /agent/parcels/{colis}/{nom}` sous le jeton de session de l'agent, puis `serve` → agent de destination par le `GET` ci-dessus | **Chiffrée age sur la machine source avant tout transport** (pour la clé publique de sauvegarde) ; téléversée à `serve` sous TLS ; `serve` ne peut pas la lire | L'agent producteur n'a que la clé publique : le clair du producteur n'existe que dans `produce/`, `0600`, et part avec l'ordre. `serve` range le fichier tel qu'il arrive, vérifie la taille et la somme annoncées, et n'a pas la clé privée : il ne la lit pas. 30 requêtes par minute et par machine, comme le téléchargement |
@@ -94,7 +94,7 @@ Trait double : chiffré. Trait simple : en clair, mais sans quitter la machine.
 | Docker | agent → `/var/run/docker.sock` | Aucun : une socket Unix de la machine | Les droits Unix : le compte de l'agent est dans le groupe `docker` (ou l'agent est root), ce qui **équivaut à root** (« Ce qui manque encore »). `kagu serve` ne lit plus la socket : il n'a besoin ni de root ni du groupe `docker`. Le client ne connaît aucun verbe qui écrit |
 | Agent | Traefik → Kagu | En clair, boucle locale | `X-Forwarded-*` cru seulement depuis `trusted_proxies`. `X-Forwarded-For` se lit de la droite : la source est la dernière entrée qui n'est pas un mandataire de confiance, ce que le client écrit à gauche ne compte pas |
 | Agent en dev | machine → `http://127.0.0.1` | Aucun, et c'est accepté : rien ne sort de la machine | Idem |
-| Agent sur un LAN | machine → `http://192.168.…` | **Refusé** par l'agent, sauf `-allow-plain` | Réservé à un réseau déjà chiffré, WireGuard par exemple |
+| Agent sur un LAN | machine → `http://192.168.…` | **Refusé** par l'agent, sans exception (`-allow-plain` retiré, R-B1-13) | Un serveur distant se joint en `https://` |
 | Ping | tâche → Traefik → `/ping/{jeton}` | TLS de Traefik | Personne : le jeton dans l'URL est le secret. Qui l'a peut faire passer une tâche pour faite. Débit borné par source, puis par jeton **reconnu** : un jeton inconnu est lu en base, jamais compté, il ne laisse aucun seau. Chaque limiteur par adresse (pings, échecs de connexion, page publique, relais) garde au plus `ratelimit.MaxSources` clés (« Limiteurs par adresse ») ; le seau par jeton reconnu, lui, refuse une clé nouvelle au plafond |
 | Statut | visiteur → Traefik → `/statut/<slug>`, `/statut/<slug>/api/…` | TLS de Traefik | Personne, par conception : la page est publique. Elle ne dit que le nom de ses composants et ce que l'opérateur a écrit ; jamais un identifiant d'objet, un nom de machine, de conteneur ou de sonde, une cible, un port, ni rien d'une autre page. Des tests le prouvent sur la réponse réelle |
 | Registre | agent → le registre de l'image | TLS, sauf vers la boucle locale (un registre sur `localhost:5000`, comme Docker le fait) | L'agent s'authentifie par un jeton anonyme, ou signé des identifiants en clair du `config.json` de Docker de la machine ; le registre ne prouve rien de plus que son certificat. Rien ne sort qu'un nom de dépôt et un tag ; l'agent ne tire jamais une image. Aucune redirection suivie |
@@ -126,7 +126,7 @@ dit comment. Une migration de plus part de `002`.
 
 | Où | Fichier | Contenu | Protection |
 | --- | --- | --- | --- |
-| Machine Kagu, `state_dir` | `kagu.db` | Les machines (`machines` : nom, hôte, adresse, système, rôle choisi), leurs agents (`agents` : clé publique Ed25519, version, racine `/srv/workspace`, date d'enrôlement, dernier signe de vie, révocation, l'empreinte de la clé du serveur que l'agent dit avoir épinglée `server_key_fingerprint`, le dernier rang d'ordre donné `last_order_seq`, les ancres de confiance locales que l'agent dit tenir `anchors` (texte de l'en-tête ; NULL tant qu'il n'a rien dit), le compte sous lequel il tourne `run_as_uid` et `run_as_name` (nuls tant qu'il ne l'a pas dit) ; un seul actif par machine, l'index `agents_one_active` le tient), d'où il tient ses droits `policy_source` (`policy`, `identity`, `refused`) et l'empreinte SHA-256 de sa politique `policy_digest` (migration `051` ; nulles tant qu'il n'a rien dit), la raison d'une politique refusée `policy_refusal` et ce qu'elle nomme `policy_refusal_detail` (migration `059` ; nulles hors source `refused`), le protocole annoncé à la dernière ouverture du flux `protocol` (migration `052` ; NULL tant qu'il n'est pas revenu depuis), les genres d'ordres qu'il y a annoncés `order_kinds` (migration `056`, JSON genre → numéro ; NULL tant qu'il n'a rien annoncé, un agent du protocole 2), l'échéance de chaque droit rapporté qui en a une `rights_until` (migration `053`, JSON nom → heure ; NULL sans échéance), les droits que chaque agent rapporte (`agent_capabilities` : droit, chemins, instant du rapport, et `unavailable`, la raison pour laquelle son compte ne peut pas l'exercer, vide s'il le peut), les jetons d'enrôlement (avec les droits demandés, `requested_capabilities`, et l'agent qui l'a consommé, `agent_id`), les champs que l'agent a dits de lui et que le serveur a refusés (`machine_report_refusals`, migration `050` : `hostname`, `system`, `arch`, `version` ; jamais la valeur refusée) | Jetons stockés hachés : une copie de la base n'enrôle personne. Un jeton vaut **1 h** et sert une fois (`machine.TokenLifetime`) ; au démarrage, `serve` efface les jetons périmés jamais servis et les consommés depuis plus de 90 jours, **sauf celui d'un agent actif** : il dit ce qui était demandé, contre quoi se lit ce que l'agent rapporte. La clé publique n'est pas un secret. Une valeur refusée (`machine.RefusedFields` : nom d'hôte RFC 1123, texte de 120 octets sans caractère de contrôle ; au flux, le système par `machine.IsSystemName`) n'est jamais écrite ; son refus l'est, la fiche le rend (`report_rejected`) jusqu'au champ redit valable ou au ré-enrôlement. La `050` a rejugé une fois, par ce même juge, ce qu'une base d'avant gardait : la valeur refusée effacée, son refus noté. Une machine retirée emporte ses agents, leurs droits et ses refus (cascade) |
+| Machine Kagu, `state_dir` | `kagu.db` | Les machines (`machines` : nom, hôte, adresse, système, rôle choisi), leurs agents (`agents` : clé publique Ed25519, version, racine `/srv/workspace`, date d'enrôlement, dernier signe de vie, révocation, l'empreinte de la clé du serveur que l'agent dit avoir épinglée `server_key_fingerprint`, le dernier rang d'ordre donné `last_order_seq`, les ancres de confiance locales que l'agent dit tenir `anchors` (texte de l'en-tête ; NULL tant qu'il n'a rien dit), le compte sous lequel il tourne `run_as_uid` et `run_as_name` (nuls tant qu'il ne l'a pas dit), la moitié publique X25519 envoyée à l'enrôlement `seal_public_key` (migration `060`, 32 octets ; nulle chez un agent d'avant) ; un seul actif par machine, l'index `agents_one_active` le tient), d'où il tient ses droits `policy_source` (`policy`, `identity`, `refused`) et l'empreinte SHA-256 de sa politique `policy_digest` (migration `051` ; nulles tant qu'il n'a rien dit), la raison d'une politique refusée `policy_refusal` et ce qu'elle nomme `policy_refusal_detail` (migration `059` ; nulles hors source `refused`), le protocole annoncé à la dernière ouverture du flux `protocol` (migration `052` ; NULL tant qu'il n'est pas revenu depuis), les genres d'ordres qu'il y a annoncés `order_kinds` (migration `056`, JSON genre → numéro ; NULL tant qu'il n'a rien annoncé, un agent du protocole 2), l'échéance de chaque droit rapporté qui en a une `rights_until` (migration `053`, JSON nom → heure ; NULL sans échéance), les droits que chaque agent rapporte (`agent_capabilities` : droit, chemins, instant du rapport, et `unavailable`, la raison pour laquelle son compte ne peut pas l'exercer, vide s'il le peut), les jetons d'enrôlement (avec les droits du jeu choisi, `requested_capabilities`, pour l'écran seulement : aucun droit ne s'en pose, et l'agent qui l'a consommé, `agent_id`), les champs que l'agent a dits de lui et que le serveur a refusés (`machine_report_refusals`, migration `050` : `hostname`, `system`, `arch`, `version` ; jamais la valeur refusée) | Jetons stockés hachés : une copie de la base n'enrôle personne. Un jeton vaut **1 h** et sert une fois (`machine.TokenLifetime`) ; au démarrage, `serve` efface les jetons périmés jamais servis et les consommés depuis plus de 90 jours, **sauf celui d'un agent actif** : il dit ce qui était demandé, contre quoi se lit ce que l'agent rapporte. La clé publique n'est pas un secret. Une valeur refusée (`machine.RefusedFields` : nom d'hôte RFC 1123, texte de 120 octets sans caractère de contrôle ; au flux, le système par `machine.IsSystemName`) n'est jamais écrite ; son refus l'est, la fiche le rend (`report_rejected`) jusqu'au champ redit valable ou au ré-enrôlement. La `050` a rejugé une fois, par ce même juge, ce qu'une base d'avant gardait : la valeur refusée effacée, son refus noté. Une machine retirée emporte ses agents, leurs droits et ses refus (cascade) |
 | Où tourne chaque machine, `state_dir` | `kagu.db` | Le type rapporté (`machines.kind`), la correction de l'opérateur (`kind_override`, `host_override`), les cartes réseau (`machine_interfaces` : nom, adresse MAC), les disques physiques (`machine_block_devices` : nom, modèle, taille, nature, amovible), les pools (`machine_storage_pools` : genre, niveau, état, taille, disques) et les grappes d'hyperviseurs (`hypervisor_clusters`, `machine_proxmox.cluster_id`) | Rien de secret : des noms de noyau et des adresses MAC. Chaque rapport de l'agent remplace les listes ; une machine retirée les emporte (cascade), une grappe sans hôte est retirée |
 | Machine Kagu, `state_dir` | `kagu.db` | Les tâches surveillées et leur jeton de ping, **chiffré** (AES-256-GCM, clé du serveur, lié à sa ligne) : la page doit le réafficher. Pour le retrouver à chaque ping, la colonne `token_lookup` garde son SHA-256 ; le chiffré est dans `token_sealed` | Une copie de la base seule ne livre pas les URL de ping ; elle donne l'empreinte, qui ne remonte pas au jeton (128 bits tirés au hasard). Qui a la base **et** `secret.key` les lit. Le jeton se régénère depuis la page de la tâche : l'ancienne URL cesse aussitôt de répondre, sans recréer la tâche. La machine d'une tâche, facultative, est en `restrict` : une machine à laquelle une tâche est rattachée ne se retire pas (409 `machine.has_heartbeats`), on détache la tâche d'abord |
 | Machine Kagu, `state_dir` | `kagu.db` | Les pings bruts (forme, source, méthode, corps tronqué à 10 Kio, **en clair**) et les exécutions (début, fin, durée, code, issue dont « manquée » : un retard sans exécution) | Purgés : pings après 7 jours, exécutions après 90 jours |
@@ -175,7 +175,7 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `/run` | `kagu-upgrade.lock` | Le verrou de `upgrade` (`flock`) : aucune donnée | Comme celui de `setup` |
 | Machine Kagu, `/usr/local/lib/kagu` | `kagu.previous` | Le binaire du serveur d'avant la dernière montée | root, `0755` ; remplacé à chaque montée |
 | Machine Kagu, `state_dir` | `control.sock` | La socket de commande, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/api/manifest/…` et, pour root seul, `/control/admin/…`. Une socket que personne n'écoute (arrêt brutal) est remplacée au démarrage suivant ; celle d'un `serve` vivant n'est jamais touchée | Mode 0600, et `state_dir` fermé au groupe et aux autres, sans quoi `serve` ne démarre pas. Elle n'est pas à sauvegarder |
-| Toute machine, la machine Kagu comprise, `/var/lib/kagu-agent` (au compte de l'agent, `kagu-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, identifiant de la machine et de l'agent (`agent_id`), adresse de Kagu (`https://…`, `http://…` ou `unix:<chemin absolu>`), empreinte du certificat, langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul ; ignorés dès que le dossier de la politique existe), les ancres (`anchors`), la version de politique que son binaire sait lire (`policy_format`), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`). `agent policy migrate` recopie droits, ancres et clé dans la politique puis les efface d'ici | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (aucun ordre ne change la clé) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/kagu`**, que le compte du serveur possède sur la machine Kagu : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
+| Toute machine, la machine Kagu comprise, `/var/lib/kagu-agent` (au compte de l'agent, `kagu-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, moitié privée de la paire X25519 (`seal_private_key`, R-B1-18 ; absente chez un agent d'avant), identifiant de la machine et de l'agent (`agent_id`), adresse de Kagu (`https://…`, `http://…` de la boucle ou `unix:<chemin absolu>`), langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul ; ignorés dès que le dossier de la politique existe), les ancres (`anchors`), la version de politique que son binaire sait lire (`policy_format`), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`). `agent policy migrate` recopie droits, ancres et clé dans la politique puis les efface d'ici | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (aucun ordre ne change la clé) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/kagu`**, que le compte du serveur possède sur la machine Kagu : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
 | Toute machine, la machine Kagu comprise, `/var/lib/kagu-agent` | `pending-rights.json` | Les droits que l'agent a refusés : nom, valeur d'un producteur, heure du dernier refus ; 32 au plus, 24 h chacun | Mode 0600, écrit par l'agent seul ; lu par `agent grant --pending` en root. L'effacer ne change aucun droit |
 | Toute machine passée par `agent policy migrate`, `/etc/kagu-agent` (à root, `0755`) | `policy.toml`, `policy.toml.lock` | La politique de l'agent : `version`, `machine_id`, un bloc `[[right]]` par droit, la clé du serveur acceptée (`[[server_key]]`), les ancres (`[anchors]`) (« La politique de l'agent ») ; le verrou de `grant`, `revoke`, `trust` et `policy migrate`, vide | `policy.toml` en `0640`, `root:kagu-agent` : l'agent la lit, son compte ne peut ni l'écrire ni la remplacer ; le verrou en `0600` à root. Aucun secret |
 | Toute machine, la machine Kagu comprise, `/var/lib/kagu-agent` | `bin/` et `update.json` | `bin/kagu-<version>` (la courante et la précédente, rien d'autre), les liens `bin/current` (ce que le lanceur exécute) et `bin/previous` (la version d'avant la dernière bascule), et le **marqueur** `update.json` : une mise à jour (ou un retour arrière) en attente de confirmation, avec son échéance, ou ce que le lanceur en a fait (« Comment un agent se met à jour », décision 9). Aucun secret : états, numéros de version, identifiant d'ordre | `0600` au compte de l'agent. Le marqueur disparaît à la confirmation, ou une fois son rapport livré au serveur ; un marqueur illisible est écarté |
@@ -208,65 +208,67 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
 
 ## Comment une machine entre
 
-1. L'opérateur nomme la machine, choisit son rôle (qui coche d'avance les droits
-   de son agent et décide de ses modules) et ajuste les droits (« Les droits
-   d'un agent », plus bas). Kagu tire un jeton, en garde
-   l'empreinte et les droits demandés, affiche le clair une seule fois avec la
-   commande à coller.
-2. Sur la machine, en **étapes** : le serveur rend avec le jeton la liste
-   `steps` (`installSteps`, `internal/edge/server/install_steps.go`), un bloc à coller
-   par étape, que la page montre en cases numérotées (`InstallSteps`), chacune
-   avec son bouton « Copier » ; **le jeton n'est que dans le bloc `enroll`**
-   (un test le garde). Dans l'ordre : `stop` (un ré-enrôlement seulement :
-   arrêter l'unité, supprimer `identity.json`) ; `binary` (sauf sur la machine
-   Kagu : `machine.ReleaseDownloadLines`, le binaire de la version du
-   serveur téléchargé à l'adresse des versions (`releases_url`, défaut
-   `brand.ReleaseBaseURL`, entre apostrophes), `SHA256SUMS` vérifié, posé dans
-   `/tmp/kagu` ; il s'arrête au premier échec. Le serveur n'offre pas son
-   binaire par HTTP : une version non publiée y échoue, 404) ; `prepare` ;
-   `enroll` ; `unit` (l'unité `kagu-agent.service` écrite par un heredoc
-   entre apostrophes, puis `daemon-reload` et `enable --now` ; son contenu,
-   `machine.AgentUnitLines`, est celui de `docs/installation/kagu-agent.service`
-   sans les commentaires, un test échoue s'ils diffèrent) ; `rights` (le drop-in
-   `droits.conf` : `ReadWritePaths=-<dossier>` de chaque dossier de droit,
-   `machine.RightFolders` — racine des services, `backup.receive`,
-   `restic.target`, `files.write` —, seulement quand un de ces droits est coché,
-   puis `restart` ; la même liste que pose `agent grant`).
-   Aucun renvoi à la documentation sur la page. **Aucun bloc ne nomme `sudo`** :
-   tous se jouent en root (`su -`), l'enrôlement prend le compte par
-   `runuser -u kagu-agent --`. La migration de l'agent (fiche › Agent,
-   `GET /api/agent-migration`, réservée à l'opérateur) rend deux blocs :
-   `commands` avec `sudo`, `root_commands` en root ; l'écran propose le second
-   d'office pour un hôte Proxmox ou quand l'agent dit `sudo_missing`
-   (`lacksSudo`), l'autre reste au choix. Chacun commence par le
-   téléchargement vérifié.
-   La **préparation** (`installPreparation`) se joue une fois en root : le compte `kagu-agent` (`useradd --system`, sans
-   shell, son dossier personnel est l'état de l'agent), le groupe `docker` s'il
-   existe, l'état à ce compte, puis **sous le compte** (`runuser`) `bin/` et le
-   binaire (`/tmp/kagu` copié par l'opérateur, `/usr/local/bin/kagu`
-   pour la machine Kagu) posé dans `bin/` sous la version du serveur avec
-   son lien `current`, puis un `install -d` au nom du compte par dossier où un
-   droit coché écrit (la racine des services, le dossier de `backup.receive`,
-   ceux de `files.write`), précédé de `test ! -L` ; un dossier sous un autre
-   dossier du compte se crée sous le compte. Root n'agit ainsi sur aucun nom
-   que le compte contrôle : la ligne se rejoue sur une machine déjà préparée,
-   et `install -d` suit un lien. Ensuite la
-   ligne : `printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://… -rights observe,…`
-   (`-rights` n'y est que si un droit dépasse `observe`). Le binaire est celui de
-   l'état, jamais un lien `/usr/local/bin/kagu` : root le lancerait, et le
-   compte de l'agent peut remplacer ce qu'il vise. Ni la préparation ni la
-   ligne ne portent d'autre texte que des constantes et des chemins de droits
-   (`ValidCapabilityPath` : lettres, chiffres, `. _ - /`) ; la préparation ne
-   porte jamais le jeton.
+1. L'opérateur nomme la machine, choisit son rôle (ses modules) et **un jeu de
+   droits** : trois cartes, « Observer », « Gérer », « Gérer en root » ; les
+   droits du jeu, groupés comme l'onglet Droits (`agentpolicy.Set.Groups`),
+   restent repliés sous « Voir le détail ». `GET /api/machines` rend l'offre
+   (`join` : `ready`, `domain_line`, `sets`). **Sans adresse publique en
+   `https://`** (`public_url`, `machine.JoinReady`), l'ajout est grisé avec
+   `sudo kagu setup --domain`, et `POST /api/machines/tokens` refuse
+   `409 machine.join_needs_domain` sans tirer de jeton (R-B1-13). Sinon Kagu
+   tire un jeton, en garde l'empreinte et, **pour l'écran seulement**, les
+   droits du jeu (`requested_capabilities`, lus avec la grammaire de la
+   politique) : aucun droit ne se pose depuis le jeton (R-DROIT-6).
+2. La réponse donne le jeton **à part** et la **ligne d'ajout**
+   (`machine.JoinLine`) : `curl -fsSL <versions>/<version>/install.sh | sudo sh
+   -s -- join --server https://… --server-key SHA256:… --rights <jeu>`. Le
+   script vient de l'adresse des versions (`releases_url` ; hors défaut, passée
+   par `KAGU_RELEASES`), jamais du serveur (R-B1-12). Le bouton « Copier » copie
+   **deux lignes** : la commande, puis le jeton (R-B1-10). Ré-enrôler donne la
+   même ligne, précédée de `machine.ReenrollLines` : deux commandes, l'une
+   après l'autre, sans enchaînement (arrêter l'agent ; retirer `identity.json`) ; la machine Kagu ne se ré-enrôle que par `setup`
+   (`409 machine.local_reenroll_by_setup`).
+   `install.sh … join` vérifie signature globale, version minimale et somme
+   du seul binaire de l'architecture ; si l'adresse des versions ne répond
+   pas, il prend les trois fichiers à la bibliothèque de serve
+   (`GET /releases/<version>/{SHA256SUMS,SHA256SUMS.minisig,kagu-linux-<arch>}`,
+   sans authentification ni jeton, `Library.OpenServed` qui revérifie avant
+   d'ouvrir), vérifiés de même par les clés du script. Puis `kagu join`
+   (`cmd/kagu/join.go`), en root, sous le verrou de setup :
+   - refuse un `--server` qui n'est pas `https://`, une empreinte mal formée
+     (`ident.IsKeyFingerprint`), une ligne sans `--rights` ;
+   - lit le jeton **avant** la question : sur `/dev/tty` sans écho (la
+     seconde ligne collée ; sinon il la demande), ou dans `--token-file` (à
+     root, `0600`, effacé dès l'ouverture, bon ou non). Sans terminal ni
+     fichier : refus ; `--token` n'existe pas ;
+   - dit ce qui change et demande `[o/N]` (`confirmOnTerminal`, la règle de
+     `confirmChange` : `--yes` seulement sans terminal) ;
+   - lit `GET /agent/server-key` (sans authentification, même seau que
+     l'enrôlement) et compare son empreinte à `--server-key`
+     (`agent.CheckServerKey`) : un écart arrête tout, **rien n'est envoyé**,
+     le jeton reste valable (`server_key_mismatch`) ;
+   - coche les étapes de B1 §3 qu'il sait vérifier, par les fonctions de
+     `setup` : système, compte (`kagu-agent`, dossier de la politique, état,
+     binaire, lanceur stable), enrôlement (`agent -enroll-only -server … 
+     -server-key …`, le jeton sur l'entrée standard), droits (unité posée,
+     puis `grant --set <jeu>` et la clé du serveur, `setupRun.layPolicy`),
+     service. Docker, restic, le dossier des services et le premier signal
+     viendront avec leurs étapes. Une identité déjà là pour ce serveur et
+     cette clé : « déjà fait », le jeton ne part pas ; pour un autre : refus.
+   - « Agent enrôlé » affiche l'empreinte de la clé de l'agent
+     (`ident.KeyFingerprint`), la même que la fiche montre (« Clé de
+     l'agent », `agent.key_fingerprint`).
+   L'enrôlement de l'agent (`agent.enroll`) compare aussi la clé : avant le
+   jeton (`-server-key` ; exigé pour un serveur qui n'est ni `unix:` ni la
+   boucle, `ErrServerKeyRequired`), puis dans la réponse ; un écart n'écrit
+   pas d'identité. L'agent ne parle à un serveur distant qu'en `https://`,
+   avec les autorités du système : `-allow-plain` et `-pin` n'existent plus.
    Le jeton entre par l'entrée standard de l'agent, lue seulement quand
    il n'a pas d'identité et reçoit `-server` (invite « Jeton
    d'enrôlement : » sur un terminal ; entrée vide ou fermée : refus, code 2).
-   Jamais dans les arguments d'un processus : `/proc/<pid>/cmdline` de
-   l'agent et de `sudo` se lit depuis tous les comptes de la machine, et le
-   premier qui copie le jeton prend l'identité (ou remplace la clé, au
-   ré-enrôlement) ; `printf` est une commande interne du shell, il ne
-   crée pas de processus. `-token` est refusé (code 2), avec un message qui
-   renvoie à l'entrée standard. L'agent déjà enrôlé ne lit jamais l'entrée (systemd).
+   Jamais dans les arguments d'un processus : `/proc/<pid>/cmdline` se lit
+   depuis tous les comptes de la machine. `-token` est refusé (code 2).
+   L'agent déjà enrôlé ne lit jamais l'entrée (systemd).
    `-enroll-only` s'arrête à l'identité : enrôlé, `identity.json` écrit comme
    d'habitude, l'agent sort (code 0) sans ouvrir le flux ni exécuter d'ordre ;
    déjà enrôlé, il sort aussitôt sans rien demander au serveur. Aucun Ctrl-C.
@@ -275,7 +277,11 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    l'agent de la machine Kagu, R-B1-7) : ni TLS, ni empreinte, ni mandataire ;
    un chemin relatif ou un autre schéma est refusé avant l'envoi du jeton.
    L'identité garde `unix:…` comme adresse. L'agent
-   tire une clé Ed25519 et un identifiant, envoie sa clé publique et le jeton.
+   tire une clé Ed25519, une paire X25519 et un identifiant, envoie ses deux
+   clés publiques et le jeton. La moitié privée X25519 reste dans
+   `identity.json` (`0600`, `seal_private_key`) ; le serveur garde la publique
+   (`agents.seal_public_key`, 32 octets ou nulle chez un agent d'avant,
+   migration 060) pour sceller le champ secret des ordres (R-B1-18, D3).
    Il joint l'empreinte (SHA-256, préfixée) de l'identifiant de la machine
    (`/etc/machine-id`, sinon `/var/lib/dbus/machine-id`) **et** de
    l'identifiant du démarrage (`/proc/sys/kernel/random/boot_id`) ; jamais
@@ -645,9 +651,9 @@ L'onglet Agent ne montre plus de droits : il y renvoie.
   sinon celle de `/api/session` (`pending_line`) quand l'écran construit le
   `fix` lui-même. Le droit se dit à côté (`rights.missing_right`, « Il manque
   le droit docker.deploy »), avec le chemin d'un droit borné, jamais dans la
-  ligne, et l'avertissement `rights.paste_only_pending` (« Une ligne venue de
-  Kagu est une seule commande `sudo kagu agent …`, sans « ; », « | », « && »
-  ni `--yes` : sinon, ne la collez pas », R-DROIT-8). À côté, hors d'une
+  ligne, et l'avertissement `rights.paste_only_pending` (« Une ligne de droits
+  venue de Kagu est une seule commande « sudo kagu agent … », sans « ; », « | »,
+  « && » ni « --yes » : sinon, ne la collez pas. », R-DROIT-8, ARB-4). À côté, hors d'une
   carte étroite, le bouton « Demander ce droit à la machine » (`RequestRight`,
   « Demander un droit à la machine » ci-dessous). Une liste qui ne porte qu'un lien (choix d'une machine,
   menu d'une VM) mène à l'onglet Agent de la fiche avec `?droit=<nom>`
@@ -779,13 +785,19 @@ ligne suivante, l'avertissement ci-dessous. Un droit posé en
 sort à la **prochaine relecture de la politique dans un agent déjà lancé**
 (`reloadPolicy`, `previous != nil`), pas au redémarrage qui suit `grant`.
 
-**Une ligne venue de Kagu est une seule commande « sudo kagu agent … », sans « ; », « | », « && » ni « --yes » : sinon, ne la collez pas.**
+**Une ligne de droits venue de Kagu est une seule commande « sudo kagu agent … », sans « ; », « | », « && » ni « --yes » : sinon, ne la collez pas.**
 Un serveur pris sert aussi l'écran et peut en retirer l'avertissement : la
 doc d'installation le porte aussi (« Coller une ligne de Kagu en root »), et
 elle vient du dépôt et de la version signée, pas du serveur. Une seule clé
-d'écran, `rights.paste_only_pending`, le dit sous chaque ligne à coller
-(`RootCommand` : `grant --pending`, `grant --set`, `revoke`, `policy migrate`,
-`trust`) et dans la sortie de `grant --pending`. Chaque commande imprime ce
+d'écran, `rights.paste_only_pending`, le dit sous chaque commande de l'agent
+à coller, et sous elles seules (`RootCommand` : `grant --pending`, `grant
+--set`, `revoke`, `policy migrate`, `trust` ; ARB-4), et dans la sortie de
+`grant --pending`. `composition.test.ts` tient la liste fermée de ce que
+`RootCommand` reçoit ; `agentpolicy.AgentLine` refuse tout enchaînement et
+`-yes`. Les autres lignes (ligne d'ajout, ré-enrôlement, `chmod`/`chown` d'une
+politique refusée, `setup --domain`) passent par `TokenBox`, sans cet
+avertissement ; la ligne d'ajout porte sa note (`machine.join_line_check`) et
+sa forme attendue est dans la doc d'installation (`TestR_B1_12_DocsCarryTheJoinLineForm`). Chaque commande imprime ce
 qu'elle change et demande `[o/N]` au clavier, N par défaut : Entrée seule ou
 un pipe ne changent rien.
 
@@ -7842,7 +7854,7 @@ refusés avant d'envoyer quoi que ce soit.
 | Les unités systemd ne se relèvent qu'au niveau du système, en nom et en état | Les unités d'un utilisateur (`systemctl --user`) ne sont pas vues ; la description, le processus, le fichier et l'environnement d'une unité ne sont jamais lus ; le **port** d'un binaire ne se déduit pas (il demanderait `/proc/<pid>/fd`, donc `ptrace`) : il se déclare. Les liens entre instances viennent avec L3 (déclarés), L4 (déduits) et L5 (environnement, sous `observe.env`) | Une décision de Lucas, si un jour le port doit se déduire (droit élevé : refusé par la décision 5 de l'étude) |
 | Un jeton d'API n'écrit que par ses verbes | Aucun verbe ne marque une alerte comme lue, ne met un canal en pause ni n'ouvre un incident : mcp-maison ne peut pas le faire. La liste des verbes (« Les verbes d'un jeton en écriture ») fait seule foi | À décider |
 | Les journaux de conteneur partent chez le fournisseur du modèle | Ce qu'un agent IA lit par mcp-maison, journaux de conteneur compris, quitte la machine, comme tout ce qu'il lit ; c'est le choix de l'opérateur qui crée un jeton et branche mcp-maison | Par conception |
-| TLS servi par Kagu lui-même | Sans Traefik ni domaine, il faut `-pin` sur un certificat tiers | À part |
+| TLS servi par Kagu lui-même | Sans Traefik ni domaine, aucune machine ne s'ajoute (`-pin` retiré) | À part |
 | Téléchargement du binaire | La commande d'installation suppose le binaire présent : il se télécharge ou se compile, et se copie à la main. Une version signée se vérifie (`release verify`), la clé de version est posée depuis le 23/10/2026 : la `v0.0.1` est non signée et n'embarque pas la clé, donc la première version signée s'installe à la main, serveur et agents (`agent.update` refuse sans clé). Des unités systemd d'exemple sont dans `docs/installation/`, non testées sous systemd | À part, avec `make release` |
 | Spool côté agent | Une coupure de plus d'une heure, ou un redémarrage de l'agent, perd des mesures : un trou dans l'historique | Avec les premiers événements à rejouer |
 | Pas d'historique par volume | Les graphes et la vue d'ensemble montrent la somme des volumes ; le détail par volume n'existe que pour la valeur courante | À décider |

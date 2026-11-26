@@ -2,8 +2,10 @@ import type { AgentRights, PolicyRefusal, RightState, RightsGroup } from "../api
 import type { Translate } from "../i18n/context";
 import { useT } from "../i18n/context";
 import { alwaysGranted, capabilityLabelKey } from "../lib/machines";
+import { rightsSetLabels, rightsSetPhrases } from "../lib/rights";
 import { formatWhen } from "../lib/time";
 import { Card, CardBody, CardHeader, Note } from "./Card";
+import { TokenBox } from "./Copy";
 import { Fold } from "./Disclosure";
 import { Pill } from "./Pill";
 import { RequestRight } from "./RequestRight";
@@ -21,11 +23,11 @@ export function RightsList({ rights, refusal = null, machineID, machineName, now
   return (
     <>
       <Card>
-        <CardHeader title={t("rights.set_title", machineName)} aside={<Pill tone={rights.set === "refused" ? "danger" : "accent"}>{t(setLabels[rights.set])}</Pill>} />
+        <CardHeader title={t("rights.set_title", machineName)} aside={<Pill tone={rights.set === "refused" ? "danger" : "accent"}>{t(rightsSetLabels[rights.set])}</Pill>} />
         <CardBody gap={10}>
           {rights.root_here && <Note tone="danger">{t("rights.root_here", machineName)}</Note>}
           {refusal !== null && <RefusalNote refusal={refusal} />}
-          <p>{t(setPhrases[rights.set])}</p>
+          <p>{t(rightsSetPhrases[rights.set])}</p>
           <p className="secondary">{t("rights.how", machineName)}</p>
         </CardBody>
       </Card>
@@ -37,7 +39,7 @@ export function RightsList({ rights, refusal = null, machineID, machineName, now
         <CardBody gap={12}>
           {rights.set_lines.map((setLine) => (
             <div key={setLine.set}>
-              <strong>{t(setLabels[setLine.set])}</strong>
+              <strong>{t(rightsSetLabels[setLine.set])}</strong>
               <RootCommand command={setLine.line} notes={[t("rights.paste_shows_change")]} />
             </div>
           ))}
@@ -47,33 +49,22 @@ export function RightsList({ rights, refusal = null, machineID, machineName, now
   );
 }
 
-// Le nom d'un jeu, et sa phrase : ce qu'il donne, ou ce qu'il coûte
-// (R-A3-13).
-const setLabels: Record<AgentRights["set"], string> = {
-  observe: "rights.observe",
-  manage: "rights.manage",
-  root: "rights.root",
-  "": "rights.custom",
-  refused: "rights.refused",
-};
-const setPhrases: Record<AgentRights["set"], string> = {
-  observe: "rights.observe_hint",
-  manage: "rights.manage_risk",
-  root: "rights.root_risk",
-  "": "rights.custom_hint",
-  refused: "rights.refused_hint",
-};
-
 // Une politique refusée : seul observe s'applique, la raison que l'agent
 // rapporte avec ce qu'elle nomme (un chemin, une clé : texte de la machine,
-// affiché brut), et la commande que le serveur écrit quand elle existe.
+// affiché brut), et la commande que le serveur écrit quand elle existe :
+// chmod ou chown, pas une commande de l'agent, donc sans RootCommand (ARB-4).
 function RefusalNote({ refusal }: { refusal: PolicyRefusal }) {
   const t = useT();
   return (
     <Note tone="danger">
       <p>{t("rights.refusal_title", t(capabilityLabelKey(alwaysGranted)))}</p>
       <p>{t(refusalReasons[refusal.reason], refusal.detail)}</p>
-      {refusal.fix_line !== "" && <RootCommand command={refusal.fix_line} />}
+      {refusal.fix_line !== "" && (
+        <>
+          <p className="secondary">{t("anchor.run_command")}</p>
+          <TokenBox value={refusal.fix_line} />
+        </>
+      )}
     </Note>
   );
 }

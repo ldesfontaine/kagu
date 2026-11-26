@@ -135,7 +135,8 @@ func TestAudit_OperatorGesturesAreJournaledUnderTheirIdentityWithoutSecrets(t *t
 	expect(token, http.StatusCreated)
 	var apiToken apiTokenCreated
 	decodeAPI(t, token, &apiToken)
-	enrollment := callAsOperator(server.Server, http.MethodPost, "/api/machines/tokens", testPassword, tokenRequest{Name: "vps-lyon-2"})
+	server.publicURL = "https://kagu.exemple.fr"
+	enrollment := callAsOperator(server.Server, http.MethodPost, "/api/machines/tokens", testPassword, tokenRequest{Name: "vps-lyon-2", Set: "observe"})
 	expect(enrollment, http.StatusCreated)
 	var enrollmentToken tokenResponse
 	decodeAPI(t, enrollment, &enrollmentToken)

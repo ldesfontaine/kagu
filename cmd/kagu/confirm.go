@@ -38,21 +38,29 @@ func isYes(answer string) bool {
 // -yes, elle refuse : rien ne s'écrit jamais sans accord.
 func confirmChange(out io.Writer, openTerminal terminalOpener, yes bool, text lang.Catalog) func(agent.PolicyChange) error {
 	return func(change agent.PolicyChange) error {
-		terminal, err := openTerminal()
-		if err != nil {
-			printPolicyChange(out, text, change)
-			if yes {
-				return nil
-			}
-			return &refusal{message: text.Get("agent.confirm_needs_tty")}
-		}
-		defer terminal.Close()
-		if yes {
-			fmt.Fprintln(out, text.Get("agent.confirm_yes_ignored"))
-		}
-		printPolicyChange(out, text, change)
-		return askOn(out, terminal, text)
+		return confirmOnTerminal(out, openTerminal, yes, text, func() { printPolicyChange(out, text, change) })
 	}
+}
+
+// confirmOnTerminal imprime ce qui change (describe), puis demande [o/N] au
+// clavier ; -yes ne vaut que sans terminal, et sans terminal ni -yes rien ne
+// se fait. La règle de confirmChange, pour qui dit le changement autrement
+// (join).
+func confirmOnTerminal(out io.Writer, openTerminal terminalOpener, yes bool, text lang.Catalog, describe func()) error {
+	terminal, err := openTerminal()
+	if err != nil {
+		describe()
+		if yes {
+			return nil
+		}
+		return &refusal{message: text.Get("agent.confirm_needs_tty")}
+	}
+	defer terminal.Close()
+	if yes {
+		fmt.Fprintln(out, text.Get("agent.confirm_yes_ignored"))
+	}
+	describe()
+	return askOn(out, terminal, text)
 }
 
 // askOnTerminal pose la question sur le terminal de contrôle ; sans terminal

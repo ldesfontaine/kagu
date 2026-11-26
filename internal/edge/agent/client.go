@@ -4,11 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"crypto/tls"
-	"crypto/x509"
+	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +23,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/container"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -77,13 +75,15 @@ func (e *ServerError) Permanent() bool {
 var (
 	// ErrPlainRefused : le serveur est en http:// et n'est pas sur cette
 	// machine ; le jeton et les signaux passeraient en clair sur le réseau.
+	// Il n'y a pas d'exception (R-B1-13).
 	ErrPlainRefused = errors.New("plain http to a remote server refused")
-	// ErrPinMismatch : le certificat présenté n'est pas celui épinglé ; il a
-	// changé, ou quelqu'un se fait passer pour Kagu.
-	ErrPinMismatch = errors.New("certificate does not match the pin")
 	// ErrSocketNotAbsolute : -server unix: ne vise qu'un chemin absolu ; un
 	// chemin relatif dépendrait du dossier où l'agent est lancé.
 	ErrSocketNotAbsolute = errors.New("unix socket path must be absolute")
+	// ErrServerKeyMismatch : la clé que le serveur présente n'a pas
+	// l'empreinte de la ligne collée ; quelqu'un peut se trouver entre la
+	// machine et Kagu (R-B1-13, R-DROIT-9).
+	ErrServerKeyMismatch = errors.New("the server key does not match the expected fingerprint")
 )
 
 // unixScheme désigne un serveur de cette machine joint par sa socket Unix :
@@ -177,10 +177,10 @@ func (c *Client) SetRightsUntil(until map[string]time.Time) {
 	c.rightsUntil = agentpolicy.FormatRightsUntil(until)
 }
 
-// NewClient refuse http:// vers autre chose que la boucle locale, sauf si
-// allowPlain le dit : un tunnel WireGuard ou un LAN de confiance, en
-// connaissance de cause. unix:<chemin absolu> passe par la socket locale.
-func NewClient(server, pin, version string, allowPlain bool) (*Client, error) {
+// NewClient refuse http:// vers autre chose que la boucle locale : un
+// serveur distant ne se joint qu'en HTTPS, avec les autorités du système
+// (R-B1-13). unix:<chemin absolu> passe par la socket locale.
+func NewClient(server, version string) (*Client, error) {
 	if socket, ok := strings.CutPrefix(server, unixScheme); ok {
 		return newSocketClient(socket, version)
 	}
@@ -188,18 +188,10 @@ func NewClient(server, pin, version string, allowPlain bool) (*Client, error) {
 	if !strings.HasPrefix(server, "http://") && !strings.HasPrefix(server, "https://") {
 		return nil, fmt.Errorf("server url must start with http:// or https://, or be unix:<absolute path>")
 	}
-	if strings.HasPrefix(server, "http://") && !allowPlain && !isLoopback(server) {
+	if strings.HasPrefix(server, "http://") && !isLoopback(server) {
 		return nil, ErrPlainRefused
 	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	if pin != "" {
-		tlsConfig, err := pinnedTLS(pin)
-		if err != nil {
-			return nil, err
-		}
-		transport.TLSClientConfig = tlsConfig
-	}
-	return newClientOver(server, transport, version), nil
+	return newClientOver(server, http.DefaultTransport.(*http.Transport).Clone(), version), nil
 }
 
 // newSocketClient parle au serveur par la socket Unix de cette machine, et
@@ -252,29 +244,47 @@ func isLoopback(server string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// pinnedTLS accepte un seul certificat, celui dont l'empreinte SHA-256 est
-// donnée : le cas d'un Kagu sans domaine, au certificat auto-signé.
-func pinnedTLS(pin string) (*tls.Config, error) {
-	expected, err := hex.DecodeString(strings.TrimPrefix(strings.ToLower(pin), "sha256:"))
-	if err != nil || len(expected) != sha256.Size {
-		return nil, fmt.Errorf("pin must be the sha256 fingerprint of the certificate, in hex")
+// ServerKey lit la clé publique qui signe les ordres, sans rien présenter :
+// c'est ce que l'agent compare avant d'envoyer son jeton.
+func (c *Client) ServerKey(ctx context.Context) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	request, err := c.newRequest(ctx, http.MethodGet, agentwire.ServerKeyRoute, nil)
+	if err != nil {
+		return nil, err
 	}
-	return &tls.Config{
-		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: true, // #nosec G402 -- la chaîne n'est pas vérifiée, l'empreinte l'est, juste en dessous.
-		VerifyConnection: func(state tls.ConnectionState) error {
-			if len(state.PeerCertificates) == 0 {
-				return errors.New("no certificate presented")
-			}
-			return verifyPin(state.PeerCertificates[0], expected)
-		},
-	}, nil
+	var answer agentwire.ServerKeyResponse
+	if err := c.doJSON(request, &answer); err != nil {
+		return nil, fmt.Errorf("read the server key: %w", err)
+	}
+	return decodeServerKey(answer.ServerKey)
 }
 
-func verifyPin(certificate *x509.Certificate, expected []byte) error {
-	sum := sha256.Sum256(certificate.Raw)
-	if !bytes.Equal(sum[:], expected) {
-		return fmt.Errorf("%w: fingerprint %x", ErrPinMismatch, sum)
+// decodeServerKey lit une clé du serveur en base64 ; autre chose qu'une clé
+// Ed25519 n'en est pas une.
+func decodeServerKey(encoded string) ([]byte, error) {
+	key, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(key) != ed25519.PublicKeySize {
+		return nil, ErrServerKeyMissing
+	}
+	return key, nil
+}
+
+// CheckServerKey lit la clé que le serveur présente et la compare à
+// l'empreinte attendue, celle de la ligne collée : join et l'enrôlement le
+// font avant que le jeton parte (R-B1-13). Rend la clé reconnue.
+func CheckServerKey(ctx context.Context, client *Client, expected string) ([]byte, error) {
+	key, err := client.ServerKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return key, sameServerKey(key, expected)
+}
+
+// sameServerKey compare une clé à l'empreinte attendue.
+func sameServerKey(key []byte, expected string) error {
+	if got := ident.KeyFingerprint(key); got != expected {
+		return fmt.Errorf("%w: %s presented, %s expected", ErrServerKeyMismatch, got, expected)
 	}
 	return nil
 }
@@ -290,6 +300,7 @@ func (c *Client) Enroll(ctx context.Context, identity Identity, token string, in
 		AgentVersion: c.version,
 
 		HostFingerprint: info.HostFingerprint,
+		SealPublicKey:   base64.StdEncoding.EncodeToString(identity.SealPublicKey()),
 	}
 	var response agentwire.EnrollResponse
 	if err := c.postJSON(ctx, "/agent/enroll", request, &response); err != nil {
@@ -511,6 +522,12 @@ func (c *Client) postJSON(ctx context.Context, path string, payload, into any) e
 		return err
 	}
 	request.Header.Set("Content-Type", "application/json")
+	return c.doJSON(request, into)
+}
+
+// doJSON envoie la requête et lit sa réponse JSON, bornée ; un statut hors de
+// 2xx est le refus du serveur.
+func (c *Client) doJSON(request *http.Request, into any) error {
 	response, err := c.http.Do(request)
 	if err != nil {
 		return err

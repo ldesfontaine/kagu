@@ -13,8 +13,8 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
-	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // kagu agent trust list | add <type> <valeur> | remove <type> <valeur>
@@ -106,7 +106,7 @@ func printTrustList(out io.Writer, text lang.Catalog, applied agent.AppliedPolic
 		fmt.Fprintf(out, "%s\t%s\n", agentpolicy.TrustServerKey, text.Get("agent.trust_list_none"))
 	}
 	for _, key := range applied.ServerKeys {
-		fmt.Fprintf(out, "%s\t%s\n", agentpolicy.TrustServerKey, agentwire.KeyFingerprint(key))
+		fmt.Fprintf(out, "%s\t%s\n", agentpolicy.TrustServerKey, ident.KeyFingerprint(key))
 	}
 	printAnchors(out, text, anchor.FromFile(applied.Anchors))
 }

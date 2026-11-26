@@ -102,16 +102,11 @@ func (r *setupRun) prepareAccounts(context.Context) (step.State, string, error) 
 		{brand.ServerAccount, r.paths.stateDir},
 		{brand.AgentAccount, r.paths.agentStateDir},
 	} {
-		_, found, err := r.system.Account(account.name)
+		created, err := r.ensureAccount(account.name, account.home)
 		if err != nil {
 			return "", "", err
 		}
-		if !found {
-			if err := r.system.Run("useradd", "--system", "--home-dir", account.home, "--shell", noLoginShell, account.name); err != nil {
-				return "", "", err
-			}
-			changed = true
-		}
+		changed = changed || created
 	}
 	root, server, agentAccount, err := r.accounts()
 	if err != nil {
@@ -151,20 +146,39 @@ func (r *setupRun) prepareAccounts(context.Context) (step.State, string, error) 
 	return step.StateDone, r.doneDetail(changed, ""), nil
 }
 
+// ensureAccount crée le compte système s'il manque, sans connexion
+// possible. Rend vrai s'il a fallu le créer.
+func (r *setupRun) ensureAccount(name, home string) (bool, error) {
+	_, found, err := r.system.Account(name)
+	if err != nil || found {
+		return false, err
+	}
+	return true, r.system.Run("useradd", "--system", "--home-dir", home, "--shell", noLoginShell, name)
+}
+
 // accounts rend root, le compte du serveur et celui de l'agent.
 func (r *setupRun) accounts() (root, server, agentAccount fsx.Owner, err error) {
 	owners := make([]fsx.Owner, 0, 3)
 	for _, name := range []string{"root", brand.ServerAccount, brand.AgentAccount} {
-		owner, found, err := r.system.Account(name)
+		owner, err := r.account(name)
 		if err != nil {
 			return root, server, agentAccount, err
-		}
-		if !found {
-			return root, server, agentAccount, fmt.Errorf("account %s is missing", name)
 		}
 		owners = append(owners, owner)
 	}
 	return owners[0], owners[1], owners[2], nil
+}
+
+// account rend un compte qui doit exister.
+func (r *setupRun) account(name string) (fsx.Owner, error) {
+	owner, found, err := r.system.Account(name)
+	if err != nil {
+		return fsx.Owner{}, err
+	}
+	if !found {
+		return fsx.Owner{}, fmt.Errorf("account %s is missing", name)
+	}
+	return owner, nil
 }
 
 // doneDetail dit « déjà fait » quand l'étape n'a rien eu à faire.
@@ -399,7 +413,7 @@ func (r *setupRun) installLocalAgent(ctx context.Context) (step.State, string, e
 	if err != nil {
 		return "", "", err
 	}
-	laid, err := r.layLocalPolicy(stateRoot, identity)
+	laid, err := r.layPolicy(stateRoot, identity, localPolicyRights)
 	if err != nil {
 		return "", "", err
 	}
@@ -534,26 +548,31 @@ func isRefusal(body []byte, sentinel error) bool {
 	return json.Unmarshal(body, &refused) == nil && refused.Error == key
 }
 
-// layLocalPolicy écrit la politique de l'agent de la machine Kagu par le
-// chemin de « agent grant » (R-B1-6) : le jeu, puis backup.receive sur le
-// dossier des sauvegardes de la base, quel que soit le jeu (R-SAUV-2), puis
-// la clé du serveur que l'agent a reçue par la socket. Rend vrai si quelque
-// chose a changé ou a été posé.
-func (r *setupRun) layLocalPolicy(stateRoot *os.Root, identity agent.Identity) (bool, error) {
+// localPolicyRights : ce que la machine Kagu reçoit en plus de son jeu,
+// quel que soit le jeu : backup.receive sur le dossier des sauvegardes de la
+// base (R-SAUV-2).
+var localPolicyRights = []agentpolicy.Capability{{Name: agentpolicy.CapabilityBackupReceive, Paths: []string{brand.AgentDatabaseBackupsDir}}}
+
+// layPolicy écrit la politique de l'agent par le chemin de « agent grant »
+// (R-B1-6) : le jeu, puis les droits en plus (extra, vide pour join), puis
+// la clé du serveur que l'agent a épinglée à l'enrôlement. Rend vrai si
+// quelque chose a changé ou a été posé.
+func (r *setupRun) layPolicy(stateRoot *os.Root, identity agent.Identity, extra []agentpolicy.Capability) (bool, error) {
 	place, err := r.place(stateRoot)
 	if err != nil {
 		return false, err
 	}
 	opts := agent.PolicyOptions{StateDir: stateRoot, StatePath: r.paths.agentStateDir, Place: place, EUID: r.euid, Audit: r.audit, System: r.system}
-	backups := []agentpolicy.Capability{{Name: agentpolicy.CapabilityBackupReceive, Paths: []string{brand.AgentDatabaseBackupsDir}}}
 	serverKey := agent.TrustRequest{Verb: agent.TrustSet, Kind: agentpolicy.TrustServerKey, Value: base64.StdEncoding.EncodeToString(identity.ServerKey)}
 	gestures := []func() (agent.PolicyChange, error){
 		func() (agent.PolicyChange, error) { return agent.GrantSet(opts, r.rights, r.announceRoot) },
-		func() (agent.PolicyChange, error) {
-			return agent.GrantRights(opts, backups, agentpolicy.Term{}, r.announceRoot)
-		},
-		func() (agent.PolicyChange, error) { return agent.Trust(opts, serverKey, r.announceRoot) },
 	}
+	if len(extra) > 0 {
+		gestures = append(gestures, func() (agent.PolicyChange, error) {
+			return agent.GrantRights(opts, extra, agentpolicy.Term{}, r.announceRoot)
+		})
+	}
+	gestures = append(gestures, func() (agent.PolicyChange, error) { return agent.Trust(opts, serverKey, r.announceRoot) })
 	changed := false
 	for _, gesture := range gestures {
 		change, err := gesture()

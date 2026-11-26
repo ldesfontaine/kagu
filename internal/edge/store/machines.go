@@ -20,7 +20,7 @@ const machineSelect = `SELECT m.id, m.name, m.hostname, m.address, m.os, m.arch,
 		m.kind, m.kind_override, m.host_override,
 		a.id, a.public_key, a.version, a.root_dir, a.enrolled_at, a.last_seen_at, a.revoked_at,
 		a.server_key_fingerprint, a.run_as_uid, a.run_as_name, t.requested_capabilities, a.rollback_version, a.anchors, a.service_rollback_version,
-		a.policy_source, a.policy_digest, a.policy_refusal, a.policy_refusal_detail, a.protocol, a.rights_until, a.root_equivalent, a.order_kinds
+		a.policy_source, a.policy_digest, a.policy_refusal, a.policy_refusal_detail, a.protocol, a.rights_until, a.root_equivalent, a.order_kinds, a.seal_public_key
 	FROM machines m
 	LEFT JOIN agents a ON a.id = (
 		SELECT id FROM agents WHERE machine_id = m.id
@@ -491,9 +491,9 @@ func reenroll(ctx context.Context, tx *sql.Tx, m machine.Machine, now time.Time)
 
 func insertAgent(ctx context.Context, tx *sql.Tx, agent machine.Agent) error {
 	_, err := tx.ExecContext(ctx, `
-		INSERT INTO agents (id, machine_id, public_key, version, enrolled_at)
-		VALUES (?, ?, ?, ?, ?)`,
-		agent.ID, agent.MachineID, agent.PublicKey, agent.Version, agent.EnrolledAt.Unix())
+		INSERT INTO agents (id, machine_id, public_key, seal_public_key, version, enrolled_at)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		agent.ID, agent.MachineID, agent.PublicKey, agent.SealPublicKey, agent.Version, agent.EnrolledAt.Unix())
 	if err != nil {
 		return fmt.Errorf("insert agent: %w", err)
 	}
@@ -554,14 +554,14 @@ func scanMachine(row scanner) (machine.Machine, error) {
 	var role, kind string
 	var kindOverride, hostOverride sql.NullString
 	var agentID, version, rootDir, serverKey, runAsName, requested sql.NullString
-	var publicKey []byte
+	var publicKey, sealPublicKey []byte
 	var enrolledAt, lastSeenAt, revokedAt, runAsUID sql.NullInt64
 	var rollbackVersion, serviceRollbackVersion sql.NullInt64
 	var anchors, policySource, policyDigest, policyRefusal, policyRefusalDetail, protocol, rightsUntil, orderKinds sql.NullString
 	var rootEquivalent sql.NullBool
 	err := row.Scan(&m.ID, &m.Name, &m.Hostname, &m.Address, &m.OS, &m.Arch, &createdAt, &m.UpdateLast, &role, &kind, &kindOverride, &hostOverride,
 		&agentID, &publicKey, &version, &rootDir, &enrolledAt, &lastSeenAt, &revokedAt, &serverKey, &runAsUID, &runAsName, &requested, &rollbackVersion, &anchors, &serviceRollbackVersion,
-		&policySource, &policyDigest, &policyRefusal, &policyRefusalDetail, &protocol, &rightsUntil, &rootEquivalent, &orderKinds)
+		&policySource, &policyDigest, &policyRefusal, &policyRefusalDetail, &protocol, &rightsUntil, &rootEquivalent, &orderKinds, &sealPublicKey)
 	if err != nil {
 		return machine.Machine{}, err
 	}
@@ -572,7 +572,7 @@ func scanMachine(row scanner) (machine.Machine, error) {
 		return m, nil
 	}
 	m.Agent = machine.Agent{
-		ID: agentID.String, MachineID: m.ID, PublicKey: publicKey,
+		ID: agentID.String, MachineID: m.ID, PublicKey: publicKey, SealPublicKey: sealPublicKey,
 		Version: version.String, RootDir: rootDir.String, ServerKeyFingerprint: serverKey.String,
 		EnrolledAt: time.Unix(enrolledAt.Int64, 0),
 		LastSeenAt: timeOrZero(lastSeenAt), RevokedAt: timeOrZero(revokedAt),
@@ -596,7 +596,7 @@ func scanMachine(row scanner) (machine.Machine, error) {
 	m.Agent.Anchors, _ = anchor.Parse(anchors.String)
 	// Une liste illisible en base ne se montre pas : il n'y a rien à comparer.
 	if requested.String != "" {
-		m.Agent.Requested, _ = agentpolicy.ParseCapabilities(requested.String)
+		m.Agent.Requested, _ = agentpolicy.ParsePolicyRights(requested.String)
 	}
 	m.LastSeenAt = m.Agent.LastSeenAt
 	return m, nil

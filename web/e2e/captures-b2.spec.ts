@@ -70,13 +70,4 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByRole("listbox")).toBeVisible();
     await shoot(page, "acceder-menu", theme);
   });
-
-  test(`enrôlement avec restic.docker ${theme}`, async ({ page }) => {
-    await open(page, theme, "/machines/nouvelle");
-    const dialog = page.locator("dialog[open]");
-    await dialog.getByLabel(label("machine.name_label")).fill("vps-essai-2");
-    await dialog.getByText(label("machine.rights_advanced")).click();
-    await dialog.getByLabel(label("machine.capability_restic_docker")).check();
-    await shoot(page, "droit-restic-docker", theme);
-  });
 }

@@ -44,7 +44,6 @@ func (s *Server) routes() []route {
 		{"GET", "/api/machines", s.listMachines},
 		{"POST", "/api/machines/tokens", s.grantsAuthority(s.createMachineToken)},
 		{"DELETE", "/api/machines/tokens/{id}", s.cancelMachineToken},
-		{"POST", "/api/machines/local-enrollment", s.grantsAuthority(s.offerLocalEnrollment)},
 		{"GET", "/api/machines/{id}", s.getMachine},
 		{"DELETE", "/api/machines/{id}", s.removeMachine},
 		{"GET", "/api/machines/{id}/delete-plan", s.getMachineDeletePlan},
@@ -234,6 +233,7 @@ func (s *Server) routes() []route {
 		{"POST", "/api/machines/{id}/restic-backups/{backup}/actions/browse", s.browseResticBackup},
 		{"POST", "/api/machines/{id}/restic-backups/{backup}/actions/restore", s.restoreResticBackup},
 		{anyMethod, "/api/", s.apiUnknown},
+		{"GET", releaseFilesPattern, s.serveReleaseFile},
 	}
 	add := func(method, pattern string, handler http.HandlerFunc) {
 		routes = append(routes, route{method, pattern, handler})
@@ -283,6 +283,7 @@ var transferRoutes = []string{
 	"GET " + agentwire.ParcelRoute + "{parcel}/{name}", "PUT " + agentwire.ParcelRoute + "{parcel}/{name}",
 	anyMethod + " " + agentwire.ResticRelayRoute + "{target}/",
 	"GET " + agentwire.ResticRelayBodyRoute + "{id}", "POST " + agentwire.ResticRelayResponseRoute + "{id}",
+	"GET " + releaseFilesPattern,
 }
 
 // Les routes qui ont leur propre durée d'écriture : browse, qui attend la

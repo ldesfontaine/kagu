@@ -27,7 +27,6 @@ export const writes = [
   "DELETE /api/settings/api-tokens/{id}",
   "POST /api/machines/tokens",
   "DELETE /api/machines/tokens/{id}",
-  "POST /api/machines/local-enrollment",
   "DELETE /api/machines/{id}",
   "POST /api/machines/{id}/actions/reenroll",
   "POST /api/machines/{id}/actions/ping",

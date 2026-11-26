@@ -11,13 +11,10 @@ func TestProxmoxRights_TakeNoScopeAndAreRoundTripped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if text := agentpolicy.FormatCapabilities(parsed); text != "observe,proxmox.power,proxmox.snapshot" || !ProxmoxRights(parsed) {
+	if text := agentpolicy.FormatCapabilities(parsed); text != "observe,proxmox.power,proxmox.snapshot" {
 		t.Fatalf("%q", text)
 	}
 	if _, err := agentpolicy.ParseCapabilities("proxmox.power=/srv"); err == nil {
 		t.Error("a scope was accepted")
-	}
-	if ProxmoxRights([]agentpolicy.Capability{{Name: agentpolicy.CapabilityObserve}}) {
-		t.Error("observe is not a Proxmox right")
 	}
 }

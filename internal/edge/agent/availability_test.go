@@ -283,7 +283,7 @@ func reasonsOf(t *testing.T, rights string, checks hostChecks) map[string]string
 	if err != nil {
 		t.Fatal(err)
 	}
-	identity, err := NewIdentity("http://127.0.0.1:1", "", "fr", capabilities)
+	identity, err := NewIdentity("http://127.0.0.1:1", "fr", capabilities)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,7 +356,7 @@ func TestJudgeRights_ANarrowedAgentSaysNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	identity, err := NewIdentity("http://127.0.0.1:1", "", "fr", capabilities)
+	identity, err := NewIdentity("http://127.0.0.1:1", "fr", capabilities)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,7 +481,7 @@ func TestJudgeRights_ProduceIsNotJudgedByANarrowedAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	identity, err := NewIdentity("http://127.0.0.1:1", "", "fr", capabilities)
+	identity, err := NewIdentity("http://127.0.0.1:1", "fr", capabilities)
 	if err != nil {
 		t.Fatal(err)
 	}

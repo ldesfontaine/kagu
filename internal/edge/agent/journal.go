@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // Le journal local des ordres (journald) : pour chaque ordre reçu, de quoi
@@ -49,7 +49,7 @@ func factsOf(signedBody, signingKey []byte) signedFacts {
 	sum := sha256.Sum256(signedBody)
 	facts := signedFacts{bodySHA256: hex.EncodeToString(sum[:])}
 	if len(signingKey) > 0 {
-		facts.signingKey = agentwire.KeyFingerprint(signingKey)
+		facts.signingKey = ident.KeyFingerprint(signingKey)
 	}
 	return facts
 }

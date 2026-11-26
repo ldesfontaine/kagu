@@ -65,7 +65,7 @@ Les fichiers d'exemple sont dans [`docs/installation/`](installation/) :
 | `make`, `git` | — | Compiler |
 | Docker | API 1.41 ou plus (Docker 20.10+) | Facultatif : suivre les conteneurs d'une machine |
 | Traefik | v3 | Facultatif mais conseillé : TLS devant Kagu |
-| Un nom de domaine | — | Conseillé : un certificat reconnu, sans `-pin` |
+| Un nom de domaine | — | Exigé pour ajouter une machine : un certificat reconnu (`join` ne parle qu'en `https://`) |
 | NTP | — | Les horloges du serveur et des machines à moins de 5 min l'une de l'autre |
 
 Le binaire est statique (`CGO_ENABLED=0`) : rien d'autre à installer sur le
@@ -448,8 +448,8 @@ Kagu écoute en HTTP ; Traefik termine TLS devant lui. Un seul routeur
 suffit : interface, API, agents, pings et statut passent par le même
 nom et le même port. Vérifié avec Traefik v3.5.3, en mode host et en
 conteneur : interface, API, agent, pings, statut et flux en direct passent,
-et Kagu voit la vraie adresse des clients. Un essai antérieur avec
-`-pin` est noté dans
+et Kagu voit la vraie adresse des clients. Un essai antérieur (avec
+`-pin`, retiré depuis) est noté dans
 [22-fonctionnement.md](projet/22-fonctionnement.md#vérifié-le-13-septembre-2026).
 
 Kagu tourne sur l'hôte, pas dans un conteneur : les **labels Docker ne
@@ -1071,90 +1071,68 @@ détail, les refus et le journal d'audit :
 
 ## Ajouter une machine
 
-### 1. Le jeton
+### La ligne d'ajout : `join`
+
+Il faut un **domaine** : Kagu joint en `https://` (`public_url`). Sans lui,
+**Ajouter une machine** est grisé et l'écran donne `sudo kagu setup --domain`.
 
 Dans l'interface : Machines → **Ajouter une machine**, un nom en lettres
-minuscules, chiffres et tirets, et les **droits** de l'agent à cocher.
-Kagu affiche une seule fois **cinq blocs à coller**, dans l'ordre, chacun
-avec son bouton Copier : le binaire (téléchargé et vérifié par sa somme SHA-256), la **préparation** (étape 2),
-l'enrôlement (étape 3), l'unité (étape 4) et, si un droit écrit ailleurs que dans
-l'état de l'agent, les dossiers qu'il autorise (le drop-in `droits.conf`, étape 4).
-Tous se jouent **en root** (`su -` ou `sudo -i`) et aucun n'a besoin de `sudo`,
-qu'un hôte Proxmox n'a pas : l'enrôlement prend le compte de l'agent par `runuser`.
-Ce qui suit explique ces blocs ; la page, elle, suffit seule. Un ré-enrôlement en
-ajoute un premier : arrêter l'agent et supprimer `identity.json`. Avec les droits
-par défaut (`probe.lan` coché, voir ci-dessous), la ligne d'enrôlement porte
-`-rights` :
+minuscules, chiffres et tirets, un rôle (les modules affichés) et un **jeu de
+droits** : trois cartes, « Observer », « Gérer », « Gérer en root » (fiche A3) ;
+« Voir le détail » déplie les droits du jeu. L'écran montre ensuite **deux
+lignes** et un seul bouton « Copier » qui copie les deux : la ligne d'ajout,
+dont la forme attendue est dans [Coller une ligne de Kagu en
+root](#coller-une-ligne-de-kagu-en-root), puis le jeton (`kg_…`). Relisez la
+ligne contre cette forme avant de coller.
+
+Collez-les ensemble sur la machine, dans une session ouverte sur elle :
+
+1. `install.sh` vient de l'**adresse des versions**, jamais de Kagu. Il vérifie
+   la signature globale, la version minimale et la somme du binaire (comme pour
+   `setup`) ; si la machine ne joint pas l'adresse des versions, il prend les
+   mêmes fichiers à la bibliothèque de Kagu (`GET /releases/<version>/…`), vérifiés
+   de la même façon. Puis il lance `kagu join`.
+2. `join` refuse un `--server` en `http://`.
+3. Il lit le **jeton** sur le terminal, sans l'afficher : c'est la seconde ligne
+   collée. Si elle s'est perdue, il le demande. Le jeton n'est ni dans la
+   commande, ni dans l'historique du shell, ni dans `ps`.
+4. Il dit ce qui va changer (compte `kagu-agent`, agent, jeu et sa phrase de
+   risque) et demande `[o/N]`.
+5. Il lit la clé de Kagu (`GET /agent/server-key`) et la compare à
+   `--server-key` **avant** d'envoyer le jeton. Un écart arrête tout : « La clé du
+   serveur ne correspond pas à la ligne », le jeton reste valable.
+6. Il coche les étapes : système, compte, enrôlement (l'agent recompare la clé
+   dans la réponse et tire sa paire X25519), droits (le jeu de la ligne et la
+   clé du serveur, dans la politique), service.
+7. La ligne « Agent enrôlé » donne l'**empreinte de la clé de l'agent** ; la fiche
+   de la machine (« Clé de l'agent ») montre la même.
+
+Ce qui reste à vérifier : la ligne vient de l'écran. Comparez l'empreinte que
+`join` accepte (« Clé du serveur reconnue ») à `sudo kagu secrets server-key`
+sur la machine Kagu.
+
+Sans terminal (cloud-init) : le jeton dans un fichier, `--token-file
+<chemin>` (à root, `0600`), effacé dès qu'il est lu, et `--yes` à la place de
+la question. Avec un terminal, `--yes` est ignoré.
+
+`join` relancé reprend : une étape faite se coche « déjà fait », le jeton n'est
+plus envoyé. Une machine dont l'agent est enrôlé ailleurs est refusée : arrêtez
+l'agent et retirez `identity.json` d'abord, deux commandes l'une après
+l'autre, celles que **Ré-enrôler** donne aussi :
 
 ```sh
-printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://kagu.example.org -rights observe,probe.lan
+sudo systemctl stop kagu-agent
+sudo rm -f /var/lib/kagu-agent/identity.json
 ```
 
-Les droits : `observe` (toujours, la case est grisée), sonder le réseau
-local (`probe.lan`, **coché par défaut** : sans lui, les sondes de cette
-machine refusent de composer vers la boucle locale, les adresses privées et
-`100.64.0.0/10`, et tombent « Hors ligne » avec le motif « adresse du réseau
-local » ; décochez-le pour une machine dont les sondes ne doivent viser que
-l'extérieur), mettre à jour l'agent, déployer un service Docker, mettre à jour un service Docker,
-recevoir des sauvegardes dans un dossier, **produire des sauvegardes**
-(`backup.produce`, vzdump Proxmox : la case fixe le producteur, `proxmox-vzdump`,
-et demande une préparation de plus, voir [`backup.produce` équivaut à
-root](#backupproduce-équivaut-à-root)), écrire des fichiers dans des
-dossiers (un à huit chemins absolus, séparés par des virgules). Au-delà de
-`observe`, la commande les porte en clair, à lire avant de coller :
+Le jeton ne porte aucun droit : il dit seulement que cette machine peut
+s'enrôler, une fois, dans l'heure. Le jeu est dans la ligne, en clair.
 
-```sh
-printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://kagu.example.org -rights observe,probe.lan,agent.update,files.write=/srv/workspace
-```
+La machine Kagu, elle, a son agent par `setup` (par sa socket locale) ; elle ne
+se ré-enrôle que par `setup`.
 
-Pour un hôte Proxmox qui produit ses sauvegardes, `-rights` porte
-`backup.produce=proxmox-vzdump` (un producteur n'est pas un chemin : il se
-nomme).
-
-Les droits `backup.produce` et `restic.produce` demandent en plus des **ancres de
-confiance** (voir [plus bas](#les-ancres-de-confiance)) : sans elles, l'agent
-refuse l'ordre.
-
-Ils s'écrivent dans `identity.json`, la fiche de la machine les montre, et
-**l'agent les applique** : un ordre hors de ses droits est refusé, et le refus
-se lit dans les ordres de la fiche et au journal. Pour les changer : fiche ›
-**Ré-enrôler**, dont la première étape montre les droits à changer et émet un
-jeton de ré-enrôlement avec les nouveaux ; collez sa ligne sur la machine après
-avoir supprimé `identity.json` (voir [Ré-enrôler, retirer](#ré-enrôler-retirer)).
-
-Le jeton passe par l'**entrée standard** de l'agent, jamais par sa ligne de
-commande : une ligne de commande se lit dans `ps` et `/proc/<pid>/cmdline`
-depuis tous les comptes de la machine, et le premier qui copie le jeton
-prend l'identité de la machine. `printf` est une commande interne du shell,
-qui ne crée aucun processus : le jeton n'apparaît dans les arguments
-d'aucun. Si `sudo` demande un mot de passe, il le lit sur le terminal
-(`/dev/tty`), pas sur le tube : la commande se colle telle quelle. Collez-la
-dans une session ouverte sur la machine, pas en argument de
-`ssh machine '…'` : la commande entière, jeton compris, deviendrait les
-arguments du shell distant (et sans terminal, `sudo` ne pourrait pas
-demander son mot de passe).
-
-Sur la machine Kagu elle-même, la commande installe **son** agent :
-l'empreinte de la machine le rattache à la machine Kagu. Si elle a déjà
-un agent actif, l'enrôlement est refusé (« cette machine est la machine
-Kagu, et elle a déjà un agent actif ») et le jeton reste valable pour
-une autre machine : pour remplacer son agent, Ré-enrôler sur sa fiche.
-
-Connecté en root sans `sudo` (Debian minimal) : remplacez `sudo -u
-kagu-agent` par `runuser -u kagu-agent --`, le reste de la ligne ne
-change pas. À la main, sur un terminal, `sudo -u kagu-agent
-/var/lib/kagu-agent/bin/current agent -server https://…` seul demande le
-jeton (« Jeton d'enrôlement : ») et le lit sur la ligne suivante ; il s'affiche
-à la saisie.
-
-La ligne lance le binaire de l'état de l'agent, pas `kagu` : il n'y a pas
-de lien `/usr/local/bin/kagu` sur une machine installée ainsi (la machine
-Kagu non plus). Un lien lancé par root vers un fichier que le compte de
-l'agent peut remplacer lui livrerait root.
-
-Le jeton sert **une fois** et expire en **1 h**. L'adresse vient de
-`public_url` : vérifiez-la avant de coller. `-lang en` s'ajoute si
-l'interface est en anglais.
+Les sections suivantes décrivent ce que `join` fait, pour une installation à la
+main ou une machine qui ne peut pas lancer `install.sh`.
 
 ### 2. Le binaire et le compte
 
@@ -1281,7 +1259,7 @@ dans un encadré. Ne cochez la case que sur l'hôte Proxmox.
 
 #### Coller une ligne de Kagu en root
 
-**Une ligne venue de Kagu est une seule commande « sudo kagu agent … », sans « ; », « | », « && » ni « --yes » : sinon, ne la collez pas.**
+**Une ligne de droits venue de Kagu est une seule commande « sudo kagu agent … », sans « ; », « | », « && » ni « --yes » : sinon, ne la collez pas.**
 
 Pourquoi : un serveur pris sert aussi l'écran. Il peut y enchaîner une
 commande de plus, ou retirer cet avertissement de l'écran. Cette page, il ne
@@ -1301,6 +1279,21 @@ Pour un droit manquant, l'écran donne toujours la même ligne,
 `sudo kagu agent grant --pending`, et le bouton « Demander ce droit à la
 machine » : l'agent note le droit, la commande le montre en clair et ne le pose
 qu'après un « o » tapé au clavier.
+
+**La ligne d'ajout d'une machine** (`join`) n'est pas une ligne de droits :
+elle lance `install.sh` depuis l'adresse des versions, puis `join`. Sa forme
+attendue, avec l'adresse des versions par défaut, est celle-ci, et rien
+d'autre (la version, l'adresse de Kagu, l'empreinte et le jeu changent) :
+
+```sh
+curl -fsSL https://github.com/ldesfontaine/kagu/releases/download/vX.Y.Z/install.sh | sudo sh -s -- join --server https://kagu.example.org --server-key SHA256:… --rights <jeu>
+```
+
+Hors de l'adresse par défaut, l'adresse des versions est celle de
+`releases_url` dans `config.toml`, en tête de `curl` et passée au script :
+`sudo KAGU_RELEASES='<releases_url de config.toml>' sh -s --` à la place de
+`sudo sh -s --`. Une autre adresse, une commande de plus ou `--yes` : ne la
+collez pas.
 
 #### Les ancres de confiance
 
@@ -1400,10 +1393,14 @@ l'unité). Pour **retirer** le droit : ré-enrôlez sans la case, puis supprimez
 Sur la machine, en root, la ligne affichée, une fois la préparation jouée :
 
 ```sh
-printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://kagu.example.org
+printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -enroll-only -server https://kagu.example.org -server-key SHA256:…
 ```
 
-L'agent tire une clé Ed25519, s'enrôle, écrit
+L'agent lit la clé de Kagu et la compare à `-server-key` avant d'envoyer le
+jeton, puis encore dans la réponse ; sans `-server-key`, un serveur distant
+est refusé. Il tire une clé Ed25519 et une paire X25519 (la moitié publique
+part avec la demande, Kagu la garde pour sceller les secrets des ordres),
+s'enrôle, écrit
 `/var/lib/kagu-agent/identity.json` en `0600` (au compte `kagu-agent`),
 puis se connecte. Le journal dit sous quel compte il tourne
 (`agent running as`, avec `kagu-agent`). La
@@ -1420,12 +1417,11 @@ relais.
 | Option | Retenue dans l'identité | Rôle |
 | --- | --- | --- |
 | `-server` | Oui | Adresse de Kagu, premier lancement seulement |
-| `-pin` | Oui | Empreinte SHA-256 du certificat de Kagu, s'il est auto-signé |
+| `-server-key` | Non | Empreinte de la clé de Kagu (`SHA256:…`, `sudo kagu secrets server-key`), comparée avant l'envoi du jeton ; exigée pour un serveur distant |
 | `-lang` | Oui | Langue des messages de l'agent, `fr` ou `en` |
 | `-rights` | Oui | Droits cochés dans l'interface ; sans lui, `observe` seul. Un droit mal écrit est refusé avant l'enrôlement (code 2), le jeton reste valable |
 | `-root-dir` | Oui | Racine des services que l'agent déploie (`docker.deploy`, `docker.update`), `/srv/workspace` par défaut, premier lancement seulement. Un chemin absolu et propre. Chaque service s'y écrit dans `<racine>/<projet>/` |
 | `-state` | Non | Répertoire d'état, `/var/lib/kagu-agent` par défaut |
-| `-allow-plain` | **Non** | Accepte `http://` vers un serveur distant |
 | `-docker-socket` | **Non** | Socket Docker, `/var/run/docker.sock` par défaut |
 | `-ca-file` | **Non** | Autorité interne pour les sondes de cette machine |
 
@@ -1567,7 +1563,7 @@ install -m 0755 /tmp/kagu /var/lib/kagu-agent/bin/kagu-v0.0.1 && ln -sfn kagu-v0
 # Les dossiers des droits, à root (les mêmes qu'à l'étape 2, sans « -o … -g … »)
 install -d -m 0755 /srv/workspace
 # L'enrôlement : la ligne de l'écran, sans « -u kagu-agent »
-printf '%s\n' 'kg_…' | sudo /var/lib/kagu-agent/bin/current agent -server https://kagu.example.org
+printf '%s\n' 'kg_…' | sudo /var/lib/kagu-agent/bin/current agent -enroll-only -server https://kagu.example.org -server-key SHA256:…
 # L'unité, et son drop-in qui la remet à root
 install -m 0644 docs/installation/kagu-agent.service /etc/systemd/system/kagu-agent.service
 mkdir -p /etc/systemd/system/kagu-agent.service.d
@@ -1584,32 +1580,13 @@ compte](#passer-un-agent-installé-en-root-sous-son-compte)) repasse tout d'un
 coup à `kagu-agent`. Le journal dit `agent running as` avec `root`, et la
 fiche de la machine « Compte : root ».
 
-### Sans domaine : `-pin`
+### Sans domaine, sans TLS
 
-Un Kagu joint par IP, avec un certificat auto-signé, n'est pas
-reconnu par le magasin du système. `-pin` épingle **ce** certificat :
-l'agent n'accepte que lui, sans vérifier la chaîne.
-
-```sh
-# L'empreinte, lue depuis la machine Kagu (le fichier du certificat) :
-openssl x509 -in cert.pem -noout -fingerprint -sha256 | cut -d= -f2 | tr -d :
-# ou à distance, en vérifiant ensuite qu'elle correspond :
-openssl s_client -connect 203.0.113.10:443 </dev/null 2>/dev/null \
-  | openssl x509 -outform DER | sha256sum | cut -d' ' -f1
-
-printf '%s\n' 'kg_…' | sudo -u kagu-agent /var/lib/kagu-agent/bin/current agent -server https://203.0.113.10 -pin <empreinte>
-```
-
-L'empreinte s'écrit en hexadécimal, majuscules ou minuscules, préfixe
-`sha256:` facultatif, **sans les deux-points**. Le certificat change :
-l'agent refuse, il faut ré-enrôler avec la nouvelle empreinte.
-
-### Sans TLS : `-allow-plain`
-
-Vers une adresse qui n'est pas la boucle locale, l'agent refuse `http://` :
-le jeton passerait en clair. `-allow-plain` lève ce refus. **Seulement sur
-un réseau déjà chiffré** (WireGuard, Tailscale). Il n'est pas retenu :
-ajoutez-le aussi à `ExecStart=` de l'unité.
+Vers une adresse qui n'est pas la boucle locale, l'agent ne parle qu'en
+`https://`, avec un certificat que le magasin du système reconnaît. `-pin`
+(certificat épinglé) et `-allow-plain` (`http://` distant) n'existent plus :
+la clé de Kagu se compare à part (`-server-key`), et le jeton ne passe jamais
+en clair. Un Kagu sans domaine n'ajoute pas de machine.
 
 ### Ré-enrôler, retirer
 
@@ -1987,7 +1964,7 @@ sudo systemctl start kagu-agent.service
 ```
 
 (`v0.0.1` : le numéro que `kagu version` affiche pour ce binaire.) La
-ligne `sed` garde les options de l'agent (`-ca-file`, `-allow-plain`…) ; la
+ligne `sed` garde les options de l'agent (`-ca-file`…) ; la
 rejouer ne change rien. N'ajoutez **pas** de lien `bin/previous` à la main : il
 naît à la première mise à jour.
 
@@ -2142,7 +2119,7 @@ d'abord (une copie du binaire, à root), sans quoi l'unité ne démarre pas :
 install -d -m 0755 -o root -g root /usr/local/lib/kagu-agent
 install -m 0755 -o root -g root /var/lib/kagu-agent/bin/kagu-v0.0.1 /usr/local/lib/kagu-agent/kagu-guard
 install -m 0644 docs/installation/kagu-agent.service /etc/systemd/system/kagu-agent.service
-# Les options notées au début (-allow-plain, -ca-file, -docker-socket), en fin de ligne, par exemple :
+# Les options notées au début (-ca-file, -docker-socket), en fin de ligne, par exemple :
 sed -i 's|^ExecStart=.*|& -ca-file /etc/ssl/ca-interne.pem|' /etc/systemd/system/kagu-agent.service
 systemctl cat kagu-agent | grep '^ExecStart='   # le nouveau chemin, et les mêmes options qu'avant
 systemctl daemon-reload
@@ -2177,7 +2154,7 @@ le rang des ordres sont gardés : **pas de ré-enrôlement**. Pour rester en roo
 [Garder l'agent en root](#garder-lagent-en-root).
 
 ```sh
-systemctl cat kagu-agent | grep '^ExecStart='   # notez les options (-allow-plain, -ca-file, -docker-socket)
+systemctl cat kagu-agent | grep '^ExecStart='   # notez les options (-ca-file, -docker-socket)
 systemctl stop kagu-agent
 
 # Le compte, et son groupe docker s'il y a Docker (rejouée : « already exists », ignorez)
@@ -2880,7 +2857,8 @@ Les messages sont ceux que le binaire écrit, tels quels.
 | Symptôme | Cause | Faire |
 | --- | --- | --- |
 | L'interface s'affiche mais rien ne charge ; l'API répond `403 {"error":"bad_host"}` ; le journal dit `request refused: unknown Host, set public_url to the address used to reach Kagu` | Le nom par lequel vous atteignez Kagu n'est pas celui de `public_url` | Mettre ce nom dans `public_url`, redémarrer |
-| Agent : « Adresse refusée : Kagu est en http:// et n'est pas sur cette machine, le jeton passerait en clair. Utilisez https://, ou -allow-plain si le réseau est déjà chiffré (WireGuard). » | `-server http://…` vers une autre machine | `https://`, ou `-allow-plain` sur un réseau chiffré, au premier lancement **et** dans l'unité |
+| Agent : « Adresse refusée : Kagu est en http:// et n'est pas sur cette machine, le jeton passerait en clair. Un serveur distant se joint en https:// seulement. » | `-server http://…` vers une autre machine | Un domaine et `https://` |
+| `join` : « La clé du serveur ne correspond pas à la ligne… » | La clé présentée n'a pas l'empreinte de `--server-key` : un intermédiaire, ou une ligne d'un autre Kagu | Ne pas continuer ; comparer à `sudo kagu secrets server-key` sur la machine Kagu. Le jeton reste valable si l'écart est vu avant l'envoi |
 | Connexion : « Code incorrect ou expiré. » alors que le téléphone affiche le bon code ; l'heure du serveur, sous le champ du code, n'est pas celle du téléphone ; souvent l'alerte « Horloge du serveur non synchronisée » | L'horloge de la machine Kagu (ou celle du téléphone) dérive | `timedatectl status` sur la machine Kagu ; `sudo timedatectl set-ntp true`, ou installer chrony ; régler l'heure automatique du téléphone |
 | Agent, en boucle : `clock skew, reconnecting` avec « L'horloge de cette machine et celle de Kagu diffèrent de plus de 5 minutes… » ; la machine reste hors ligne | Horloges décalées | `timedatectl set-ntp true` sur les deux machines ; l'agent réessaie seul |
 | Agent : « Jeton refusé : il a déjà servi. Un jeton n'enrôle qu'une machine, créez-en un nouveau. » | Jeton déjà consommé | Un nouveau jeton (Ajouter une machine, ou Ré-enrôler) |
@@ -2895,7 +2873,7 @@ Les messages sont ceux que le binaire écrit, tels quels.
 | `secrets rotate` : « un serveur tourne sur ce state_dir » | La rotation de `secret.key` demande le serveur arrêté | `systemctl stop kagu`, relancer la commande, redémarrer |
 | `secrets rotate-server-key` : « rotation refusée : ces machines ont un agent plus ancien que ce serveur » | Un agent est à un protocole plus ancien, ou ne s'est pas reconnecté depuis la mise à jour du serveur (protocole inconnu) | Mettre à jour l'agent de chaque machine nommée, attendre sa reconnexion, relancer ; aucune option ne passe outre |
 | `secrets finish-server-key` : « ces machines ont encore la clé précédente » | Root n'y a pas collé la ligne `trust set server-key` depuis la rotation | Coller sur chaque machine la ligne que le refus donne, ou `-force` puis la coller |
-| Agent : `tls: failed to verify certificate` | Certificat auto-signé sans `-pin` | `-pin`, ou un certificat reconnu |
+| Agent : `tls: failed to verify certificate` | Certificat auto-signé | Un certificat reconnu (un domaine) |
 | « L'agent n'a pas le droit de lire la socket Docker de cette machine. » (`docker_denied`) | Le compte de l'agent n'est pas dans le groupe `docker`, ou y a été mis après le démarrage de l'agent : un groupe se lit au démarrage du processus | `usermod -aG docker kagu-agent` puis `systemctl restart kagu-agent`. Le groupe `docker` équivaut à root ([ce que cela donne](#le-groupe-docker-équivaut-à-root)) ; sinon, [garder l'agent en root](#garder-lagent-en-root) |
 | Agent : `WARN rights not exercisable` au journal, un droit « indisponible » sur la fiche de la machine, un ordre « Refusé » avec la même raison | Un droit coché que le compte de l'agent ne peut pas exercer : `docker_denied` (socket fermée au compte, ligne ci-dessus), `docker_missing` (pas de Docker, ou pas de `/usr/bin/docker`), `path_denied` (le dossier du droit, ou celui qui le contient, n'appartient pas au compte : la préparation ne l'a pas créé, ou une machine passée sous le compte n'a pas eu son `chown`), `path_unwritable` (l'unité ne l'ouvre pas : `ReadWritePaths=`), `not_self_updatable` (`bin/` n'appartient pas au compte) ; pour `backup.produce`, `sudo_missing` (pas de `sudo`), `producer_missing` (le script de root, ou `/usr/bin/vzdump`, manque) et `sudo_denied` (la règle `sudoers` manque, ou l'unité n'a pas son drop-in `produce.conf`) ; pour `restic.docker`, `docker_denied`, `docker_missing` (socket Docker et binaire `docker`) et `restic_missing` ; pour `restic.target`, `restic.produce`, `restic.verify`, `restic.browse` et `restic.restore`, `rest_server_missing` (la cible seule) et `restic_missing` (le binaire n'est ni dans le PATH de l'agent ni au chemin déclaré par `-rest-server` ou `-restic` : l'agent ne télécharge rien) | `path_denied` : `chown -h kagu-agent:kagu-agent <dossier>` ([Passer un agent installé en root sous son compte](#passer-un-agent-installé-en-root-sous-son-compte) dit lesquels), puis `systemctl restart kagu-agent` ; `path_unwritable` : le drop-in `droits.conf` ; `not_self_updatable` : `chown -hR kagu-agent:kagu-agent /var/lib/kagu-agent` ; `sudo_missing` : `apt install sudo` ; `producer_missing` et `sudo_denied` : rejouer la préparation de la page du jeton (les six lignes de [`backup.produce` équivaut à root](#backupproduce-équivaut-à-root)), puis `systemctl restart kagu-agent`, car le drop-in ne se lit qu'au démarrage de l'unité ; `rest_server_missing`, `restic_missing` : installer le binaire (paquet de la distribution ou version publiée, somme vérifiée par l'opérateur), puis `systemctl restart kagu-agent` |
 | Un plan de VM : « La VM 312 n'a pas été sauvegardée : Le producteur de sauvegarde a échoué… » (`backup.target_failed:312:producer_failed`) | `vzdump` a échoué sur la VM, ou n'a rien écrit. La carte du plan ne montre **pas** sa sortie d'erreur : seule une raison fermée y figure | Fiche de la **machine source** (l'hôte) › Ordres › l'ordre « Produire une sauvegarde » en échec : les dernières lignes de la sortie d'erreur de `vzdump` y sont (VM verrouillée, stockage, numéro inconnu…). Rien n'a été envoyé |

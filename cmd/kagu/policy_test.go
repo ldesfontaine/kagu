@@ -10,7 +10,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/edge/agent"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
-	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // « agent policy migrate » dit tout ce qu'il recopie avant la question (les
@@ -33,7 +33,7 @@ func TestRunAgentPolicyMigrate_TellsWhatItCopiesThenErasesIt(t *testing.T) {
 	if !errors.As(err, &refused) || !strings.Contains(refused.message, "-yes") {
 		t.Fatalf("without terminal: %v", err)
 	}
-	for _, want := range []string{"+ docker.deploy", "+ " + anchor.BackupGuest + " 312", "+ clé du serveur   " + agentwire.KeyFingerprint(legacy.ServerKey)} {
+	for _, want := range []string{"+ docker.deploy", "+ " + anchor.BackupGuest + " 312", "+ clé du serveur   " + ident.KeyFingerprint(legacy.ServerKey)} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q is not told:\n%s", want, out)
 		}

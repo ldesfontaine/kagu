@@ -16,6 +16,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/seal"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -251,7 +252,7 @@ func TestSecretsServerKey_PrintsTheFingerprintOnly(t *testing.T) {
 	if err := secretsCommand([]string{"server-key", "-config", configPath}, &out); err != nil {
 		t.Fatal(err)
 	}
-	if out.String() != key.Fingerprint()+"\n" || key.Fingerprint() != agentwire.KeyFingerprint(key.PublicKey()) {
+	if out.String() != key.Fingerprint()+"\n" || key.Fingerprint() != ident.KeyFingerprint(key.PublicKey()) {
 		t.Fatalf("output %q, want %s", out.String(), key.Fingerprint())
 	}
 	for _, line := range strings.Split(strings.TrimSpace(string(keyFile)), "\n") {

@@ -1,5 +1,5 @@
 import type { ApiError, RefusalFix } from "../api/client";
-import type { Capability, Machine, RightState } from "../api/machines";
+import type { AgentRights, Capability, Machine, RightState } from "../api/machines";
 import type { Translate } from "../i18n/context";
 import { detectedProxmox } from "./proxmox";
 import type { Tone } from "./tone";
@@ -19,6 +19,24 @@ interface WantedRight {
   name: string;
   path: string;
 }
+
+// Le nom d'un jeu, et sa phrase : ce qu'il donne, ou ce qu'il coûte
+// (R-A3-13). Les mêmes sur l'onglet Droits, au choix d'un jeu à l'ajout d'une
+// machine et dans le terminal de setup.
+export const rightsSetLabels: Record<AgentRights["set"], string> = {
+  observe: "rights.observe",
+  manage: "rights.manage",
+  root: "rights.root",
+  "": "rights.custom",
+  refused: "rights.refused",
+};
+export const rightsSetPhrases: Record<AgentRights["set"], string> = {
+  observe: "rights.observe_hint",
+  manage: "rights.manage_risk",
+  root: "rights.root_risk",
+  "": "rights.custom_hint",
+  refused: "rights.refused_hint",
+};
 
 // L'adresse de la fenêtre « Ré-enrôler » d'une machine : changer la clé de
 // son agent, ou en installer un.

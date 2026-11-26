@@ -80,14 +80,17 @@ type Token struct {
 
 // Ce que l'agent envoie pour s'enrôler.
 type Enrollment struct {
-	MachineID    string
-	PublicKey    []byte
-	Token        string
-	Hostname     string
-	Address      string
-	OS           string
-	Arch         string
-	AgentVersion string
+	MachineID string
+	PublicKey []byte
+	// La moitié publique X25519 de l'agent (R-B1-18) ; vide chez un agent
+	// d'avant, 32 octets sinon.
+	SealPublicKey []byte
+	Token         string
+	Hostname      string
+	Address       string
+	OS            string
+	Arch          string
+	AgentVersion  string
 	// Empreinte de l'identifiant de machine de l'agent ; vide, pas de
 	// contrôle.
 	HostFingerprint string
@@ -96,6 +99,9 @@ type Enrollment struct {
 	// l'agent tourne sur la machine du serveur (R-B1-7).
 	ViaLocalSocket bool
 }
+
+// SealKeySize est la taille d'une moitié publique X25519.
+const SealKeySize = 32
 
 var (
 	ErrNotFound      = errors.New("machine not found")
@@ -121,6 +127,12 @@ var (
 	// ré-enrôlement, qui en installe un nouveau.
 	ErrAgentRevoked = errors.New("agent revoked")
 	ErrNoAgent      = refusal.Conflict("machine.no_agent", "the machine has no active agent")
+	// ErrJoinNeedsDomain : sans adresse publique en https, il n'y a pas de
+	// ligne d'ajout ; le jeton passerait en clair (R-B1-13).
+	ErrJoinNeedsDomain = refusal.Conflict("machine.join_needs_domain", "adding a machine needs an https public address")
+	// ErrLocalReenrollBySetup : l'agent de la machine Kagu ne s'enrôle que par
+	// sa socket (R-B1-7) ; setup le refait, pas une ligne d'ajout.
+	ErrLocalReenrollBySetup = refusal.Conflict("machine.local_reenroll_by_setup", "the agent of the server machine is enrolled again by setup")
 	// ErrOffline : un ordre ne part que par le flux ouvert de l'agent. Un seul
 	// refus pour tous les domaines, jugé après l'agent actif, le droit et l'ancre.
 	ErrOffline = refusal.Conflict("machine.offline", "the machine is offline: an order only leaves through its open stream")

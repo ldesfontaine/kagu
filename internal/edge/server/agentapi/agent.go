@@ -79,18 +79,27 @@ func (h *Handler) enroll(w http.ResponseWriter, r *http.Request, viaLocalSocket 
 		h.writeError(w, http.StatusBadRequest, "bad_key")
 		return
 	}
+	// Un agent d'avant ne l'envoie pas : nulle, pas vide.
+	var sealPublicKey []byte
+	if request.SealPublicKey != "" {
+		if sealPublicKey, err = base64.StdEncoding.DecodeString(request.SealPublicKey); err != nil {
+			h.writeError(w, http.StatusBadRequest, "bad_key")
+			return
+		}
+	}
 	// L'agent agit sous l'identifiant qu'il présente : le jeton, consommé
 	// dans la même transaction, dit s'il en avait le droit.
 	ctx := audit.WithActor(r.Context(), audit.Agent(request.MachineID))
 	enrolled, err := h.machines.Enroll(ctx, machine.Enrollment{
-		MachineID:    request.MachineID,
-		PublicKey:    publicKey,
-		Token:        request.Token,
-		Hostname:     request.Hostname,
-		Address:      h.clientAddress(r),
-		OS:           request.OS,
-		Arch:         request.Arch,
-		AgentVersion: request.AgentVersion,
+		MachineID:     request.MachineID,
+		PublicKey:     publicKey,
+		SealPublicKey: sealPublicKey,
+		Token:         request.Token,
+		Hostname:      request.Hostname,
+		Address:       h.clientAddress(r),
+		OS:            request.OS,
+		Arch:          request.Arch,
+		AgentVersion:  request.AgentVersion,
 
 		HostFingerprint: request.HostFingerprint,
 		ViaLocalSocket:  viaLocalSocket,
@@ -103,6 +112,27 @@ func (h *Handler) enroll(w http.ResponseWriter, r *http.Request, viaLocalSocket 
 		MachineID: enrolled.ID, Name: enrolled.Name, AgentID: enrolled.Agent.ID,
 		ServerKey: base64.StdEncoding.EncodeToString(serverKey),
 	})
+}
+
+// getServerKey rend la clé qui signe les ordres, sans rien demander : c'est
+// une clé publique, et join la compare à l'empreinte de la ligne avant que le
+// jeton parte (R-B1-13). Même seau que l'enrôlement.
+func (h *Handler) getServerKey(w http.ResponseWriter, r *http.Request) {
+	if !h.speaksProtocol(w, r) {
+		return
+	}
+	if !h.sourceLimit.Allow(h.clientAddress(r)) {
+		w.Header().Set("Retry-After", httpx.RetryAfterSeconds)
+		h.writeError(w, http.StatusTooManyRequests, "too_many_requests")
+		return
+	}
+	serverKey, err := h.serverKey()
+	if err != nil {
+		h.logger.Error("server key unreadable", "error", err)
+		h.writeError(w, http.StatusServiceUnavailable, "server_key_missing")
+		return
+	}
+	h.writeJSON(w, http.StatusOK, agentwire.ServerKeyResponse{ServerKey: base64.StdEncoding.EncodeToString(serverKey)})
 }
 
 func (h *Handler) serverKey() ([]byte, error) {

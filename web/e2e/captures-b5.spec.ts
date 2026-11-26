@@ -110,12 +110,4 @@ for (const theme of ["light", "dark"] as const) {
     await expect(dialog).toContainText(label("restic.source_restore_right_missing"), { timeout: 30_000 });
     await shoot(page, "restaurer-sans-droit", theme);
   });
-
-  test(`enrôlement avec le droit restic.browse ${theme}`, async ({ page }) => {
-    await open(page, theme, "/machines/nouvelle");
-    const dialog = page.locator("dialog[open]");
-    await dialog.getByText(label("machine.rights_advanced")).click();
-    await dialog.getByRole("checkbox", { name: label("machine.capability_restic_browse") }).check();
-    await shoot(page, "droit-restic-browse", theme);
-  });
 }

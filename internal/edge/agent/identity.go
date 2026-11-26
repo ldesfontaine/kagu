@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"crypto/ecdh"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
@@ -17,8 +18,8 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
-	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 const (
@@ -35,7 +36,6 @@ type Identity struct {
 	PublicKey  []byte `json:"public_key"`
 	PrivateKey []byte `json:"private_key"`
 	Server     string `json:"server"`
-	Pin        string `json:"pin,omitempty"`
 	// Langue de l'opérateur, choisie sur Kagu au moment de l'installation.
 	Language   lang.Code `json:"language,omitempty"`
 	EnrolledAt time.Time `json:"enrolled_at"`
@@ -73,6 +73,10 @@ type Identity struct {
 	// politique, rapportées au serveur à chaque ouverture du flux, relues du
 	// disque avant chaque ordre ; « agent trust » écrit la politique.
 	Anchors map[string][]string `json:"anchors,omitempty"`
+	// La moitié privée de la paire X25519 tirée à l'enrôlement (R-B1-18) :
+	// le serveur garde la publique pour sceller le champ secret des ordres.
+	// Elle ne quitte jamais ce fichier (0600). Vide chez un agent d'avant.
+	SealPrivateKey []byte `json:"seal_private_key,omitempty"`
 	// L'état est mal gardé (CheckStateDir) : seuls les droits d'observer
 	// s'appliquent, ceux du fichier restent sur le disque. Non exporté, donc
 	// jamais écrit : l'état corrigé, un redémarrage les rend.
@@ -93,7 +97,16 @@ func (id Identity) ServerKeyFingerprint() string {
 	if len(id.ServerKey) != ed25519.PublicKeySize {
 		return ""
 	}
-	return agentwire.KeyFingerprint(id.ServerKey)
+	return ident.KeyFingerprint(id.ServerKey)
+}
+
+// SealPublicKey rend la moitié publique de la paire X25519, vide sans elle.
+func (id Identity) SealPublicKey() []byte {
+	private, err := ecdh.X25519().NewPrivateKey(id.SealPrivateKey)
+	if err != nil {
+		return nil
+	}
+	return private.PublicKey().Bytes()
 }
 
 // Capabilities rend les droits du fichier ; une liste illisible (fichier
@@ -143,18 +156,23 @@ var ErrNotEnrolled = errors.New("agent not enrolled: run with -server and send t
 // aucun jeton.
 var ErrTokenMissing = errors.New("no enrollment token on stdin")
 
-// NewIdentity tire une clé et un id ; rien n'est écrit avant l'enrôlement.
-func NewIdentity(server, pin string, language lang.Code, capabilities []agentpolicy.Capability) (Identity, error) {
+// NewIdentity tire la clé de l'agent, sa paire X25519 et un id ; rien n'est
+// écrit avant l'enrôlement.
+func NewIdentity(server string, language lang.Code, capabilities []agentpolicy.Capability) (Identity, error) {
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return Identity{}, fmt.Errorf("generate key: %w", err)
+	}
+	sealKey, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		return Identity{}, fmt.Errorf("generate seal key: %w", err)
 	}
 	id, err := machine.NewID()
 	if err != nil {
 		return Identity{}, fmt.Errorf("generate id: %w", err)
 	}
 	return Identity{
-		MachineID: id, PublicKey: publicKey, PrivateKey: privateKey, Server: server, Pin: pin, Language: language,
+		MachineID: id, PublicKey: publicKey, PrivateKey: privateKey, SealPrivateKey: sealKey.Bytes(), Server: server, Language: language,
 		Rights: rightsOf(capabilities), PolicyFormat: agentpolicy.FormatVersion,
 	}, nil
 }

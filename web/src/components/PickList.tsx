@@ -17,6 +17,9 @@ export interface PickOption {
   detail: ReactNode;
   // Ce qui se lit à droite : une pastille, une jauge.
   end?: ReactNode;
+  // Ce qui se lit sous la ligne, sur toute sa largeur : un pli « Voir le
+  // détail ». Il s'ouvre sans choisir la ligne.
+  more?: ReactNode;
   unfit?: {
     reason: string;
     right?: { machineID: string; name: string; path?: string } | undefined;
@@ -59,6 +62,7 @@ function PickRow({ name, option, checked, onChange }: { name: string; option: Pi
           </Button>
         )}
       </span>
+      {option.more !== undefined && <div className="pick-more">{option.more}</div>}
     </div>
   );
 }

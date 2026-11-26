@@ -132,11 +132,11 @@ func startAgentWith(t *testing.T, ctx context.Context, server *fakeServer, logs 
 	t.Helper()
 	httpServer := httptest.NewServer(server.handler())
 	t.Cleanup(httpServer.Close)
-	identity, err := NewIdentity(httpServer.URL, "", lang.French, rights)
+	identity, err := NewIdentity(httpServer.URL, lang.French, rights)
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := NewClient(httpServer.URL, "", "v0.0.1", false)
+	client, err := NewClient(httpServer.URL, "v0.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}

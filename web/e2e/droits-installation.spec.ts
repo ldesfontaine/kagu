@@ -1,83 +1,88 @@
+import type { Page } from "@playwright/test";
+
 import { label } from "./support/catalog";
-import { createFirstAccount, mockFirstSetup } from "./support/firstSetup";
 import { expect, test } from "./support/findings";
 
-// Le chantier U1 (#447) : l'installation d'une machine en étapes copiables, un
-// refus de droit qui porte son geste, et un sélecteur de machine qui grise
-// celles qui ne conviennent pas. Chaque geste est joué comme un opérateur le
-// ferait, sur les données fictives.
+// L'ajout d'une machine (B1) : un jeu de droits, deux lignes à coller ; puis
+// (U1, #447) un refus de droit qui porte son geste, et un sélecteur de
+// machine qui grise celles qui ne conviennent pas. Chaque geste est joué
+// comme un opérateur le ferait, sur les données fictives.
 
-test("Ajouter une machine : cinq étapes, un bloc chacune, le jeton une seule fois", async ({ page, findings }) => {
+// Le banc écoute en clair : sans adresse publique en https, l'ajout y est
+// fermé (R-B1-13). La liste des machines est relue telle que le serveur la
+// rend, l'ajout seul y est ouvert ou fermé ; le jeton est inventé.
+const joinCommand = "curl -fsSL https://exemple.org/install.sh | sudo sh -s -- join --server https://kagu.exemple.fr --server-key SHA256:exemple --rights manage";
+const joinToken = "kg_exemple_de_jeton_inventé_0000";
+
+async function withJoin(page: Page, ready: boolean): Promise<{ bodies: unknown[] }> {
+  const sent = { bodies: [] as unknown[] };
+  await page.route("**/api/machines", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    const response = await route.fetch();
+    const body = (await response.json()) as { join: { ready: boolean; domain_line: string } };
+    body.join = { ...body.join, ready, domain_line: "sudo kagu setup --domain" };
+    await route.fulfill({ response, json: body });
+  });
+  await page.route("**/api/machines/tokens", async (route) => {
+    sent.bodies.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 201,
+      json: { name: "vps-essai-1", token: joinToken, set: "manage", command: joinCommand, reenroll_lines: [], expires_at: new Date(Date.now() + 3_480_000).toISOString() },
+    });
+  });
+  return sent;
+}
+
+test("Ajouter une machine : trois jeux, aucun nom de droit replié, deux lignes et un seul Copier", async ({ page, findings }) => {
   findings.where = "/machines/nouvelle";
+  const sent = await withJoin(page, true);
   await page.goto("/machines/nouvelle");
   const dialog = page.locator("dialog[open]");
   await dialog.getByLabel(label("machine.name_label")).fill("vps-essai-1");
-  await dialog.getByText(label("machine.rights_advanced")).click();
-  await dialog.getByLabel(label("machine.capability_docker_deploy")).check();
-  await dialog.getByLabel(label("machine.capability_backup_receive")).check();
-  await dialog.locator("#machine-backup-path").fill("/srv/sauvegardes");
+
+  // Trois cartes, aucune case à cocher ; plis fermés, aucun nom de droit ne se lit.
+  await expect(dialog.getByRole("radio")).toHaveCount(3);
+  await expect(dialog.getByRole("checkbox")).toHaveCount(0);
+  await expect(dialog.getByText("docker.deploy", { exact: true }).first()).toBeHidden();
+  await dialog.locator("input[type=radio][value=manage]").check();
+  await dialog.locator(".pick-more summary").nth(1).click();
+  await expect(dialog.getByText("docker.deploy", { exact: true }).first()).toBeVisible();
   await dialog.getByRole("button", { name: label("machine.create_token") }).click();
+  expect(sent.bodies).toEqual([{ name: "vps-essai-1", role: "generic", set: "manage" }]);
 
-  // Les cinq étapes, dans l'ordre où on les colle, chacune avec son titre.
-  const titles = ["binary", "prepare", "enroll", "unit", "rights"].map((id) => label(`machine.install_${id}_title`));
-  const items = dialog.locator(".checklist-item");
-  await expect(items).toHaveCount(5);
-  for (const [index, title] of titles.entries()) {
-    await expect(items.nth(index)).toContainText(title);
-    // Un seul bloc à copier par étape, et son bouton.
-    await expect(items.nth(index).locator(".token-box")).toHaveCount(1);
-    await expect(items.nth(index).getByRole("button", { name: label("machine.copy") })).toBeVisible();
-  }
+  // La commande sans le jeton ; le jeton à part ; un seul « Copier ».
+  await expect(dialog.locator(".token-box")).toHaveCount(1);
+  await expect(dialog.locator(".token-box")).toContainText(joinCommand);
+  await expect(dialog.locator(".token-box")).not.toContainText(joinToken);
+  await expect(dialog).toContainText(joinToken);
+  await expect(dialog.getByRole("button", { name: label("machine.copy") })).toHaveCount(1);
+  await dialog.getByRole("button", { name: label("machine.copy") }).click();
+  await expect(dialog.getByRole("button", { name: new RegExp(`${label("machine.copied")}|${label("machine.copy_failed")}`) })).toBeVisible();
 
-  // Aucune documentation à côté : la fenêtre ne renvoie nulle part.
-  await expect(dialog).not.toContainText(/documentation d'installation|voir la documentation/i);
-  await expect(dialog.getByRole("link")).toHaveCount(0);
-
-  // Le jeton n'est que dans la commande de l'enrôlement.
-  const text = (await dialog.innerText()).replace(/\s+/g, " ");
-  expect(text.match(/kg_[a-z0-9_]{8,}/g)?.length).toBe(1);
-  await expect(items.nth(2).locator(".token-box")).toContainText("kg_");
-  // Les lignes longues passent à la ligne : rien ne déborde du bloc.
-  const overflowing = await dialog.locator(".token-box pre").evaluateAll((blocks) => blocks.filter((block) => block.scrollWidth > block.clientWidth).length);
-  expect(overflowing).toBe(0);
-
-  // Chaque bouton « Copier » répond (copié, ou copie refusée par le navigateur sans terminal).
-  await items.nth(0).getByRole("button", { name: label("machine.copy") }).click();
-  await expect(items.nth(0).getByRole("button", { name: new RegExp(`${label("machine.copied")}|${label("machine.copy_failed")}`) })).toBeVisible();
-
-  // Une case cochée reste cochée quand on va à l'attente et qu'on revient.
-  await items.nth(0).getByRole("checkbox").check();
   await dialog.getByRole("button", { name: label("wizard.next") }).click();
-  // L'horloge des données fictives est figée : le jeton y est déjà expiré, ce qui est aussi une attente.
   await expect(dialog.locator(".wizard-step-current")).toContainText(label("machine.step_wait"));
-  await dialog.getByRole("button", { name: label("wizard.previous") }).click();
-  await expect(items.nth(0).getByRole("checkbox")).toBeChecked();
-
-  await dialog.getByRole("button", { name: label("wizard.next") }).click();
   await dialog.locator(".modal-foot").getByRole("button", { name: label("modal.close") }).click();
   await expect(dialog).toHaveCount(0);
   expect(findings.unknown()).toEqual([]);
 });
 
-test("Hôte Proxmox sans sudo : l'installation et la migration se collent en root, binaire téléchargé et vérifié", async ({ page, findings }) => {
-  findings.where = "/machines/nouvelle (rôle Proxmox)";
-  await page.goto("/machines/nouvelle");
-  const dialog = page.locator("dialog[open]");
-  await dialog.getByLabel(label("machine.name_label")).fill("pve-sans-sudo");
-  await dialog.locator("#machine-role").click();
-  await page.locator("[role=listbox] [role=option]").filter({ hasText: label("role.proxmox") }).click();
-  await dialog.getByRole("button", { name: label("machine.create_token") }).click();
-  const steps = dialog.locator(".checklist").first();
-  await expect(steps).toContainText(label("machine.install_binary_title"));
-  // Aucun bloc ne nomme sudo, et celui du binaire se télécharge et se vérifie.
-  const blocks = (await steps.locator(".token-box pre").allInnerTexts()).join("\n");
-  expect(blocks).not.toMatch(/\bsudo\b/);
-  expect(blocks).toContain("curl -fLO");
-  expect(blocks).toContain("sha256sum -c --ignore-missing SHA256SUMS");
-  expect(blocks).toContain("runuser -u kagu-agent --");
-  await dialog.getByRole("button", { name: label("wizard.next") }).click();
-  await dialog.locator(".modal-foot").getByRole("button", { name: label("modal.close") }).click();
+test("Sans domaine en https, « Ajouter une machine » est grisé et la commande setup --domain est donnée", async ({ page, findings }) => {
+  findings.where = "/machines (sans domaine)";
+  await withJoin(page, false);
+  await page.goto("/machines");
+  await expect(page.getByRole("button", { name: label("machine.add") })).toBeDisabled();
+  await expect(page.locator("main")).toContainText(label("machine.join_needs_domain_note").replaceAll("{product}", "Kagu"));
+  await expect(page.locator(".token-box", { hasText: "sudo kagu setup --domain" })).toBeVisible();
+  expect(findings.unknown()).toEqual([]);
+  // Le direct relit la liste : une relecture en vol ne doit pas survivre à la page.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
 
+test("Hôte Proxmox sans sudo : la migration de l'agent se colle en root, binaire téléchargé et vérifié", async ({ page, findings }) => {
+  findings.where = "/machines (agent d'un hôte Proxmox)";
   // La fiche d'un hôte Proxmox dont l'agent n'est pas migré : le bloc est en root d'office.
   await page.route("**/api/machines/*/agent-update", (route) =>
     route.fulfill({ json: { current: "v0.0.1", target: "v0.0.2", arch: "amd64", available: false, reason: "rollback_unavailable" } }),
@@ -141,24 +146,5 @@ test("Sonde : une machine sans agent est grisée dans le sélecteur", async ({ p
     await expect(list.locator(".select-option-group .select-option-reason a").nth(index)).toBeVisible();
   }
   await page.keyboard.press("Escape");
-  expect(findings.unknown()).toEqual([]);
-});
-
-test("Première configuration : le compte créé, les étapes de l'agent se collent, rien ne renvoie à la documentation", async ({ page, findings }) => {
-  findings.where = "/ (première configuration)";
-  await mockFirstSetup(page);
-  await page.goto("/");
-  await createFirstAccount(page);
-  const items = page.locator(".checklist-item");
-  await expect(items).toHaveCount(3);
-  for (const id of ["prepare", "enroll", "unit"]) {
-    await expect(page.locator(".checklist")).toContainText(label(`machine.install_${id}_title`));
-  }
-  await expect(page.locator("main")).not.toContainText(/documentation d'installation|voir la documentation/i);
-  // Chaque bloc a son bouton « Copier » ; le jeton n'est que dans l'enrôlement.
-  await expect(page.getByRole("button", { name: label("machine.copy") })).toHaveCount(3);
-  expect(((await page.locator("main").innerText()).match(/kg_exemple_de_jeton/g) ?? []).length).toBe(1);
-  await items.first().getByRole("checkbox").check();
-  await page.getByRole("button", { name: label("auth.setup_continue") }).click();
   expect(findings.unknown()).toEqual([]);
 });
