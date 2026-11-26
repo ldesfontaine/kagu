@@ -40,7 +40,7 @@ function PendingLine({ machineID, right, command, path, short }: { machineID: st
     return null;
   }
   const where = path !== undefined && path !== "" ? [t("machine.grant_path", path)] : [];
-  const notes = [t("rights.missing_right", right), ...where, t("rights.paste_only_pending"), t("rights.paste_shows_change")];
+  const notes = [t("rights.missing_right", right), ...where, t("rights.paste_shows_change")];
   if (short || machineID === "") {
     return <RootCommand command={line} notes={notes} short={short} />;
   }

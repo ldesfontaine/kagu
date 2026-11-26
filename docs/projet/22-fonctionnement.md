@@ -766,12 +766,24 @@ Un agent qui n'annonce pas `right.request@1` reçoit « agent à mettre à jour 
 | Un genre que le serveur envoie sans le droit : un run refusé de plus dans l'historique à chaque clic | La liste de `grant --pending` se remplit sur un serveur sain ; aucun autre genre ne part sans le droit, et l'agent n'exécute rien pour celui-ci |
 
 **Les droits en attente** (R-A3-15, `internal/edge/agent/pending.go`).
-La liste se remplit par un **ordre signé reçu sans le droit** : sur un serveur
-sain, c'est `right.request` (ci-dessus), les autres genres étant refusés
-d'avance. L'en-tête de `grant --pending` dit
-« Droits que {product} a demandés et que l'agent a refusés ». Un droit posé en
+La liste **ne se remplit que** par un **ordre signé reçu sans le droit** : sur
+un serveur sain, c'est `right.request` (ci-dessus), les autres genres étant
+refusés d'avance ; ou par une sonde du réseau local sans `probe.lan`, plus bas.
+L'en-tête de `grant --pending` dit
+« Droits que {product} a demandés et que l'agent a refusés », puis, sur la
+ligne suivante, l'avertissement ci-dessous. Un droit posé en
 sort à la **prochaine relecture de la politique dans un agent déjà lancé**
 (`reloadPolicy`, `previous != nil`), pas au redémarrage qui suit `grant`.
+
+**Une ligne venue de Kagu est une seule commande « sudo kagu agent … », sans « ; », « | », « && » ni « --yes » : sinon, ne la collez pas.**
+Un serveur pris sert aussi l'écran et peut en retirer l'avertissement : la
+doc d'installation le porte aussi (« Coller une ligne de Kagu en root »), et
+elle vient du dépôt et de la version signée, pas du serveur. Une seule clé
+d'écran, `rights.paste_only_pending`, le dit sous chaque ligne à coller
+(`RootCommand` : `grant --pending`, `grant --set`, `revoke`, `policy migrate`,
+`trust`) et dans la sortie de `grant --pending`. Chaque commande imprime ce
+qu'elle change et demande `[o/N]` au clavier, N par défaut : Entrée seule ou
+un pipe ne changent rien.
 
 L'agent note dans `pending-rights.json` (son état, `0600`, écrit d'un coup)
 chaque droit qu'il refuse `right_missing` : au jugement d'un ordre (le juge,

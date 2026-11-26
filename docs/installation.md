@@ -1278,6 +1278,29 @@ des compromissions maladroites. `NoNewPrivileges=false` retire en plus à l'unit
 une protection : c'est la contrepartie de ce droit, et la page du jeton la dit
 dans un encadré. Ne cochez la case que sur l'hôte Proxmox.
 
+#### Coller une ligne de Kagu en root
+
+**Une ligne venue de Kagu est une seule commande « sudo kagu agent … », sans « ; », « | », « && » ni « --yes » : sinon, ne la collez pas.**
+
+Pourquoi : un serveur pris sert aussi l'écran. Il peut y enchaîner une
+commande de plus, ou retirer cet avertissement de l'écran. Cette page, il ne
+la réécrit pas : elle vient du dépôt et de la version signée, pas du serveur.
+Dans le doute, relisez la ligne ici avant de la lancer.
+
+Ce que fait chaque commande avant d'écrire : `grant`, `grant --set`,
+`grant --pending`, `revoke`, `policy migrate` et `trust` impriment ce qu'elles
+changent, puis demandent `[o/N]` au clavier, N par défaut. Entrée seule ne
+change rien ; `echo o | sudo …` ne répond pas, la réponse se lit sur le
+terminal, jamais sur l'entrée standard. `--yes` ne vaut que **sans terminal**
+(un script, cloud-init) : dans un terminal, la commande dit « --yes ne vaut que
+sans terminal : la question est posée. » et pose la question. `grant --pending`
+refuse `--yes` dans tous les cas.
+
+Pour un droit manquant, l'écran donne toujours la même ligne,
+`sudo kagu agent grant --pending`, et le bouton « Demander ce droit à la
+machine » : l'agent note le droit, la commande le montre en clair et ne le pose
+qu'après un « o » tapé au clavier.
+
 #### Les ancres de confiance
 
 Un serveur Kagu compromis signe les ordres qu'il veut. Pour qu'il ne puisse
@@ -1472,20 +1495,6 @@ droits ne changent pas : Docker installé après « Gérer », relancez
 chemin qui ne servent plus ; les dossiers restent. `grant` ne touche à aucun
 autre drop-in (`produce.conf`, `root.conf`) : il les nomme, et ce qu'ils
 ouvrent s'ajoute au sien.
-
-**Une ligne venue de Kagu est une seule commande `sudo kagu agent …`, sans
-« ; », « | », « && » ni `--yes` : sinon, ne la collez pas.** Un serveur pris
-sert aussi l'écran ; cette page, il ne la réécrit pas. Pour un droit manquant,
-l'écran donne toujours la même ligne, `sudo kagu agent grant --pending`, et le
-bouton « Demander ce droit à la machine » : l'agent note le droit, la commande
-le montre en clair et ne le pose qu'après un « o » tapé au clavier.
-
-`grant`, `grant --set`, `grant --pending`, `revoke`, `policy migrate` et
-`trust` impriment ce qu'ils changent, puis demandent `[o/N]` au clavier, N par
-défaut ; `echo o | sudo …` ne répond pas. `--yes` ne vaut que **sans
-terminal** (un script, cloud-init) : dans un terminal, la commande dit
-« --yes ne vaut que sans terminal : la question est posée. » et pose la
-question. `grant --pending` refuse `--yes` dans tous les cas.
 
 **Le code de sortie 3** veut dire « mis à jour, relance-moi » : l'agent vient
 de changer de binaire (`agent.update`) ou de revenir en arrière

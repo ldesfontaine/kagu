@@ -163,6 +163,7 @@ func grantPending(command policyCommand, opts agent.PolicyOptions, text lang.Cat
 // refus de l'agent.
 func printPendingRights(out io.Writer, text lang.Catalog, pending []agent.PendingRight, change agent.PolicyChange) {
 	fmt.Fprintln(out, text.Get("agent.pending_header"))
+	fmt.Fprintln(out, text.Get("rights.paste_only_pending"))
 	for _, entry := range pending {
 		if !slices.Contains(change.Added, entry.Text()) {
 			continue

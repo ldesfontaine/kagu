@@ -15,6 +15,18 @@ import { expect, test } from "./support/findings";
 const captureFolder = new URL("../../docs/projet/refonte-ux/captures/", import.meta.url).pathname;
 const capturing = process.env.E2E_CAPTURES === "1";
 const machineName = "vps-droits";
+// ARB-1 : le début de l'avertissement, avant {product}, se lit sous chaque
+// ligne à coller.
+const pasteWarning = label("rights.paste_only_pending").split("{product}")[0]!.trim();
+
+// Chaque ligne à coller de la zone porte l'avertissement : aucune n'y échappe.
+async function expectWarnedLines(zone: Locator): Promise<void> {
+  const lines = zone.locator(".root-command");
+  expect(await lines.count(), "une ligne à coller au moins").toBeGreaterThan(0);
+  for (const line of await lines.all()) {
+    await expect(line).toContainText(pasteWarning);
+  }
+}
 
 // Les droits de la machine, par groupe, tels que le serveur les rend.
 interface ServedGroup {
@@ -90,6 +102,11 @@ test("onglet Droits : le jeu, cinq groupes, les noms repliés, les lignes du ser
   await expect(network).toContainText(label("rights.not_allowed"));
   await expect(network.locator(".token-box code")).toHaveText(/^sudo \S+ agent grant --pending$/);
   await expect(network).toContainText(label("rights.paste_shows_change"));
+  await expectWarnedLines(network);
+  // « Changer de jeu » (grant --set) : chaque ligne avec l'avertissement ; puis
+  // toutes celles de l'onglet, pliées ou non.
+  await expectWarnedLines(main.locator("section.card", { has: page.locator(".card-t").getByText(label("rights.other_sets"), { exact: true }) }));
+  await expectWarnedLines(main);
   // ARB-1 : à côté de la ligne, « Demander ce droit à la machine » fait
   // partir un ordre right.request, et lui seul ; le groupe reste pas permis.
   const before = await machineRuns(page);
@@ -117,6 +134,7 @@ test("onglet Droits : le jeu, cinq groupes, les noms repliés, les lignes du ser
     if (group.revoke_line !== "") {
       await expect(detail.locator(".token-box code")).toHaveText(group.revoke_line);
       await expect(detail).toContainText(label("rights.revoke_line"));
+      await expectWarnedLines(detail);
     }
     if (group.name === "enter") {
       // L'échéance de terminal.host se lit sur sa ligne.

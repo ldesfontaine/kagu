@@ -66,7 +66,9 @@ func TestR_A3_15_E03_07_PendingWithoutTerminalWritesNothing(t *testing.T) {
 	if !strings.Contains(out, "docker.deploy") || !strings.Contains(out, "Déployer un service Docker") {
 		t.Fatalf("the pending right is not told in clear:\n%s", out)
 	}
-	if strings.Contains(out+refused.message, "-yes") {
+	// L'avertissement nomme « --yes » pour l'interdire : ce n'est pas une offre.
+	warning := testCatalog(t).Get("rights.paste_only_pending")
+	if strings.Contains(strings.ReplaceAll(out, warning, "")+refused.message, "-yes") {
 		t.Fatalf("--pending without terminal offers -yes, which it refuses:\n%s\n%s", out, refused.message)
 	}
 	if want := "Droits que " + brand.ProductName + " a demandés et que l'agent a refusés ces dernières 24 h :"; !strings.Contains(out, want) {
@@ -140,5 +142,20 @@ func TestR_A3_15_E03_07_NoPendingRight(t *testing.T) {
 	out, err = runPolicy(t, place, noTerminal, policyGrant, "-state", stateDir, "--pending")
 	if err != nil || !strings.Contains(out, "Aucun droit en attente") || policyContent(t, place) != before {
 		t.Fatalf("expired list: %v\n%s", err, out)
+	}
+}
+
+// R-DROIT-8 (ARB-1) : la sortie de grant --pending porte, avant la question,
+// la phrase de l'écran (une seule clé), avec le nom et la commande de la marque.
+func TestR_DROIT_8_PendingOutputCarriesThePasteWarning(t *testing.T) {
+	stateDir, place := policyState(t)
+	writePending(t, stateDir, refusedNow())
+	out, _ := runPolicy(t, place, fakeTerminal("\n"), policyGrant, "-state", stateDir, "--pending")
+	want := "Une ligne venue de " + brand.ProductName + " est une seule commande « sudo " + brand.Command + " agent … », sans « ; », « | », « && » ni « --yes » : sinon, ne la collez pas."
+	if !strings.Contains(out, want) {
+		t.Fatalf("no warning in the --pending output, want %q:\n%s", want, out)
+	}
+	if strings.Index(out, want) > strings.Index(out, "[o/N]") {
+		t.Fatalf("the warning comes after the question:\n%s", out)
 	}
 }
