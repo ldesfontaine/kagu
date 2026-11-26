@@ -48,6 +48,11 @@ type Config struct {
 	// Adresse à laquelle les machines joignent Kagu, mise dans la
 	// commande d'installation. Vide : déduite de la requête.
 	PublicURL string `toml:"public_url" validate:"omitempty,http_url"`
+	// Adresse des versions, d'où les lignes d'installation et de migration
+	// d'un agent téléchargent son binaire ; setup l'écrit avec celle
+	// qu'install.sh a lue dans KAGU_RELEASES. HTTPS seulement : ces lignes
+	// vérifient la somme, pas la signature. Défaut : brand.ReleaseBaseURL.
+	ReleasesURL string `toml:"releases_url" validate:"required,url,startswith=https://"`
 	// Adresse de mcp-maison, le serveur MCP installé à côté : Paramètres lit
 	// son /health. Vide : Kagu ne le cherche pas et marche sans lui.
 	MCPURL string `toml:"mcp_url" validate:"omitempty,http_url"`
@@ -90,6 +95,7 @@ func Default() Config {
 	return Config{
 		Listen:                  DefaultListen,
 		StateDir:                defaultStateDir,
+		ReleasesURL:             brand.ReleaseBaseURL,
 		MaxConnections:          defaultMaxConnections,
 		MaxConnectionsPerSource: defaultMaxConnectionsPerSource,
 		WriteTimeoutSeconds:     defaultWriteTimeoutSeconds,
@@ -175,16 +181,18 @@ var ErrServesClearHTTP = errors.New("listen is not on loopback and no HTTPS prox
 // setupFile est ce que setup écrit dans le fichier de configuration ; le
 // reste garde ses valeurs par défaut, que l'opérateur change à la main.
 type setupFile struct {
-	Listen    string `toml:"listen"`
-	PublicURL string `toml:"public_url,omitempty"`
-	StateDir  string `toml:"state_dir"`
+	Listen      string `toml:"listen"`
+	PublicURL   string `toml:"public_url,omitempty"`
+	StateDir    string `toml:"state_dir"`
+	ReleasesURL string `toml:"releases_url,omitempty"`
 }
 
 // RenderForSetup écrit le fichier de configuration que setup pose, et le
 // relit comme serve le relira. Il refuse ce que serve refuserait, et une
-// adresse publique servie sans HTTPS (R-CNX-5) : rien ne s'écrit.
-func RenderForSetup(listen, publicURL, stateDir string) ([]byte, error) {
-	content, err := toml.Marshal(setupFile{Listen: listen, PublicURL: publicURL, StateDir: stateDir})
+// adresse publique servie sans HTTPS (R-CNX-5) : rien ne s'écrit. Une
+// adresse des versions vide n'est pas écrite : le défaut vaut.
+func RenderForSetup(listen, publicURL, stateDir, releasesURL string) ([]byte, error) {
+	content, err := toml.Marshal(setupFile{Listen: listen, PublicURL: publicURL, StateDir: stateDir, ReleasesURL: releasesURL})
 	if err != nil {
 		return nil, err
 	}

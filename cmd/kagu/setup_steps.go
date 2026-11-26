@@ -58,6 +58,7 @@ const (
 	controlHealthPath          = "/control/admin/health"
 	controlLocalEnrollmentPath = "/control/admin/local-enrollment"
 	controlLocalAgentPath      = "/control/admin/local-agent"
+	controlReleaseImportPath   = "/control/admin/releases/import"
 )
 
 // setupSystem est ce que setup demande à la machine, en plus de ce que
@@ -228,7 +229,7 @@ func (r *setupRun) writeServerConfig(listen string, owner fsx.Owner) (bool, erro
 	if !errors.Is(err, fs.ErrNotExist) {
 		return false, err
 	}
-	content, err := config.RenderForSetup(listen, "", r.paths.stateDir)
+	content, err := config.RenderForSetup(listen, "", r.paths.stateDir, r.releasesURL)
 	if errors.Is(err, config.ErrServesClearHTTP) {
 		return false, refuseClearListen(listen)
 	}
@@ -242,37 +243,87 @@ func (r *setupRun) writeServerConfig(listen string, owner fsx.Owner) (bool, erro
 	return true, nil
 }
 
-// startServer pose l'unité de serve et attend sa socket de contrôle. Déjà
-// fait si /control/admin/health répond.
+// startServer pose l'unité de serve, attend sa socket de contrôle, puis lui
+// fait importer la version qu'install.sh a vérifiée. Déjà fait si
+// /control/admin/health répond ; l'import se rejoue, il ne change rien
+// à une version déjà là.
 func (r *setupRun) startServer(ctx context.Context) (step.State, string, error) {
+	detail, err := r.runServer(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	imported, err := r.importDownloadedRelease(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	if imported != "" {
+		detail = r.text.Format("setup.release_imported", detail, imported)
+	}
+	return step.StateDone, detail, nil
+}
+
+// runServer démarre serve s'il ne répond pas, et rend le détail de la ligne.
+func (r *setupRun) runServer(ctx context.Context) (string, error) {
 	if r.serverAnswers(ctx) {
-		return step.StateDone, r.doneDetail(false, ""), nil
+		return r.doneDetail(false, ""), nil
 	}
 	if _, err := os.Stat(r.paths.binary); err != nil {
-		return "", "", &setupFailure{reason: r.text.Format("setup.binary_missing", r.paths.binary), todo: r.text.Format("setup.binary_missing_todo", r.paths.binary)}
+		return "", &setupFailure{reason: r.text.Format("setup.binary_missing", r.paths.binary), todo: r.text.Format("setup.binary_missing_todo", r.paths.binary)}
 	}
 	// La règle que serve juge au démarrage, vérifiée avant de le lancer : un
 	// dossier ouvert l'arrêterait sans canal local.
 	stateDir, err := os.OpenRoot(r.paths.stateDir)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	defer stateDir.Close()
 	if err := requirePrivateStateDir(stateDir, r.paths.stateDir); err != nil {
-		return "", "", err
+		return "", err
 	}
 	if _, err := r.startUnit(brand.ServerUnit, machine.ServerUnitLines()); err != nil {
-		return "", "", err
+		return "", err
 	}
 	answered, err := r.waitFor(ctx, func(ctx context.Context) (bool, error) { return r.serverAnswers(ctx), nil })
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	if !answered {
 		silent := r.text.Format("setup.server_silent", r.control.socket, int(r.wait.Seconds()))
-		return "", "", &setupFailure{reason: silent, todo: r.text.Get("setup.server_silent_todo")}
+		return "", &setupFailure{reason: silent, todo: r.text.Get("setup.server_silent_todo")}
 	}
-	return step.StateDone, r.text.Get("setup.server_detail"), nil
+	return r.text.Get("setup.server_detail"), nil
+}
+
+// importDownloadedRelease fait importer par serve, sous son compte, les
+// fichiers de la version qu'install.sh a vérifiée (Library.Import les
+// revérifie avec les clés du binaire). Rend la version importée ; rien sans
+// dossier, quand setup est lancé sans install.sh.
+func (r *setupRun) importDownloadedRelease(ctx context.Context) (string, error) {
+	if _, err := os.Stat(r.paths.releaseDir); errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	request := struct {
+		Folder string `json:"folder"`
+	}{Folder: r.paths.releaseDir}
+	status, body, err := r.control.post(ctx, controlReleaseImportPath, request, controlTimeout)
+	if err != nil {
+		return "", err
+	}
+	if status != http.StatusOK {
+		// Le refus dit dans la langue de setup, comme admin le dit.
+		refused := adminRun{client: r.control, text: r.text, out: r.out}.refusalOf(status, body)
+		return "", &setupFailure{
+			reason: r.text.Format("setup.release_refused", r.paths.releaseDir, refused.Error()),
+			todo:   r.text.Get("setup.release_refused_todo"),
+		}
+	}
+	var imported struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(body, &imported); err != nil || imported.Version == "" {
+		return "", fmt.Errorf("read the imported release: %w", err)
+	}
+	return imported.Version, nil
 }
 
 func (r *setupRun) serverAnswers(ctx context.Context) bool {

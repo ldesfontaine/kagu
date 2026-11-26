@@ -12,6 +12,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/edge/server"
 	"github.com/ldesfontaine/kagu/internal/edge/server/ping"
 	"github.com/ldesfontaine/kagu/internal/fact/auth"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 func TestParse_EmptyFile_UsesDefaults(t *testing.T) {
@@ -358,7 +359,7 @@ func TestParse_GlobalLimits_DefaultCustomAndBad(t *testing.T) {
 // Le fichier que setup écrit se relit tel quel ; une adresse publique sans
 // HTTPS ne s'écrit pas (R-CNX-5), une adresse que serve refuserait non plus.
 func TestRenderForSetup_WritesWhatServeReadsAndRefusesAClearPublicListen(t *testing.T) {
-	content, err := RenderForSetup(DefaultListen, "", "/var/lib/kagu-test")
+	content, err := RenderForSetup(DefaultListen, "", "/var/lib/kagu-test", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,12 +367,35 @@ func TestRenderForSetup_WritesWhatServeReadsAndRefusesAClearPublicListen(t *test
 	if err != nil || len(warnings) != 0 || cfg.Listen != DefaultListen || cfg.StateDir != "/var/lib/kagu-test" || cfg.PublicURL != "" {
 		t.Fatalf("read back %+v %v %v:\n%s", cfg, warnings, err, content)
 	}
+	if cfg.ReleasesURL != brand.ReleaseBaseURL || strings.Contains(string(content), "releases_url") {
+		t.Fatalf("without an address, the default is not written: %q\n%s", cfg.ReleasesURL, content)
+	}
 	for _, listen := range []string{"203.0.113.7:8080", "0.0.0.0:8080", "[::]:8080"} {
-		if content, err := RenderForSetup(listen, "https://kagu.example.org", "/var/lib/kagu-test"); !errors.Is(err, ErrServesClearHTTP) || content != nil {
+		if content, err := RenderForSetup(listen, "https://kagu.example.org", "/var/lib/kagu-test", ""); !errors.Is(err, ErrServesClearHTTP) || content != nil {
 			t.Fatalf("%s: %v %q", listen, err, content)
 		}
 	}
-	if _, err := RenderForSetup("127.0.0.1:no-port", "", "/var/lib/kagu-test"); err == nil {
+	if _, err := RenderForSetup("127.0.0.1:no-port", "", "/var/lib/kagu-test", ""); err == nil {
 		t.Fatal("a listen serve refuses was written")
+	}
+}
+
+// L'adresse des versions qu'install.sh passe à setup s'écrit dans le
+// fichier et se relit ; une adresse sans HTTPS ne s'écrit pas : les lignes
+// d'un agent ne vérifient que la somme.
+func TestRenderForSetup_WritesTheReleasesAddressInHTTPSOnly(t *testing.T) {
+	const mirror = "https://mirror.example.org/kagu/releases"
+	content, err := RenderForSetup(DefaultListen, "", "/var/lib/kagu-test", mirror)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := Parse(content)
+	if err != nil || cfg.ReleasesURL != mirror {
+		t.Fatalf("read back %q %v:\n%s", cfg.ReleasesURL, err, content)
+	}
+	for _, refused := range []string{"http://mirror.example.org/kagu", "file:///srv/releases", "mirror.example.org", "https://"} {
+		if content, err := RenderForSetup(DefaultListen, "", "/var/lib/kagu-test", refused); err == nil {
+			t.Errorf("%q was written:\n%s", refused, content)
+		}
 	}
 }

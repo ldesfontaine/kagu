@@ -38,6 +38,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/systemdunits"
 	"github.com/ldesfontaine/kagu/internal/fact/update"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/live"
@@ -480,6 +481,7 @@ type Server struct {
 	// La socket des agents locaux ne sert que les routes de l'agent.
 	agentSocketHandler http.Handler
 	publicURL          string
+	releasesURL        string
 	trustedProxies     []netip.Prefix
 	// Le secret que le mandataire pose dans brand.ProxySecretHeader ; vide :
 	// aucun n'est configuré, l'adresse du pair seule décide (voir auth.go).
@@ -564,7 +566,11 @@ type Options struct {
 	PublicLive Live
 	// Adresse publique de Kagu pour la commande d'installation ; vide :
 	// déduite de la requête.
-	PublicURL      string
+	PublicURL string
+	// ReleasesURL est l'adresse des versions (releases_url), d'où les lignes
+	// d'installation et de migration d'un agent téléchargent son binaire ;
+	// vide : brand.ReleaseBaseURL.
+	ReleasesURL    string
 	TrustedProxies []netip.Prefix
 	// ForwardSecret est le secret partagé avec le mandataire du mode forward,
 	// lu par proxysecret.Load ; vide : aucun.
@@ -649,6 +655,7 @@ func New(opts Options) (*Server, error) {
 		verbDenyLimit:  ratelimit.New(apiVerbDenyRate, apiVerbDenyBurst, apiVerbIdle),
 		eventTabs:      ratelimit.NewSlots(maxEventSubscribers),
 		publicURL:      opts.PublicURL,
+		releasesURL:    cmp.Or(opts.ReleasesURL, brand.ReleaseBaseURL),
 		trustedProxies: opts.TrustedProxies,
 		forwardSecret:  opts.ForwardSecret,
 		forwardUsers:   forwardUserSet(opts.ForwardUsers),

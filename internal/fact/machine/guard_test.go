@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 func TestGuardInstallLines_PutRootsCopyOutsideTheStateOfTheAccount(t *testing.T) {
@@ -41,7 +43,7 @@ func TestGuardMigrationLines_AreTheExactLinesToPasteWithSudo(t *testing.T) {
 	if got != want {
 		t.Fatalf("got:\n%s", got)
 	}
-	if !strings.HasSuffix(GuardMigrationText("v0.0.2", false), got) {
+	if !strings.HasSuffix(GuardMigrationText(brand.ReleaseBaseURL, "v0.0.2", false), got) {
 		t.Fatal("the text does not end with the lines")
 	}
 	// Rien ne vient de l'opérateur ni du réseau, et rien ne lance l'agent en root.
@@ -79,8 +81,8 @@ func TestGuardMigrationLines_RootVariantNeverNamesSudo(t *testing.T) {
 // Le bloc de migration commence par le téléchargement vérifié : il ne suppose
 // plus /tmp/kagu déjà copié.
 func TestGuardMigrationText_DownloadsAndChecksTheBinaryFirst(t *testing.T) {
-	text := GuardMigrationText("v0.0.2", true)
-	download := strings.Join(ReleaseDownloadLines("v0.0.2"), "\n")
+	text := GuardMigrationText(brand.ReleaseBaseURL, "v0.0.2", true)
+	download := strings.Join(ReleaseDownloadLines(brand.ReleaseBaseURL, "v0.0.2"), "\n")
 	if !strings.HasPrefix(text, download+"\n") {
 		t.Fatalf("the block must start with the download:\n%s", text)
 	}
@@ -178,5 +180,35 @@ func TestAgentUnitLines_MatchTheShippedUnit(t *testing.T) {
 	got := strings.Join(AgentUnitLines(), "\n")
 	if strings.TrimRight(strings.Join(want, "\n"), "\n") != got {
 		t.Fatalf("la page d'installation et le fichier livré diffèrent.\npage :\n%s\nfichier :\n%s", got, strings.Join(want, "\n"))
+	}
+}
+
+// L'adresse des versions vient de la configuration (releases_url) : un
+// miroir se lit tel quel, et un texte que le shell interpréterait reste une
+// seule valeur entre apostrophes, que root colle sans rien lancer.
+func TestReleaseDownloadLines_ReadTheReleasesAddressAsOneWord(t *testing.T) {
+	mirror := strings.Join(ReleaseDownloadLines("https://mirror.example.org/kagu/", "v0.0.2"), "\n")
+	if !strings.Contains(mirror, "base=https://mirror.example.org/kagu/v0.0.2 &&") {
+		t.Fatalf("the mirror is not the base:\n%s", mirror)
+	}
+	hostile := strings.Join(ReleaseDownloadLines("https://mirror.example.org/$(touch pwned);x`id`'", "v0.0.2"), "\n")
+	if !strings.Contains(hostile, `base='https://mirror.example.org/$(touch pwned);x`+"`id`"+`'\''/v0.0.2' &&`) {
+		t.Fatalf("the address is not quoted:\n%s", hostile)
+	}
+	shell, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh")
+	}
+	dir := t.TempDir()
+	script := "cd " + dir + " && " + strings.Join(ReleaseDownloadLines("https://mirror.example.org/$(touch pwned)", "v0.0.2")[1:2], "") + " echo \"$base\""
+	output, err := exec.Command(shell, "-c", script).CombinedOutput() // #nosec G204 -- la ligne que le test juge, dans un dossier de test.
+	if err != nil {
+		t.Fatalf("sh: %v %s", err, output)
+	}
+	if strings.TrimSpace(string(output)) != "https://mirror.example.org/$(touch pwned)/v0.0.2" {
+		t.Fatalf("base read by sh: %q", output)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "pwned")); err == nil {
+		t.Fatal("the address ran a command")
 	}
 }

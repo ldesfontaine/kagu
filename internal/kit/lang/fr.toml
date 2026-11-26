@@ -4252,7 +4252,7 @@ agent = "Agent de cette machine"
 
 [setup]
 title = "{product} %s — installation"
-usage = "Usage : {command} setup [--rights observe|manage|root]"
+usage = "Usage : {command} setup [--rights observe|manage|root] [--releases-url https://…]"
 domain_later = "--domain et --proxy ne sont pas encore pris en charge : setup installe l'accès par le tunnel SSH seulement. Relancez sans ces options."
 rights_unknown = "--rights vaut observe, manage ou root."
 locked = "Un autre setup tourne déjà sur cette machine (verrou %s) : attendez qu'il finisse."
@@ -4272,6 +4272,9 @@ binary_missing_todo = "Posez le binaire, install -m 0755 {command} %s, puis rela
 server_detail = "écoute sur la machine seulement"
 server_silent = "pas de réponse par %s en %d s"
 server_silent_todo = "Lisez le journal du serveur, journalctl -u {server_unit} -n 50, corrigez, puis relancez setup."
+release_imported = "%s · version %s dans la bibliothèque"
+release_refused = "la version de %s est refusée : %s"
+release_refused_todo = "Relancez install.sh : il retélécharge la version et la revérifie, puis relance setup."
 local_enrolled = "la machine {product} a déjà eu un agent, qui n'est plus sur cette machine"
 local_enrolled_todo = "Ré-enrôlez-la depuis l'interface (Machines, la machine {product}, Ré-enrôler), puis relancez setup."
 enroll_failed = "l'agent ne s'est pas enrôlé"

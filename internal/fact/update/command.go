@@ -1,9 +1,8 @@
 package update
 
 import (
-	"strings"
-
 	"github.com/ldesfontaine/kagu/internal/fact/container"
+	"github.com/ldesfontaine/kagu/internal/kit/shell"
 )
 
 // Command fabrique ce que l'opérateur tapera pour appliquer la mise à
@@ -17,27 +16,8 @@ func Command(found container.Container, check Check) string {
 		return ""
 	}
 	if found.ComposeService != "" && found.ComposeDir != "" {
-		return "cd " + shellQuote(found.ComposeDir) + " && docker compose pull " + shellQuote(found.ComposeService) +
-			" && docker compose up -d " + shellQuote(found.ComposeService)
+		return "cd " + shell.Quote(found.ComposeDir) + " && docker compose pull " + shell.Quote(found.ComposeService) +
+			" && docker compose up -d " + shell.Quote(found.ComposeService)
 	}
-	return "docker pull " + shellQuote(check.Target())
-}
-
-// shellQuote entoure de guillemets simples ce qui en a besoin : un
-// chemin avec une espace, un nom qui n'est pas qu'un mot.
-func shellQuote(value string) string {
-	if value != "" && strings.IndexFunc(value, needsQuoting) < 0 {
-		return value
-	}
-	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
-}
-
-func needsQuoting(character rune) bool {
-	switch {
-	case character >= 'a' && character <= 'z', character >= 'A' && character <= 'Z', character >= '0' && character <= '9':
-		return false
-	case character == '/', character == '.', character == '-', character == '_', character == ':', character == '@', character == '+':
-		return false
-	}
-	return true
+	return "docker pull " + shell.Quote(check.Target())
 }

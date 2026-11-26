@@ -149,7 +149,7 @@ Les sous-commandes :
 
 | Commande | Rôle |
 | --- | --- |
-| `kagu setup [--rights observe\|manage\|root]` | Installe le serveur et l'agent de cette machine, en root, voir [En une commande : setup](#en-une-commande--setup) |
+| `kagu setup [--rights observe\|manage\|root] [--releases-url https://…]` | Installe le serveur et l'agent de cette machine, en root, voir [En une commande : setup](#en-une-commande--setup) ; `install.sh` le lance après avoir vérifié la version, voir [Par install.sh](#par-installsh) |
 | `kagu serve -config <chemin>` | Le serveur web. `-config` vaut `/etc/kagu/config.toml` par défaut |
 | `kagu agent [options]` | L'agent d'une machine, voir [Ajouter une machine](#ajouter-une-machine) |
 | `kagu auth status\|disable -config <chemin>` | L'état de l'authentification, ou la couper (mot de passe perdu) : l'interface revient à sa première configuration |
@@ -166,6 +166,39 @@ Les sous-commandes :
 | `kagu version` | La version et le commit |
 
 ## Installer le serveur
+
+### Par install.sh
+
+Une version signée publie aussi `install.sh`, qui porte sa propre version
+(`MIN_VERSION`) et les deux clés de version, la courante et la secours :
+
+```sh
+curl -fsSLO https://github.com/ldesfontaine/kagu/releases/download/vX.Y.Z/install.sh
+sudo sh install.sh          # options de setup à la suite : --rights observe…
+```
+
+Dans l'ordre, avant d'écrire quoi que ce soit hors d'un dossier temporaire :
+
+| Étape | Ce qui refuse |
+| --- | --- |
+| Télécharge `SHA256SUMS` et `SHA256SUMS.minisig` depuis `KAGU_RELEASES/vX.Y.Z` | Le réseau, un 404 |
+| Vérifie la signature **globale** : les sommes **et** le commentaire de confiance, qui porte la version. Par `minisign -V` s'il est installé, sinon par `openssl` (BLAKE2b-512 puis Ed25519) | Une signature d'une autre clé, l'ancien algorithme `Ed`, des sommes ou un commentaire changés |
+| Compare la version du commentaire à `MIN_VERSION` | Une version signée plus ancienne servie à la place (« version plus ancienne que celle attendue ») |
+| Télécharge chaque binaire listé, `sha256sum -c` | Un binaire changé |
+| Pose `/usr/local/bin/kagu`, garde les fichiers de la version dans `/var/lib/kagu-setup/release/`, lance `kagu setup --releases-url "$KAGU_RELEASES"` | — |
+
+`KAGU_RELEASES` (défaut : les versions publiées sur GitHub,
+`https://github.com/ldesfontaine/kagu/releases/download`) choisit l'adresse
+des versions : un miroir ne change pas la confiance, la signature est
+vérifiée par les clés du script. `setup` l'écrit dans `config.toml`
+(`releases_url`) et fait importer la version gardée par `serve` dans la
+bibliothèque (« Serveur démarré · version vX.Y.Z dans la bibliothèque »).
+
+Sur Debian 12, `minisign` est un paquet ; Ubuntu 22.04 n'en a pas, le script
+y vérifie par `openssl` (3.0). Le script téléchargé s'exécute en root : il
+protège d'un binaire changé ou d'une version ancienne servis par un miroir,
+pas d'un script changé à la source. Le chemin sans script reste
+[Télécharger](#télécharger) puis `kagu setup`.
 
 ### En une commande : setup
 
@@ -344,6 +377,7 @@ commenté : [`installation/config.toml`](installation/config.toml).
 | `forward_secret_file` | vide | Mode `forward` : le fichier d'une ligne qui porte le secret partagé avec le mandataire (32 caractères au moins, illisible pour les autres comptes). Illisible, trop court ou trop ouvert, il arrête le démarrage. Voir [Derrière un SSO qui authentifie](#derrière-un-sso-qui-authentifie) |
 | `forward_users` | vide | Mode `forward` : les identités admises, par exemple `["lucas"]` ; toute autre répond `403`. Vide : toute identité que le SSO transmet. Voir [Qui peut entrer](#qui-peut-entrer) |
 | `log_level` | `info` | `debug`, `info`, `warn` ou `error`. En `debug`, une ligne par requête HTTP |
+| `releases_url` | `https://github.com/ldesfontaine/kagu/releases/download` | L'adresse des versions, `https://` seulement : les lignes d'installation et de migration d'un agent y téléchargent son binaire (elles vérifient la somme, pas la signature). `setup` l'écrit avec celle d'`install.sh` |
 
 Une clé inconnue est signalée au démarrage (`unknown key ["…"] ignored`)
 puis ignorée ; une valeur invalide arrête le démarrage avec le nom du champ.

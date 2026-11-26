@@ -28,6 +28,8 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/release"
+	"github.com/ldesfontaine/kagu/internal/kit/release/releasetest"
 	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/kit/version"
 )
@@ -68,6 +70,8 @@ type setupBench struct {
 	parts  *components
 	// Ce que setup a demandé à la route du jeton.
 	enrollmentRequests int
+	// Les clés de version que serve croit ; nil : celles du binaire.
+	releaseKeys *release.Keys
 }
 
 func newSetupBench(t *testing.T) *setupBench {
@@ -91,6 +95,7 @@ func newSetupBench(t *testing.T) *setupBench {
 		lockFile: filepath.Join(dir, "setup.lock"), stateDir: filepath.Join(dir, "state"), agentStateDir: filepath.Join(dir, "agent"),
 		policyDir: filepath.Join(dir, "policy"), unitDir: filepath.Join(dir, "units"), binary: binary,
 		guardPath: filepath.Join(dir, "guard", brand.AgentGuardBinary), agentSocket: filepath.Join(dir, "agent.sock"),
+		releaseDir: filepath.Join(dir, "release"),
 	}
 	b.place = agent.PolicyPlace{Dir: b.paths.policyDir, Owner: fsx.Owner{UID: os.Getuid(), GID: os.Getgid()}}
 	b.system = &setupSystemFake{
@@ -139,7 +144,7 @@ func (b *setupBench) started(unit string) {
 func (b *setupBench) startServe() {
 	t := b.t
 	logger := slog.New(slog.NewTextHandler(b.logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	_, parts, srv := realServerLogging(t, b.paths.stateDir, logger)
+	_, parts, srv := realServerLogging(t, b.paths.stateDir, logger, b.trustReleaseKeys)
 	parts.actions.SetKey(action.GenerateKey())
 	hostname, _ := os.Hostname()
 	parts.machines.SetServerHost(hostinfo.HostFingerprint(), hostname)
@@ -154,6 +159,19 @@ func (b *setupBench) startServe() {
 		t.Fatal("the agent socket did not open")
 	}
 	t.Cleanup(func() { _ = agents.Close() })
+}
+
+// trustReleaseKeys donne à la bibliothèque de serve les clés de test du banc.
+func (b *setupBench) trustReleaseKeys(parts *components) {
+	if b.releaseKeys == nil {
+		return
+	}
+	root, err := os.OpenRoot(b.paths.stateDir)
+	if err != nil {
+		b.t.Fatal(err)
+	}
+	b.t.Cleanup(func() { _ = root.Close() })
+	parts.releases = release.NewLibrary(root, *b.releaseKeys)
 }
 
 // countEnrollments compte les demandes de jeton de la machine Kagu.
@@ -690,5 +708,90 @@ func TestSetup_LocalEnrollmentIsForRootOnly(t *testing.T) {
 	srv.ControlHandler().ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusForbidden || strings.Contains(recorder.Body.String(), brand.EnrollmentTokenScheme) {
 		t.Fatalf("an unknown peer: %d %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+// setupRelease donne au banc une version signée par une clé de test, posée
+// où install.sh la laisse ; serve croit trusted.
+func setupRelease(t *testing.T, b *setupBench, signer release.PrivateKey, trusted release.PublicKey) {
+	t.Helper()
+	b.releaseKeys = &release.Keys{Current: trusted}
+	b.paths.releaseDir = releasetest.Write(t, signer, "v1.0.0", releasetest.Binaries("v1.0.0", "amd64", "arm64"))
+}
+
+// La version qu'install.sh a vérifiée entre dans la bibliothèque par serve,
+// sous son compte ; l'adresse des versions passée par install.sh s'écrit
+// dans config.toml. Relancé, setup réimporte sans rien changer.
+func TestSetup_ImportsTheReleaseInstallShLeft(t *testing.T) {
+	public, private, err := release.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := newSetupBench(t)
+	setupRelease(t, b, private, public)
+	const mirror = "https://mirror.example.org/kagu"
+	for range 2 {
+		out, err := b.run(noTerminal, "", "--releases-url", mirror)
+		if err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		if line := lineOf(t, out, "Serveur démarré"); !strings.Contains(line, "version v1.0.0 dans la bibliothèque") {
+			t.Fatalf("the server line: %q", line)
+		}
+	}
+	versions, err := b.parts.releases.Versions()
+	if err != nil || len(versions) != 1 || versions[0].String() != "v1.0.0" {
+		t.Fatalf("library %v %v", versions, err)
+	}
+	cfg, _, err := config.Load(b.paths.configFile)
+	if err != nil || cfg.ReleasesURL != mirror {
+		t.Fatalf("releases_url %q %v", cfg.ReleasesURL, err)
+	}
+}
+
+// Sans install.sh, setup n'importe rien et l'adresse des versions reste celle
+// par défaut, non écrite.
+func TestSetup_WithoutInstallShImportsNothing(t *testing.T) {
+	b := newSetupBench(t)
+	out, err := b.run(noTerminal, "")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if line := lineOf(t, out, "Serveur démarré"); strings.Contains(line, "bibliothèque") {
+		t.Fatalf("the server line: %q", line)
+	}
+	content, err := os.ReadFile(b.paths.configFile)
+	if err != nil || strings.Contains(string(content), "releases_url") {
+		t.Fatalf("config.toml %v:\n%s", err, content)
+	}
+}
+
+// Une version que serve refuse (signée par une autre clé que les siennes)
+// arrête setup sur la ligne du serveur, avec la raison de serve ; rien n'entre
+// dans la bibliothèque, et l'agent ne s'installe pas.
+func TestSetup_StopsOnAReleaseServeRefuses(t *testing.T) {
+	trusted, _, err := release.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, other, err := release.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := newSetupBench(t)
+	setupRelease(t, b, other, trusted)
+	out, err := b.run(noTerminal, "")
+	var refused *refusal
+	if !errors.As(err, &refused) || !strings.Contains(refused.message, "install.sh") {
+		t.Fatalf("got %v\n%s", err, out)
+	}
+	if line := lineOf(t, out, "Serveur démarré"); !strings.HasPrefix(line, "  ✗") || !strings.Contains(line, "aucune des clés de version") {
+		t.Fatalf("the failed line: %q", line)
+	}
+	if versions, err := b.parts.releases.Versions(); err != nil || len(versions) != 0 {
+		t.Fatalf("library %v %v", versions, err)
+	}
+	if strings.Contains(out, "Agent de cette machine") {
+		t.Fatalf("setup went on:\n%s", out)
 	}
 }

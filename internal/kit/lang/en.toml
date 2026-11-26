@@ -4252,7 +4252,7 @@ agent = "Agent of this machine"
 
 [setup]
 title = "{product} %s — installation"
-usage = "Usage: {command} setup [--rights observe|manage|root]"
+usage = "Usage: {command} setup [--rights observe|manage|root] [--releases-url https://…]"
 domain_later = "--domain and --proxy are not supported yet: setup installs access through the SSH tunnel only. Run it again without these options."
 rights_unknown = "--rights is observe, manage or root."
 locked = "Another setup is already running on this machine (lock %s): wait for it to finish."
@@ -4272,6 +4272,9 @@ binary_missing_todo = "Install the binary, install -m 0755 {command} %s, then ru
 server_detail = "listens on this machine only"
 server_silent = "no answer through %s within %d s"
 server_silent_todo = "Read the server log, journalctl -u {server_unit} -n 50, fix it, then run setup again."
+release_imported = "%s · version %s in the library"
+release_refused = "the release in %s is refused: %s"
+release_refused_todo = "Run install.sh again: it downloads and checks the release again, then runs setup."
 local_enrolled = "the {product} machine already had an agent, which is no longer on this machine"
 local_enrolled_todo = "Re-enroll it from the interface (Machines, the {product} machine, Re-enroll), then run setup again."
 enroll_failed = "the agent did not enroll"

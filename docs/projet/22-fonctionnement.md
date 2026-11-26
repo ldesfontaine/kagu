@@ -169,6 +169,7 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `/run/kagu` | `agent.sock` | La socket des agents locaux, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/agent/…` (« La socket des agents locaux ») | Mode 0660, groupe `kagu-agent` ; seul l'uid de ce compte passe. Elle n'est pas à sauvegarder |
 | Machine Kagu, `/etc/kagu` | `setup.json` | Ce que `kagu setup` retient : le jeu de droits choisi (`rights`) et chaque ligne cochée (`steps` : clé, état, détail, heure). Rien d'autre : ni jeton ni code | root, `0600`, écrit d'un coup après chaque ligne. Un setup relancé reprend la réponse au lieu de reposer la question (`--rights` la remplace). La montée de version le relira |
 | Machine Kagu, `/run` | `kagu-setup.lock` | Le verrou de `setup` (`flock`) : aucune donnée | root, `0600` ; le verrou tombe avec le processus, le fichier avec le redémarrage |
+| Machine Kagu, `/var/lib/kagu-setup/release` | `SHA256SUMS`, `SHA256SUMS.minisig`, `kagu-linux-*` | La version qu'`install.sh` a vérifiée, que `setup` fait importer par `serve` dans la bibliothèque | root, dossier `0755`, fichiers `0644` : publics, lus par le compte du serveur. Récrits par le prochain `install.sh` ; rien ne les efface |
 | Machine Kagu, `state_dir` | `control.sock` | La socket de commande, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/api/manifest/…` et, pour root seul, `/control/admin/…`. Une socket que personne n'écoute (arrêt brutal) est remplacée au démarrage suivant ; celle d'un `serve` vivant n'est jamais touchée | Mode 0600, et `state_dir` fermé au groupe et aux autres, sans quoi `serve` ne démarre pas. Elle n'est pas à sauvegarder |
 | Toute machine, la machine Kagu comprise, `/var/lib/kagu-agent` (au compte de l'agent, `kagu-agent`, ou root s'il tourne en root ; `0700`, hors du dossier du serveur) | `identity.json` | Clé privée Ed25519, identifiant de la machine et de l'agent (`agent_id`), adresse de Kagu (`https://…`, `http://…` ou `unix:<chemin absolu>`), empreinte du certificat, langue, **droits** (`rights`, écrits par `-rights` au premier lancement ; absents chez un agent d'avant : `observe` seul ; ignorés dès que le dossier de la politique existe), les ancres (`anchors`), la version de politique que son binaire sait lire (`policy_format`), **la clé publique du serveur** épinglée à l'enrôlement (`server_key`), le rang du dernier ordre exécuté (`last_order_seq`). `agent policy migrate` recopie droits, ancres et clé dans la politique puis les efface d'ici | Mode 0600 ; le perdre impose un ré-enrôlement. La clé du serveur et le rang ne se touchent pas à la main (aucun ordre ne change la clé) : une autre clé fait refuser chaque ordre, un rang baissé rouvre la porte aux rejeux d'ordres encore valables (deux minutes). Les droits se lisent et se changent à la main : l'agent rapporte ce qu'il y lit, l'interface montre l'écart. Le dossier est à root et **hors de `/var/lib/kagu`**, que le compte du serveur possède sur la machine Kagu : ce compte ne peut ni remplacer le fichier ni renommer le dossier. L'agent juge sa chaîne de dossiers au démarrage (« Les droits d'un agent », état mal gardé) |
 | Toute machine, la machine Kagu comprise, `/var/lib/kagu-agent` | `pending-rights.json` | Les droits que l'agent a refusés : nom, valeur d'un producteur, heure du dernier refus ; 32 au plus, 24 h chacun | Mode 0600, écrit par l'agent seul ; lu par `agent grant --pending` en root. L'effacer ne change aucun droit |
@@ -215,7 +216,8 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    (un test le garde). Dans l'ordre : `stop` (un ré-enrôlement seulement :
    arrêter l'unité, supprimer `identity.json`) ; `binary` (sauf sur la machine
    Kagu : `machine.ReleaseDownloadLines`, le binaire de la version du
-   serveur téléchargé de la publication, `SHA256SUMS` vérifié, posé dans
+   serveur téléchargé à l'adresse des versions (`releases_url`, défaut
+   `brand.ReleaseBaseURL`, entre apostrophes), `SHA256SUMS` vérifié, posé dans
    `/tmp/kagu` ; il s'arrête au premier échec. Le serveur n'offre pas son
    binaire par HTTP : une version non publiée y échoue, 404) ; `prepare` ;
    `enroll` ; `unit` (l'unité `kagu-agent.service` écrite par un heredoc
@@ -1041,9 +1043,30 @@ ainsi (ci-dessous). La ligne de la première configuration, elle, passe
 encore par l'adresse publique et donne une machine neuve, pas `local` : elle
 ne sert plus qu'à une installation faite à la main.
 
+#### Le script d'installation
+
+`install.sh` (racine du dépôt, publié avec chaque version ; fiche B1,
+R-B1-14, T04-10) amène la version jusqu'à setup. Il porte `MIN_VERSION`
+(écrite à la publication ; vide, le script refuse) et les deux clés de
+`key.go`, la courante et la secours (un test les compare). Rien ne s'écrit
+hors d'un dossier temporaire avant la fin des vérifications.
+
+| Pas | Ce que fait le script |
+| --- | --- |
+| Télécharger | `SHA256SUMS` et `SHA256SUMS.minisig` depuis `$KAGU_RELEASES/v<MIN_VERSION>` (`KAGU_RELEASES` : défaut `brand.ReleaseBaseURL`) |
+| Signature globale | La forme du `.minisig` (quatre lignes, préfixes, algorithme `ED`), la clé choisie par l'identifiant de la signature ; puis `minisign -V -Q` s'il est là, sinon `openssl` : Ed25519 sur le BLAKE2b-512 des sommes, puis Ed25519 sur la signature suivie du commentaire de confiance. Le même jugement que `release.VerifySums` (le test le compare) |
+| Version | `file:SHA256SUMS` et `version:vX.Y.Z` lus dans le commentaire de confiance, le seul texte signé ; plus ancienne que `MIN_VERSION`, refus |
+| Binaires | Chaque nom de `SHA256SUMS` (`kagu-linux-<arch>` seulement) téléchargé, `sha256sum --strict -c` |
+| Poser | `/var/lib/kagu-setup/release/` (`0755`, fichiers `0644` : `serve` les lit sous son compte) reçoit sommes, signature et binaires ; `/usr/local/bin/kagu` le binaire de `uname -m` ; puis `exec kagu setup --releases-url "$KAGU_RELEASES" "$@"`, sur `/dev/tty` (sous `curl \| sh`, l'entrée est le script), sur `/dev/null` sans terminal |
+
+Tous les binaires sont téléchargés, pas seulement celui de la machine :
+`Library.Import` exige chaque binaire listé, et la bibliothèque sert alors
+aussi un agent d'une autre architecture (décision de Lucas, T04-10). Coût :
+un binaire de plus à télécharger.
+
 #### L'installation par setup
 
-`sudo kagu setup [--rights observe|manage|root]` installe la machine Kagu
+`sudo kagu setup [--rights observe|manage|root] [--releases-url https://…]` installe la machine Kagu
 (fiche B1, T04-08). Une seule question, le jeu de l'agent de cette machine,
 lue sur `/dev/tty` ; sans terminal, « Gérer ». `--domain` et `--proxy` sont
 refusés tant que le proxy géré n'existe pas : l'interface n'écoute que la
@@ -1056,8 +1079,8 @@ s'écrit avec sa raison, le refus dit quoi faire, et setup s'arrête là
 | Ligne (clé) | Ce que setup vérifie, puis fait s'il le faut |
 | --- | --- |
 | Système reconnu (`step.enroll.system`) | Debian 12 ou 13, Ubuntu 22.04 ou 24.04 (`hostinfo.OSName`), systemd, 1 Gio libre sous `/var/lib`. Rejouée à chaque fois |
-| Compte kagu créé (`step.setup.account`) | Les comptes `kagu` et `kagu-agent` (`useradd --system`) ; `/etc/kagu-agent` (root, `0755`) ; `/etc/kagu` (`root:kagu`, `0750`) et `config.toml` (`0640`) s'il manque : `listen = "127.0.0.1:8080"` et `state_dir` (`config.RenderForSetup`, qui refuse une adresse publique sans HTTPS, R-CNX-5) ; un `config.toml` présent n'est pas réécrit, mais setup s'arrête s'il sert l'interface en clair hors de la machine. `state_dir` et l'état de l'agent créés ou remis en `0700` à leur compte |
-| Serveur démarré (`step.setup.server`) | Déjà fait si `GET /control/admin/health` répond. Sinon : le binaire `/usr/local/bin/kagu` présent, `state_dir` fermé (la règle de `serve`), l'unité `kagu.service` écrite si elle diffère (`machine.ServerUnitLines`, le texte de `docs/installation/kagu.service`), `systemctl enable --now`, puis 60 s d'attente de la socket de contrôle |
+| Compte kagu créé (`step.setup.account`) | Les comptes `kagu` et `kagu-agent` (`useradd --system`) ; `/etc/kagu-agent` (root, `0755`) ; `/etc/kagu` (`root:kagu`, `0750`) et `config.toml` (`0640`) s'il manque : `listen = "127.0.0.1:8080"`, `state_dir` et, avec `--releases-url`, `releases_url` (`https://` seulement) (`config.RenderForSetup`, qui refuse une adresse publique sans HTTPS, R-CNX-5) ; un `config.toml` présent n'est pas réécrit, mais setup s'arrête s'il sert l'interface en clair hors de la machine. `state_dir` et l'état de l'agent créés ou remis en `0700` à leur compte |
+| Serveur démarré (`step.setup.server`) | Déjà fait si `GET /control/admin/health` répond. Sinon : le binaire `/usr/local/bin/kagu` présent, `state_dir` fermé (la règle de `serve`), l'unité `kagu.service` écrite si elle diffère (`machine.ServerUnitLines`, le texte de `docs/installation/kagu.service`), `systemctl enable --now`, puis 60 s d'attente de la socket de contrôle. Puis, si `/var/lib/kagu-setup/release/` existe (laissé par `install.sh`), `POST /control/admin/releases/import` : `serve` le revérifie avec ses clés et le range dans la bibliothèque ; la ligne dit « version vX.Y.Z dans la bibliothèque ». Rejoué à chaque setup, sans effet sur une version déjà là ; un refus arrête setup sur cette ligne, avec la raison de `serve` |
 | Agent de cette machine (`step.setup.agent`) | `bin/kagu-<version>` et `bin/current` dans l'état de l'agent, le lanceur stable ; sans identité, le jeton par `POST /control/admin/local-enrollment`, passé **sur l'entrée standard** à `bin/current agent -enroll-only -server unix:/run/kagu/agent.sock`, lancé sous le compte de l'agent ; puis, par le chemin de `agent grant` : le jeu, `backup.receive=/var/lib/kagu-agent/database-backups` quel que soit le jeu (R-SAUV-2), et la clé du serveur que l'agent a reçue par la socket (`trust set server-key`). « Gérer en root » se dit avant d'être posé (R-DROIT-5). L'unité de l'agent (`machine.AgentUnitLines`), puis 60 s d'attente de son premier rapport (`GET /control/admin/local-agent`) |
 | Dossier des services (`step.enroll.workspace`) | Sous « Observer », sautée. Sinon verte quand l'agent rapporte `docker.deploy` exerçable (`deploy.state = ok`) ; inexerçable au bout de 60 s, rouge avec la raison de l'agent. Docker n'est pas encore installé par setup : sans lui, « Gérer » s'arrête ici |
 
@@ -5578,7 +5601,7 @@ même refus.
 | `auth-mode forward [-header Remote-User]` | `auth-mode` | Passe derrière le SSO, ou change l'en-tête en `forward`. Ferme toutes les sessions |
 | `sessions close-all` | `sessions/close-all` | Ferme toutes les sessions (un `WARN` au journal de `serve`, pas de ligne d'audit) |
 | `tokens revoke-all` | `tokens/revoke-all` | Révoque tous les jetons d'API |
-| — (`upgrade`, à venir) | `GET health`, `POST backup/pre-upgrade`, `POST releases/import` | Préparent une montée de `serve` (ci-dessous) |
+| — (`upgrade`, à venir) | `GET health`, `POST backup/pre-upgrade`, `POST releases/import` | Préparent une montée de `serve` (ci-dessous) ; `setup` appelle `health`, et `releases/import` sur la version qu'`install.sh` a laissée |
 | — (`setup`) | `POST local-enrollment` | `201 {"token","expires_at"}` : le jeton de l'agent de la machine Kagu (`OfferLocalEnrollment`, celui qui attend encore, sinon un neuf). `409 machine.local_enrolled` quand elle a, ou a eu, un agent. Le clair ne part que vers root et n'entre jamais au journal |
 | — (`setup`) | `GET local-agent` | `200 {"enrolled","online","reported","deploy":{"state","reason"}}` : où en est l'agent de la machine Kagu ; `deploy` est le verdict de `agentpolicy.Fit` pour `docker.deploy` (`ok`, `missing`, `unavailable` avec la raison de l'agent, `unknown` tant qu'il n'a rien rapporté) |
 

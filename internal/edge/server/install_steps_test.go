@@ -10,6 +10,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/version"
 )
@@ -48,7 +49,7 @@ func TestInstallSteps_FollowTheOrderTheOperatorPastes(t *testing.T) {
 		{"a re-enrollment stops the agent first", rights, installTarget{reenroll: true}, []string{"stop", "binary", "prepare", "enroll", "unit", "rights"}},
 	}
 	for _, c := range cases {
-		if got := stepIDs(installSteps("https://kagu.example.org", "kg_abc", lang.French, c.capabilities, c.target)); !slices.Equal(got, c.want) {
+		if got := stepIDs(installSteps("https://kagu.example.org", brand.ReleaseBaseURL, "kg_abc", lang.French, c.capabilities, c.target)); !slices.Equal(got, c.want) {
 			t.Errorf("%s: steps %v, want %v", c.name, got, c.want)
 		}
 	}
@@ -62,7 +63,7 @@ func TestInstallSteps_TheTokenIsOnlyInTheEnrollment(t *testing.T) {
 		t.Fatal(err)
 	}
 	const token = "kg_jeton_secret_0123"
-	for _, step := range installSteps("https://kagu.example.org", token, lang.French, rights, installTarget{reenroll: true}) {
+	for _, step := range installSteps("https://kagu.example.org", brand.ReleaseBaseURL, token, lang.French, rights, installTarget{reenroll: true}) {
 		if has := strings.Contains(step.Command, token); has != (step.ID == stepEnroll) {
 			t.Errorf("step %s: token present = %v", step.ID, has)
 		}
@@ -93,7 +94,7 @@ func TestInstallBinary_DownloadsVerifiesThenInstalls(t *testing.T) {
 		}
 		witness("sha256sum", `echo "sha256sum $*" >> `+log+"; exit "+status)
 		witness("install", `echo "install $*" >> `+log)
-		cmd := exec.Command(shell, "-c", installBinary()) // #nosec G204 -- le texte que le test juge, lu par un sh dont chaque commande est un témoin.
+		cmd := exec.Command(shell, "-c", installBinary(brand.ReleaseBaseURL)) // #nosec G204 -- le texte que le test juge, lu par un sh dont chaque commande est un témoin.
 		cmd.Env = []string{"PATH=" + bin + ":/usr/bin:/bin", "TMPDIR=" + t.TempDir()}
 		runErr := cmd.Run()
 		calls, _ := os.ReadFile(log) // #nosec G304 -- un fichier de test.
