@@ -4294,6 +4294,8 @@ units_manual = "laid by hand: left alone"
 units_same = "already up to date"
 units_rewritten = "rewritten, drop-ins kept"
 policy_migrated = "policy migrated"
+policy_not_migrated = "policy not migrated, without your consent: %s"
+policy_by_hand = "The agent's policy is not migrated: nothing was touched. Run %s first, then run {command} upgrade again."
 guard_copied = "stable launcher copied from the verified version"
 policy_same = "already up to date"
 

@@ -1117,7 +1117,8 @@ setup ; « Observer » va jusqu'au code.
 #### La montée du serveur : upgrade
 
 `sudo kagu upgrade [--to <version>] [--from <dossier>]` monte le serveur de
-la machine Kagu (B2). Lancé dans un terminal, il se relance aussitôt par
+la machine Kagu (B2). Lancé dans un terminal, il pose d'abord, s'il le
+faut, la question de la politique de l'agent (ci-dessous), puis se relance par
 `systemd-run --unit=kagu-upgrade --pipe --wait --collect` : l'unité
 transitoire ne dépend pas de la session SSH, la sortie suit tant que le
 terminal est ouvert, et l'outil, dans l'unité, ignore `SIGHUP` et `SIGPIPE`
@@ -1128,18 +1129,18 @@ fichier, et dit si la montée tourne encore (le verrou est tenu).
 
 | Ligne (clé) | Ce que fait upgrade |
 | --- | --- |
-| Version trouvée (`step.upgrade.found`) | L'installation : avec `setup.json`, `/usr/local/bin/kagu` et `/etc/kagu/config.toml` ; sans lui, l'`ExecStart` de `kagu.service` (binaire et `-config`). La version : `--from`, sinon la plus haute de la bibliothèque de `serve` au-dessus de celle en place (lue par root, jamais écrite), sinon l'adresse des versions (`releases/latest` donne le numéro, les fichiers viennent de `releases/download/<version>/`). Tout est lu en mémoire et vérifié par `release.ReadVerified` avec les **clés du binaire en place** (R-B2-1) ; la version posée dans `/var/lib/kagu-upgrade/<version>/` est faite de ces octets-là, puis importée par `serve` (`releases/import`) quand elle ne vient pas de sa bibliothèque |
+| Version trouvée (`step.upgrade.found`) | L'installation : avec `setup.json`, `/usr/local/bin/kagu` et `/etc/kagu/config.toml` ; sans lui, l'`ExecStart` de `kagu.service` (binaire et `-config`). La version : `--from`, sinon la plus haute de la bibliothèque de `serve` au-dessus de celle en place (lue par root, jamais écrite), sinon l'adresse des versions (`releases/latest` donne le numéro, les fichiers viennent de `releases/download/<version>/` ; une redirection n'est suivie que vers une adresse https, dix au plus, comme `install.sh`). Tout est lu en mémoire et vérifié par `release.ReadVerified` avec les **clés du binaire en place** (R-B2-1) ; la version posée dans `/var/lib/kagu-upgrade/<version>/` est faite de ces octets-là, puis importée par `serve` (`releases/import`) quand elle ne vient pas de sa bibliothèque |
 | Place libre (`step.upgrade.space`) | Deux fois la base plus le binaire, libres sous `state_dir` et sous le dossier du binaire |
 | Base copiée (`step.upgrade.copied`) | `POST /control/admin/backup/pre-upgrade` : `serve` copie, sous son compte (R-B2-2) |
 | Binaire remplacé (`step.upgrade.replaced`) | L'ancien recopié en `/usr/local/lib/kagu/kagu.previous`, le nouveau posé par `rename` |
 | Serveur redémarré (`step.upgrade.restarted`) | `systemctl restart kagu.service` |
 | Serveur répond (`step.upgrade.answers`) | `GET /control/admin/health` rend la version visée, 60 s au plus. Puis la main passe au **nouveau binaire** (`exec`, même unité) : `upgrade --finish` relit `state.json` |
 | Unités à jour (`step.upgrade.units`) | Avec `setup.json` : `kagu.service` et `kagu-agent.service` comparées à celles du nouveau binaire (`machine.ServerUnitLines`, `machine.AgentUnitLines`), réécrites si elles diffèrent, `daemon-reload`. Drop-ins jamais touchés. Sans `setup.json` : sautée |
-| Politique de l'agent (`step.upgrade.policy`) | Un agent enrôlé dont le dossier de la politique n'existe pas : `agent.MigratePolicy`, ce qui est recopié affiché. Le lanceur stable, s'il est posé : recopié depuis la version posée, **revérifiée au moment de la copie** avec les clés du nouveau binaire, jamais depuis `bin/` de l'agent (R-B2-12). La version posée est ensuite effacée |
+| Politique de l'agent (`step.upgrade.policy`) | Un agent enrôlé dont le dossier de la politique n'existe pas : `agent.MigratePolicy`, si root a dit oui avant la relance (l'accord passe à l'unité par `--policy-consented`, puis dans `state.json`) ; ce qui est recopié est redit, la question ne se repose pas. Sans cet accord : non migrée, la ligne dite. Le lanceur stable, s'il est posé : recopié depuis la version posée, **revérifiée au moment de la copie** avec les clés du nouveau binaire, jamais depuis `bin/` de l'agent (R-B2-12). La version posée est ensuite effacée |
 
 **Ce qui est refusé avant toute copie** : une signature fausse ou d'une autre
 clé, un binaire qui n'a pas sa somme, une version téléchargée qui n'est pas
-celle demandée, une redirection qui sort de l'adresse des versions, un
+celle demandée, une redirection vers une adresse qui n'est pas https, un
 binaire sans clé de version (la `v0.0.1` : installation à la main, une
 fois), `--to` qui ne monte pas. **Une montée arrêtée après « Binaire
 remplacé »** (la nouvelle version muette, une machine éteinte) : `upgrade`
@@ -1147,8 +1148,15 @@ refuse d'en lancer une autre, et le message de l'échec donne le retour à la
 main (l'ancien binaire et la copie de la base). **Le coût** : un processus
 root parle à l'adresse des versions (décision de Lucas, QA-16) ; `--from`
 s'en passe. Les unités réécrites ne valent qu'au prochain redémarrage du
-service. La politique est migrée sans question : lancer `upgrade` est
-l'accord de root. Le retour seul et `--resume` viendront (T04-14).
+service. Le retour seul et `--resume` viendront (T04-14).
+
+**La politique de l'agent** (décision de Lucas du 25/11, ARB-1) : un agent
+de la machine Kagu qui lit encore ses droits dans `identity.json` fait
+calculer la migration **avant** la relance, dans le terminal de root : le
+changement imprimé (`printPolicyChange`), puis `[o/N]` par `confirmChange`,
+N par défaut, réponse lue sur `/dev/tty`. Non, ou pas de terminal :
+`upgrade` s'arrête avant la première coche, rien n'est touché, et dit de
+lancer `sudo kagu agent policy migrate`. Pas d'option `--yes`.
 
 ## Comment les modules et le rôle d'une machine décident de l'écran
 

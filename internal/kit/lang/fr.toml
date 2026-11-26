@@ -4294,6 +4294,8 @@ units_manual = "posées à la main : non touchées"
 units_same = "déjà à jour"
 units_rewritten = "réécrites, drop-ins gardés"
 policy_migrated = "politique migrée"
+policy_not_migrated = "politique non migrée, sans votre accord : %s"
+policy_by_hand = "La politique de l'agent n'est pas migrée : rien n'a été touché. Lancez d'abord %s, puis relancez {command} upgrade."
 guard_copied = "lanceur stable recopié de la version vérifiée"
 policy_same = "déjà à jour"
 

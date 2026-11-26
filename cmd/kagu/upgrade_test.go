@@ -61,6 +61,11 @@ type upgradeBench struct {
 	afterStep func(step.Key) error
 	noKeys    bool
 	place     agent.PolicyPlace
+	// Le terminal de root, où se pose la question de la politique.
+	openTerminal terminalOpener
+	// Un autre hôte, en https, vers lequel l'adresse des versions renvoie
+	// quand redirectTo le nomme.
+	mirror *httptest.Server
 }
 
 func newUpgradeBench(t *testing.T) *upgradeBench {
@@ -100,6 +105,11 @@ func newUpgradeBench(t *testing.T) *upgradeBench {
 	b.system = &upgradeSystemFake{bench: b, free: 8 << 30}
 	b.releases = httptest.NewServer(http.HandlerFunc(b.serveReleases))
 	t.Cleanup(b.releases.Close)
+	b.mirror = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(b.published, filepath.Base(r.URL.Path)))
+	}))
+	t.Cleanup(b.mirror.Close)
+	b.openTerminal = noTerminal
 	return b
 }
 
@@ -152,7 +162,7 @@ func (b *upgradeBench) newRun(running string) *upgradeRun {
 	}
 	place := b.place
 	return &upgradeRun{
-		out: b.terminal, euid: 0, system: b.system, paths: b.paths, keys: keys, running: running,
+		out: b.terminal, openTerminal: b.openTerminal, transport: b.mirror.Client().Transport, euid: 0, system: b.system, paths: b.paths, keys: keys, running: running,
 		releaseBase: b.releases.URL + "/releases/download", latestURL: b.releases.URL + "/releases/latest",
 		place: func(*os.Root) (agent.PolicyPlace, error) { return place, nil }, audit: func(string) error { return nil },
 		wait: 2 * time.Second, poll: 10 * time.Millisecond, afterStep: b.afterStep,
@@ -341,11 +351,16 @@ func TestR_B2_1_UpgradeRefusesAnUnsignedBinaryBeforeAnyCopy(t *testing.T) {
 			b.publish(foreign)
 			return nil
 		}, "aucune des clés de version"},
-		{"download redirected outside the release address", func(b *upgradeBench) []string {
+		{"download redirected to an address that is not https", func(b *upgradeBench) []string {
 			b.publish(b.private)
-			b.redirectTo = "http://127.0.0.1:1/elsewhere"
+			b.redirectTo = b.releases.URL + "/elsewhere"
 			return nil
-		}, errRedirectOutside.Error()},
+		}, errRedirectNotHTTPS.Error()},
+		{"download redirected over https, signed by another key", func(b *upgradeBench) []string {
+			b.publish(foreign)
+			b.redirectTo = b.mirror.URL + "/assets"
+			return nil
+		}, "aucune des clés de version"},
 		{"binary without a release key", func(b *upgradeBench) []string {
 			b.publish(b.private)
 			b.noKeys = true
@@ -597,20 +612,79 @@ func TestUpgrade_RefusesAndTouchesNothing(t *testing.T) {
 	}
 }
 
-// Un agent qui lit encore ses droits dans identity.json : upgrade joue
-// « agent policy migrate », dit ce qu'il recopie, et les droits passent à
-// l'identique dans la politique.
-func TestUpgrade_MigratesTheAgentPolicyLeftInIdentity(t *testing.T) {
+// Une redirection https vers un autre hôte est suivie, comme celle de GitHub
+// vers son stockage : la signature, vérifiée ensuite, fait l'intégrité.
+func TestUpgrade_FollowsAnHTTPSRedirectThenVerifies(t *testing.T) {
+	b := newUpgradeBench(t)
+	b.publish(b.private)
+	b.redirectTo = b.mirror.URL + "/assets"
+	if err := b.upgrade("--" + inUnitFlag); err != nil {
+		t.Fatalf("upgrade: %v\n%s", err, b.terminal)
+	}
+	if got := b.read(b.paths.binary); got != string(b.binaries[release.BinaryName(runtime.GOARCH)]) {
+		t.Fatalf("binary %q", got)
+	}
+}
+
+// Un agent qui lit encore ses droits dans identity.json : avant la relance,
+// dans le terminal de root, upgrade affiche ce que la migration recopie et
+// demande [o/N]. Oui : l'unité migre sans reposer la question. N par
+// défaut, ou pas de terminal : arrêt avant la première coche, rien touché,
+// la ligne à lancer à la main dite (décision ARB-1).
+func TestUpgrade_AsksBeforeMigratingTheAgentPolicy(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		terminal terminalOpener
+		migrated bool
+	}{
+		{"yes", fakeTerminal("o\n"), true},
+		{"no by default", fakeTerminal("\n"), false},
+		{"no terminal", noTerminal, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			b := newUpgradeBench(t)
+			b.publish(b.private)
+			b.paths.agentStateDir, b.place = legacyState(t, "docker.deploy")
+			b.openTerminal = test.terminal
+			err := b.upgrade()
+			printed := b.terminal.String()
+			if !strings.Contains(printed, "+ docker.deploy") {
+				t.Fatalf("the change is not told before the question:\n%s", printed)
+			}
+			if !test.migrated {
+				var refused *refusal
+				if !errors.As(err, &refused) || !strings.Contains(refused.message, agentpolicy.MigrateLine()) {
+					t.Fatalf("upgrade: %v", err)
+				}
+				if b.system.unitArgs != nil || strings.Contains(printed, "Version trouvée") || policyContent(t, b.place) != "" {
+					t.Fatalf("something moved: unit %v\n%s", b.system.unitArgs, printed)
+				}
+				b.nothingMoved()
+				return
+			}
+			if err != nil {
+				t.Fatalf("upgrade: %v\n%s", err, printed)
+			}
+			if !slices.Contains(b.system.unitArgs, "--"+policyConsentFlag) || strings.Count(printed, "[o/N]") != 1 || !strings.Contains(printed, "politique migrée") {
+				t.Fatalf("unit %v\n%s", b.system.unitArgs, printed)
+			}
+			if stored := storedPolicy(t, b.place); !slices.ContainsFunc(stored.Rights, func(right agentpolicy.Capability) bool { return right.Name == "docker.deploy" }) {
+				t.Fatalf("stored %+v", stored)
+			}
+		})
+	}
+}
+
+// Relancée dans l'unité sans l'accord du terminal, la montée ne migre pas la
+// politique : la coche le dit.
+func TestUpgrade_DoesNotMigrateWithoutConsent(t *testing.T) {
 	b := newUpgradeBench(t)
 	b.publish(b.private)
 	b.paths.agentStateDir, b.place = legacyState(t, "docker.deploy")
 	if err := b.upgrade("--" + inUnitFlag); err != nil {
 		t.Fatalf("upgrade: %v\n%s", err, b.terminal)
 	}
-	if printed := b.terminal.String(); !strings.Contains(printed, "+ docker.deploy") || !strings.Contains(printed, "politique migrée") {
-		t.Fatalf("printed %q", printed)
-	}
-	if stored := storedPolicy(t, b.place); !slices.ContainsFunc(stored.Rights, func(right agentpolicy.Capability) bool { return right.Name == "docker.deploy" }) {
-		t.Fatalf("stored %+v", stored)
+	if policyContent(t, b.place) != "" || !strings.Contains(b.terminal.String(), "politique non migrée") {
+		t.Fatalf("printed %q", b.terminal)
 	}
 }

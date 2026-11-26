@@ -1779,7 +1779,9 @@ sudo kagu upgrade --status         # où en est la dernière montée
 - **Le lanceur stable** de l'agent de la machine Kagu est recopié depuis la
   version vérifiée, jamais depuis `bin/` de l'agent. Un agent qui lit encore
   ses droits dans `identity.json` passe à la politique (`agent policy
-  migrate`, ce qui est recopié est affiché).
+  migrate`) : avant toute coche, `upgrade` affiche ce qui est recopié et
+  demande `[o/N]` ; non, ou sans terminal, il s'arrête sans rien toucher et
+  dit de lancer `sudo kagu agent policy migrate` d'abord.
 
 Ce que `upgrade` ne fait pas encore : **revenir seul** si la nouvelle version
 ne répond pas en 60 s. Il s'arrête, et le message dit les trois gestes du

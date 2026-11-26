@@ -17,6 +17,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/edge/agent"
 	"github.com/ldesfontaine/kagu/internal/edge/config"
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
@@ -229,6 +230,7 @@ func (r *upgradeRun) readLibrary(keys release.Keys, running, wanted release.Vers
 func (r *upgradeRun) latestVersion(ctx context.Context) (release.Version, error) {
 	client := &http.Client{
 		Timeout:       upgradeDownloadTimeout,
+		Transport:     r.transport,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, r.latestURL, nil)
@@ -282,11 +284,6 @@ func (r *upgradeRun) download(ctx context.Context, keys release.Keys, wanted rel
 
 func (r *upgradeRun) downloadFailure(err error) error {
 	return &stepFailure{reason: err.Error(), todo: r.text.Get("upgrade.download_todo")}
-}
-
-// isUnder : address est sous base, un dossier d'URL.
-func isUnder(address, base string) bool {
-	return strings.HasPrefix(address, base+"/")
 }
 
 // explainVerification dit pourquoi une version est refusée : la phrase de sa
@@ -496,12 +493,15 @@ func (r *upgradeRun) updateUnits(context.Context) (step.State, string, error) {
 // recopié depuis la version vérifiée (R-B2-12).
 func (r *upgradeRun) updateAgentPolicy(context.Context) (step.State, string, error) {
 	var done []string
-	migrated, err := r.migrateAgentPolicy()
+	migrated, pending, err := r.migrateAgentPolicy()
 	if err != nil {
 		return "", "", err
 	}
 	if migrated {
 		done = append(done, r.text.Get("upgrade.policy_migrated"))
+	}
+	if pending {
+		done = append(done, r.text.Format("upgrade.policy_not_migrated", agentpolicy.MigrateLine()))
 	}
 	refreshed, err := r.refreshGuard()
 	if err != nil {
@@ -516,10 +516,62 @@ func (r *upgradeRun) updateAgentPolicy(context.Context) (step.State, string, err
 	return step.StateDone, strings.Join(done, ", "), nil
 }
 
-// migrateAgentPolicy joue « agent policy migrate » sur un agent enrôlé dont
-// la politique n'existe pas encore : ses droits sont recopiés à l'identique,
-// et dits. Lancer upgrade est l'accord de root.
-func (r *upgradeRun) migrateAgentPolicy() (bool, error) {
+// migrateAgentPolicy joue « agent policy migrate » sur un agent qui lit
+// encore ses droits dans identity.json, si root a dit oui au terminal avant
+// la relance (askPolicyMigration) : ce qui est recopié est redit, la question
+// ne se repose pas. Sans cet accord, rien n'est migré : pending le dit.
+func (r *upgradeRun) migrateAgentPolicy() (migrated, pending bool, err error) {
+	pending, err = r.withPendingMigration(func(opts agent.PolicyOptions) error {
+		if !r.state.PolicyConsent {
+			return nil
+		}
+		announce := func(change agent.PolicyChange) error {
+			printPolicyChange(r.out, r.text, change)
+			return nil
+		}
+		if _, err := agent.MigratePolicy(opts, announce); err != nil {
+			return explainPolicyError(err, r.text)
+		}
+		migrated = true
+		return nil
+	})
+	return migrated, pending && !migrated, err
+}
+
+// askPolicyMigration pose, dans le terminal de root et avant la relance, la
+// question de la migration de la politique : le changement affiché, puis
+// [o/N] par le chemin de confirmChange. Non, ou pas de terminal : upgrade
+// s'arrête avant la première coche, la ligne à lancer à la main dite.
+// consented est vrai quand root a dit oui ; rien n'est encore écrit.
+func (r *upgradeRun) askPolicyMigration() (consented bool, err error) {
+	_, err = r.withPendingMigration(func(opts agent.PolicyOptions) error {
+		ask := func(change agent.PolicyChange) error {
+			printPolicyChange(r.out, r.text, change)
+			if err := confirmChange(r.out, r.openTerminal, false, r.text); err != nil {
+				return &refusal{message: r.text.Format("upgrade.policy_by_hand", agentpolicy.MigrateLine())}
+			}
+			return errPolicyConsented
+		}
+		_, err := agent.MigratePolicy(opts, ask)
+		return err
+	})
+	if errors.Is(err, errPolicyConsented) {
+		return true, nil
+	}
+	var refused *refusal
+	if err != nil && !errors.As(err, &refused) {
+		return false, explainPolicyError(err, r.text)
+	}
+	return false, err
+}
+
+// errPolicyConsented arrête la migration après le oui de root : elle se fait
+// dans l'unité.
+var errPolicyConsented = errors.New("policy migration consented")
+
+// withPendingMigration appelle migrate quand l'agent de cette machine est
+// enrôlé et que sa politique n'existe pas encore ; pending le dit.
+func (r *upgradeRun) withPendingMigration(migrate func(agent.PolicyOptions) error) (pending bool, err error) {
 	stateRoot, err := os.OpenRoot(r.paths.agentStateDir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
@@ -542,14 +594,7 @@ func (r *upgradeRun) migrateAgentPolicy() (bool, error) {
 		return false, err
 	}
 	opts := agent.PolicyOptions{StateDir: stateRoot, StatePath: r.paths.agentStateDir, Place: place, EUID: r.euid, Audit: r.audit}
-	announce := func(change agent.PolicyChange) error {
-		printPolicyChange(r.out, r.text, change)
-		return nil
-	}
-	if _, err := agent.MigratePolicy(opts, announce); err != nil {
-		return false, explainPolicyError(err, r.text)
-	}
-	return true, nil
+	return true, migrate(opts)
 }
 
 // refreshGuard recopie le lanceur stable, s'il est installé, depuis la

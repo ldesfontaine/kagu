@@ -50,6 +50,8 @@ const (
 	// suite jouée par le nouveau binaire.
 	inUnitFlag = "in-unit"
 	finishFlag = "finish"
+	// L'accord de root, donné au terminal, à migrer la politique de l'agent.
+	policyConsentFlag = "policy-consented"
 )
 
 // upgradePaths : où upgrade lit et écrit. Chaque chemin se tire de brand ou
@@ -89,6 +91,8 @@ type upgradeState struct {
 	Copy     string      `json:"copy,omitempty"`
 	Steps    []step.Step `json:"steps"`
 	Finished bool        `json:"finished"`
+	// Root a dit oui, au terminal, à la migration de la politique.
+	PolicyConsent bool `json:"policy_consent,omitempty"`
 }
 
 // upgradeSystem est ce que upgrade demande à la machine ; un test en
@@ -108,19 +112,22 @@ type upgradeSystem interface {
 // upgradeRun porte ce qu'une montée touche ; un test y met un faux système,
 // ses chemins, ses clés et des attentes courtes.
 type upgradeRun struct {
-	out    io.Writer
-	text   lang.Catalog
-	euid   int
-	system upgradeSystem
-	paths  upgradePaths
-	keys   func() (release.Keys, error)
+	out          io.Writer
+	openTerminal terminalOpener
+	text         lang.Catalog
+	euid         int
+	system       upgradeSystem
+	paths        upgradePaths
+	keys         func() (release.Keys, error)
 	// La version de ce binaire.
 	running string
 	// L'adresse des versions et la page de la dernière.
 	releaseBase, latestURL string
-	place                  policyPlacer
-	audit                  func(message string) error
-	wait, poll             time.Duration
+	// Le transport des téléchargements ; nil, celui par défaut.
+	transport  http.RoundTripper
+	place      policyPlacer
+	audit      func(message string) error
+	wait, poll time.Duration
 	// afterStep est appelé après chaque étape cochée ; nil en vrai.
 	afterStep func(step.Key) error
 
@@ -137,7 +144,7 @@ type upgradeRun struct {
 
 func runUpgrade(args []string) error {
 	run := upgradeRun{
-		out: os.Stdout, euid: os.Geteuid(), system: hostUpgradeSystem{}, paths: systemUpgradePaths(),
+		out: os.Stdout, openTerminal: openControllingTerminal, euid: os.Geteuid(), system: hostUpgradeSystem{}, paths: systemUpgradePaths(),
 		keys: release.TrustedPublicKeys, running: version.Number(),
 		releaseBase: brand.ReleaseBaseURL, latestURL: brand.ReleaseLatestURL,
 		place: agent.SystemPolicyPlace, audit: auditToSystemJournal, wait: upgradeWait, poll: setupPoll,
@@ -158,6 +165,7 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 	status := flags.Bool("status", false, "")
 	inUnit := flags.Bool(inUnitFlag, false, "")
 	finish := flags.Bool(finishFlag, false, "")
+	consented := flags.Bool(policyConsentFlag, false, "")
 	if err := flags.Parse(args); err != nil || flags.NArg() > 0 {
 		return &refusal{message: r.text.Get("upgrade.usage")}
 	}
@@ -168,7 +176,11 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 		return r.printStatus()
 	}
 	if !*inUnit {
-		return r.relaunchInUnit(*to, *from)
+		consent, err := r.askPolicyMigration()
+		if err != nil {
+			return err
+		}
+		return r.relaunchInUnit(*to, *from, consent)
 	}
 	// Dans l'unité, la sortie est le terminal de systemd-run : la session
 	// coupée, l'écrire échoue, et la montée continue (R-B2-5).
@@ -189,7 +201,7 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 		return r.finish(ctx)
 	}
 	r.to, r.from = *to, *from
-	handOver, err := r.start(ctx)
+	handOver, err := r.start(ctx, *consented)
 	// Le verrou tombe avant la passation : le nouveau binaire le reprend.
 	unlock()
 	if err != nil || !handOver {
@@ -200,8 +212,11 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 
 // relaunchInUnit relance la commande dans l'unité transitoire et rend son
 // code de sortie. --from se donne en chemin absolu : l'unité part de /.
-func (r *upgradeRun) relaunchInUnit(to, from string) error {
+func (r *upgradeRun) relaunchInUnit(to, from string, policyConsent bool) error {
 	args := []string{"--" + inUnitFlag}
+	if policyConsent {
+		args = append(args, "--"+policyConsentFlag)
+	}
 	if to != "" {
 		args = append(args, "--to", to)
 	}
@@ -224,12 +239,12 @@ func (r *upgradeRun) relaunchInUnit(to, from string) error {
 // suite revient au nouveau binaire. Une montée arrêtée après « Binaire
 // remplacé » ne se relance pas par-dessus : le retour arrière et --resume
 // viendront.
-func (r *upgradeRun) start(ctx context.Context) (handOver bool, err error) {
+func (r *upgradeRun) start(ctx context.Context, policyConsent bool) (handOver bool, err error) {
 	if r.interrupted() {
 		r.printSteps()
 		return false, &refusal{message: r.text.Format("upgrade.interrupted", r.state.Target, brand.InstallDocURL)}
 	}
-	r.state = upgradeState{Running: r.running}
+	r.state = upgradeState{Running: r.running, PolicyConsent: policyConsent}
 	fmt.Fprintln(r.out, r.text.Format("upgrade.title", r.running))
 	fmt.Fprintln(r.out)
 	return r.runSteps(ctx, startSteps)
@@ -425,18 +440,26 @@ func (hostUpgradeSystem) HandOver(binary string, args []string) error {
 	return syscall.Exec(binary, append([]string{binary, "upgrade"}, args...), os.Environ()) // #nosec G204 -- le binaire que upgrade vient de poser, vérifié.
 }
 
-// releaseClient télécharge sous l'adresse des versions, et ne suit aucune
-// redirection qui en sort.
+// releaseClient télécharge à l'adresse des versions. Une redirection n'est
+// suivie que vers une adresse https, comme install.sh (--proto-redir
+// '=https'), dans la limite de dix ; l'intégrité vient de la signature.
 func (r *upgradeRun) releaseClient() *http.Client {
 	return &http.Client{
-		Timeout: upgradeDownloadTimeout,
-		CheckRedirect: func(request *http.Request, _ []*http.Request) error {
-			if !isUnder(request.URL.String(), r.releaseBase) {
-				return fmt.Errorf("%w: %s", errRedirectOutside, request.URL.Redacted())
+		Timeout:   upgradeDownloadTimeout,
+		Transport: r.transport,
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			if request.URL.Scheme != "https" {
+				return fmt.Errorf("%w: %s", errRedirectNotHTTPS, request.URL.Redacted())
+			}
+			if len(via) >= maxRedirects {
+				return fmt.Errorf("stopped after %d redirects", maxRedirects)
 			}
 			return nil
 		},
 	}
 }
 
-var errRedirectOutside = errors.New("redirect outside the release address")
+// maxRedirects est le plafond du client HTTP de Go par défaut.
+const maxRedirects = 10
+
+var errRedirectNotHTTPS = errors.New("redirect to an address that is not https")
