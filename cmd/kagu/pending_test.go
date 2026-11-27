@@ -169,3 +169,55 @@ func TestR_DROIT_8_PendingOutputCarriesThePasteWarning(t *testing.T) {
 		t.Fatalf("the warning comes after the question:\n%s", out)
 	}
 }
+
+// R-A3-15 (ARB-3) : grant --pending lit tout droit que la politique connaît,
+// ceux de la politique seule compris. Chaque droit demandé s'imprime avec sa
+// phrase de risque et son échéance avant [o/N] (2 h et « égal de root » pour
+// terminal.host) ; Entrée seule ne pose rien, « o » au terminal pose ce qui
+// était imprimé.
+func TestR_A3_15_ARB3_PendingPrintsAndGrantsEveryRequestedRight(t *testing.T) {
+	text := testCatalog(t)
+	for _, requested := range []struct{ right, granted string }{
+		{agentpolicy.CapabilityDockerDeploy, "docker.deploy"},
+		{agentpolicy.CapabilityResticProduce, "restic.produce"},
+		{agentpolicy.CapabilityTerminalContainer, "terminal.container"},
+		{agentpolicy.CapabilityNetworkPrivate, "network.private=1"},
+		{agentpolicy.CapabilityTerminalHost, "terminal.host=root"},
+	} {
+		t.Run(requested.right, func(t *testing.T) {
+			stateDir, place := policyState(t)
+			writePending(t, stateDir, agent.PendingRight{Name: requested.right, RefusedAt: time.Now().Add(-time.Minute)})
+			before := policyContent(t, place)
+			out, err := runPolicy(t, place, fakeTerminal("\n"), policyGrant, "-state", stateDir, "--pending")
+			var refused *refusal
+			if !errors.As(err, &refused) || policyContent(t, place) != before {
+				t.Fatalf("Enter alone: %v\n%s", err, out)
+			}
+			question := strings.Index(out, "[o/N]")
+			if question < 0 {
+				t.Fatalf("no question:\n%s", out)
+			}
+			printed := out[:question]
+			term := text.Get("agent.pending_permanent")
+			if requested.right == agentpolicy.CapabilityTerminalHost {
+				term = strings.TrimSuffix(text.Get("agent.pending_until"), "%s")
+			}
+			if !strings.Contains(printed, "  "+requested.granted+" : ") || !strings.Contains(printed, term) {
+				t.Fatalf("the pending line of %s (%q) is not printed:\n%s", requested.granted, term, out)
+			}
+			if risk := agentpolicy.NoticeOf(agentpolicy.Capability{Name: requested.right}).RiskKey; risk != "" && !strings.Contains(printed, text.Format(risk)) {
+				t.Fatalf("no risk sentence %q:\n%s", risk, out)
+			}
+
+			out, err = runPolicy(t, place, fakeTerminal("o\n"), policyGrant, "-state", stateDir, "--pending")
+			stored := storedPolicy(t, place)
+			if err != nil || agentpolicy.FormatCapabilities(stored.Rights) != "observe,"+requested.granted {
+				t.Fatalf("o: %v %q\n%s", err, agentpolicy.FormatCapabilities(stored.Rights), out)
+			}
+			expiry, bounded := stored.Expiries[requested.right]
+			if bounded != (requested.right == agentpolicy.CapabilityTerminalHost) || bounded && expiry.Until.Sub(expiry.Granted.Now) != 2*time.Hour {
+				t.Fatalf("term %+v", stored.Expiries)
+			}
+		})
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 )
 
@@ -67,5 +68,24 @@ func TestAnchorRefusal_NamesTheKindAndIsAReportedReason(t *testing.T) {
 	}
 	if !IsReportedReason(RightMissing("backup.produce")) || !IsReportedReason(ReasonBusy) {
 		t.Error("plain and right reasons stay reported")
+	}
+}
+
+// R-A3-15 (ARB-3) : une raison right_missing se rapporte pour tout droit que
+// la politique connaît, ceux de la politique seule compris, jamais pour un
+// autre nom.
+func TestR_A3_15_ARB3_EveryKnownRightIsAReportedReason(t *testing.T) {
+	for _, right := range agentpolicy.Names() {
+		if name, ok := RightOfReason(RightMissing(right)); !ok || name != right || !IsReportedReason(RightMissing(right)) {
+			t.Errorf("%s is not a reported reason", right)
+		}
+	}
+	if !IsReportedReason("right_missing:terminal.host") {
+		t.Error("right_missing:terminal.host must be reported")
+	}
+	for _, reason := range []string{"right_missing:nothing", "right_missing:", "right_missing:terminal.host;reboot"} {
+		if _, ok := RightOfReason(reason); ok || IsReportedReason(reason) {
+			t.Errorf("%q must not be a reported reason", reason)
+		}
 	}
 }

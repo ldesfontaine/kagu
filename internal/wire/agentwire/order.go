@@ -272,10 +272,11 @@ func RightMissing(right string) string {
 }
 
 // RightOfReason rend le droit qu'une raison « right_missing:<droit> » nomme ;
-// ok est faux pour une autre raison ou un droit inconnu.
+// ok est faux pour une autre raison ou un droit que la politique ne connaît
+// pas (agentpolicy.IsKnown).
 func RightOfReason(reason string) (right string, ok bool) {
 	right, found := strings.CutPrefix(reason, ReasonRightMissing+":")
-	return right, found && slices.Contains(agentpolicy.CapabilityNames(), right)
+	return right, found && agentpolicy.IsKnown(right)
 }
 
 // AnchorOfReason rend le type d'ancre qu'une raison « anchor_*:<type> » nomme.

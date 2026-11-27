@@ -43,6 +43,12 @@ func TestARB1_AClickSendsARightRequestAndNothingElse(t *testing.T) {
 	if got.Code != http.StatusCreated || run.Kind != string(agentwire.KindRightRequest) || string(run.Params) != `{"right":"docker.deploy"}` {
 		t.Fatalf("request: %d %s", got.Code, got.Body.String())
 	}
+	// ARB-3 : terminal.host, de la politique seule, se demande par l'API.
+	host := callAPI(server.Server, http.MethodPost, path, map[string]any{"right": "terminal.host"})
+	decodeAPI(t, host, &run)
+	if host.Code != http.StatusCreated || run.Kind != string(agentwire.KindRightRequest) || string(run.Params) != `{"right":"terminal.host"}` {
+		t.Fatalf("terminal.host: %d %s", host.Code, host.Body.String())
+	}
 	if refused := callAPI(server.Server, http.MethodPost, "/api/machines/"+remoteID+"/actions/update-agent", map[string]any{}); refused.Code < 400 {
 		t.Fatalf("agent.update without its right: %d %s", refused.Code, refused.Body.String())
 	}
@@ -55,8 +61,8 @@ func TestARB1_AClickSendsARightRequestAndNothingElse(t *testing.T) {
 
 	var list actionsResponse
 	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/actions?machine="+remoteID, nil), &list)
-	if len(list.Runs) != 1 || list.Runs[0].Kind != string(agentwire.KindRightRequest) {
-		t.Fatalf("runs %+v, want the right.request alone", list.Runs)
+	if len(list.Runs) != 2 || list.Runs[0].Kind != string(agentwire.KindRightRequest) || list.Runs[1].Kind != string(agentwire.KindRightRequest) {
+		t.Fatalf("runs %+v, want the two right.request alone", list.Runs)
 	}
 }
 

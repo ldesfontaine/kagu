@@ -78,7 +78,7 @@ func Covers(rights []Capability, right, value string) bool {
 // lui-même. L'agent note la même valeur d'un ordre refusé.
 func CheckRequested(right, value string) error {
 	switch {
-	case !slices.Contains(Names(), right):
+	case !IsKnown(right):
 		return ErrCapabilityUnknown
 	case value == "":
 		return nil
