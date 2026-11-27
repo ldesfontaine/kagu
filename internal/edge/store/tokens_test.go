@@ -8,6 +8,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 )
 
 // La purge efface les jetons périmés jamais servis et les consommés depuis
@@ -60,4 +61,29 @@ func TestPurgeTokens_ExpiredPendingAndOldConsumedOnly(t *testing.T) {
 			t.Errorf("%s: %v, want %v", c.name, err, c.want)
 		}
 	}
+}
+
+// La purge emporte les étapes d'arrivée des jetons qu'elle efface, et celles
+// d'un jeton annulé : gesture_steps n'a pas de clé étrangère. Celles d'un
+// jeton qui reste restent.
+func TestPurgeTokens_TakesTheEnrollmentStepsOfThePurgedTokens(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Unix(1_800_000_000, 0)
+	expired := machine.TokenIDOf(issueToken(t, db, "expired", "", now.Add(-2*time.Hour)))
+	cancelled := machine.TokenIDOf(issueToken(t, db, "cancelled", "", now))
+	pending := machine.TokenIDOf(issueToken(t, db, "pending", "", now))
+	checked := step.Step{Key: step.EnrollSystem, State: step.StateDone, At: now}
+	for _, id := range []string{expired, cancelled, pending} {
+		if err := db.ReplaceEnrollmentSteps(ctx, id, []step.Step{checked}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.DeleteToken(ctx, cancelled); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.PurgeTokens(ctx, now, now.Add(-machine.ConsumedTokenRetention)); err != nil {
+		t.Fatal(err)
+	}
+	requireRowIDs(t, rowIDs(t, db, `SELECT subject FROM gesture_steps ORDER BY subject`), "enrollment:"+pending)
 }

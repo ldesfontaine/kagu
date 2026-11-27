@@ -13,6 +13,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 	"github.com/ldesfontaine/kagu/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 )
 
 // Ce que l'agent et le serveur échangent en JSON pour l'enrôlement ; les
@@ -163,6 +164,22 @@ const ServerKeyRoute = "/agent/server-key"
 // EnrollResponse.ServerKey, en base64.
 type ServerKeyResponse struct {
 	ServerKey string `json:"server_key"`
+}
+
+// JoinProgressRoute reçoit le parcours de join (B1 §5, R-B1-11), le jeton
+// dans HeaderEnrollmentToken : le serveur le compare par empreinte et ne le
+// consomme pas.
+const JoinProgressRoute = "/agent/join/progress"
+
+// HeaderEnrollmentToken porte le jeton de join : en en-tête, jamais dans
+// l'adresse, qu'un journal de proxy garderait.
+const HeaderEnrollmentToken = brand.HeaderPrefix + "Enrollment-Token" // #nosec G101 -- un nom d'en-tête.
+
+// JoinProgress est le corps de JoinProgressRoute, et celui que setup envoie
+// par la socket de contrôle : toutes les étapes cochées depuis la première,
+// qui remplacent le parcours précédent.
+type JoinProgress struct {
+	Steps []step.Step `json:"steps"`
 }
 
 // La réponse à l'enrôlement : l'identifiant retenu pour la machine, son nom,

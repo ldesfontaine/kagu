@@ -45,6 +45,8 @@ type joinRun struct {
 	tokenFile  string
 	yes        bool
 	token      string
+	// client parle au serveur dont la clé est reconnue.
+	client *agent.Client
 	// L'unité de l'agent vient d'être écrite : son démarrage la relance.
 	unitWritten bool
 }
@@ -97,6 +99,7 @@ func (r *joinRun) command(ctx context.Context, args []string) error {
 	if err := r.recognizeServerKey(ctx); err != nil {
 		return err
 	}
+	r.report = r.reportJoinProgress
 	return r.runSteps(ctx, r.steps())
 }
 
@@ -219,8 +222,17 @@ func (r *joinRun) recognizeServerKey(ctx context.Context) error {
 	if _, err := agent.CheckServerKey(ctx, client, r.serverKey); err != nil {
 		return explainJoinError(err, r.text)
 	}
+	r.client = client
 	fmt.Fprintln(r.out, r.text.Format("join.server_key_ok", r.serverKey))
 	return nil
+}
+
+// reportJoinProgress envoie le parcours au serveur, le jeton en en-tête,
+// pour la tuile « en cours d'arrivée » (R-B1-11) : seulement après que sa clé
+// est reconnue. Un refus (jeton expiré, débit) ne coupe pas join : la
+// frise n'est qu'une vue, l'enrôlement dit seul si le jeton vaut.
+func (r *joinRun) reportJoinProgress(ctx context.Context, steps []step.Step) {
+	_ = r.client.PostJoinProgress(ctx, r.token, steps)
 }
 
 // explainJoinError dit un échec de l'agent dans la langue de join.

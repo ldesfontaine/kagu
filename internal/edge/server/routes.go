@@ -44,6 +44,7 @@ func (s *Server) routes() []route {
 		{"GET", "/api/machines", s.listMachines},
 		{"POST", "/api/machines/tokens", s.grantsAuthority(s.createMachineToken)},
 		{"DELETE", "/api/machines/tokens/{id}", s.cancelMachineToken},
+		{"GET", "/api/machines/tokens/{id}/progress", s.getTokenProgress},
 		{"GET", "/api/machines/{id}", s.getMachine},
 		{"DELETE", "/api/machines/{id}", s.removeMachine},
 		{"GET", "/api/machines/{id}/delete-plan", s.getMachineDeletePlan},
@@ -251,7 +252,7 @@ func (s *Server) routes() []route {
 var apiTokenRoutes = []string{
 	"GET /api/session", "GET /api/counts",
 	"GET /api/machines", "GET /api/machines/{id}", "GET /api/machines/{id}/network", "GET /api/machines/{id}/resources",
-	"GET /api/machines/{id}/proxmox",
+	"GET /api/machines/{id}/proxmox", "GET /api/machines/tokens/{id}/progress",
 	"GET /api/firewalls", "GET /api/firewalls/{id}", "GET /api/firewalls/{id}/rules",
 	"GET /api/firewalls/{id}/interfaces", "GET /api/firewalls/{id}/leases", "GET /api/firewalls/{id}/flows",
 	"GET /api/containers", "GET /api/containers/{id}", "GET /api/containers/{id}/logs",

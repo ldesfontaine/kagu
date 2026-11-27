@@ -96,6 +96,10 @@ type setupRun struct {
 	// afterStep est appelé après chaque étape cochée ; nil en vrai. Un test
 	// y coupe setup, comme une session SSH perdue.
 	afterStep func(step.Key) error
+	// report envoie le parcours au serveur après chaque ligne cochée, pour
+	// la tuile de la machine qui arrive (R-B1-11) : setup par la socket de
+	// contrôle, join par la route de l'agent.
+	report func(ctx context.Context, steps []step.Step)
 
 	rights agentpolicy.Set
 	// L'adresse des versions qu'install.sh passe (--releases-url) ; vide :
@@ -155,6 +159,7 @@ func (r *setupRun) command(ctx context.Context, args []string) error {
 		return err
 	}
 	r.state.Rights = r.rights
+	r.report = r.reportLocalProgress
 	if err := r.runSteps(ctx, r.steps()); err != nil {
 		return err
 	}
@@ -310,13 +315,13 @@ func (r *setupRun) runSteps(ctx context.Context, steps []setupStep) error {
 		state, detail, err := current.run(ctx)
 		if err != nil {
 			reason, todo := explainStepFailure(err, r.text)
-			r.check(current.key, step.StateFailed, reason)
+			r.check(ctx, current.key, step.StateFailed, reason)
 			if err := r.saveSetupState(); err != nil {
 				return err
 			}
 			return &refusal{message: todo}
 		}
-		r.check(current.key, state, detail)
+		r.check(ctx, current.key, state, detail)
 		if err := r.saveSetupState(); err != nil {
 			return err
 		}
@@ -344,9 +349,13 @@ func explainStepFailure(err error, text lang.Catalog) (reason, todo string) {
 	return err.Error(), text.Get("setup.failed_todo")
 }
 
-// check imprime la ligne d'une étape et la retient pour setup.json.
-func (r *setupRun) check(key step.Key, state step.State, detail string) {
+// check imprime la ligne d'une étape, la retient pour setup.json et envoie
+// le parcours au serveur.
+func (r *setupRun) check(ctx context.Context, key step.Key, state step.State, detail string) {
 	r.state.Steps = recordStep(r.out, r.text, r.state.Steps, key, state, detail)
+	if r.report != nil {
+		r.report(ctx, r.state.Steps)
+	}
 }
 
 // recordStep imprime la ligne d'une étape et rend steps où elle remplace

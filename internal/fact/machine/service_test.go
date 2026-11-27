@@ -18,6 +18,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 )
 
 // Un faux magasin en mémoire : le vrai est testé chez lui, et le service
@@ -288,6 +289,33 @@ func (f *fakeStore) ListPendingTokens(context.Context, time.Time) ([]Token, erro
 		}
 	}
 	return out, nil
+}
+
+func (f *fakeStore) TokenByHash(_ context.Context, hash string) (Token, error) {
+	if t, ok := f.tokens[hash]; ok {
+		return t, nil
+	}
+	return Token{}, ErrTokenNotFound
+}
+
+func (f *fakeStore) TokenByID(context.Context, string) (Token, error) {
+	return Token{}, ErrTokenNotFound
+}
+
+func (f *fakeStore) TokenOfAgent(context.Context, string) (Token, error) {
+	return Token{}, ErrTokenNotFound
+}
+
+func (f *fakeStore) ReplaceEnrollmentSteps(context.Context, string, []step.Step) error {
+	return nil
+}
+
+func (f *fakeStore) AppendEnrollmentStep(context.Context, string, step.Step) error {
+	return nil
+}
+
+func (f *fakeStore) EnrollmentSteps(context.Context, string) ([]step.Step, error) {
+	return []step.Step{}, nil
 }
 
 func (f *fakeStore) DeleteToken(_ context.Context, id string) error {

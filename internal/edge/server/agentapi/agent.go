@@ -154,9 +154,9 @@ func (h *Handler) writeEnrollError(w http.ResponseWriter, r *http.Request, err e
 	case errors.Is(err, machine.ErrTokenNotFound):
 		h.writeError(w, http.StatusNotFound, "token_not_found")
 	case errors.Is(err, machine.ErrTokenConsumed):
-		h.writeError(w, http.StatusConflict, "token_consumed")
+		h.writeError(w, http.StatusConflict, machine.RefusedTokenConsumed)
 	case errors.Is(err, machine.ErrTokenExpired):
-		h.writeError(w, http.StatusConflict, "token_expired")
+		h.writeError(w, http.StatusConflict, machine.RefusedTokenExpired)
 	case errors.Is(err, machine.ErrNameTaken):
 		h.writeError(w, http.StatusConflict, "name_taken")
 	case errors.Is(err, machine.ErrLocalAgentActive):

@@ -24,6 +24,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -465,25 +466,41 @@ func isEmptySignal(sent agentwire.SignalRequest) bool {
 
 // PostLogs livre un lot de journal pour une requête du serveur.
 func (c *Client) PostLogs(ctx context.Context, session, requestID string, batch container.LogBatch) error {
+	return c.postNoContent(ctx, "/agent/logs/"+url.PathEscape(requestID), "post logs", batch, func(request *http.Request) {
+		request.Header.Set("Authorization", "Bearer "+session)
+	})
+}
+
+// PostJoinProgress envoie le parcours de join, le jeton en en-tête : le
+// serveur le compare, sans le consommer (R-B1-11).
+func (c *Client) PostJoinProgress(ctx context.Context, token string, steps []step.Step) error {
+	return c.postNoContent(ctx, agentwire.JoinProgressRoute, "post join progress", agentwire.JoinProgress{Steps: steps}, func(request *http.Request) {
+		request.Header.Set(agentwire.HeaderEnrollmentToken, token)
+	})
+}
+
+// postNoContent poste payload en JSON, avec ce que present pose de preuve, et
+// n'attend que 204 ; what nomme l'envoi dans l'erreur.
+func (c *Client) postNoContent(ctx context.Context, path, what string, payload any, present func(*http.Request)) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	content, err := json.Marshal(batch)
+	content, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	request, err := c.newRequest(ctx, http.MethodPost, "/agent/logs/"+url.PathEscape(requestID), bytes.NewReader(content))
+	request, err := c.newRequest(ctx, http.MethodPost, path, bytes.NewReader(content))
 	if err != nil {
 		return err
 	}
-	request.Header.Set("Authorization", "Bearer "+session)
+	present(request)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := c.http.Do(request)
 	if err != nil {
-		return fmt.Errorf("post logs: %w", err)
+		return fmt.Errorf("%s: %w", what, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("post logs: %w", serverError(response))
+		return fmt.Errorf("%s: %w", what, serverError(response))
 	}
 	return nil
 }

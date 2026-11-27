@@ -44,6 +44,7 @@ func (s *Server) adminRoutes() []controlRoute {
 		{"POST " + adminPrefix + "backup/pre-upgrade", s.copyBeforeUpgrade},
 		{"POST " + adminPrefix + "releases/import", s.importRelease},
 		{"POST " + adminPrefix + "local-enrollment", s.offerLocalEnrollmentToRoot},
+		{"POST " + adminPrefix + "local-enrollment/progress", s.recordLocalProgress},
 		{"GET " + adminPrefix + "local-agent", s.readLocalAgent},
 	}
 }

@@ -37,6 +37,7 @@ const (
 	controlHealthPath          = "/control/admin/health"
 	controlLocalEnrollmentPath = "/control/admin/local-enrollment"
 	controlLocalAgentPath      = "/control/admin/local-agent"
+	controlLocalProgressPath   = "/control/admin/local-enrollment/progress"
 	controlPreUpgradePath      = "/control/admin/backup/pre-upgrade"
 	controlReleaseImportPath   = "/control/admin/releases/import"
 )

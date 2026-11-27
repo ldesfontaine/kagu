@@ -177,6 +177,9 @@ var wantOpenRoutes = []string{
 	// La clé publique des ordres et la bibliothèque des versions, que join lit
 	// avant d'être enrôlé (R-B1-12, R-B1-13).
 	"/agent/server-key", "/releases/{version}/{name}",
+	// L'avancement de join, le jeton en en-tête, comparé sans être consommé
+	// (R-B1-11).
+	"/agent/join/progress",
 }
 
 func checkOpenRoutes(t *testing.T, open map[string]bool) {

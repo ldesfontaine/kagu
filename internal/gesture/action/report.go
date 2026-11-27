@@ -109,16 +109,9 @@ func readResult(reported agentwire.ActionResult) (Result, error) {
 // readSteps juge les étapes d'un run : au plus ce que le protocole porte,
 // chacune passée par step.Clean.
 func readSteps(reported []step.Step) ([]step.Step, error) {
-	if len(reported) > agentwire.MaxActionSteps {
-		return nil, fmt.Errorf("%w: %d steps", ErrReportInvalid, len(reported))
-	}
-	steps := make([]step.Step, 0, len(reported))
-	for _, one := range reported {
-		cleaned, ok := step.Clean(one)
-		if !ok {
-			return nil, fmt.Errorf("%w: step", ErrReportInvalid)
-		}
-		steps = append(steps, cleaned)
+	steps, ok := step.CleanAll(reported, agentwire.MaxActionSteps)
+	if !ok {
+		return nil, fmt.Errorf("%w: steps", ErrReportInvalid)
 	}
 	return steps, nil
 }

@@ -1,23 +1,25 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 
-import { useMachines, type TokenResponse } from "../../api/machines";
+import { useMachines, useTokenArrival, type TokenResponse } from "../../api/machines";
 import { Button } from "../../components/Button";
 import { Note } from "../../components/Card";
 import { Modal } from "../../components/Modal";
 import { Pill } from "../../components/Pill";
+import { StepTrail } from "../../components/StepTrail";
 import { WizardBar } from "../../components/Wizard";
 import { useNow } from "../../hooks/useNow";
 import { useT } from "../../i18n/context";
 import { enrollProgress, type EnrollProgress, type EnrollTarget } from "../../lib/enrollWait";
-import { formatRemaining } from "../../lib/time";
+import { formatClock, formatRemaining } from "../../lib/time";
 import { EnrollmentToken } from "./EnrollmentToken";
 
 type Stage = "command" | "wait";
 
 // Les deux dernières étapes d'un enrôlement, communes à l'ajout et au
 // ré-enrôlement : les deux lignes à coller sur la machine, puis l'attente de
-// l'agent, qui se lit sur la liste des machines que le direct relit. Le
+// l'agent, qui se lit sur la liste des machines que le direct relit, avec
+// les étapes que join coche sur le jeton (R-B1-11). Le
 // jeton reste en mémoire dans cette fenêtre : il ne s'affiche qu'une fois.
 // titles : les trois étapes de l'assistant ; la première est celle de
 // l'appelant, déjà franchie.
@@ -39,7 +41,8 @@ export function EnrollFlow({
   const now = useNow();
   const machines = useMachines();
   const [stage, setStage] = useState<Stage>("command");
-  const progress = enrollProgress(target, machines.data?.machines ?? [], Date.parse(token.expires_at), now);
+  const arrival = useTokenArrival(stage === "wait" ? token.id : null);
+  const progress = enrollProgress(target, machines.data?.machines ?? [], arrival.data, Date.parse(token.expires_at), now);
 
   const actions =
     stage === "command" ? (
@@ -67,13 +70,15 @@ export function EnrollFlow({
   return (
     <Modal title={title} onClose={onClose} wide actions={actions}>
       <WizardBar titles={titles} position={stage === "command" ? 1 : 2} reached={stage === "command" ? 1 : 2} canJump={false} onJump={() => undefined} />
-      {stage === "command" ? <EnrollmentToken token={token} /> : <AgentWait name={token.name} progress={progress} remaining={Date.parse(token.expires_at) - now} />}
+      {stage === "command" ? <EnrollmentToken token={token} /> : <AgentWait name={token.name} progress={progress} expiresAt={token.expires_at} remaining={Date.parse(token.expires_at) - now} />}
     </Modal>
   );
 }
 
-// L'état de l'attente, annoncé aux lecteurs d'écran quand il change.
-function AgentWait({ name, progress, remaining }: { name: string; progress: EnrollProgress; remaining: number }) {
+// La tuile « en cours d'arrivée » : l'état de l'attente, annoncé aux
+// lecteurs d'écran quand il change, puis la frise des étapes que join a
+// cochées, telles que le serveur les rend.
+export function AgentWait({ name, progress, expiresAt, remaining }: { name: string; progress: EnrollProgress; expiresAt: string; remaining: number }) {
   const t = useT();
   return (
     <div className="modal-form" role="status" aria-live="polite">
@@ -93,7 +98,8 @@ function AgentWait({ name, progress, remaining }: { name: string; progress: Enro
           <p className="secondary">{t("machine.wait_connected_help")}</p>
         </>
       )}
-      {progress.state === "expired" && <Note tone="danger">{t("machine.wait_expired")}</Note>}
+      {progress.state === "expired" && <Note tone="danger">{t("machine.wait_expired", formatClock(expiresAt))}</Note>}
+      {progress.steps.length > 0 && <StepTrail steps={progress.steps} />}
     </div>
   );
 }

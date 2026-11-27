@@ -97,6 +97,24 @@ func Clean(reported Step) (Step, bool) {
 	return reported, true
 }
 
+// CleanAll juge un parcours venu d'ailleurs : au plus limit étapes, chacune
+// passée par Clean ; faux si le parcours est trop long ou si une étape est
+// refusée.
+func CleanAll(reported []Step, limit int) ([]Step, bool) {
+	if len(reported) > limit {
+		return nil, false
+	}
+	steps := make([]Step, 0, len(reported))
+	for _, one := range reported {
+		cleaned, ok := Clean(one)
+		if !ok {
+			return nil, false
+		}
+		steps = append(steps, cleaned)
+	}
+	return steps, true
+}
+
 // Print écrit la ligne d'une étape au terminal, « ✓ Docker installé
 // 27.3.1 » : le libellé est celui que l'écran montre pour la même clé.
 func Print(w io.Writer, catalog lang.Catalog, s Step) {

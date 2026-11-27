@@ -29,6 +29,7 @@ import (
 	refusals "github.com/ldesfontaine/kagu/internal/kit/refusal"
 	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/kit/version"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Les étapes de setup. Chacune lit d'abord l'état réel de la machine et ne
@@ -537,6 +538,18 @@ func (r *setupRun) localEnrollmentToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("read the local enrollment token: %w", err)
 	}
 	return offered.Token, nil
+}
+
+// reportLocalProgress envoie le parcours de setup par la socket de contrôle,
+// sous le jeton de l'agent de cette machine (R-B1-11). Sans suite si le
+// serveur n'est pas encore là ou n'a pas encore offert de jeton : le
+// prochain envoi porte tout le parcours. Un échec ne coche rien en rouge,
+// la frise n'est qu'une vue.
+func (r *setupRun) reportLocalProgress(ctx context.Context, steps []step.Step) {
+	if r.control == nil {
+		return
+	}
+	_, _, _ = r.control.post(ctx, controlLocalProgressPath, agentwire.JoinProgress{Steps: steps}, controlTimeout)
 }
 
 // isRefusal dit si le corps d'un refus du serveur porte la clé de sentinel.

@@ -3,7 +3,7 @@ import { Link, Navigate, Outlet, useLocation, useNavigate, useParams, useSearchP
 
 import { useMachineContainers } from "../api/containers";
 import type { Lifecycle } from "../api/lifecycle";
-import { deleteMachine, useMachines, type Agent, type Machine } from "../api/machines";
+import { deleteMachine, useMachineSheet, useMachines, type Agent, type Machine } from "../api/machines";
 import { useMachineProbes } from "../api/probes";
 import { useMachineResources } from "../api/resources";
 import { ActionsCard } from "../components/ActionsCard";
@@ -30,6 +30,7 @@ import { PageHead } from "../components/PageHead";
 import { RightsList } from "../components/RightsList";
 import { RootCommand } from "../components/RootCommand";
 import { RoleCard } from "../components/RoleCard";
+import { StepTrail } from "../components/StepTrail";
 import { ProbeTable } from "../components/ProbeTable";
 import { ResourceHistory, ResourceStats } from "../components/Resources";
 import { ContainerFilter, ContainerTable } from "../components/ContainerTable";
@@ -112,6 +113,7 @@ function MachineView({ current, all, tab }: { current: Machine; all: Machine[]; 
             <>
               <AgentCard machineID={current.id} agent={current.agent} reportRejected={current.report_rejected} updateLast={current.update_last} withoutSudo={lacksSudo(current)} now={now} />
               <ActionsCard machineID={current.id} agent={current.agent} />
+              <ArrivalCard machineID={current.id} />
             </>
           ) : tab === "droits" ? (
             <MachineRights machine={current} now={now} />
@@ -196,6 +198,26 @@ function AgentCard({ machineID, agent, reportRejected, updateLast, withoutSudo, 
         )}
         <Link to={`/machines/${machineID}/droits`}>{t("rights.open_tab")}</Link>
         <AgentAnchors agent={agent} />
+      </CardBody>
+    </Card>
+  );
+}
+
+// La frise de l'arrivée de la machine, celle que la tuile montrait pendant
+// join (R-B1-11) : le serveur la relit par le jeton de son agent. Rien tant
+// qu'elle n'est pas lue, ni si ce jeton est purgé.
+function ArrivalCard({ machineID }: { machineID: string }) {
+  const t = useT();
+  const sheet = useMachineSheet(machineID);
+  const arrival = sheet.data?.arrival ?? [];
+  if (arrival.length === 0) {
+    return null;
+  }
+  return (
+    <Card>
+      <CardHeader title={t("machine.arrival_title")} />
+      <CardBody>
+        <StepTrail steps={arrival} />
       </CardBody>
     </Card>
   );
