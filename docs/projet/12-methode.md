@@ -132,6 +132,41 @@ note l'ancienne courante comme retirée et refuse ensuite ce qu'elle signe
 | Distribuer | `release import dist-release` sur la machine Kagu, puis mettre à jour les agents ; publier les quatre fichiers sur la page de la version à la main, avec `install.sh` où `MIN_VERSION` vaut `X.Y.Z` (et la clé de secours du script est celle qui a signé, la courante celle de `release-2.key`, comme le binaire) |
 | Reprendre | `RELEASE_SIGNING_KEY` = contenu de `release-2.key` dans l'environnement `release`. La secours qui a servi est usée : les versions suivantes ne l'embarquent plus |
 
+## Les captures
+
+Rejouées **à chaque fin d'étape**, hors `make ci`. Résultat : `docs/captures.md`
+(généré, groupé par menu, date et commit en tête) et `docs/captures/<page>-ordinateur.webp`
+et `-telephone.webp` : toutes les routes de `web/src/App.tsx`, mode sombre,
+1280×900 et 390×844, pleine page.
+
+| Étape | Qui | Geste |
+| --- | --- | --- |
+| Remettre la VM d'essai (M-NU) à l'instantané « neuf » | Raph | avant chaque rejeu ; documenté ici, pas fait par le script |
+| Rejouer | l'agent, depuis orca | `CAPTURES_VM=<cible SSH> scripts/captures.sh <commit> <NN>` |
+| Fusionner | Raph | la branche `captures/etape-NN` (docs seulement) |
+
+- Les données sont celles de `TestE2EFixtureServer` (fictives, horloge figée),
+  servies sur la VM d'essai et jointes par un tunnel SSH : jamais
+  l'installation de Lucas. `CAPTURES_VM=local` lance le serveur sur la machine
+  du script, pour un essai.
+- La liste des pages vient du routeur (`declaredRoutes`). Une route à
+  paramètre prend le premier identifiant que l'interface rend dans ses liens
+  (menus « … » compris) ; une route sans lien prend celui de sa route-mère.
+  Une page que les données fictives n'atteignent pas est dans
+  `unreachedRoutes` (`web/e2e/support/routes.ts`), avec sa raison : même liste
+  que le parcours. Le test `R-CAPTURES-1` échoue pour toute autre route sans
+  capture.
+- **Garde des données réelles** : le texte de chaque page, puis `docs/captures.md`,
+  sont lus contre le domaine de l'opérateur, son plan d'adresses privé et les noms de machines réels (liste dans `scripts/captures.sh`). Ces
+  noms vivent **hors du dépôt**, dans `~/.config/kagu/captures-noms-reels.txt`
+  (ou `CAPTURES_NAMES_FILE`), un par ligne : le dépôt est miroité en public
+  (`TestR_NETMAPDEMO_NoRealInstallationInPublicFixtures`). Sans ce fichier, le
+  script refuse de partir. `scripts/captures.sh --garde <fichier>` lit un
+  fichier contre la même liste.
+- Le lancement du serveur de démo est dans `scripts/captures-serveur.sh` ; `scripts/captures-serveur-test.sh` (cible `make scripts-test`, dans `make ci`) échoue si ssh ne rend pas la main ou si une fonction déclare un `local` du nom d'une variable en lecture seule de `captures.sh`.
+- Le coût : 56 routes × 2 formats pèsent environ 16 Mo de WebP à chaque rejeu
+  gardé dans l'historique.
+
 ## La CI
 
 `.github/workflows/ci.yml` joue le scan des secrets, la politique Plumber

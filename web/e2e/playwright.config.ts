@@ -21,6 +21,22 @@ function portOfCheckout(): number {
 // KAGU_E2E_ADDR impose l'adresse.
 const address = process.env.KAGU_E2E_ADDR ?? `127.0.0.1:${portOfCheckout()}`;
 
+// KAGU_E2E_EXTERNAL=1 : le serveur tourne ailleurs (la VM d'essai, par un
+// tunnel SSH) ; scripts/captures.sh s'y branche sans en lancer un.
+const external = process.env.KAGU_E2E_EXTERNAL === "1";
+
+const webServer = {
+  command: "./.fixture.test -test.run TestE2EFixtureServer -test.timeout 0",
+  env: { KAGU_E2E_ADDR: address },
+  url: `http://${address}/`,
+  reuseExistingServer: false,
+  timeout: 60_000,
+  // Les journaux du serveur noieraient le rapport ; en cas d'échec de démarrage, le délai le dit.
+  // E2E_SERVER_LOGS=1 les laisse passer : sans elles, un serveur mort ne dit pas pourquoi.
+  stdout: process.env.E2E_SERVER_LOGS === "1" ? "pipe" : "ignore",
+  stderr: process.env.E2E_SERVER_LOGS === "1" ? "pipe" : "ignore",
+} as const;
+
 export default defineConfig({
   testDir: ".",
   testMatch: "*.spec.ts",
@@ -39,15 +55,5 @@ export default defineConfig({
     actionTimeout,
     navigationTimeout: pageLoadTimeout,
   },
-  webServer: {
-    command: "./.fixture.test -test.run TestE2EFixtureServer -test.timeout 0",
-    env: { KAGU_E2E_ADDR: address },
-    url: `http://${address}/`,
-    reuseExistingServer: false,
-    timeout: 60_000,
-    // Les journaux du serveur noieraient le rapport ; en cas d'échec de démarrage, le délai le dit.
-    // E2E_SERVER_LOGS=1 les laisse passer : sans elles, un serveur mort ne dit pas pourquoi.
-    stdout: process.env.E2E_SERVER_LOGS === "1" ? "pipe" : "ignore",
-    stderr: process.env.E2E_SERVER_LOGS === "1" ? "pipe" : "ignore",
-  },
+  ...(external ? {} : { webServer }),
 });

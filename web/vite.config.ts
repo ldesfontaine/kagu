@@ -30,6 +30,6 @@ export default defineConfig({
     sourcemap: false,
   },
   test: {
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "e2e/support/*.test.ts"],
   },
 });
