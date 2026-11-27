@@ -32,9 +32,10 @@ import (
 // le terminal tant qu'il est ouvert. Chaque étape se coche par step.Print et
 // s'écrit dans son état (state.json) : --status le relit. Ce qui touche à
 // state_dir passe par serve, sur sa socket de contrôle : root n'y écrit
-// jamais (R-B2-2), sauf pour revenir, serve arrêté (upgrade_rollback.go).
-// Après « Serveur répond », la suite est jouée par le nouveau binaire : ses
-// unités et son lanceur stable sont les siens.
+// jamais (R-B2-2) ; au retour arrière, serve arrêté, c'est un enfant sous le
+// compte du service (upgrade_rollback.go). Après « Serveur répond », la suite
+// est jouée par le nouveau binaire : ses unités et son lanceur stable sont
+// les siens.
 
 const (
 	// Ce que upgrade attend de health après le redémarrage (R-B2-3).
@@ -110,6 +111,12 @@ type upgradeSystem interface {
 	RunInUnit(args []string) error
 	// HandOver remplace ce processus par binary avec ces options.
 	HandOver(binary string, args []string) error
+	// Account rend l'uid et le gid d'un compte du système ; found est faux
+	// s'il n'existe pas.
+	Account(name string) (account fsx.Owner, found bool, err error)
+	// RunAsAccount lance args sous account, sans groupe en plus, et rend
+	// ce qu'il a écrit.
+	RunAsAccount(account fsx.Owner, args []string) (string, error)
 }
 
 // upgradeRun porte ce qu'une montée touche ; un test y met un faux système,
@@ -169,7 +176,16 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 	inUnit := flags.Bool(inUnitFlag, false, "")
 	finish := flags.Bool(finishFlag, false, "")
 	resume := flags.Bool(resumeFlag, false, "")
-	if err := flags.Parse(args); err != nil || flags.NArg() > 0 || (*resume && (*to != "" || *from != "" || *status)) {
+	restoreDatabase := flags.Bool(restoreDatabaseFlag, false, "")
+	if err := flags.Parse(args); err != nil {
+		return &refusal{message: r.text.Get("upgrade.usage")}
+	}
+	// L'enfant du retour arrière, sous le compte du service : avant le
+	// refus d'un autre compte que root.
+	if *restoreDatabase && *inUnit {
+		return r.restoreDatabase(flags.Args())
+	}
+	if flags.NArg() > 0 || *restoreDatabase || (*resume && (*to != "" || *from != "" || *status)) {
 		return &refusal{message: r.text.Get("upgrade.usage")}
 	}
 	if r.euid != 0 {
@@ -499,6 +515,11 @@ func (hostUpgradeSystem) RunInUnit(args []string) error {
 // dans l'unité transitoire.
 func upgradeUnitLine(self string, args []string) []string {
 	return append([]string{"--unit=" + brand.UpgradeUnit, "--pipe", "--wait", "--collect", "--quiet", "--", self, "upgrade"}, args...)
+}
+
+// RunAsAccount : l'enfant de root sous un autre compte, comme EnrollAgent.
+func (hostUpgradeSystem) RunAsAccount(account fsx.Owner, args []string) (string, error) {
+	return runAsAccount(account, args, nil)
 }
 
 // HandOver : exec garde le processus de l'unité, son terminal et son nom.

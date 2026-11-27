@@ -1788,13 +1788,14 @@ un serveur qui ne démarre pas), `upgrade` revient seul :
     Base fautive gardée : /var/lib/kagu/upgrade/echec-v0.6.0.db
 ```
 
-- `systemctl stop kagu`, puis la base fautive, avec ses `-wal` et `-shm`,
-  est déplacée en `upgrade/echec-<version>.db` : **jamais effacée**. Une
-  deuxième montée ratée vers la même version prend `echec-<version>-2.db`.
+- `systemctl stop kagu`, puis l'ancien binaire est remis.
+- Sous le compte `kagu` (root ne touche jamais la base) : la base fautive,
+  avec ses `-wal` et `-shm`, est déplacée en `upgrade/echec-<version>.db` :
+  **jamais effacée**. Une deuxième montée ratée vers la même version prend
+  `echec-<version>-2.db`.
 - La copie `avant-<version>.db` est remise à la place de la base, octet pour
-  octet, au compte `kagu` en `0600` ; la copie reste où elle est.
-- L'ancien binaire est remis, `serve` redémarre, `upgrade` attend qu'il rende
-  la version d'avant.
+  octet, par le compte `kagu`, en `0600` ; la copie reste où elle est.
+- `serve` redémarre, `upgrade` attend qu'il rende la version d'avant.
 - **Ce qui est perdu** : ce que `serve` a écrit entre la copie et l'arrêt
   (l'écran dit combien de secondes). Lisez le journal de la version fautive
   (`journalctl -u kagu -n 100`) avant de relancer.
@@ -1819,7 +1820,7 @@ nouvelle version répond, la montée finit ; elle reste muette, `upgrade`
 revient. Un retour commencé ne se rejoue jamais.
 
 Ce que `upgrade` ne fait pas encore : attendre plus de 60 s une version dont
-les migrations sont lentes (l'archive ne les déclare pas encore). La
+les migrations sont lentes (l'archive ne les déclare pas encore, #907). La
 **`v0.0.1`** n'embarque pas de clé de version : `upgrade` refuse, la première
 version signée s'installe à la main, une fois.
 

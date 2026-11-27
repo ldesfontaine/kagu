@@ -326,6 +326,14 @@ func (s *fakeUpgradeServe) copyDatabase(w http.ResponseWriter, copyPath string) 
 	return true
 }
 
+// childRun est un enfant lancé sous un autre compte : son compte, ses
+// options, et state_dir avant et après lui.
+type childRun struct {
+	account       fsx.Owner
+	args          []string
+	before, after []string
+}
+
 // upgradeSystemFake : systemctl restart et start font tourner la version du
 // binaire posé, stop rend serve muet ; systemd-run et la passation relancent
 // la commande dans ce processus, comme le ferait l'unité.
@@ -341,6 +349,11 @@ type upgradeSystemFake struct {
 	databaseAtStart string
 	// systemctl start échoue : le retour rate.
 	startFails bool
+	// Les comptes demandés et les enfants lancés sous un autre compte.
+	accounts []string
+	children []childRun
+	// state_dir à chaque systemctl.
+	treeAtCall []string
 	// Le oui de root lu dans state.json au moment de la relance.
 	consentAtRelaunch bool
 	handOver          []string
@@ -351,6 +364,7 @@ func (s *upgradeSystemFake) Run(name string, args ...string) error {
 	if name != "systemctl" {
 		return nil
 	}
+	s.treeAtCall = append(s.treeAtCall, strings.Join(treeOf(s.bench.t, s.bench.stateDir), "\n"))
 	switch args[0] {
 	case "stop":
 		s.bench.serve.stops()
@@ -393,6 +407,30 @@ func (s *upgradeSystemFake) startInstalled() error {
 }
 
 func (s *upgradeSystemFake) FreeBytes(string) (uint64, error) { return s.free, nil }
+
+// serviceAccount est le compte du service sur le banc : un uid qui n'est
+// pas root, même quand le test tourne en root. Les fichiers restent écrits
+// par le processus du test.
+func serviceAccount() fsx.Owner {
+	return fsx.Owner{UID: 6501, GID: 6501}
+}
+
+func (s *upgradeSystemFake) Account(name string) (fsx.Owner, bool, error) {
+	s.accounts = append(s.accounts, name)
+	return serviceAccount(), name == brand.ServerAccount, nil
+}
+
+// RunAsAccount joue l'enfant dans ce processus, avec l'uid demandé ; il
+// retient le compte et l'état de state_dir avant et après.
+func (s *upgradeSystemFake) RunAsAccount(account fsx.Owner, args []string) (string, error) {
+	s.children = append(s.children, childRun{account: account, args: args, before: treeOf(s.bench.t, s.bench.stateDir)})
+	var out bytes.Buffer
+	run := s.bench.newRun(version.Number())
+	run.out, run.euid = &out, account.UID
+	err := run.command(context.Background(), args[2:])
+	s.children[len(s.children)-1].after = treeOf(s.bench.t, s.bench.stateDir)
+	return out.String(), err
+}
 
 func (s *upgradeSystemFake) RunInUnit(args []string) error {
 	s.unitArgs = upgradeUnitLine(s.bench.paths.binary, args)

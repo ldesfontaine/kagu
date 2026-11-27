@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -731,22 +732,29 @@ func (hostSetupSystem) Address() string {
 	return info.Address
 }
 
-// EnrollAgent : le compte de l'agent, sans groupe en plus, un PATH fixe ; ce
-// que l'agent écrit en sortant dit pourquoi il a refusé.
+// EnrollAgent : le compte de l'agent, le jeton sur l'entrée standard.
 func (hostSetupSystem) EnrollAgent(account fsx.Owner, args []string, token string) error {
-	command := exec.Command(args[0], args[1:]...) // #nosec G204 -- le binaire de l'agent et les options de setup, aucune valeur de l'opérateur.
+	_, err := runAsAccount(account, args, strings.NewReader(token+"\n"))
+	return err
+}
+
+// runAsAccount lance args sous account, sans groupe en plus, avec un PATH
+// fixe, depuis / : un enfant de root qui n'a que les droits de ce compte.
+// Rend ce qu'il a écrit ; en échec, sa dernière ligne dit pourquoi.
+func runAsAccount(account fsx.Owner, args []string, stdin io.Reader) (string, error) {
+	command := exec.Command(args[0], args[1:]...) // #nosec G204 -- un binaire de root et des options de Kagu, aucune valeur de l'opérateur.
 	command.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{
 		Uid: uint32(account.UID), Gid: uint32(account.GID), Groups: []uint32{}, // #nosec G115 -- un uid et un gid.
 	}}
 	command.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL=C"}
 	command.Dir = "/"
-	command.Stdin = strings.NewReader(token + "\n")
+	command.Stdin = stdin
 	var output bytes.Buffer
 	command.Stdout, command.Stderr = &output, &output
 	if err := command.Run(); err != nil {
-		return fmt.Errorf("%w: %s", err, lastLine(output.String()))
+		return output.String(), fmt.Errorf("%w: %s", err, lastLine(output.String()))
 	}
-	return nil
+	return output.String(), nil
 }
 
 // lastLine rend la dernière ligne non vide d'une sortie.

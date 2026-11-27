@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -15,16 +17,19 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 	"github.com/ldesfontaine/kagu/internal/kit/release"
 	"github.com/ldesfontaine/kagu/internal/kit/step"
+	"github.com/ldesfontaine/kagu/internal/kit/untrusted"
 )
 
 // Le retour arrière de upgrade (R-B2-3, R-B2-4) : la nouvelle version ne
 // répond pas, upgrade remet l'ancien binaire et la copie de la base faite
-// par serve. C'est le seul moment où root écrit dans state_dir : serve est
-// arrêté, il ne peut rien faire lui-même. Un retour ne se joue qu'une fois ;
+// par serve. Root arrête serve, remet le binaire, relance et attend ; les
+// gestes sous state_dir sont ceux d'un enfant sous le compte du service
+// (R-B2-2, ARB-5) : root n'y ouvre rien. Un retour ne se joue qu'une fois ;
 // raté, upgrade donne la main.
 
-// La base remise est à serve, comme la copie : root l'écrit sans la garder.
-const restoredDatabaseMode = 0o600
+// restoreDatabaseFlag est l'option interne de l'enfant qui échange les
+// bases : upgrade --in-unit --restore-database <state_dir> <avant> <visée>.
+const restoreDatabaseFlag = "restore-database"
 
 // Ce qu'on reprend après une montée arrêtée : redémarrer si ce n'est pas
 // fait, puis attendre la nouvelle version.
@@ -111,23 +116,23 @@ func (r *upgradeRun) rollBack(ctx context.Context) error {
 	return &refusal{message: r.text.Format("upgrade.rolled_back_todo", r.state.Target, r.state.Running)}
 }
 
-// restorePrevious : serve arrêté, sa base échangée contre la copie, l'ancien
-// binaire remis, serve relancé et attendu. Rend où est gardée la base
-// fautive, et ce qui est perdu : ce que serve a écrit entre la copie et
-// l'arrêt.
+// restorePrevious : serve arrêté, l'ancien binaire remis, la base échangée
+// contre la copie par l'enfant, serve relancé et attendu. Rend où est gardée
+// la base fautive, et ce qui est perdu : ce que serve a écrit entre la copie
+// et l'arrêt.
 func (r *upgradeRun) restorePrevious(ctx context.Context) (faulty string, lost time.Duration, err error) {
 	if err := r.system.Run("systemctl", "stop", brand.ServerUnit); err != nil {
 		return "", 0, err
 	}
 	stopped := time.Now()
-	if faulty, err = r.swapDatabase(); err != nil {
-		return "", 0, err
-	}
 	previous, err := os.ReadFile(r.state.Previous)
 	if err != nil {
 		return "", 0, err
 	}
 	if err := writeExecutable(r.state.Binary, previous); err != nil {
+		return "", 0, err
+	}
+	if faulty, err = r.swapDatabaseAsService(); err != nil {
 		return "", 0, err
 	}
 	if err := r.system.Run("systemctl", "start", brand.ServerUnit); err != nil {
@@ -140,30 +145,63 @@ func (r *upgradeRun) restorePrevious(ctx context.Context) (faulty string, lost t
 	return faulty, stopped.Sub(copied.At), nil
 }
 
-// swapDatabase garde la base fautive à côté de la copie, puis remet la
-// copie à sa place. serve doit être arrêté.
-func (r *upgradeRun) swapDatabase() (faulty string, err error) {
-	running, err := release.ParseVersion(r.state.Running)
+// swapDatabaseAsService fait échanger les bases par le binaire remis, celui
+// de root, lancé sous le compte du service : le compte se lit par son nom,
+// jamais sur un fichier de state_dir. L'enfant rend le nom de la base
+// fautive ; il n'est pris que s'il a la forme attendue.
+func (r *upgradeRun) swapDatabaseAsService() (faulty string, err error) {
+	account, found, err := r.system.Account(brand.ServerAccount)
 	if err != nil {
 		return "", err
 	}
-	target, err := release.ParseVersion(r.state.Target)
+	if !found {
+		return "", fmt.Errorf("account %s not found", brand.ServerAccount)
+	}
+	args := []string{r.state.Binary, "upgrade", "--" + inUnitFlag, "--" + restoreDatabaseFlag, r.state.StateDir, r.state.Running, r.state.Target}
+	output, err := r.system.RunAsAccount(account, args)
 	if err != nil {
 		return "", err
 	}
-	stateDir, err := os.OpenRoot(r.state.StateDir)
+	kept := lastLine(output)
+	wanted := path.Join(brand.UpgradeDir, brand.UpgradeFailedPrefix+r.state.Target)
+	if !strings.HasPrefix(kept, wanted) || untrusted.HasControl(kept) || strings.Contains(kept, "..") {
+		return "", fmt.Errorf("unexpected faulty database name: %q", untrusted.Bound(kept, step.MaxDetailRunes))
+	}
+	return filepath.Join(r.state.StateDir, kept), nil
+}
+
+// restoreDatabase est l'enfant, sous le compte du service : il garde la base
+// fautive à côté de la copie, remet la copie à sa place, et écrit le nom de
+// la base fautive. serve est arrêté. Lancé par root, il refuse (R-B2-2).
+func (r *upgradeRun) restoreDatabase(args []string) error {
+	if r.euid == 0 {
+		return &refusal{message: r.text.Get("upgrade.restore_as_root")}
+	}
+	if len(args) != 3 {
+		return &refusal{message: r.text.Get("upgrade.usage")}
+	}
+	running, err := release.ParseVersion(args[1])
 	if err != nil {
-		return "", err
+		return err
+	}
+	target, err := release.ParseVersion(args[2])
+	if err != nil {
+		return err
+	}
+	stateDir, err := os.OpenRoot(args[0])
+	if err != nil {
+		return err
 	}
 	defer stateDir.Close()
 	kept, err := keepFaultyDatabase(stateDir, target)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if err := restoreDatabaseCopy(stateDir, running); err != nil {
-		return "", err
+		return err
 	}
-	return filepath.Join(r.state.StateDir, kept), nil
+	_, err = fmt.Fprintln(r.out, kept)
+	return err
 }
 
 // keepFaultyDatabase déplace la base et ses -wal, -shm sous un nom libre
@@ -210,30 +248,29 @@ func freeFailedName(stateDir *os.Root, target release.Version) (string, error) {
 }
 
 // restoreDatabaseCopy remet la copie d'avant la montée à la place de la
-// base, octet pour octet. Root l'écrit, et la rend au compte de la copie,
-// celui de serve, en 0600, avant qu'elle ne prenne son nom. Le nom de la
-// copie se recalcule de la version : jamais un chemin que serve aurait dit.
+// base, octet pour octet, en flux : le fichier naît au compte de l'enfant,
+// en 0600, et ne prend son nom qu'écrit. Le nom de la copie se recalcule de
+// la version : jamais un chemin que serve aurait dit ; un lien est refusé.
 func restoreDatabaseCopy(stateDir *os.Root, running release.Version) error {
 	name := store.UpgradeCopyName(running)
-	info, err := stateDir.Lstat(name)
-	if err != nil {
-		return err
-	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || !info.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", name)
-	}
 	for _, suffix := range store.DatabaseJournalSuffixes {
 		if _, err := stateDir.Lstat(brand.DatabaseFile + suffix); !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("%s%s is still next to the database: %w", brand.DatabaseFile, suffix, err)
 		}
 	}
-	content, err := stateDir.ReadFile(name)
+	copied, err := stateDir.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return err
 	}
-	owner := fsx.Owner{UID: int(stat.Uid), GID: int(stat.Gid)}
-	return fsx.WriteAtomicOwned(stateDir, brand.DatabaseFile, content, restoredDatabaseMode, owner)
+	defer copied.Close()
+	info, err := copied.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", name)
+	}
+	return fsx.CreateExclusiveFrom(stateDir, brand.DatabaseFile, copied, store.UpgradeCopyMode)
 }
 
 // handRecovery arrête upgrade sur un retour raté : les trois commandes à

@@ -229,7 +229,8 @@ func (db *DB) SnapshotDatabase(ctx context.Context, path string) error {
 const (
 	KeptUpgradeCopies = 3
 	upgradeDirMode    = 0o700
-	upgradeCopyMode   = 0o600
+	// UpgradeCopyMode : la copie, et la base que upgrade remet depuis elle.
+	UpgradeCopyMode   = 0o600
 	upgradeCopySuffix = ".db"
 )
 
@@ -251,7 +252,7 @@ func (db *DB) CopyBeforeUpgrade(ctx context.Context, running release.Version) (s
 	}
 	// Le fichier naît vide en 0600 (VACUUM INTO accepte un fichier vide) :
 	// SQLite le créerait sinon en 0644, umask compris.
-	if err := fsx.CreateExclusive(db.stateDir, partial, nil, upgradeCopyMode); err != nil {
+	if err := fsx.CreateExclusive(db.stateDir, partial, nil, UpgradeCopyMode); err != nil {
 		return "", err
 	}
 	if err := db.SnapshotDatabase(ctx, filepath.Join(db.stateDir.Name(), partial)); err != nil {

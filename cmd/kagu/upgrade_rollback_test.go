@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ldesfontaine/kagu/internal/edge/store"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/release"
 	"github.com/ldesfontaine/kagu/internal/kit/release/releasetest"
@@ -84,7 +85,7 @@ func TestR_B2_3_ASilentServerBringsBackTheOldBinaryAndTheCopy(t *testing.T) {
 		t.Fatalf("serve started on %q", b.system.databaseAtStart)
 	}
 	info, err := os.Stat(b.database())
-	if err != nil || info.Mode().Perm() != restoredDatabaseMode {
+	if err != nil || info.Mode().Perm() != store.UpgradeCopyMode {
 		t.Fatalf("restored database: %v %v", info, err)
 	}
 	if !ownedByCaller(info) {
@@ -319,5 +320,52 @@ func TestUpgrade_RollbackRefusesACopyThatIsALink(t *testing.T) {
 	}
 	if !strings.Contains(b.terminal.String(), "✗ Retour arrière") {
 		t.Fatalf("printed %q", b.terminal)
+	}
+}
+
+// R-B2-2 (ARB-5) : pendant le retour, root arrête serve, remet le binaire,
+// relance ; state_dir ne bouge que dans l'enfant, lancé sous le compte du
+// service, depuis le binaire remis.
+func TestR_B2_2_RootNeverWritesUnderStateDir(t *testing.T) {
+	b := failingUpgradeBench(t)
+	b.wantRolledBack(b.upgrade("--" + inUnitFlag))
+	if !slices.Equal(b.system.accounts, []string{brand.ServerAccount}) || len(b.system.children) != 1 {
+		t.Fatalf("accounts %v, children %d", b.system.accounts, len(b.system.children))
+	}
+	child := b.system.children[0]
+	if child.account != serviceAccount() || child.account.UID == 0 {
+		t.Fatalf("child account %+v", child.account)
+	}
+	if child.args[0] != b.paths.binary || !slices.Contains(child.args, "--"+restoreDatabaseFlag) {
+		t.Fatalf("child %v", child.args)
+	}
+	// restart, stop, start : entre stop et l'enfant, puis entre l'enfant et
+	// start, seul root agit.
+	if len(b.system.treeAtCall) != 3 {
+		t.Fatalf("systemctl calls %v", b.system.calls)
+	}
+	stopped, started := b.system.treeAtCall[1], b.system.treeAtCall[2]
+	if stopped != strings.Join(child.before, "\n") {
+		t.Fatalf("root wrote under state_dir before the child:\n%s\n---\n%s", stopped, strings.Join(child.before, "\n"))
+	}
+	if started != strings.Join(child.after, "\n") {
+		t.Fatalf("root wrote under state_dir after the child:\n%s\n---\n%s", strings.Join(child.after, "\n"), started)
+	}
+	if strings.Join(child.before, "\n") == strings.Join(child.after, "\n") {
+		t.Fatal("the child changed nothing")
+	}
+}
+
+// L'enfant refuse de tourner en root : root ne touche jamais la base.
+func TestUpgrade_TheDatabaseSwapRefusesRoot(t *testing.T) {
+	b := newUpgradeBench(t)
+	before := treeOf(t, b.stateDir)
+	var refused *refusal
+	err := b.upgrade("--"+inUnitFlag, "--"+restoreDatabaseFlag, b.stateDir, version.Number(), upgradeTarget)
+	if !errors.As(err, &refused) || refused.message != testCatalog(t).Get("upgrade.restore_as_root") {
+		t.Fatalf("swap as root: %v", err)
+	}
+	if !slices.Equal(before, treeOf(t, b.stateDir)) {
+		t.Fatal("state_dir changed")
 	}
 }
