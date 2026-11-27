@@ -22,6 +22,7 @@ var writesWithoutScreen = map[string]string{
 	"POST /api/manifest/plan":            "la commande `apply`, par la socket de commande ; l'écran ne montre que les passages",
 	"POST /api/manifest/apply":           "la commande `apply`, par la socket de commande",
 	"POST /agent/enroll":                 "l'agent, à l'enrôlement",
+	"POST /agent/join/progress":          "join, à chaque étape cochée, le jeton en en-tête (R-B1-11)",
 	"POST /agent/signal":                 "l'agent, à chaque signal",
 	"POST /agent/logs/{request}":         "l'agent, la réponse à une lecture de journaux",
 	"PUT /agent/parcels/{parcel}/{name}": "l'agent, un colis qu'il produit",

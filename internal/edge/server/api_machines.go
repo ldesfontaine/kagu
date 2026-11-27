@@ -16,6 +16,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/module"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/kit/version"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -377,6 +378,8 @@ type reenrollRequest struct {
 // Le jeton en clair, une seule fois, à part de la ligne d'ajout, qui ne le
 // porte jamais (R-B1-10) : l'écran copie la ligne puis le jeton.
 type tokenResponse struct {
+	// L'identifiant du jeton : la tuile en lit l'avancement.
+	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Token   string `json:"token"`
 	Set     string `json:"set"`
@@ -569,7 +572,37 @@ func (s *Server) getMachine(w http.ResponseWriter, r *http.Request) {
 	if s.failed(w, r, err, nil) {
 		return
 	}
-	s.writeAPI(w, http.StatusOK, s.machineJSONOf(found, facts))
+	arrival, err := s.machines.ArrivalSteps(r.Context(), found.Agent.ID)
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	s.writeAPI(w, http.StatusOK, machineSheetJSON{machineJSON: s.machineJSONOf(found, facts), Arrival: arrival})
+}
+
+// machineSheetJSON est la fiche : la machine, et la frise de son arrivée,
+// lue par le jeton que son agent a consommé (R-B1-11) ; vide si ce jeton est
+// purgé.
+type machineSheetJSON struct {
+	machineJSON
+	Arrival []step.Step `json:"arrival"`
+}
+
+// arrivalJSON est l'avancement d'une machine qui arrive, lu sur son jeton :
+// la tuile « en cours d'arrivée » le dessine (StepTrail) sans le recalculer.
+type arrivalJSON struct {
+	State     machine.ArrivalState `json:"state"`
+	ExpiresAt time.Time            `json:"expires_at"`
+	Steps     []step.Step          `json:"steps"`
+}
+
+// getTokenProgress rend l'avancement d'un jeton, servi ou non (niveau 0) :
+// ses étapes, sans le jeton.
+func (s *Server) getTokenProgress(w http.ResponseWriter, r *http.Request) {
+	arrival, err := s.machines.ArrivalOf(r.Context(), r.PathValue("id"))
+	if s.failed(w, r, err, machine.ErrTokenNotFound) {
+		return
+	}
+	s.writeAPI(w, http.StatusOK, arrivalJSON{State: arrival.State, ExpiresAt: arrival.ExpiresAt.UTC(), Steps: arrival.Steps})
 }
 
 // La migration d'un agent installé avant le retour arrière automatique : les
@@ -703,6 +736,7 @@ func (s *Server) writeToken(w http.ResponseWriter, r *http.Request, token machin
 		return
 	}
 	s.writeAPI(w, http.StatusCreated, tokenResponse{
+		ID:            token.ID,
 		Name:          token.Name,
 		Token:         cleartext,
 		Set:           string(set),

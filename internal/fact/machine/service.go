@@ -17,6 +17,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/deletion"
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 )
 
 const (
@@ -74,6 +75,16 @@ type Store interface {
 	InsertToken(ctx context.Context, token Token) error
 	ListPendingTokens(ctx context.Context, now time.Time) ([]Token, error)
 	DeleteToken(ctx context.Context, id string) error
+	// TokenByHash et TokenByID lisent un jeton sans le consommer ;
+	// TokenOfAgent, celui qu'un agent a consommé. ErrTokenNotFound sinon.
+	TokenByHash(ctx context.Context, hash string) (Token, error)
+	TokenByID(ctx context.Context, id string) (Token, error)
+	TokenOfAgent(ctx context.Context, agentID string) (Token, error)
+	// Le parcours d'arrivée d'une machine, sous son jeton (gesture_steps,
+	// sujet enrollment:<id>).
+	ReplaceEnrollmentSteps(ctx context.Context, tokenID string, steps []step.Step) error
+	AppendEnrollmentStep(ctx context.Context, tokenID string, reported step.Step) error
+	EnrollmentSteps(ctx context.Context, tokenID string) ([]step.Step, error)
 	// Enroll consomme le jeton, crée la machine ou la retrouve, révoque son
 	// agent actif et inscrit le nouveau, dans une seule transaction ; il
 	// renvoie la machine telle qu'elle est en base.
@@ -423,6 +434,10 @@ func (s *Service) Enroll(ctx context.Context, request Enrollment) (Machine, erro
 	}
 	agent := Agent{ID: agentID, PublicKey: request.PublicKey, SealPublicKey: request.SealPublicKey, Version: request.AgentVersion, EnrolledAt: now}
 	machine, err := s.store.Enroll(ctx, ident.HashToken(request.Token), candidate, agent, now)
+	if errors.Is(err, ErrTokenExpired) || errors.Is(err, ErrTokenConsumed) {
+		s.noteRefusedEnrollment(ctx, request.Token, err)
+		return Machine{}, err
+	}
 	if err != nil {
 		return Machine{}, err
 	}

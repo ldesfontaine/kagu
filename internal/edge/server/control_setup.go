@@ -7,6 +7,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
+	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // Les routes de root dont setup a besoin pour l'agent de la machine Kagu
@@ -59,4 +60,23 @@ func (s *Server) readLocalAgent(w http.ResponseWriter, r *http.Request) {
 		Enrolled: agent.IsActive(), Online: local.Online, Reported: !agent.ReportedAt.IsZero(),
 		Deploy: fitJSON{State: string(deploy.State), Reason: deploy.Reason},
 	})
+}
+
+// recordLocalProgress écrit le parcours de setup sous le jeton de l'agent de
+// la machine Kagu (R-B1-11), dans le corps de join : toutes ses lignes
+// depuis la première. 404 tant qu'aucun jeton ne lui est offert.
+func (s *Server) recordLocalProgress(w http.ResponseWriter, r *http.Request) {
+	var request agentwire.JoinProgress
+	if !s.readAPI(w, r, &request) {
+		return
+	}
+	err := s.machines.RecordLocalProgress(r.Context(), request.Steps)
+	if errors.Is(err, machine.ErrBadField) {
+		s.apiRefuse(w, http.StatusBadRequest, codeBadJSON)
+		return
+	}
+	if s.failed(w, r, err, machine.ErrTokenNotFound) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -23,6 +23,7 @@ beforeEach(() => {
 const command = "curl -fsSL https://example.org/install.sh | sudo sh -s -- join --server https://kagu.example.org --server-key SHA256:abc --rights manage";
 
 const token: TokenResponse = {
+  id: "0123456789abcdef",
   name: "web-1",
   token: "kg_secret",
   set: "manage",

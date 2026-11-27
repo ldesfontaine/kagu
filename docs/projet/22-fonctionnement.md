@@ -136,7 +136,7 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `kagu.db` | Le journal d'audit : la table `audit_events`, une ligne par geste réussi qui écrit un objet déclaré ou une autorité : `at`, `actor_kind`, `actor_name` et `actor_label` (le nom que portait l'acteur à l'instant du geste, nullable : migration `017_audit_actor_label.sql`), `action`, `object_kind`, `object_id`, `object_name` recopié, `details` (JSON plat de textes) et `apply_id` quand un apply l'a écrit. **Aucun secret** : ni mot de passe, ni jeton, ni secret, ni URL de webhook (« Le journal d'audit ») | Ajout seul : un déclencheur refuse toute modification d'une ligne, hors la mise à nul du lien `apply_id` (`ON DELETE SET NULL`). Pas de clé étrangère vers l'objet : la ligne lui survit. Purgé après **un an** (`audit.Retention`), avec les alertes, au démarrage puis une fois par jour |
 | Machine Kagu, `state_dir` | `kagu.db` | L'envoi du journal : la table `audit_deliveries`, une ligne par (événement, canal qui reçoit le journal) : `status` (`pending`, `delivered`, `failed`), `attempts`, `reason` et `code` du dernier essai, `next_attempt_at`. Réservée dans la transaction de l'événement. **Aucun contenu** : le message se refait de l'événement, relu à l'envoi (« Le journal d'audit › Envoi aux canaux ») | Part avec son événement (la purge à un an) et avec son canal (`ON DELETE CASCADE`) |
 | Machine Kagu, `state_dir` | `kagu.db` | Les ordres envoyés aux agents : `action_runs` (identifiant, genre `action`, paramètres sans secret `params`, machine et agent en `set null` avec `machine_name` recopié, état, `refusal_reason`, `not_after`, rang `seq` unique par agent, `requested_by` recopié de l'acteur, `requested_by_label` son nom lisible (migration `049`), `requested_at`, `finished_at`) et leur sortie, `run_logs` (rang, instant, flux, ligne ; 64 lignes au plus par run), partie avec son run (`cascade`). Écrit **avant** que l'ordre ne parte (« Comment un ordre part et revient ») | Un run survit à sa machine et à son agent : c'est une trace. Purgé à 90 jours (`action.Retention`) avec sa sortie, par la boucle des ordres. La sortie est ce que l'agent a écrit : rien n'y est masqué |
-| Machine Kagu, `state_dir` | `kagu.db` | Les étapes cochées d'un geste suivi (migration `057`) : `gesture_steps` (`subject` préfixé, `run:<id>` pour un ordre, `enrollment:<id du jeton>` réservé à l'arrivée d'une machine ; `position`, l'ordre d'affichage ; `key`, la clé du catalogue ; `state` `running`, `done`, `failed` ou `skipped` ; `detail`, 200 caractères au plus, nettoyé par `untrusted.Strip` ; `at` ; `source_addr`, nul pour un run). **Aucune clé étrangère** : un run purgé ou un jeton expiré ne bloque rien | La purge des runs efface elle-même les lignes `run:<id>` des runs purgés, dans sa transaction. Le détail est ce que l'agent a écrit, nettoyé, rien n'y est masqué |
+| Machine Kagu, `state_dir` | `kagu.db` | Les étapes cochées d'un geste suivi (migration `057`) : `gesture_steps` (`subject` préfixé, `run:<id>` pour un ordre, `enrollment:<id du jeton>` pour l'arrivée d'une machine (voir « L'arrivée d'une machine ») ; `position`, l'ordre d'affichage ; `key`, la clé du catalogue ; `state` `running`, `done`, `failed` ou `skipped` ; `detail`, 200 caractères au plus, nettoyé par `untrusted.Strip` ; `at` ; `source_addr`, nul pour un run). **Aucune clé étrangère** : un run purgé ou un jeton expiré ne bloque rien | La purge des runs efface elle-même les lignes `run:<id>` des runs purgés, dans sa transaction ; la purge des jetons du démarrage (`PurgeTokens`), les lignes `enrollment:<id>` de tout jeton qui n'est plus (purgé, annulé, remplacé). Le détail est ce que l'agent a écrit, nettoyé, rien n'y est masqué |
 | Machine Kagu, `state_dir` | `kagu.db` | Le rattachement des conteneurs à l'annuaire : `containers.unit_id` (l'unité déclarée, nulle tant que rien ne rattache) et `containers.match_level` (`label`, `compose` ou `name`), recalculés à chaque rapport et après chaque écriture de l'annuaire ; la table `ignored_keys` (machine, genre `compose_service` — valeur `projet/service` —, `compose_project` ou `container_name`, valeur) des conteneurs que l'opérateur dit voulus. Les deux labels du produit que le conteneur porte, `containers.label_service` et `containers.label_unit` (texte, vides par défaut) et `containers.label_invalid` (0 ou 1 : des labels de la marque étaient là, mal formés), pour que le rapprochement relise la valeur sans la demander à l'agent ; aucun autre label n'est gardé. Aucun secret, aucun identifiant Docker : une clé d'observation survit à la recréation du conteneur | `unit_id` passe à nul quand l'unité est supprimée (`ON DELETE SET NULL`), `ignored_keys` part avec sa machine. Pas de purge : l'opérateur retire une clé d'un geste |
 | Machine Kagu, `state_dir` | `kagu.db` | Les conteneurs : une fiche par conteneur dans `containers` (nom, projet Compose, image, état Docker, code de sortie, tué faute de mémoire, tué sans arrêt demandé, arrêt demandé, santé, ports publiés, mode réseau, privilégié, dépendances déclarées, dates), ses transitions dans `container_events`, ses mesures dans `container_samples`, ce que chaque machine dit de son Docker dans `machine_engines` | Purgés : transitions après 90 jours, fiche d'un conteneur détruit après 30 jours avec ses transitions et mesures, mesures après 48 h ; plafonnés par machine (fiches vivantes, archivées, transitions, cadence des mesures : « Comment les conteneurs sont suivis », point 6). **L'extrait de journal** d'un arrêt anormal (50 lignes, 10 Kio) est stocké en clair sur la transition : ce qu'une application écrit dans ses logs peut s'y trouver |
 | Machine Kagu, `state_dir` | `kagu.db` | Les clés SSH autorisées que chaque agent relève (migration `011_ssh_keys.sql`) : `ssh_reports` (une ligne par machine : relevé tronqué ou non, instant), `ssh_accounts` (machine, compte, uid, état `read`, `none`, `denied`, `unsafe` ou `too_large`, relevé tronqué, lignes ignorées) et `ssh_keys` (compte, fichier `authorized_keys` ou `authorized_keys2`, **empreinte SHA256**, type, taille en bits, commentaire borné à 64 octets, noms d'options reconnus). **Jamais le contenu d'un fichier ni la clé publique entière** : l'empreinte ne remonte pas à la clé | Remplacé en entier à chaque relevé retenu, dans une transaction : ce qu'une machine ne dit plus disparaît. Pas de purge d'âge. La machine retirée emporte tout (`ON DELETE CASCADE`), et le plan de suppression compte « clés SSH relevées » |
@@ -258,6 +258,32 @@ qu'à l'écran qui le montre une fois, puis chez le client qui le garde
    - « Agent enrôlé » affiche l'empreinte de la clé de l'agent
      (`ident.KeyFingerprint`), la même que la fiche montre (« Clé de
      l'agent », `agent.key_fingerprint`).
+   - après chaque ligne cochée, envoie le parcours au serveur
+     (`POST /agent/join/progress`, voir « L'arrivée d'une machine ») ; un
+     refus de cet envoi ne coupe pas join.
+
+   **L'arrivée d'une machine** (R-B1-11, R-GESTE-4). Tant qu'elle n'est pas
+   enrôlée, son avancement vit sur son jeton : `gesture_steps`, sujet
+   `enrollment:<id du jeton>`, et nulle part ailleurs ; aucune migration.
+
+   | Qui écrit | Par où | Ce qui est jugé |
+   | --- | --- | --- |
+   | `join` | `POST /agent/join/progress`, sans authentification, le jeton dans l'en-tête `Kagu-Enrollment-Token` (jamais dans l'adresse), corps `{"steps": [...]}` : tout le parcours depuis la première ligne, qui remplace le précédent | Le jeton est lu par son empreinte (`ident.HashToken`) et **jamais consommé**. En attente : tout parcours passe. Servi : seulement un parcours qui dit « Agent enrôlé » fait, pour qu'une ligne recollée sur une autre machine n'écrase pas la frise de la première (`token_consumed` sinon). Expiré : `token_expired`, rien d'écrit. 16 étapes au plus, chacune passée par `step.Clean` (`step.CleanAll`). Le seau par source de l'enrôlement, puis **dix envois par minute et par jeton** (seau keyé par l'id du jeton, 1 024 jetons suivis au plus) : 429 au-delà |
+   | Le serveur, à un enrôlement refusé | `machine.Service.Enroll` | `token_expired` ou `token_consumed` : une ligne « Agent enrôlé » en échec, le code en détail, l'heure du refus, **ajoutée** à la suite du parcours du jeton (le refus rendu à l'agent ne change pas si l'écriture échoue) |
+   | `setup`, pour l'agent de la machine Kagu | `POST /control/admin/local-enrollment/progress` (socket de contrôle, root seul), même corps | Sous le jeton que l'agent local a consommé, sinon sous celui qui lui est offert ; 404 avant (les premières lignes de setup précèdent le serveur, l'envoi suivant porte tout) |
+
+   Lectures (niveau 0, ouvertes aux jetons d'API) :
+   `GET /api/machines/tokens/{id}/progress` rend `state` (`pending`,
+   `expired`, `enrolled`, jugé par le serveur), `expires_at` et `steps`,
+   jamais le jeton ; `GET /api/machines/{id}` rend `arrival`, le parcours du
+   jeton que l'agent courant a consommé (`enrollment_tokens.agent_id`), vide
+   si ce jeton est purgé. La tuile « en cours d'arrivée » (fenêtre d'ajout,
+   `AgentWait`) dessine ces étapes par `StepTrail`, sans liste à elle ; un
+   jeton expiré se dit « Jeton expiré à <heure> », la tentative refusée
+   reste dans la frise. Un silence de join n'est jamais rouge : seule
+   l'heure du jeton l'est. La fiche montre la même frise (onglet Agent,
+   « Arrivée de la machine »).
+
    L'enrôlement de l'agent (`agent.enroll`) compare aussi la clé : avant le
    jeton (`-server-key` ; exigé pour un serveur qui n'est ni `unix:` ni la
    boucle, `ErrServerKeyRequired`), puis dans la réponse ; un écart n'écrit
@@ -1107,7 +1133,8 @@ boucle locale. Chaque ligne se coche par `step.Print`, avec les clés et les
 libellés de l'écran, et regarde d'abord l'état réel : relancé, setup coche
 « déjà fait » ce qui l'est, sans rien refaire (R-B1-3). Une ligne en échec
 s'écrit avec sa raison, le refus dit quoi faire, et setup s'arrête là
-(R-B1-2).
+(R-B1-2). Après chaque ligne, setup envoie son parcours au serveur
+pour la fiche de la machine Kagu (voir « L'arrivée d'une machine »).
 
 | Ligne (clé) | Ce que setup vérifie, puis fait s'il le faut |
 | --- | --- |
@@ -1979,9 +2006,10 @@ d'autre (test). Un ordre qui ne se décode pas n'atteint aucun exécuteur.
 `internal/kit/lang` : le terminal l'imprime par `step.Print`, l'écran la
 dessine par `StepTrail`, avec le même libellé (un test refuse une clé sans
 libellé). Une clé bien formée que le serveur ne connaît pas (agent plus
-récent) s'écrit, et s'affiche entre crochets. Aujourd'hui seules les neuf
-étapes d'arrivée d'une machine (`step.enroll.*`) sont déclarées ; aucun ordre
-n'en rapporte encore, et aucune route ne rend les étapes.
+récent) s'écrit, et s'affiche entre crochets. Les neuf
+étapes d'arrivée d'une machine (`step.enroll.*`) vivent sur son jeton, puis
+sa fiche (voir « L'arrivée d'une machine ») ; aucun ordre n'en rapporte
+encore.
 
 | État | Posé par | Fini |
 | --- | --- | --- |

@@ -45,18 +45,19 @@ const serviceUID = 998
 // adminBodies : un corps valable pour chaque route d'administration, pour
 // qu'un refus ne puisse venir que de la garde.
 var adminBodies = map[string]string{
-	"POST /control/admin/setup-code":         `{}`,
-	"POST /control/admin/reset-password":     `{"password":"a passphrase from root"}`,
-	"POST /control/admin/reset-totp":         `{}`,
-	"POST /control/admin/unlock":             `{}`,
-	"POST /control/admin/auth-mode":          `{"mode":"forward","header":"X-Forwarded-User"}`,
-	"POST /control/admin/sessions/close-all": `{}`,
-	"POST /control/admin/tokens/revoke-all":  `{}`,
-	"GET /control/admin/health":              ``,
-	"POST /control/admin/backup/pre-upgrade": `{}`,
-	"POST /control/admin/releases/import":    `{"folder":"/var/lib/kagu-import/v0.0.2"}`,
-	"POST /control/admin/local-enrollment":   ``,
-	"GET /control/admin/local-agent":         ``,
+	"POST /control/admin/setup-code":                `{}`,
+	"POST /control/admin/reset-password":            `{"password":"a passphrase from root"}`,
+	"POST /control/admin/reset-totp":                `{}`,
+	"POST /control/admin/unlock":                    `{}`,
+	"POST /control/admin/auth-mode":                 `{"mode":"forward","header":"X-Forwarded-User"}`,
+	"POST /control/admin/sessions/close-all":        `{}`,
+	"POST /control/admin/tokens/revoke-all":         `{}`,
+	"GET /control/admin/health":                     ``,
+	"POST /control/admin/backup/pre-upgrade":        `{}`,
+	"POST /control/admin/releases/import":           `{"folder":"/var/lib/kagu-import/v0.0.2"}`,
+	"POST /control/admin/local-enrollment":          ``,
+	"POST /control/admin/local-enrollment/progress": `{"steps":[{"key":"step.enroll.system","state":"done","at":"2026-11-27T10:00:00Z"}]}`,
+	"GET /control/admin/local-agent":                ``,
 }
 
 // R-A2-11 : un pair d'uid non nul reçoit 403 sur chaque route

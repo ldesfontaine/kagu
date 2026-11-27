@@ -46,11 +46,13 @@ type bench struct {
 	updates    *update.Service
 	actions    *action.Service
 	db         *store.DB
+	// stateDir porte le fichier de la base, qu'un test relit à part.
+	stateDir *os.Root
 }
 
 func newBench(t *testing.T) *bench {
 	t.Helper()
-	db := storetest.Open(t)
+	stateDir, db := storetest.OpenWithStateDir(t)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	clock := func() time.Time { return testNow }
 	machines := machine.New(db, machine.NewSessions(), logger)
@@ -67,7 +69,7 @@ func newBench(t *testing.T) *bench {
 	actions := action.New(db, machines, logger)
 	actions.SetClock(clock)
 	actions.SetKey(action.GenerateKey())
-	b := &bench{logger: logger, machines: machines, resources: resources, containers: containers, probes: probes, updates: updates, actions: actions, db: db}
+	b := &bench{logger: logger, machines: machines, resources: resources, containers: containers, probes: probes, updates: updates, actions: actions, db: db, stateDir: stateDir}
 	b.mount()
 	return b
 }

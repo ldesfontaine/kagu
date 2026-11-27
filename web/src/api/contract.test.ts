@@ -13,7 +13,7 @@ import type { Firewall, FirewallCounts, FirewallDetail, FirewallFlowsResponse, F
 import type { DeletionCount, DeletionPlan } from "./deletion";
 import type { DeclaredServiceDetail, DeclaredServicesResponse, DeployPlan, GapsResponse, ProjectsResponse, ProposalResponse, ServiceUpdate } from "./directory";
 import type { JobResponse, JobsResponse } from "./jobs";
-import type { Account, Agent, AgentAnchors, AgentRights, AnchorKind, Capability, GroupRight, JoinGroup, JoinOffer, JoinSet, Machine, MachineHost, MachineRole, MachinesResponse, PolicyRefusal, ReportedCapability, RightFit, RightsGroup, SetLine } from "./machines";
+import type { Account, Agent, AgentAnchors, AgentRights, AnchorKind, Capability, GroupRight, JoinGroup, JoinOffer, JoinSet, Machine, MachineHost, MachineSheet, MachineRole, MachinesResponse, PolicyRefusal, ReportedCapability, RightFit, RightsGroup, SetLine } from "./machines";
 import type { MachineStorage, PhysicalDisk, StoragePool } from "./storage";
 import type { AppliesResponse, Apply } from "./manifest";
 import type { MCPCheck } from "./mcpCheck";
@@ -27,6 +27,7 @@ import type { Current, HistoryResponse, ResourcesResponse } from "./resources";
 import type { Session } from "./session";
 import type { VerbRequest, VerbRequestsResponse } from "./verbRequests";
 import type { Incident, IncidentsResponse, PublicStatus, StatusComponent, StatusComponentsResponse } from "./status";
+import type { Step } from "../lib/steps";
 
 // Le contrat de l'API est écrit deux fois : en Go (les balises json) et ici
 // (les types de api/*.ts). Les réponses figées par les goldens du serveur
@@ -109,7 +110,7 @@ const capability = shape<Capability>("Capability", { name: value, paths: value }
 const reportedCapability = shape<ReportedCapability>("ReportedCapability", { name: value, paths: value, unavailable: value, until: value });
 const refusalFix = shape<RefusalFix>("RefusalFix", { right: optional(value), machine: optional(value), command: optional(value), exact: optional(value) });
 
-const machine = shape<Machine>("Machine", {
+const machineFields: FieldsOf<Machine> = {
   id: value,
   name: value,
   hostname: value,
@@ -204,6 +205,14 @@ const machine = shape<Machine>("Machine", {
       backup_unknown: value,
     }),
   }),
+};
+
+const machine = shape<Machine>("Machine", machineFields);
+
+// La fiche : la machine, et la frise de son arrivée (R-B1-11).
+const machineSheet = shape<MachineSheet>("MachineSheet", {
+  ...machineFields,
+  arrival: shape<Step>("Step", { key: value, state: value, detail: optional(value), at: value }),
 });
 
 const machineStorage = shape<MachineStorage>("MachineStorage", {
@@ -1343,20 +1352,20 @@ const contract: Record<string, Shape<unknown>> = {
   "history_hourly.golden.json": history,
   "job.golden.json": jobResponse,
   "jobs.golden.json": jobs,
-  "local.golden.json": machine,
+  "local.golden.json": machineSheet,
   "local_containers.golden.json": containers,
   "local_network.golden.json": network,
   "local_resources.golden.json": current,
-  "machine.golden.json": machine,
-  "machine_account.golden.json": machine,
+  "machine.golden.json": machineSheet,
+  "machine_account.golden.json": machineSheet,
   "machine_delete_plan.golden.json": deletionPlan,
   "machine_containers.golden.json": containers,
   "machine_network.golden.json": network,
   "machine_probes.golden.json": probes,
   "machine_storage.golden.json": machineStorage,
-  "machine_hosted.golden.json": machine,
-  "machine_hosting_proxmox.golden.json": machine,
-  "machine_role.golden.json": machine,
+  "machine_hosted.golden.json": machineSheet,
+  "machine_hosting_proxmox.golden.json": machineSheet,
+  "machine_role.golden.json": machineSheet,
   "machine_proxmox.golden.json": proxmoxHost,
   "machines.golden.json": machines,
   "manifest_applies.golden.json": shape<AppliesResponse>("AppliesResponse", { applies: apply }),

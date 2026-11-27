@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -24,6 +25,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/gesture/action"
 	"github.com/ldesfontaine/kagu/internal/kit/ident"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -399,4 +401,44 @@ func TestJoin_TheSetComesFromTheLine(t *testing.T) {
 	if b.proxy.enrollments.Load() != 1 || !strings.Contains(lineOf(t, again, b.text(t).Get("step.enroll.enrolled")), "déjà fait") {
 		t.Fatalf("resumed: %d enrollments\n%s", b.proxy.enrollments.Load(), again)
 	}
+}
+
+// R-GESTE-4, R-B1-11 : ce que join coche au terminal est ce que la tuile lit
+// sur le jeton, ligne pour ligne : les étapes que le serveur rend,
+// imprimées par step.Print, refont les coches du terminal. Toutes sont des
+// neuf étapes d'arrivée, et le jeton n'a servi qu'à l'enrôlement.
+func TestR_GESTE_4_TheTileAndTheTerminalTickTheSameNineSteps(t *testing.T) {
+	b := newJoinBench(t)
+	out, err := b.run(fakeTerminal(b.token+"\n"), fakeTerminal("o\n"), b.line("manage")...)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	arrival, err := b.server.machines.ArrivalOf(context.Background(), machine.TokenIDOf(b.token))
+	if err != nil || arrival.State != machine.ArrivalEnrolled {
+		t.Fatalf("arrival %+v %v", arrival, err)
+	}
+	nine := []step.Key{
+		step.EnrollSystem, step.EnrollDocker, step.EnrollRestic, step.EnrollAccount, step.EnrollRights,
+		step.EnrollEnrolled, step.EnrollUnit, step.EnrollWorkspace, step.EnrollReady,
+	}
+	var tile bytes.Buffer
+	for _, ticked := range arrival.Steps {
+		if !slices.Contains(nine, ticked.Key) {
+			t.Fatalf("%s is not an arrival step", ticked.Key)
+		}
+		step.Print(&tile, b.text(t), ticked)
+	}
+	if len(arrival.Steps) != len(joinSteps(t)) || !strings.Contains(out, tile.String()) {
+		t.Fatalf("the tile reads\n%s\nthe terminal printed\n%s", tile.String(), out)
+	}
+	if b.proxy.enrollments.Load() != 1 {
+		t.Fatalf("%d enrollments", b.proxy.enrollments.Load())
+	}
+}
+
+// joinSteps rend les étapes que join coche.
+func joinSteps(t *testing.T) []setupStep {
+	t.Helper()
+	var run joinRun
+	return run.steps()
 }

@@ -5,6 +5,7 @@ import type { DeletionPlan } from "./deletion";
 import type { Lifecycle } from "./lifecycle";
 import type { ProxmoxSummary } from "./proxmox";
 import type { ModuleID } from "../lib/modules";
+import type { Step } from "../lib/steps";
 
 // Les machines et leurs jetons d'enrôlement, sur le modèle d'api/probes.
 // Sujet du direct : « machines », que topicsOf devine du chemin. Ce qu'une
@@ -273,12 +274,29 @@ export interface JoinGroup {
 // commandes qui arrêtent l'agent en place et retirent son identité avant
 // join, l'une après l'autre ; vide pour un ajout.
 export interface TokenResponse {
+  id: string;
   name: string;
   token: string;
   set: RightsSet;
   command: string;
   reenroll_lines: string[];
   expires_at: string;
+}
+
+// L'arrivée d'une machine, lue sur son jeton (R-B1-11) : son état, que le
+// serveur juge, et les étapes que join a cochées, dans l'ordre.
+export type ArrivalState = "pending" | "expired" | "enrolled";
+
+export interface Arrival {
+  state: ArrivalState;
+  expires_at: string;
+  steps: Step[];
+}
+
+// La fiche : la machine, et la frise de son arrivée, vide si son jeton est
+// purgé.
+export interface MachineSheet extends Machine {
+  arrival: Step[];
 }
 
 const machinesPath = "/api/machines";
@@ -307,6 +325,15 @@ export async function setMachineRole(machineID: string, role: RoleID): Promise<v
 // la porte (vide : aucun désigné).
 export async function setMachinePlacement(machineID: string, kindOverride: KindID | "", hostOverride: string): Promise<Machine> {
   return api.send<Machine>(route("PUT /api/machines/{id}/placement", { id: machineID }), { kind_override: kindOverride, host_override: hostOverride });
+}
+
+// L'avancement d'un jeton, servi ou non ; null : rien n'est lu.
+export function useTokenArrival(id: string | null): Resource<Arrival> {
+  return useResource<Arrival>(id === null ? null : `${machinesPath}/tokens/${segment(id)}/progress`);
+}
+
+export function useMachineSheet(id: string): Resource<MachineSheet> {
+  return useResource<MachineSheet>(machinePath(id));
 }
 
 export async function deleteMachineToken(id: string): Promise<void> {

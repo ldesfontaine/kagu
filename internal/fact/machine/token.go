@@ -33,7 +33,7 @@ func NewToken(name, machineID string) (string, Token, error) {
 	cleartext := tokenScheme + strings.ToLower(encoded)
 	hash := ident.HashToken(cleartext)
 	token := Token{
-		ID:        hash[:tokenIDLength],
+		ID:        tokenIDOf(hash),
 		Hash:      hash,
 		Prefix:    cleartext[:tokenPrefixLength],
 		Name:      name,
@@ -41,6 +41,16 @@ func NewToken(name, machineID string) (string, Token, error) {
 		Role:      RoleGeneric,
 	}
 	return cleartext, token, nil
+}
+
+// TokenIDOf rend l'identifiant du jeton dont voici le clair, qu'il existe ou
+// non : de quoi compter ses envois sans lire la base.
+func TokenIDOf(cleartext string) string {
+	return tokenIDOf(ident.HashToken(cleartext))
+}
+
+func tokenIDOf(hash string) string {
+	return hash[:tokenIDLength]
 }
 
 // Masked est tout ce qu'une page peut montrer d'un jeton déjà émis.

@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,12 +11,14 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/audit"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/kit/version"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -291,5 +295,62 @@ func TestFailed_AnAnchorRefusalCarriesItsKeyAndCommand(t *testing.T) {
 	}
 	if recorder.Code != http.StatusConflict || body.Error != "anchor.backup_guest_missing" || body.Fix == nil || !body.Fix.Exact || body.Fix.Command != "sudo "+brand.Command+" agent trust add backup.guest 312" {
 		t.Fatalf("%d %+v", recorder.Code, body)
+	}
+}
+
+// R-B1-11 : la tuile lit l'avancement sur le jeton par
+// GET /api/machines/tokens/{id}/progress, sans le jeton ; un jeton d'API le
+// lit aussi (niveau 0). Enrôlée, la fiche rend la même frise ; un jeton
+// inconnu répond 404.
+func TestAPI_TokenProgress_TheTileThenTheSheetReadTheSameSteps(t *testing.T) {
+	server := joinServer(t)
+	ctx := context.Background()
+	cleartext, token, err := server.machines.CreateToken(ctx, "vps-paris-1", machine.RoleGeneric, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := []step.Step{{Key: step.EnrollSystem, State: step.StateDone, Detail: "Debian 12, amd64", At: time.Unix(1_800_000_000, 0)}}
+	if err := server.machines.RecordJoinProgress(ctx, cleartext, checked); err != nil {
+		t.Fatal(err)
+	}
+	var tile arrivalJSON
+	read := callBearer(server.Server, "/api/machines/tokens/"+token.ID+"/progress", server.issueAPIToken(t, "mcp-maison"))
+	decodeAPI(t, read, &tile)
+	if tile.State != machine.ArrivalPending || len(tile.Steps) != 1 || tile.Steps[0].Detail != "Debian 12, amd64" || strings.Contains(read.Body.String(), cleartext) {
+		t.Fatalf("progress %s", read.Body.String())
+	}
+	if got := callAPI(server.Server, http.MethodGet, "/api/machines/tokens/0000000000000000/progress", nil); got.Code != http.StatusNotFound {
+		t.Fatalf("unknown token: %d", got.Code)
+	}
+
+	public, _, _ := ed25519.GenerateKey(rand.Reader)
+	enrolled, err := server.machines.Enroll(ctx, machine.Enrollment{MachineID: remoteID, PublicKey: public, Token: cleartext, Hostname: "vps", OS: "Debian 12", Arch: "amd64", AgentVersion: "v0.0.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sheet machineSheetJSON
+	decodeAPI(t, callAPI(server.Server, http.MethodGet, "/api/machines/"+enrolled.ID, nil), &sheet)
+	if len(sheet.Arrival) != 1 || sheet.Arrival[0].Key != step.EnrollSystem {
+		t.Fatalf("sheet arrival %+v", sheet.Arrival)
+	}
+}
+
+// R-B1-11 : setup écrit les étapes de l'agent de la machine Kagu par la
+// socket de contrôle, sous le jeton que cet agent a consommé ; sa fiche les
+// rend. Un parcours mal formé est refusé.
+func TestControlLocalProgress_LandsOnTheServerMachineSheet(t *testing.T) {
+	ts := newTestServer(t)
+	body := `{"steps":[{"key":"step.enroll.system","state":"done","at":"2026-11-27T10:00:00Z"},{"key":"step.setup.agent","state":"done","detail":"Gérer","at":"2026-11-27T10:01:00Z"}]}`
+	if got := callControl(ts, http.MethodPost, "/control/admin/local-enrollment/progress", body, rootUID); got.Code != http.StatusNoContent {
+		t.Fatalf("progress: %d %s", got.Code, got.Body.String())
+	}
+	var sheet machineSheetJSON
+	decodeAPI(t, callAPI(ts.Server, http.MethodGet, "/api/machines/"+machine.LocalID, nil), &sheet)
+	if len(sheet.Arrival) != 2 || sheet.Arrival[1].Key != step.SetupAgent {
+		t.Fatalf("local arrival %+v", sheet.Arrival)
+	}
+	bad := `{"steps":[{"key":"setup.agent","state":"done","at":"2026-11-27T10:00:00Z"}]}`
+	if got := callControl(ts, http.MethodPost, "/control/admin/local-enrollment/progress", bad, rootUID); got.Code != http.StatusBadRequest {
+		t.Fatalf("bad key: %d %s", got.Code, got.Body.String())
 	}
 }

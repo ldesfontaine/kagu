@@ -47,6 +47,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/ratelimit"
 	"github.com/ldesfontaine/kagu/internal/kit/release"
 	"github.com/ldesfontaine/kagu/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/view/manifest"
 	"github.com/ldesfontaine/kagu/internal/view/reader"
 	"github.com/ldesfontaine/kagu/internal/view/status"
@@ -78,6 +79,13 @@ type MachineService interface {
 	OfferLocalEnrollment(ctx context.Context) (string, machine.Token, error)
 	PendingTokens(ctx context.Context) ([]machine.Token, error)
 	CancelToken(ctx context.Context, id string) error
+	// L'arrivée d'une machine (R-B1-11) : join l'écrit sur son jeton, setup
+	// sur celui de l'agent de la machine Kagu ; la tuile et la fiche la
+	// relisent.
+	RecordJoinProgress(ctx context.Context, cleartext string, steps []step.Step) error
+	RecordLocalProgress(ctx context.Context, steps []step.Step) error
+	ArrivalOf(ctx context.Context, tokenID string) (machine.Arrival, error)
+	ArrivalSteps(ctx context.Context, agentID string) ([]step.Step, error)
 	Remove(ctx context.Context, id string, options machine.RemoveOptions) error
 	DeletePlan(ctx context.Context, id string) (deletion.Plan, error)
 	Enroll(ctx context.Context, request machine.Enrollment) (machine.Machine, error)

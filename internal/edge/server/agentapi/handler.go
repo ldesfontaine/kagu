@@ -20,6 +20,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
 	"github.com/ldesfontaine/kagu/internal/kit/ratelimit"
 	"github.com/ldesfontaine/kagu/internal/kit/sampler"
+	"github.com/ldesfontaine/kagu/internal/kit/step"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -27,6 +28,7 @@ import (
 // session et son flux.
 type MachineService interface {
 	Enroll(ctx context.Context, request machine.Enrollment) (machine.Machine, error)
+	RecordJoinProgress(ctx context.Context, cleartext string, steps []step.Step) error
 	Authenticate(ctx context.Context, proof machine.Proof) (machine.Machine, error)
 	NoteSystem(ctx context.Context, machineID, system string) error
 	NoteServerKey(ctx context.Context, agentID, fingerprint string) error
@@ -180,6 +182,7 @@ type Handler struct {
 	signalLimit   *ratelimit.Limiter
 	parcelLimit   *ratelimit.Limiter
 	relayLimit    *ratelimit.BySource
+	joinLimit     *ratelimit.Limiter
 }
 
 func New(opts Options) *Handler {
@@ -203,11 +206,13 @@ func New(opts Options) *Handler {
 		signalLimit:   ratelimit.New(signalPerMachineRate, signalPerMachineBurst, signalIdle),
 		parcelLimit:   ratelimit.New(parcelPerMachineRate, parcelPerMachineBurst, parcelIdle),
 		relayLimit:    newRelayLimiter(opts.Clock),
+		joinLimit:     ratelimit.NewCapped(joinProgressRate, joinProgressBurst, joinProgressIdle, joinProgressMaxTokens),
 	}
 	if opts.Clock != nil {
 		handler.sourceLimit.SetClock(opts.Clock)
 		handler.signalLimit.SetClock(opts.Clock)
 		handler.parcelLimit.SetClock(opts.Clock)
+		handler.joinLimit.SetClock(opts.Clock)
 	}
 	return handler
 }
@@ -230,6 +235,7 @@ func (h *Handler) routes(viaLocalSocket bool, add func(method, pattern string, h
 		h.enroll(w, r, viaLocalSocket)
 	})
 	add("GET", agentwire.ServerKeyRoute, h.getServerKey)
+	add("POST", agentwire.JoinProgressRoute, h.joinProgress)
 	add("GET", "/agent/stream", h.stream)
 	add("POST", "/agent/signal", h.signal)
 	add("POST", "/agent/logs/{request}", h.logs)

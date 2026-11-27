@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -51,18 +52,58 @@ func (db *DB) DeleteToken(ctx context.Context, id string) error {
 // PurgeTokens efface les jetons périmés jamais consommés, et les consommés
 // avant consumedBefore : passé ce délai, l'historique ne sert plus. Le jeton
 // d'un agent actif reste : il dit les droits demandés, contre lesquels se lit
-// ce que l'agent rapporte.
+// ce que l'agent rapporte. Les étapes d'arrivée d'un jeton qui n'est plus
+// partent avec lui : gesture_steps n'a pas de clé étrangère (T04-03), et un
+// jeton annulé ou remplacé n'en laisse pas non plus.
 func (db *DB) PurgeTokens(ctx context.Context, now, consumedBefore time.Time) error {
-	_, err := db.sql.ExecContext(ctx, `
-		DELETE FROM enrollment_tokens
-		WHERE (consumed_at IS NULL AND expires_at <= ?)
-			OR (consumed_at < ? AND (agent_id IS NULL
-				OR agent_id NOT IN (SELECT id FROM agents WHERE revoked_at IS NULL)))`,
-		now.Unix(), consumedBefore.Unix())
-	if err != nil {
-		return fmt.Errorf("purge tokens: %w", err)
+	return db.inTx(ctx, "purge tokens", func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `
+			DELETE FROM enrollment_tokens
+			WHERE (consumed_at IS NULL AND expires_at <= ?)
+				OR (consumed_at < ? AND (agent_id IS NULL
+					OR agent_id NOT IN (SELECT id FROM agents WHERE revoked_at IS NULL)))`,
+			now.Unix(), consumedBefore.Unix())
+		if err != nil {
+			return fmt.Errorf("purge tokens: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `
+			DELETE FROM gesture_steps
+			WHERE substr(subject, 1, ?) = ?
+				AND substr(subject, ?) NOT IN (SELECT id FROM enrollment_tokens)`,
+			len(enrollmentSubjectPrefix), enrollmentSubjectPrefix, len(enrollmentSubjectPrefix)+1)
+		if err != nil {
+			return fmt.Errorf("purge enrollment steps: %w", err)
+		}
+		return nil
+	})
+}
+
+// TokenByHash lit un jeton par l'empreinte de son clair, sans le consommer :
+// l'avancement de join le compare, seul l'enrôlement le sert.
+func (db *DB) TokenByHash(ctx context.Context, hash string) (machine.Token, error) {
+	return db.readToken(ctx, `token_hash = ?`, hash)
+}
+
+// TokenByID lit un jeton par son identifiant, consommé ou non.
+func (db *DB) TokenByID(ctx context.Context, id string) (machine.Token, error) {
+	return db.readToken(ctx, `id = ?`, id)
+}
+
+// TokenOfAgent lit le jeton qu'un agent a consommé : celui de son arrivée.
+func (db *DB) TokenOfAgent(ctx context.Context, agentID string) (machine.Token, error) {
+	return db.readToken(ctx, `agent_id = ?`, agentID)
+}
+
+// readToken lit le jeton qui répond à where ; machine.ErrTokenNotFound sinon.
+func (db *DB) readToken(ctx context.Context, where, value string) (machine.Token, error) {
+	token, err := scanToken(db.sql.QueryRowContext(ctx, `SELECT `+tokenColumns+` FROM enrollment_tokens WHERE `+where, value)) // #nosec G202 -- une condition fixe du code, la valeur est liée.
+	if errors.Is(err, sql.ErrNoRows) {
+		return machine.Token{}, machine.ErrTokenNotFound
 	}
-	return nil
+	if err != nil {
+		return machine.Token{}, fmt.Errorf("read token: %w", err)
+	}
+	return token, nil
 }
 
 func scanToken(row scanner) (machine.Token, error) {

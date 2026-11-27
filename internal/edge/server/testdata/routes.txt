@@ -6,6 +6,7 @@ GET /api/events
 GET /api/machines
 POST /api/machines/tokens
 DELETE /api/machines/tokens/{id}
+GET /api/machines/tokens/{id}/progress
 GET /api/machines/{id}
 DELETE /api/machines/{id}
 GET /api/machines/{id}/delete-plan
@@ -188,6 +189,7 @@ POST /api/machines/{id}/restic-backups/{backup}/actions/restore
 GET /releases/{version}/{name}
 POST /agent/enroll
 GET /agent/server-key
+POST /agent/join/progress
 GET /agent/stream
 POST /agent/signal
 POST /agent/logs/{request}

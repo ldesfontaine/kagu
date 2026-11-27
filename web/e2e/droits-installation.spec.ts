@@ -13,6 +13,7 @@ import { expect, test } from "./support/findings";
 // rend, l'ajout seul y est ouvert ou fermé ; le jeton est inventé.
 const joinCommand = "curl -fsSL https://exemple.org/install.sh | sudo sh -s -- join --server https://kagu.exemple.fr --server-key SHA256:exemple --rights manage";
 const joinToken = "kg_exemple_de_jeton_inventé_0000";
+const joinTokenID = "jeton-essai-1";
 
 async function withJoin(page: Page, ready: boolean): Promise<{ bodies: unknown[] }> {
   const sent = { bodies: [] as unknown[] };
@@ -30,7 +31,13 @@ async function withJoin(page: Page, ready: boolean): Promise<{ bodies: unknown[]
     sent.bodies.push(route.request().postDataJSON());
     await route.fulfill({
       status: 201,
-      json: { name: "vps-essai-1", token: joinToken, set: "manage", command: joinCommand, reenroll_lines: [], expires_at: new Date(Date.now() + 3_480_000).toISOString() },
+      json: { id: joinTokenID, name: "vps-essai-1", token: joinToken, set: "manage", command: joinCommand, reenroll_lines: [], expires_at: new Date(Date.now() + 3_480_000).toISOString() },
+    });
+  });
+  // L'avancement que join aurait écrit sur le jeton (R-B1-11).
+  await page.route(`**/api/machines/tokens/${joinTokenID}/progress`, async (route) => {
+    await route.fulfill({
+      json: { state: "pending", expires_at: new Date(Date.now() + 3_480_000).toISOString(), steps: [{ key: "step.enroll.system", state: "done", detail: "Debian 12, amd64", at: new Date().toISOString() }] },
     });
   });
   return sent;
@@ -64,6 +71,8 @@ test("Ajouter une machine : trois jeux, aucun nom de droit replié, deux lignes 
 
   await dialog.getByRole("button", { name: label("wizard.next") }).click();
   await expect(dialog.locator(".wizard-step-current")).toContainText(label("machine.step_wait"));
+  await expect(dialog.locator(".step-trail")).toContainText(label("step.enroll.system"));
+  await expect(dialog.locator(".step-trail")).toContainText("Debian 12, amd64");
   await dialog.locator(".modal-foot").getByRole("button", { name: label("modal.close") }).click();
   await expect(dialog).toHaveCount(0);
   expect(findings.unknown()).toEqual([]);
