@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
 // foreignKeysOn dit si la connexion qui répond a les clés étrangères en marche.
@@ -118,7 +120,7 @@ func TestOpen_RefusesADatabaseWithAnUnknownMigration(t *testing.T) {
 	db.Close()
 
 	_, err = Open(ctx, root)
-	if !errors.Is(err, ErrUnknownSchema) || !strings.Contains(err.Error(), "999") {
-		t.Fatalf("attendu ErrUnknownSchema qui nomme la 999, obtenu %v", err)
+	if !errors.Is(err, ErrUnknownSchema) || !strings.Contains(err.Error(), "999") || !strings.Contains(err.Error(), brand.Command+" upgrade --resume") {
+		t.Fatalf("attendu ErrUnknownSchema qui nomme la 999 et upgrade --resume, obtenu %v", err)
 	}
 }

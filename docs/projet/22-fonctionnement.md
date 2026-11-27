@@ -167,11 +167,12 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `outgoing/<colis>/` | Les colis des ordres longs, de deux sortes. *À télécharger* (la base, `backup.receive`) : l'instantané de la base (`VACUUM INTO`) le temps de l'emballer, puis l'archive chiffrée jusqu'à son téléchargement par l'agent, **la vie de son ordre au plus** (`action.ParcelLifetime` : 2 min pour être pris, une heure pour finir). *À téléverser* (`backup.produce`, `Outbox.CreateForUpload`) : un colis que la machine **source** remplit par `PUT /agent/parcels/{colis}/{nom}` (l'archive chiffrée d'une VM, 64 Gio au plus, 1 Gio libre de marge ; la clé scellée y est déposée par `serve`), jusqu'à ce que la destination l'ait téléchargé ; `serve` le jette dès la cible traitée, et **un seul vit à la fois**. Vidé au démarrage de `serve`. Aucune sauvegarde n'est gardée sur cette machine | `0700`, `0600`, même disque et mêmes droits que la base ; l'instantané en clair est effacé avant l'envoi ; un téléversement n'apporte que du chiffré |
 | Machine Kagu, `state_dir` | `lifecycle.json` | La dernière lecture d'endoflife.date : quel dépôt d'images est quel produit, et les branches des produits que les services utilisent (nom, maintenue ou non, date de fin, dernière version). Absent tant que la fin de support n'a jamais été activée | Données publiques, 0600, écriture atomique, remplacé d'un bloc à chaque lecture réussie ; l'effacer coûte une lecture de la source |
 | Machine Kagu, `state_dir` | `upgrade/avant-<version>.db` | La copie de la base d'avant une montée de `serve`, nommée par la version qui tournait : une base entière, écrite par `serve` sous son compte (`VACUUM INTO`, « Préparer une montée de serve ») | Mode 0600 dans un dossier 0700, au compte du service. Les trois plus récentes restent, la quatrième efface la plus ancienne. Mêmes données que la base, **en clair** comme elle |
+| Machine Kagu, `state_dir` | `upgrade/echec-<version>.db`, ses `-wal` et `-shm` | La base d'une montée ratée vers `<version>`, déplacée là par le retour arrière d'`upgrade` (R-B2-4) ; `echec-<version>-2.db` pour la deuxième vers la même version | Au compte du service, mode gardé (`rename` de root, `serve` arrêté). **Jamais effacée** par Kagu : ni `upgrade`, ni le ménage des copies. Mêmes données que la base, en clair ; à effacer à la main une fois lue |
 | Machine Kagu, `/run/kagu` | `agent.sock` | La socket des agents locaux, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/agent/…` (« La socket des agents locaux ») | Mode 0660, groupe `kagu-agent` ; seul l'uid de ce compte passe. Elle n'est pas à sauvegarder |
 | Machine Kagu, `/etc/kagu` | `setup.json` | Ce que `kagu setup` retient : le jeu de droits choisi (`rights`), la réponse à la question Docker (`tools` : `yes` ou `no`) et chaque ligne cochée (`steps` : clé, état, détail, heure). Rien d'autre : ni jeton ni code | root, `0600`, écrit d'un coup après chaque ligne. Un setup relancé reprend les réponses au lieu de reposer les questions (`--rights` remplace la première, `--no-docker` la seconde). `upgrade` le relit : présent, les unités sont celles de setup, et il les tient à jour |
 | Machine Kagu, `/run` | `kagu-setup.lock` | Le verrou de `setup` (`flock`) : aucune donnée | root, `0600` ; le verrou tombe avec le processus, le fichier avec le redémarrage |
 | Machine Kagu, `/var/lib/kagu-setup/release` | `SHA256SUMS`, `SHA256SUMS.minisig`, `kagu-linux-*` | La version qu'`install.sh` a vérifiée, que `setup` fait importer par `serve` dans la bibliothèque | root, dossier `0755`, fichiers `0644` : publics, lus par le compte du serveur. Récrits par le prochain `install.sh` ; rien ne les efface |
-| Machine Kagu, `/var/lib/kagu-upgrade` (root, `0755`) | `state.json` | Ce que `kagu upgrade` retient de la dernière montée : la version d'avant (`running`) et la version visée (`target`), les chemins (binaire, ancien binaire, `state_dir`, version posée, copie de la base), chaque ligne cochée, `finished`. Aucun secret | root, `0600`, écrit d'un coup après chaque ligne ; `upgrade --status` le relit. Une montée arrêtée après « Binaire remplacé » empêche d'en relancer une autre |
+| Machine Kagu, `/var/lib/kagu-upgrade` (root, `0755`) | `state.json` | Ce que `kagu upgrade` retient de la dernière montée : la version d'avant (`running`) et la version visée (`target`), les chemins (binaire, ancien binaire, `state_dir`, version posée, copie de la base), chaque ligne cochée, `finished`, `rollback_started` (le retour arrière a commencé). Aucun secret | root, `0600`, écrit d'un coup après chaque ligne ; `upgrade --status` le relit, `upgrade --resume` repart de l'étape écrite. Une montée arrêtée après « Binaire remplacé », ni finie ni revenue, empêche d'en relancer une autre |
 | Machine Kagu, `/var/lib/kagu-upgrade` | `<version>/` | La version que `upgrade` installe, telle qu'il l'a vérifiée : `SHA256SUMS`, sa signature, les binaires. `serve` l'importe de là ; le nouveau binaire y reprend le lanceur stable | root, dossier `0755`, fichiers `0644` : des fichiers publics. Effacé quand la montée finit |
 | Machine Kagu, `/run` | `kagu-upgrade.lock` | Le verrou de `upgrade` (`flock`) : aucune donnée | Comme celui de `setup` |
 | Machine Kagu, `/usr/local/lib/kagu` | `kagu.previous` | Le binaire du serveur d'avant la dernière montée | root, `0755` ; remplacé à chaque montée |
@@ -1249,18 +1250,29 @@ fichier, et dit si la montée tourne encore (le verrou est tenu).
 | Serveur répond (`step.upgrade.answers`) | `GET /control/admin/health` rend la version visée, 60 s au plus. Puis la main passe au **nouveau binaire** (`exec`, même unité) : `upgrade --finish` relit `state.json` |
 | Unités à jour (`step.upgrade.units`) | Avec `setup.json` : `kagu.service` et `kagu-agent.service` comparées à celles du nouveau binaire (`machine.ServerUnitLines`, `machine.AgentUnitLines`), réécrites si elles diffèrent, `daemon-reload`. Drop-ins jamais touchés. Sans `setup.json` : sautée |
 | Politique de l'agent (`step.upgrade.policy`) | Un agent enrôlé dont le dossier de la politique n'existe pas : `agent.MigratePolicy`, si root a dit oui avant la relance : le oui est écrit dans `state.json` (`policy_consent`), jamais passé en option, et l'unité le consomme (remis à faux, migration faite ou refusée, ou montée arrêtée) ; ce qui est recopié est redit, la question ne se repose pas. Sans ce oui dans l'état : non migrée, la ligne dite. Le lanceur stable, s'il est posé : recopié depuis la version posée, **revérifiée au moment de la copie** avec les clés du nouveau binaire, jamais depuis `bin/` de l'agent (R-B2-12). La version posée est ensuite effacée |
+| Retour arrière (`step.upgrade.rolled_back`) | Seulement quand une ligne échoue entre « Binaire remplacé » et « Serveur répond » (R-B2-3). `rollback_started` écrit d'abord dans `state.json` : un retour ne se rejoue jamais. Puis `systemctl stop kagu.service` ; la base et ses `-wal`, `-shm` déplacées par `rename` en `upgrade/echec-<version visée>.db` (le premier nom libre, `store.FailedUpgradeName`, R-B2-4) ; la copie `store.UpgradeCopyName(<version d'avant>)`, nom recalculé et jamais lu de la réponse de `serve`, relue par root sous `os.Root` et réécrite à la place de la base (`fsx.WriteAtomicOwned`, `0600`, au propriétaire de la copie avant de prendre son nom), refusée si un `-wal` ou `-shm` reste à côté ; `kagu.previous` remis à la place du binaire ; `systemctl start`, puis `health` doit rendre la version d'avant, 60 s au plus. Le détail dit ce qui est perdu : les secondes entre « Base copiée » et l'arrêt. En échec : la ligne ✗, et `upgrade` s'arrête sur les trois commandes à jouer à la main (`stop`, `install` du binaire, `install -o kagu` de la copie), sans plus rien toucher |
 
 **Ce qui est refusé avant toute copie** : une signature fausse ou d'une autre
 clé, un binaire qui n'a pas sa somme, une version téléchargée qui n'est pas
 celle demandée, une redirection vers une adresse qui n'est pas https, un
 binaire sans clé de version (la `v0.0.1` : installation à la main, une
 fois), `--to` qui ne monte pas. **Une montée arrêtée après « Binaire
-remplacé »** (la nouvelle version muette, une machine éteinte) : `upgrade`
-refuse d'en lancer une autre, et le message de l'échec donne le retour à la
-main (l'ancien binaire et la copie de la base). **Le coût** : un processus
+remplacé »** (une machine éteinte, l'unité tuée), ni finie ni revenue :
+`upgrade` refuse d'en lancer une autre et renvoie à `upgrade --resume`, comme
+`serve` qui trouve une base plus récente que lui (`store.ErrUnknownSchema`).
+`--resume` se relance dans l'unité, sans question, et repart de l'étape
+écrite : « Serveur répond » faite, la main passe au nouveau binaire
+(`--finish`) ; sinon il redémarre si « Serveur redémarré » manque, attend la
+version visée, et revient si elle reste muette ; un retour commencé n'est
+jamais rejoué : si la version d'avant répond, il est noté fait (« revenu à la
+main »), sinon les trois commandes sont redites. **Le coût** : un processus
 root parle à l'adresse des versions (décision de Lucas, QA-16) ; `--from`
 s'en passe. Les unités réécrites ne valent qu'au prochain redémarrage du
-service. Le retour seul et `--resume` viendront (T04-14).
+service. Le retour écrit sous `state_dir` en root, `serve` arrêté : c'est
+la seule exception à R-B2-2, et la base est lue entière en mémoire pour être
+remise (sa taille en mémoire vive, le temps du retour). L'attente de 10
+minutes pour des migrations lentes n'est pas faite : l'archive ne les déclare
+pas.
 
 **La politique de l'agent** (décision de Lucas du 25/11, ARB-1) : un agent
 de la machine Kagu qui lit encore ses droits dans `identity.json` fait
@@ -5786,7 +5798,8 @@ même refus.
 | — (`setup`) | `GET local-agent` | `200 {"enrolled","online","reported","deploy":{"state","reason"}}` : où en est l'agent de la machine Kagu ; `deploy` est le verdict de `agentpolicy.Fit` pour `docker.deploy` (`ok`, `missing`, `unavailable` avec la raison de l'agent, `unknown` tant qu'il n'a rien rapporté) |
 
 **Préparer une montée de serve** (B2, T04-07). Root appelle, `serve` agit
-sous son propre compte : root n'écrit jamais dans `state_dir`.
+sous son propre compte : root n'écrit jamais dans `state_dir`, sauf pour le
+retour arrière, `serve` arrêté (« La montée du serveur : upgrade »).
 
 | Route | Corps | Réponse | Ce que fait `serve` |
 | --- | --- | --- | --- |

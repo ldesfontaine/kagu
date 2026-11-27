@@ -74,9 +74,12 @@ const (
 	// d'Internet.
 	ReleasesDir = "releases"
 	// Les copies de la base faites par serve avant une montée, dans
-	// state_dir : UpgradeCopyPrefix + la version qui tournait + ".db".
-	UpgradeDir        = "upgrade"
-	UpgradeCopyPrefix = "avant-"
+	// state_dir : UpgradeCopyPrefix + la version qui tournait + ".db". La
+	// base d'une montée ratée y est gardée par upgrade : UpgradeFailedPrefix
+	// + la version visée + ".db".
+	UpgradeDir          = "upgrade"
+	UpgradeCopyPrefix   = "avant-"
+	UpgradeFailedPrefix = "echec-"
 	// Sur chaque machine, dans l'état de l'agent : les binaires installés
 	// (AgentBinaryPrefix + version) et le lien que l'unité lance.
 	AgentBinDir       = "bin"

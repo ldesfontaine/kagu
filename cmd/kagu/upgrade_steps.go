@@ -427,6 +427,17 @@ func (r *upgradeRun) restartServer(context.Context) (step.State, string, error) 
 
 // awaitServer attend que health rende la version visée.
 func (r *upgradeRun) awaitServer(ctx context.Context) (step.State, string, error) {
+	if err := r.awaitVersion(ctx, r.state.Target); err != nil {
+		return "", "", err
+	}
+	return step.StateDone, r.state.Target, nil
+}
+
+// awaitVersion attend, au plus r.wait, que health rende wanted.
+func (r *upgradeRun) awaitVersion(ctx context.Context, wanted string) error {
+	if r.control == nil {
+		r.control = newControlClient(r.state.StateDir)
+	}
 	answered, err := waitUntil(ctx, r.wait, r.poll, func(ctx context.Context) (bool, error) {
 		body, err := r.control.get(ctx, controlHealthPath)
 		if err != nil {
@@ -435,18 +446,15 @@ func (r *upgradeRun) awaitServer(ctx context.Context) (step.State, string, error
 		var health struct {
 			Version string `json:"version"`
 		}
-		return json.Unmarshal(body, &health) == nil && health.Version == r.state.Target, nil
+		return json.Unmarshal(body, &health) == nil && health.Version == wanted, nil
 	})
 	if err != nil {
-		return "", "", err
+		return err
 	}
 	if !answered {
-		return "", "", &stepFailure{
-			reason: r.text.Format("upgrade.silent", int(r.wait.Seconds())),
-			todo:   r.text.Format("upgrade.silent_todo", r.state.Previous, r.state.Copy, brand.InstallDocURL),
-		}
+		return &stepFailure{reason: r.text.Format("upgrade.silent", int(r.wait.Seconds())), todo: r.text.Get("upgrade.silent_todo")}
 	}
-	return step.StateDone, r.state.Target, nil
+	return nil
 }
 
 // updateUnits compare les unités que setup a posées à celles de ce binaire,

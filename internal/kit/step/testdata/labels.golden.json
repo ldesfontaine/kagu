@@ -18,6 +18,7 @@
     "step.upgrade.policy": "Agent policy",
     "step.upgrade.replaced": "Binary replaced",
     "step.upgrade.restarted": "Server restarted",
+    "step.upgrade.rolled_back": "Rolled back",
     "step.upgrade.space": "Free space",
     "step.upgrade.units": "Units up to date"
   },
@@ -40,6 +41,7 @@
     "step.upgrade.policy": "Politique de l'agent",
     "step.upgrade.replaced": "Binaire remplacé",
     "step.upgrade.restarted": "Serveur redémarré",
+    "step.upgrade.rolled_back": "Retour arrière",
     "step.upgrade.space": "Place libre",
     "step.upgrade.units": "Unités à jour"
   }

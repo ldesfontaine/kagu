@@ -32,8 +32,9 @@ import (
 // le terminal tant qu'il est ouvert. Chaque étape se coche par step.Print et
 // s'écrit dans son état (state.json) : --status le relit. Ce qui touche à
 // state_dir passe par serve, sur sa socket de contrôle : root n'y écrit
-// jamais (R-B2-2). Après « Serveur répond », la suite est jouée par le
-// nouveau binaire : ses unités et son lanceur stable sont les siens.
+// jamais (R-B2-2), sauf pour revenir, serve arrêté (upgrade_rollback.go).
+// Après « Serveur répond », la suite est jouée par le nouveau binaire : ses
+// unités et son lanceur stable sont les siens.
 
 const (
 	// Ce que upgrade attend de health après le redémarrage (R-B2-3).
@@ -50,6 +51,7 @@ const (
 	// suite jouée par le nouveau binaire.
 	inUnitFlag = "in-unit"
 	finishFlag = "finish"
+	resumeFlag = "resume"
 )
 
 // upgradePaths : où upgrade lit et écrit. Chaque chemin se tire de brand ou
@@ -92,6 +94,8 @@ type upgradeState struct {
 	// Root a dit oui, au clavier, à la migration de la politique : écrit
 	// avant la relance, consommé par l'unité. Aucune option ne le pose.
 	PolicyConsent bool `json:"policy_consent,omitempty"`
+	// Le retour arrière a commencé : il ne se rejoue jamais (R-B2-3).
+	RollbackStarted bool `json:"rollback_started,omitempty"`
 }
 
 // upgradeSystem est ce que upgrade demande à la machine ; un test en
@@ -164,7 +168,8 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 	status := flags.Bool("status", false, "")
 	inUnit := flags.Bool(inUnitFlag, false, "")
 	finish := flags.Bool(finishFlag, false, "")
-	if err := flags.Parse(args); err != nil || flags.NArg() > 0 {
+	resume := flags.Bool(resumeFlag, false, "")
+	if err := flags.Parse(args); err != nil || flags.NArg() > 0 || (*resume && (*to != "" || *from != "" || *status)) {
 		return &refusal{message: r.text.Get("upgrade.usage")}
 	}
 	if r.euid != 0 {
@@ -173,11 +178,18 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 	if *status {
 		return r.printStatus()
 	}
+	if !*inUnit && *resume {
+		return r.relaunchInUnit([]string{"--" + resumeFlag})
+	}
 	if !*inUnit {
 		if err := r.askPolicyMigration(); err != nil {
 			return err
 		}
-		return r.relaunchInUnit(*to, *from)
+		args, err := startArgs(*to, *from)
+		if err != nil {
+			return err
+		}
+		return r.relaunchInUnit(args)
 	}
 	// Dans l'unité, la sortie est le terminal de systemd-run : la session
 	// coupée, l'écrire échoue, et la montée continue (R-B2-5).
@@ -197,13 +209,12 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 		defer unlock()
 		return r.finish(ctx)
 	}
-	consented, err := r.takePolicyConsent()
-	if err != nil {
-		unlock()
-		return err
+	var handOver bool
+	if *resume {
+		handOver, err = r.resume(ctx)
+	} else {
+		handOver, err = r.startWithConsent(ctx, *to, *from)
 	}
-	r.to, r.from = *to, *from
-	handOver, err := r.start(ctx, consented)
 	// Le verrou tombe avant la passation : le nouveau binaire le reprend.
 	unlock()
 	if err != nil || !handOver {
@@ -212,21 +223,27 @@ func (r *upgradeRun) command(ctx context.Context, args []string) error {
 	return r.system.HandOver(r.state.Binary, []string{"--" + inUnitFlag, "--" + finishFlag})
 }
 
-// relaunchInUnit relance la commande dans l'unité transitoire et rend son
-// code de sortie. --from se donne en chemin absolu : l'unité part de /.
-func (r *upgradeRun) relaunchInUnit(to, from string) error {
-	args := []string{"--" + inUnitFlag}
+// startArgs sont les options d'une montée relancée dans l'unité. --from se
+// donne en chemin absolu : l'unité part de /.
+func startArgs(to, from string) ([]string, error) {
+	var args []string
 	if to != "" {
 		args = append(args, "--to", to)
 	}
 	if from != "" {
 		folder, err := filepath.Abs(from)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		args = append(args, "--from", folder)
 	}
-	err := r.system.RunInUnit(args)
+	return args, nil
+}
+
+// relaunchInUnit relance la commande dans l'unité transitoire et rend son
+// code de sortie.
+func (r *upgradeRun) relaunchInUnit(args []string) error {
+	err := r.system.RunInUnit(append([]string{"--" + inUnitFlag}, args...))
 	var exited *exec.ExitError
 	if errors.As(err, &exited) {
 		return &exitStatus{code: exited.ExitCode()}
@@ -234,19 +251,29 @@ func (r *upgradeRun) relaunchInUnit(to, from string) error {
 	return err
 }
 
+// startWithConsent prend le oui de root à la migration de la politique,
+// puis lance la montée.
+func (r *upgradeRun) startWithConsent(ctx context.Context, to, from string) (handOver bool, err error) {
+	consented, err := r.takePolicyConsent()
+	if err != nil {
+		return false, err
+	}
+	r.to, r.from = to, from
+	return r.start(ctx, consented)
+}
+
 // start joue la montée jusqu'à « Serveur répond » ; handOver dit que la
 // suite revient au nouveau binaire. Une montée arrêtée après « Binaire
-// remplacé » ne se relance pas par-dessus : le retour arrière et --resume
-// viendront.
+// remplacé » ne se relance pas par-dessus : --resume la finit ou revient.
 func (r *upgradeRun) start(ctx context.Context, policyConsent bool) (handOver bool, err error) {
 	if r.interrupted() {
 		r.printSteps()
-		return false, &refusal{message: r.text.Format("upgrade.interrupted", r.state.Target, brand.InstallDocURL)}
+		return false, &refusal{message: r.text.Format("upgrade.interrupted", r.state.Target)}
 	}
 	r.state = upgradeState{Running: r.running, PolicyConsent: policyConsent}
 	fmt.Fprintln(r.out, r.text.Format("upgrade.title", r.running))
 	fmt.Fprintln(r.out)
-	return r.runSteps(ctx, startSteps)
+	return r.runStepsOrRollBack(ctx, startSteps)
 }
 
 // takePolicyConsent retire de state.json le oui de root à la migration, et le
@@ -279,17 +306,25 @@ func (r *upgradeRun) recordPolicyConsent() error {
 	return r.saveState()
 }
 
-// interrupted : une montée a remplacé le binaire sans finir.
+// interrupted : une montée a remplacé le binaire sans finir ni revenir.
 func (r *upgradeRun) interrupted() bool {
-	if r.state.Finished {
-		return false
-	}
+	return r.stepDone(step.UpgradeReplaced) && !r.state.Finished && !r.stepDone(step.UpgradeRolledBack)
+}
+
+// stepDone : la coche key est faite dans l'état.
+func (r *upgradeRun) stepDone(key step.Key) bool {
+	_, done := r.doneStep(key)
+	return done
+}
+
+// doneStep rend la coche key de l'état quand elle est faite.
+func (r *upgradeRun) doneStep(key step.Key) (step.Step, bool) {
 	for _, checked := range r.state.Steps {
-		if checked.Key == step.UpgradeReplaced && checked.State == step.StateDone {
-			return true
+		if checked.Key == key && checked.State == step.StateDone {
+			return checked, true
 		}
 	}
-	return false
+	return step.Step{}, false
 }
 
 // finish est la suite jouée par le nouveau binaire : il relit l'état, pose

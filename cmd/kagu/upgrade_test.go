@@ -250,13 +250,28 @@ func (c *cutTerminal) close() {
 }
 
 // fakeUpgradeServe est serve sur sa socket de contrôle : il dit sa version,
-// copie sa base (sans rien écrire ici) et importe ; il retient chaque appel.
+// copie sa base (sans rien écrire ici, sauf writesCopy) et importe ; il
+// retient chaque appel. Muet, health ne répond pas.
 type fakeUpgradeServe struct {
-	lock     sync.Mutex
-	version  string
-	stateDir string
-	copies   int
-	imports  []string
+	lock       sync.Mutex
+	version    string
+	stateDir   string
+	copies     int
+	imports    []string
+	silent     bool
+	writesCopy bool
+}
+
+func (s *fakeUpgradeServe) runs(version string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.version, s.silent = version, false
+}
+
+func (s *fakeUpgradeServe) stops() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.silent = true
 }
 
 func (s *fakeUpgradeServe) handler() http.Handler {
@@ -264,14 +279,22 @@ func (s *fakeUpgradeServe) handler() http.Handler {
 	mux.HandleFunc("GET "+controlHealthPath, func(w http.ResponseWriter, _ *http.Request) {
 		s.lock.Lock()
 		defer s.lock.Unlock()
+		if s.silent {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"version": s.version})
 	})
 	mux.HandleFunc("POST "+controlPreUpgradePath, func(w http.ResponseWriter, _ *http.Request) {
 		s.lock.Lock()
 		defer s.lock.Unlock()
 		s.copies++
+		copyPath := filepath.Join(s.stateDir, brand.UpgradeDir, brand.UpgradeCopyPrefix+s.version+".db")
+		if s.writesCopy && !s.copyDatabase(w, copyPath) {
+			return
+		}
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]string{"path": filepath.Join(s.stateDir, brand.UpgradeDir, brand.UpgradeCopyPrefix+s.version+".db")})
+		_ = json.NewEncoder(w).Encode(map[string]string{"path": copyPath})
 	})
 	mux.HandleFunc("POST "+controlReleaseImportPath, func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
@@ -286,14 +309,38 @@ func (s *fakeUpgradeServe) handler() http.Handler {
 	return mux
 }
 
-// upgradeSystemFake : systemctl restart fait tourner la version du binaire
-// posé ; systemd-run et la passation relancent la commande dans ce
-// processus, comme le ferait l'unité.
+// copyDatabase écrit la copie comme serve : la base telle quelle, en 0600
+// dans un dossier 0700.
+func (s *fakeUpgradeServe) copyDatabase(w http.ResponseWriter, copyPath string) bool {
+	content, err := os.ReadFile(filepath.Join(s.stateDir, brand.DatabaseFile))
+	if err == nil {
+		err = os.MkdirAll(filepath.Dir(copyPath), 0o700)
+	}
+	if err == nil {
+		err = os.WriteFile(copyPath, content, 0o600)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	return true
+}
+
+// upgradeSystemFake : systemctl restart et start font tourner la version du
+// binaire posé, stop rend serve muet ; systemd-run et la passation relancent
+// la commande dans ce processus, comme le ferait l'unité.
 type upgradeSystemFake struct {
 	bench    *upgradeBench
 	free     uint64
 	calls    []string
 	unitArgs []string
+	// La nouvelle version a une migration qui échoue : elle écrit dans la
+	// base et ses -wal, -shm, puis reste muette.
+	failingMigration bool
+	// Ce que la base contenait quand serve a été relancé par start.
+	databaseAtStart string
+	// systemctl start échoue : le retour rate.
+	startFails bool
 	// Le oui de root lu dans state.json au moment de la relance.
 	consentAtRelaunch bool
 	handOver          []string
@@ -301,16 +348,46 @@ type upgradeSystemFake struct {
 
 func (s *upgradeSystemFake) Run(name string, args ...string) error {
 	s.calls = append(s.calls, name+" "+strings.Join(args, " "))
-	if name == "systemctl" && args[0] == "restart" {
-		installed, err := os.ReadFile(s.bench.installed)
-		if err != nil {
-			return err
+	if name != "systemctl" {
+		return nil
+	}
+	switch args[0] {
+	case "stop":
+		s.bench.serve.stops()
+	case "start":
+		if s.startFails {
+			return errors.New("systemctl start: unit failed")
 		}
-		if bytes.Equal(installed, s.bench.binaries[release.BinaryName(runtime.GOARCH)]) {
-			s.bench.serve.lock.Lock()
-			s.bench.serve.version = upgradeTarget
-			s.bench.serve.lock.Unlock()
+		database, _ := os.ReadFile(filepath.Join(s.bench.stateDir, brand.DatabaseFile))
+		s.databaseAtStart = string(database)
+		return s.startInstalled()
+	case "restart":
+		return s.startInstalled()
+	}
+	return nil
+}
+
+// startInstalled fait tourner le binaire posé : la nouvelle version, ou
+// l'ancienne remise par le retour.
+func (s *upgradeSystemFake) startInstalled() error {
+	installed, err := os.ReadFile(s.bench.installed)
+	if err != nil {
+		return err
+	}
+	switch {
+	case !bytes.Equal(installed, s.bench.binaries[release.BinaryName(runtime.GOARCH)]):
+		if string(installed) == "the binary in place" {
+			s.bench.serve.runs(version.Number())
 		}
+	case s.failingMigration:
+		s.bench.serve.stops()
+		for _, suffix := range []string{"", "-wal", "-shm"} {
+			if err := os.WriteFile(filepath.Join(s.bench.stateDir, brand.DatabaseFile+suffix), []byte("faulty"+suffix), 0o600); err != nil {
+				return err
+			}
+		}
+	default:
+		s.bench.serve.runs(upgradeTarget)
 	}
 	return nil
 }
