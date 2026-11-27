@@ -293,6 +293,24 @@ func prerequisiteText(text lang.Catalog, step agent.Prerequisite) string {
 		return text.Format("agent.prerequisite_vzdump_gate_removed", step.Detail)
 	case agent.PrerequisiteLegacySudoRemoved:
 		return text.Format("agent.prerequisite_legacy_sudo_removed", step.Detail)
+	case agent.PrerequisiteProxmoxRole:
+		return text.Format("agent.prerequisite_proxmox_role", step.Detail)
+	case agent.PrerequisiteProxmoxUser:
+		return text.Format("agent.prerequisite_proxmox_user", step.Detail)
+	case agent.PrerequisiteProxmoxACLRemoved:
+		return text.Format("agent.prerequisite_proxmox_acl_removed", step.Detail)
+	case agent.PrerequisiteProxmoxACL:
+		return text.Format("agent.prerequisite_proxmox_acl", step.Detail)
+	case agent.PrerequisiteProxmoxToken:
+		return text.Format("agent.prerequisite_proxmox_token", step.Detail)
+	case agent.PrerequisiteProxmoxTokenReplaced:
+		return text.Format("agent.prerequisite_proxmox_token_replaced", step.Detail)
+	case agent.PrerequisiteProxmoxTokenFile:
+		return text.Format("agent.prerequisite_proxmox_token_file", step.Detail)
+	case agent.PrerequisiteProxmoxTokenMissing:
+		return text.Format("agent.prerequisite_proxmox_token_missing", step.Detail)
+	case agent.PrerequisiteProxmoxTokenRemoved:
+		return text.Format("agent.prerequisite_proxmox_token_removed", step.Detail)
 	case agent.PrerequisiteRestart:
 		return text.Format("agent.prerequisite_restart", step.Detail)
 	}
@@ -465,9 +483,9 @@ func explainPolicyError(err error, text lang.Catalog) error {
 		return &refusal{message: text.Format("agent.policy_unreadable", err.Error())}
 	case errors.Is(err, agentpolicy.ErrCapabilityUnknown), errors.Is(err, agentpolicy.ErrCapabilityPath), errors.Is(err, agentpolicy.ErrCapabilityScope),
 		errors.Is(err, agentpolicy.ErrCapabilityAccount), errors.Is(err, agentpolicy.ErrCapabilityPeers), errors.Is(err, agentpolicy.ErrSetUnknown),
-		errors.Is(err, agentpolicy.ErrNoMonotonicClock):
-		// Un droit mal écrit, ou une échéance sans horloge monotone, se dit
-		// avec la phrase de son refus.
+		errors.Is(err, agentpolicy.ErrNoMonotonicClock), errors.Is(err, agent.ErrNotProxmoxHost), errors.Is(err, agent.ErrProxmoxRightMissing):
+		// Un droit mal écrit, une échéance sans horloge monotone, un jeton
+		// Proxmox sans hôte ni droit, se dit avec la phrase de son refus.
 		key, _ := kitrefusal.KeyOf(err)
 		return &refusal{message: text.Get(key)}
 	}

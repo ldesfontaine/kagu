@@ -1241,7 +1241,8 @@ la réécrit pas : elle vient du dépôt et de la version signée, pas du serveu
 Dans le doute, relisez la ligne ici avant de la lancer.
 
 Ce que fait chaque commande avant d'écrire : `grant`, `grant --set`,
-`grant --pending`, `revoke`, `policy migrate` et `trust` impriment ce qu'elles
+`grant --pending`, `revoke`, `policy migrate`, `trust` et `proxmox-token`
+([Jeton Proxmox local](#jeton-proxmox-local)) impriment ce qu'elles
 changent, puis demandent `[o/N]` au clavier, N par défaut. Entrée seule ne
 change rien ; `echo o | sudo …` ne répond pas, la réponse se lit sur le
 terminal, jamais sur l'entrée standard. `--yes` ne vaut que **sans terminal**
@@ -1727,6 +1728,29 @@ relevé connaît. Retirer l'hôte, ou ne pas encore l'avoir relevé, ramène à 
 sélecteur écrit à la main : un plan `all` est alors refusé au lancement
 (`backup.selector_needs_list`). Le droit de produire (`backup.produce`) et le
 jeton en lecture sont indépendants : l'un sans l'autre est permis.
+
+### Jeton Proxmox local
+
+Démarrer, arrêter et prendre des instantanés (droits `proxmox.power` et
+`proxmox.snapshot`) se fait par l'agent de l'hôte, avec un jeton Proxmox à lui,
+**distinct** du jeton en lecture ci-dessus. Le droit d'abord, puis, en root
+sur l'hôte Proxmox :
+
+```sh
+sudo kagu agent proxmox-token
+```
+
+La commande affiche ce qu'elle crée (un rôle réduit et ses privilèges, un
+compte qui ne sert qu'au jeton, son rôle sur `/vms`, le jeton, le fichier du
+jeton dans l'état de l'agent) et demande `[o/N]`, N par défaut, comme `grant`.
+Le secret du jeton va de Proxmox au fichier (`0600`, au compte de l'agent, avec
+l'empreinte du certificat de l'API locale) sans passer par l'écran, une ligne de
+commande ni un journal. L'agent est relancé et redit ses droits : le bouton
+s'allume sur la fiche. Relancée, la commande remet le rôle à ses seuls
+privilèges et remplace le jeton. `revoke` du dernier des deux droits retire le
+jeton, le compte, le rôle et le fichier, après la même question. Le détail :
+[`22-fonctionnement.md`](projet/22-fonctionnement.md), « Comment un hôte
+Proxmox agit ».
 
 ## Mettre à jour
 

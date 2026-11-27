@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -19,6 +20,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/role"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
+	"github.com/ldesfontaine/kagu/internal/kit/tlsinspect"
 )
 
 // Ce que « agent grant » et « agent revoke » font aussi sur le système
@@ -61,6 +63,20 @@ const (
 	// La règle sudo, le script de root et le produce.conf d'avant la porte,
 	// retirés.
 	PrerequisiteLegacySudoRemoved PrerequisiteKind = "legacy_sudo_removed"
+	// Le jeton Proxmox local (proxmox_setup.go) : le rôle réduit, le compte,
+	// un rôle du compte ailleurs que sur /vms retiré, son rôle sur /vms, le
+	// jeton créé ou remplacé, son fichier dans l'état de l'agent.
+	PrerequisiteProxmoxRole          PrerequisiteKind = "proxmox_role"
+	PrerequisiteProxmoxUser          PrerequisiteKind = "proxmox_user"
+	PrerequisiteProxmoxACLRemoved    PrerequisiteKind = "proxmox_acl_removed"
+	PrerequisiteProxmoxACL           PrerequisiteKind = "proxmox_acl"
+	PrerequisiteProxmoxToken         PrerequisiteKind = "proxmox_token"          // #nosec G101 -- le nom d'un pas, pas un secret.
+	PrerequisiteProxmoxTokenReplaced PrerequisiteKind = "proxmox_token_replaced" // #nosec G101 -- le nom d'un pas, pas un secret.
+	PrerequisiteProxmoxTokenFile     PrerequisiteKind = "proxmox_token_file"     // #nosec G101 -- le nom d'un pas, pas un secret.
+	// Un droit proxmox.* demande le jeton et son fichier manque : la commande
+	// qui le pose est dite. Retiré : plus aucun droit ne le demande.
+	PrerequisiteProxmoxTokenMissing PrerequisiteKind = "proxmox_token_missing" // #nosec G101 -- le nom d'un pas, pas un secret.
+	PrerequisiteProxmoxTokenRemoved PrerequisiteKind = "proxmox_token_removed" // #nosec G101 -- le nom d'un pas, pas un secret.
 	// daemon-reload, puis la relance de l'agent.
 	PrerequisiteRestart PrerequisiteKind = "restart"
 )
@@ -83,8 +99,11 @@ type System interface {
 	// InGroup dit si le compte est membre du groupe.
 	InGroup(account, group string) (bool, error)
 	// Run lance une commande du système (usermod, gpasswd, runuser,
-	// systemctl) et attend sa fin.
+	// systemctl, pveum) et attend sa fin.
 	Run(name string, args ...string) error
+	// Output fait comme Run et rend la sortie standard, qui n'entre jamais
+	// dans l'erreur : celle de « pveum user token add » porte un secret.
+	Output(name string, args ...string) ([]byte, error)
 	// MakeFolder crée un dossier à root, ou reprend celui qui existe, et le
 	// donne à owner avec ce mode ; il refuse un lien, et un dossier sous un
 	// parent qui n'est pas à root.
@@ -99,6 +118,9 @@ type System interface {
 	RemoveDropIn(name string) error
 	// Proxmox dit si la machine est un hôte Proxmox VE (role.Detect).
 	Proxmox() bool
+	// ProxmoxCertificate rend l'empreinte SHA-256 du certificat que présente
+	// l'API locale de Proxmox (machine.ProxmoxLocalAPI).
+	ProxmoxCertificate() (string, error)
 	// ServerMachine dit si le serveur tourne sur cette machine : sa
 	// configuration, à root, est là.
 	ServerMachine() bool
@@ -127,15 +149,16 @@ func (a hostAccount) isRoot() bool { return a.owner.UID == 0 }
 // groupe docker se pose quand un droit d'après le demande ; il se retire
 // quand un droit d'avant le demandait et qu'aucun d'après ne le demande. Les
 // dossiers se font pour les droits posés ; ceux des droits retirés restent
-// (ce sont des données). Le drop-in dit les dossiers des droits d'après.
-func planPrerequisites(system System, account hostAccount, servicesRoot string, before, after []agentpolicy.Capability) ([]Prerequisite, error) {
+// (ce sont des données). Le drop-in dit les dossiers des droits d'après. Le
+// jeton Proxmox se retire avec le dernier droit qui s'en sert.
+func planPrerequisites(system System, account hostAccount, state agentState, before, after []agentpolicy.Capability) ([]Prerequisite, error) {
 	added := addedRights(before, after)
 	plan, err := planDockerGroup(system, account, before, after)
 	if err != nil {
 		return nil, err
 	}
-	plan = append(plan, planFolders(account, machine.RightFolders(added, servicesRoot), machine.RightFolders(after, servicesRoot))...)
-	dropIns, err := planDropIns(system, machine.RightFolders(after, servicesRoot))
+	plan = append(plan, planFolders(account, machine.RightFolders(added, state.servicesRoot), machine.RightFolders(after, state.servicesRoot))...)
+	dropIns, err := planDropIns(system, machine.RightFolders(after, state.servicesRoot))
 	if err != nil {
 		return nil, err
 	}
@@ -146,6 +169,11 @@ func planPrerequisites(system System, account hostAccount, servicesRoot string, 
 		return nil, err
 	}
 	plan = append(plan, gate...)
+	token, err := planProxmoxToken(system, state.dir, state.path, after)
+	if err != nil {
+		return nil, err
+	}
+	plan = append(plan, token...)
 	if slices.ContainsFunc(plan, Prerequisite.needsRestart) {
 		plan = append(plan, Prerequisite{Kind: PrerequisiteRestart, Detail: brand.AgentUnit, lay: restartAgent})
 	}
@@ -155,12 +183,20 @@ func planPrerequisites(system System, account hostAccount, servicesRoot string, 
 	return plan, nil
 }
 
+// agentState est l'état de l'agent que le plan touche : ouvert, son chemin
+// à dire, et la racine des services de l'identité.
+type agentState struct {
+	dir          *os.Root
+	path         string
+	servicesRoot string
+}
+
 // needsRestart : un groupe ou un drop-in ne se lit qu'au démarrage de l'unité.
-// Un dossier, ou la porte vzdump, que l'agent joint par sa socket, n'en
-// demandent pas.
+// Un dossier, la porte vzdump, que l'agent joint par sa socket, ou le jeton
+// Proxmox, qu'il relit à chaque ordre, n'en demandent pas.
 func (p Prerequisite) needsRestart() bool {
 	switch p.Kind {
-	case PrerequisiteFolder, PrerequisiteVzdumpGate, PrerequisiteVzdumpGateRemoved:
+	case PrerequisiteFolder, PrerequisiteVzdumpGate, PrerequisiteVzdumpGateRemoved, PrerequisiteProxmoxTokenRemoved:
 		return false
 	}
 	return p.lay != nil
@@ -468,16 +504,32 @@ func (HostSystem) InGroup(account, group string) (bool, error) {
 	return slices.Contains(groups, wanted.Gid), nil
 }
 
-// Run lance la commande avec un PATH fixe : root ne prend pas celui de
-// l'environnement.
-func (HostSystem) Run(name string, args ...string) error {
-	command := exec.Command(name, args...) // #nosec G204 -- bounded: un programme constant de planPrerequisites, un compte et des chemins jugés.
+// hostCommand prépare la commande avec un PATH fixe : root ne prend pas
+// celui de l'environnement.
+func hostCommand(name string, args ...string) *exec.Cmd {
+	command := exec.Command(name, args...) // #nosec G204 -- bounded: un programme constant du plan, un compte, des chemins jugés, des noms de machine.
 	command.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL=C"}
-	output, err := command.CombinedOutput()
+	return command
+}
+
+func (HostSystem) Run(name string, args ...string) error {
+	output, err := hostCommand(name, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %w: %s", name, err, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+// Output : l'erreur ne porte que la sortie d'erreur.
+func (HostSystem) Output(name string, args ...string) ([]byte, error) {
+	command := hostCommand(name, args...)
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	output, err := command.Output()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w: %s", name, err, strings.TrimSpace(stderr.String()))
+	}
+	return output, nil
 }
 
 // MakeFolder : les parents s'ouvrent depuis « / », un par un, jugés
@@ -612,6 +664,19 @@ func (HostSystem) RemoveDropIn(name string) error {
 
 func (HostSystem) Proxmox() bool {
 	return slices.ContainsFunc(detectRoles().Roles, func(found role.Role) bool { return found.Name == role.ProxmoxVE })
+}
+
+// ProxmoxCertificate relève l'empreinte comme l'écran de déclaration d'un
+// Proxmox (tlsinspect) : root, sur la boucle locale de l'hôte.
+func (HostSystem) ProxmoxCertificate() (string, error) {
+	report, err := tlsinspect.Inspect(context.Background(), machine.ProxmoxLocalAPI)
+	if err != nil {
+		return "", err
+	}
+	if report.Fingerprint == "" {
+		return "", fmt.Errorf("%s did not answer in TLS (%s)", machine.ProxmoxLocalAPI, report.Cause)
+	}
+	return report.Fingerprint, nil
 }
 
 func (HostSystem) ServerMachine() bool {

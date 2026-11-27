@@ -93,19 +93,21 @@ const (
 // elle, la durée que « grant » lui donne quand rien n'est dit (zéro : sans
 // échéance), la phrase de son risque, une clé des catalogues que « grant »
 // imprime avant la question (R-A3-12), et ce qu'il demande au système
-// (R-A3-8) : le groupe docker, ou la porte root (A5). opens : le droit que
-// la ligne grant d'un groupe pas permis pose, un par groupe.
+// (R-A3-8) : le groupe docker, la porte root (A5), le jeton Proxmox local.
+// opens : le droit que la ligne grant d'un groupe pas permis pose, un par
+// groupe.
 type knownRight struct {
-	name        string
-	group       Group
-	opens       bool
-	readable    readable
-	value       valueGrammar
-	bare        string
-	term        time.Duration
-	risk        string
-	dockerGroup bool
-	rootGate    bool
+	name         string
+	group        Group
+	opens        bool
+	readable     readable
+	value        valueGrammar
+	bare         string
+	term         time.Duration
+	risk         string
+	dockerGroup  bool
+	rootGate     bool
+	proxmoxToken bool
 }
 
 // readable dit où un droit se lit.
@@ -157,8 +159,8 @@ var knownRights = []knownRight{
 	{name: CapabilityBackupReceive, group: GroupBackup, value: valueOnePath},
 	{name: CapabilityBackupProduce, group: GroupBackup, value: valueProducers},
 	{name: CapabilityFilesWrite, group: GroupDeploy, value: valuePaths},
-	{name: CapabilityProxmoxPower, group: GroupDeploy},
-	{name: CapabilityProxmoxSnapshot, group: GroupDeploy},
+	{name: CapabilityProxmoxPower, group: GroupDeploy, proxmoxToken: true},
+	{name: CapabilityProxmoxSnapshot, group: GroupDeploy, proxmoxToken: true},
 	{name: CapabilityResticTarget, group: GroupBackup, value: valueOnePath},
 	{name: CapabilityResticProduce, group: GroupBackup, opens: true},
 	{name: CapabilityResticDocker, group: GroupBackup, risk: manageRisk, dockerGroup: true},
@@ -203,6 +205,15 @@ func NeedsDockerGroup(rights []Capability) bool {
 	return slices.ContainsFunc(rights, func(right Capability) bool {
 		known, _ := knownRightOf(right.Name)
 		return known.dockerGroup
+	})
+}
+
+// NeedsProxmoxToken dit si un de ces droits s'appuie sur le jeton Proxmox
+// local de l'agent : proxmox.power, proxmox.snapshot.
+func NeedsProxmoxToken(rights []Capability) bool {
+	return slices.ContainsFunc(rights, func(right Capability) bool {
+		known, _ := knownRightOf(right.Name)
+		return known.proxmoxToken
 	})
 }
 
