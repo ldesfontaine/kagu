@@ -19,6 +19,9 @@
 set -euo pipefail
 export PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C
 
+# shellcheck source=captures-serveur.sh
+source "$(dirname "${BASH_SOURCE[0]}")/captures-serveur.sh"
+
 readonly vm="${CAPTURES_VM:-}"
 readonly names_file="${CAPTURES_NAMES_FILE:-$HOME/.config/kagu/captures-noms-reels.txt}"
 readonly port="${CAPTURES_PORT:-18893}"
@@ -106,13 +109,12 @@ echo "étape: front et serveur de démo ($goarch)"
 
 echo "étape: serveur de démo sur $vm"
 if [ "$vm" = "local" ]; then
-	(cd "$tree/web/e2e" && KAGU_E2E_ADDR="127.0.0.1:$port" ./.fixture.test -test.run TestE2EFixtureServer -test.timeout 0 >"$work/serveur.log" 2>&1 &
-		echo $! >"$work/pid")
+	(start_local_server "$tree/web/e2e" "$port" "$work/serveur.log" "$work/pid")
 	local_pid="$(cat "$work/pid")"
 else
 	ssh -- "$vm" "mkdir -p $remote_dir/tmp"
 	scp -q -- "$tree/web/e2e/.fixture.test" "$vm:$remote_dir/fixture.test"
-	ssh -- "$vm" "cd $remote_dir && chmod 700 tmp && TMPDIR=\$PWD/tmp KAGU_E2E_ADDR=127.0.0.1:$port nohup ./fixture.test -test.run TestE2EFixtureServer -test.timeout 0 >serveur.log 2>&1 </dev/null & echo \$! >pid" || fail "le serveur de démo ne démarre pas sur $vm"
+	start_remote_server "$vm" "$remote_dir" "$port" || fail "le serveur de démo ne démarre pas sur $vm"
 	ssh -N -L "$port:127.0.0.1:$port" -- "$vm" &
 	tunnel_pid=$!
 fi
