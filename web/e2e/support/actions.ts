@@ -178,7 +178,7 @@ async function waitForSettledPage(page: Page, reads: Reads, startedAtLeast: numb
   }
 }
 
-async function openPage(page: Page, path: string): Promise<void> {
+export async function openPage(page: Page, path: string): Promise<void> {
   const reads = watchRequests(page);
   const startedBefore = reads.started;
   await page.goto(path, { timeout: pageLoadTimeout });

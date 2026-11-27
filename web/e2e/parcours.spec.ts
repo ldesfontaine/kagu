@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 import { exerciseScreen, linksOf } from "./support/actions";
 import { expect, test } from "./support/findings";
-import { claimShape, declaredRoutes, matchesRoute, recordedVisits, recordVisit, shapeOf } from "./support/routes";
+import { claimShape, declaredRoutes, matchesRoute, recordedVisits, recordVisit, shapeOf, unreachedRoutes } from "./support/routes";
 
 // Le parcours : chaque écran du routeur est ouvert, chaque bouton cliqué,
 // chaque fenêtre ouverte puis refermée, chaque menu déroulant ouvert avec une
@@ -40,13 +40,7 @@ for (const route of staticRoutes) {
   });
 }
 
-// Les routes que les données fictives n'atteignent pas, et pourquoi. Une ligne
-// de plus ici est une route qu'aucun test ne voit.
-const notReached: Record<string, string> = {
-  "/machines/:id/proxmox": "l'onglet Hyperviseur n'existe que pour une machine dont l'agent annonce le module ; aucune ne l'annonce dans les données fictives",
-};
-
 test("chaque route du routeur a été visitée", () => {
-  const missing = declaredRoutes().filter((route) => !(route in notReached) && !recordedVisits().some((path) => matchesRoute(route, path)));
+  const missing = declaredRoutes().filter((route) => !(route in unreachedRoutes) && !recordedVisits().some((path) => matchesRoute(route, path)));
   expect(missing, "routes que ni un lien ni un bouton n'a menées").toEqual([]);
 });

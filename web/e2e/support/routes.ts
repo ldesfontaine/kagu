@@ -41,6 +41,24 @@ export function matchesRoute(pattern: string, path: string): boolean {
   return wanted.length === actual.length && wanted.every((segment, index) => segment.startsWith(":") || segment === actual[index]);
 }
 
+// La route qui sert une adresse : parmi celles qui la reconnaissent, la plus
+// précise (le plus de segments fixes), comme le routeur. `/machines/nouvelle`
+// va à « nouvelle », pas à `/machines/:id`.
+export function routeOfPath(patterns: string[], path: string): string | undefined {
+  const fixedSegments = (pattern: string) => pattern.split("/").filter((segment) => segment !== "" && !segment.startsWith(":")).length;
+  return patterns
+    .filter((pattern) => matchesRoute(pattern, path))
+    .sort((first, second) => fixedSegments(second) - fixedSegments(first))
+    .at(0);
+}
+
+// Les routes que les données fictives n'atteignent pas, et pourquoi. Une ligne
+// de plus ici est une route qu'aucun test ne voit, ni le parcours ni les
+// captures.
+export const unreachedRoutes: Record<string, string> = {
+  "/machines/:id/proxmox": "l'onglet Hyperviseur n'existe que pour une machine dont l'agent annonce le module ; aucune ne l'annonce dans les données fictives",
+};
+
 // Les identifiants du serveur (hexadécimaux, svc_…, prj_…, UUID, numériques)
 // se ramènent à « :id » : une page de chaque forme suffit à la visite.
 export function shapeOf(path: string): string {
