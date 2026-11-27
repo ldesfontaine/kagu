@@ -48,6 +48,9 @@ func (r *refusal) Error() string {
 // connectent. -enroll-only s'arrête à l'identité, écrite ou déjà là.
 func runAgent(args []string) error {
 	asRoot := policyCommand{out: os.Stdout, openTerminal: openControllingTerminal, euid: os.Geteuid(), place: agent.SystemPolicyPlace}
+	if len(args) > 0 && args[0] == machine.VzdumpStreamCommand {
+		return runVzdumpStream(args[1:])
+	}
 	if len(args) > 0 && args[0] == "trust" {
 		return runAgentTrust(args[1:], asRoot)
 	}

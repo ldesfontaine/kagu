@@ -124,9 +124,9 @@ const (
 	// Les instantanés que l'agent crée portent ce préfixe : il ne supprime que
 	// ceux-là, jamais ceux de l'opérateur.
 	SnapshotPrefix = TokenPrefix + "-"
-	// Le script de root que la règle sudo de backup.produce nomme, seul : il
-	// lance vzdump hors du bac à sable de l'unité de l'agent.
-	VzdumpWrapperPath = "/usr/local/sbin/" + ID + "-vzdump"
+	// La socket de la porte vzdump (backup.produce), à root et au groupe de
+	// l'agent.
+	VzdumpGateSocket = "/run/" + ID + "-vzdump.sock"
 	// Le nom d'une sauvegarde est le préfixe de son plan (celui de la base est
 	// ID), un instant UTC et « .tar.age » ; la clé scellée qui
 	// l'accompagne porte le préfixe ci-dessous et l'empreinte.
@@ -258,3 +258,29 @@ const (
 // Début de l'empreinte de l'identifiant d'une machine, pour reconnaître
 // un agent installé sur la machine du serveur.
 const HostFingerprintPrefix = ID + "-host:"
+
+// Docker et restic, que setup installe après un oui (R-B1-4, décision de
+// sécurité 15) : ces sources, ces versions et ces sommes, inscrites dans la
+// version signée de Kagu, et rien d'autre ; jamais « la dernière ». Les
+// changer demande une version de Kagu.
+const (
+	// Le dépôt APT de Docker, et l'empreinte OpenPGP de la clé qui le signe :
+	// une clé téléchargée qui n'a pas celle-ci ne s'installe pas.
+	DockerRepositoryURL  = "https://download.docker.com/linux"
+	DockerKeyFingerprint = "9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
+	// Les versions des paquets, sans le suffixe que le dépôt ajoute pour chaque
+	// système (« ~debian.12~bookworm »).
+	DockerVersion        = "5:29.10.0-1"
+	ContainerdVersion    = "2.4.2-3"
+	DockerComposeVersion = "5.7.2-1"
+	// restic : son binaire officiel, compressé en bzip2.
+	ResticVersion    = "0.19.1"
+	ResticReleaseURL = "https://github.com/restic/restic/releases/download"
+)
+
+// ResticArchiveSums : la somme SHA-256 de restic_<version>_linux_<arch>.bz2
+// par architecture, relue sur le SHA256SUMS que l'équipe de restic signe.
+var ResticArchiveSums = map[string]string{
+	"amd64": "f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c",
+	"arm64": "a5f64aaab53d51e311fa3829124c5b703f2d14cf187d8640b6be3b2b49376465",
+}

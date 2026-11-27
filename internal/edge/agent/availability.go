@@ -30,9 +30,6 @@ import (
 
 const (
 	dockerDialTimeout = 2 * time.Second
-	// sudo -n -l répond sans rien exécuter ni demander : un délai large pour une
-	// machine dont sudo interroge un annuaire.
-	sudoListTimeout = 10 * time.Second
 	// access(2) : écrire dans un dossier et le traverser. Créer dessous exige
 	// les deux ; syscall n'en nomme pas les constantes.
 	accessWrite  = 0x2
@@ -55,10 +52,10 @@ type hostChecks struct {
 	// lookPath : un programme du PATH, ou un chemin absolu, que le compte peut
 	// lancer (exec.LookPath).
 	lookPath func(name string) (string, error)
-	// sudoList : « sudo -n -l <programme> », qui répond sans rien exécuter ni
-	// demander de mot de passe : la règle de sudo laisse le compte lancer ce
-	// programme. Une erreur : elle ne le laisse pas.
-	sudoList func(ctx context.Context, program string) error
+	// vzdumpGate : la socket de la porte vzdump est là et le compte peut
+	// l'ouvrir (gate_missing, gate_denied), sans s'y connecter : une
+	// connexion lancerait une unité de root.
+	vzdumpGate func() string
 	// proxmoxToken : le jeton local de Proxmox est posé, lisible du seul compte
 	// de l'agent, avec l'empreinte du certificat.
 	proxmoxToken func() string
@@ -79,7 +76,7 @@ func newHostChecks(socket string, updater *selfUpdater) hostChecks {
 		freeBytes:   freeBytesUnder,
 		agentUpdate: func() string { return updater.unavailableReason(writableOrCreatable) },
 		lookPath:    exec.LookPath,
-		sudoList:    sudoListsProgram,
+		vzdumpGate:  func() string { return vzdumpGateReason(brand.VzdumpGateSocket) },
 		// Branché par newOrderRunner : il lit l'état de l'agent.
 		proxmoxToken:   func() string { return "" },
 		findRestic:     func() (string, error) { return findBinary("", resticProgram, exec.LookPath) },
@@ -97,7 +94,7 @@ func allowAll() hostChecks {
 		freeBytes:      func(string) (uint64, error) { return math.MaxUint64, nil },
 		agentUpdate:    func() string { return "" },
 		lookPath:       func(name string) (string, error) { return name, nil },
-		sudoList:       func(context.Context, string) error { return nil },
+		vzdumpGate:     func() string { return "" },
 		proxmoxToken:   func() string { return "" },
 		findRestic:     func() (string, error) { return "/usr/bin/" + resticProgram, nil },
 		findRestServer: func() (string, error) { return "/usr/bin/" + restServerProgram, nil },
@@ -127,18 +124,17 @@ func rootEquivalent(euid int, rights []agentpolicy.Capability, checks hostChecks
 	return euid == 0 || checks.dockerMember() || agentpolicy.HasCapability(rights, agentpolicy.CapabilityTerminalHost)
 }
 
-// sudoListsProgram demande à sudo si la règle du compte laisse lancer ce
-// programme. Le résultat se lit au code de sortie ; la sortie est jetée.
-func sudoListsProgram(ctx context.Context, program string) error {
-	sudo, err := exec.LookPath("sudo")
-	if err != nil {
-		return err
+// vzdumpGateReason juge la socket de la porte par access(2) : se connecter
+// à une socket Unix demande d'y écrire.
+func vzdumpGateReason(socket string) string {
+	err := syscall.Access(socket, accessWrite)
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, syscall.EACCES), errors.Is(err, syscall.EPERM):
+		return agentwire.ReasonGateDenied
 	}
-	ctx, cancel := context.WithTimeout(ctx, sudoListTimeout)
-	defer cancel()
-	command := exec.CommandContext(ctx, sudo, "-n", "-l", program) // #nosec G204 -- bounded: sudo est celui du PATH de l'unité, program une constante de brand.
-	command.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL=C"}
-	return command.Run()
+	return agentwire.ReasonGateMissing
 }
 
 // dockerReason dit si le compte de l'agent peut parler à Docker : docker_missing
@@ -252,7 +248,7 @@ func judgeRights(ctx context.Context, rights []agentpolicy.Capability, root stri
 		case agentpolicy.CapabilityBackupReceive, agentpolicy.CapabilityFilesWrite:
 			note(capability.Name, firstPathReason(checks, capability.Paths))
 		case agentpolicy.CapabilityBackupProduce:
-			note(capability.Name, firstProducerReason(ctx, checks, capability.Paths))
+			note(capability.Name, firstProducerReason(checks, capability.Paths))
 		case agentpolicy.CapabilityProxmoxPower, agentpolicy.CapabilityProxmoxSnapshot:
 			note(capability.Name, checks.proxmoxToken())
 		case agentpolicy.CapabilityResticTarget:
@@ -314,36 +310,26 @@ func firstPathReason(checks hostChecks, paths []string) string {
 
 // firstProducerReason rend la raison du premier producteur du droit que la
 // machine ne sait pas lancer.
-func firstProducerReason(ctx context.Context, checks hostChecks, producers []string) string {
+func firstProducerReason(checks hostChecks, producers []string) string {
 	for _, producer := range producers {
-		if reason := producerReason(ctx, checks, producer); reason != "" {
+		if reason := producerReason(checks, producer); reason != "" {
 			return reason
 		}
 	}
 	return ""
 }
 
-// producerReason dit pourquoi le compte ne peut pas lancer ce producteur : pas
-// de sudo, un programme qui manque (le script de root que la préparation pose,
-// ou vzdump), ou une règle sudo qui ne laisse pas le compte lancer le script.
-// Le programme avant la règle : sans le script, sudo -l répondrait non pour
-// une raison que la préparation seule explique. Un producteur que l'agent ne
-// sait pas lancer manque : le fichier de l'agent n'en porte pas
+// producerReason dit pourquoi le compte ne peut pas lancer ce producteur :
+// vzdump manque, ou la porte vzdump n'est pas posée ou lui est fermée. vzdump
+// avant la porte : sans lui, grant ne pose pas la porte. Un producteur que
+// l'agent ne sait pas lancer manque : le fichier de l'agent n'en porte pas
 // (ParseCapabilities), mais un oubli ici ne doit pas le dire disponible.
-func producerReason(ctx context.Context, checks hostChecks, producer string) string {
+func producerReason(checks hostChecks, producer string) string {
 	if producer != agentpolicy.ProducerProxmoxVzdump {
 		return agentwire.ReasonProducerMissing
 	}
-	if _, err := checks.lookPath("sudo"); err != nil {
-		return agentwire.ReasonSudoMissing
+	if _, err := checks.lookPath(machine.VzdumpBinary); err != nil {
+		return agentwire.ReasonProducerMissing
 	}
-	for _, program := range []string{brand.VzdumpWrapperPath, machine.VzdumpBinary} {
-		if _, err := checks.lookPath(program); err != nil {
-			return agentwire.ReasonProducerMissing
-		}
-	}
-	if err := checks.sudoList(ctx, brand.VzdumpWrapperPath); err != nil {
-		return agentwire.ReasonSudoDenied
-	}
-	return ""
+	return checks.vzdumpGate()
 }

@@ -14,7 +14,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/restic"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
-	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
@@ -145,7 +145,7 @@ func (s *resticSource) partsFor(ctx context.Context, job resticBackupJob, checks
 	if job.params.Scope == agentwire.ResticScopeService {
 		return s.serviceParts(ctx, job, checks)
 	}
-	producer, err := s.producerFor(ctx, job, checks)
+	producer, err := s.producerFor(job, checks)
 	if err != nil {
 		return nil, err
 	}
@@ -194,18 +194,18 @@ func (s *resticSource) runPart(ctx context.Context, job resticBackupJob, choice 
 }
 
 // producerFor rend, pour un invité, la commande que restic lance et lit
-// (--stdin-from-command) : vzdump par le script de root, comme backup.produce,
-// sans compression. Le droit se rejuge sur la machine avant de lancer.
-func (s *resticSource) producerFor(ctx context.Context, job resticBackupJob, checks hostChecks) ([]string, error) {
-	if reason := producerReason(ctx, checks, agentpolicy.ProducerProxmoxVzdump); reason != "" {
+// (--stdin-from-command) : le binaire de l'agent, qui demande vzdump sans
+// compression à la porte et sort en erreur si vzdump échoue (StreamVzdump).
+// Le droit se rejuge sur la machine avant de lancer.
+func (s *resticSource) producerFor(job resticBackupJob, checks hostChecks) ([]string, error) {
+	if reason := producerReason(checks, agentpolicy.ProducerProxmoxVzdump); reason != "" {
 		return nil, refuseWith(reason, errors.New("the producer cannot run on this machine"))
 	}
-	sudo, err := checks.lookPath("sudo")
-	if err != nil || !filepath.IsAbs(sudo) {
-		return nil, refuseWith(agentwire.ReasonSudoMissing, errors.New("sudo not found as an absolute path"))
+	binary, err := s.agentBinary()
+	if err != nil || !filepath.IsAbs(binary) {
+		return nil, refuseWith(agentwire.ReasonProducerMissing, fmt.Errorf("the agent binary has no absolute path: %v", err))
 	}
-	vmid := strconv.Itoa(job.params.VMID)
-	return append([]string{sudo}, vzdumpArguments(brand.VzdumpWrapperPath, vmid, vzdumpCompressNone)...), nil
+	return []string{binary, "agent", machine.VzdumpStreamCommand, strconv.Itoa(job.params.VMID)}, nil
 }
 
 // guestFileName est le nom stable du flux d'un invité : restic déduplique

@@ -228,7 +228,7 @@ func TestR_A3_8_WhatEachRightAsksOfTheSystem(t *testing.T) {
 	if want := []string{"docker.deploy", "docker.update", "restic.docker", "terminal.container", "service.free"}; !slices.Equal(docker, want) {
 		t.Errorf("docker group: %v, want %v", docker, want)
 	}
-	if want := []string{"backup.produce", "terminal.host", "network.private"}; !slices.Equal(gate, want) {
+	if want := []string{"terminal.host", "network.private"}; !slices.Equal(gate, want) {
 		t.Errorf("root gate: %v, want %v", gate, want)
 	}
 	for _, name := range docker {

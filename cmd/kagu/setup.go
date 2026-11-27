@@ -63,6 +63,12 @@ type setupPaths struct {
 	agentSocket   string
 	// Les fichiers de la version qu'install.sh a vérifiée.
 	releaseDir string
+	// Docker et restic : le plafond des journaux, la clé et la source APT du
+	// dépôt de Docker, le binaire de restic.
+	dockerConfig  string
+	dockerKeyring string
+	dockerSource  string
+	resticBinary  string
 }
 
 func systemSetupPaths() setupPaths {
@@ -71,14 +77,18 @@ func systemSetupPaths() setupPaths {
 		stateDir: brand.StateDir, agentStateDir: brand.AgentStateDir, policyDir: brand.AgentPolicyDir,
 		unitDir: filepath.Dir(machine.ServerUnitFile), binary: brand.InstalledBinary,
 		guardPath: brand.AgentGuardPath, agentSocket: brand.AgentSocketPath, releaseDir: brand.SetupReleaseDir,
+		dockerConfig: "/etc/docker/daemon.json", dockerKeyring: "/etc/apt/keyrings/docker.asc",
+		dockerSource: "/etc/apt/sources.list.d/docker.list", resticBinary: "/usr/local/bin/restic",
 	}
 }
 
-// setupState est setup.json : la réponse à la question et les étapes cochées,
-// rien d'autre. Jamais un jeton ni un code : B2 le relit.
+// setupState est setup.json : les réponses aux questions et les étapes
+// cochées, rien d'autre. Jamais un jeton ni un code : B2 le relit.
 type setupState struct {
 	Rights agentpolicy.Set `json:"rights,omitempty"`
-	Steps  []step.Step     `json:"steps"`
+	// Tools : la réponse à la question Docker, « yes » ou « no ».
+	Tools string      `json:"tools,omitempty"`
+	Steps []step.Step `json:"steps"`
 }
 
 // setupRun porte ce qu'une installation touche ; un test y met un faux
@@ -102,12 +112,18 @@ type setupRun struct {
 	report func(ctx context.Context, steps []step.Step)
 
 	rights agentpolicy.Set
+	// requested : le jeu demandé quand Docker refusé l'a ramené à Observer ;
+	// vide sinon.
+	requested agentpolicy.Set
 	// L'adresse des versions qu'install.sh passe (--releases-url) ; vide :
 	// celle par défaut.
 	releasesURL string
 	state       setupState
-	listen      string
-	control     *controlClient
+	// resticSums : les sommes des archives de restic ; nil vaut celles de
+	// brand. Un test donne celle de son archive.
+	resticSums map[string]string
+	listen     string
+	control    *controlClient
 }
 
 func runSetup(args []string) error {
@@ -128,6 +144,7 @@ func (r *setupRun) command(ctx context.Context, args []string) error {
 	// L'aide se dit par setup.usage, dans la langue de la commande.
 	flags.SetOutput(io.Discard)
 	rights := flags.String("rights", "", "")
+	noDocker := flags.Bool("no-docker", false, "")
 	flags.StringVar(&r.releasesURL, "releases-url", "", "")
 	flags.String("domain", "", "")
 	flags.String("proxy", "", "")
@@ -160,6 +177,9 @@ func (r *setupRun) command(ctx context.Context, args []string) error {
 	}
 	r.state.Rights = r.rights
 	r.report = r.reportLocalProgress
+	if err := r.chooseTools(*noDocker); err != nil {
+		return err
+	}
 	if err := r.runSteps(ctx, r.steps()); err != nil {
 		return err
 	}
@@ -297,10 +317,12 @@ type setupStep struct {
 }
 
 // steps : celles de setup, dans l'ordre de B1 §5 jusqu'à « Dossier des
-// services ». Docker et restic viendront entre le système et les comptes.
+// services ». Docker passe avant les comptes (R-B1-5).
 func (r *setupRun) steps() []setupStep {
 	return []setupStep{
 		{step.EnrollSystem, r.checkSystem},
+		{step.EnrollDocker, r.installDocker},
+		{step.EnrollRestic, r.installRestic},
 		{step.SetupAccount, r.prepareAccounts},
 		{step.SetupServer, r.startServer},
 		{step.SetupAgent, r.installLocalAgent},

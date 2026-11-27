@@ -287,6 +287,12 @@ func prerequisiteText(text lang.Catalog, step agent.Prerequisite) string {
 		return text.Format("agent.prerequisite_other_drop_in", step.Detail)
 	case agent.PrerequisiteRootGate:
 		return text.Format("agent.prerequisite_root_gate", step.Detail)
+	case agent.PrerequisiteVzdumpGate:
+		return text.Format("agent.prerequisite_vzdump_gate", step.Detail)
+	case agent.PrerequisiteVzdumpGateRemoved:
+		return text.Format("agent.prerequisite_vzdump_gate_removed", step.Detail)
+	case agent.PrerequisiteLegacySudoRemoved:
+		return text.Format("agent.prerequisite_legacy_sudo_removed", step.Detail)
 	case agent.PrerequisiteRestart:
 		return text.Format("agent.prerequisite_restart", step.Detail)
 	}

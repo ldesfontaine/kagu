@@ -98,13 +98,11 @@ test("unfitFor ne prend pas les droits demandés pour acquis (X-24) : seul le ve
   expect(unfitFor(t, requestedOnly, "docker.deploy")?.reason).toBe("machine.fit_right_missing|machine.capability_docker_deploy");
 });
 
-test("lacksSudo : un hôte Proxmox, ou un agent qui dit que sudo manque", () => {
-  const base = { role: "generic" as const, roles: [], agent: agentWith([], [{ name: "observe" }]) };
+test("lacksSudo : un hôte Proxmox", () => {
+  const base = { role: "generic" as const, roles: [] };
   expect(lacksSudo(base)).toBe(false);
   expect(lacksSudo({ ...base, role: "proxmox" })).toBe(true);
   expect(lacksSudo({ ...base, roles: [{ name: "proxmox_ve", version: "8.2" }] })).toBe(true);
-  expect(lacksSudo({ ...base, agent: agentWith([], [{ name: "backup.produce", unavailable: "sudo_missing" }]) })).toBe(true);
-  expect(lacksSudo({ ...base, agent: null })).toBe(false);
 });
 
 // Les quatre états que le serveur rend (agentpolicy.Fit), chacun avec son ton.

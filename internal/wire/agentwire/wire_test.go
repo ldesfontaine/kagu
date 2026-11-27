@@ -113,7 +113,7 @@ func TestUnavailableReasons_AreRefusalReasons(t *testing.T) {
 			t.Errorf("%q n'est pas une raison de refus connue", reason)
 		}
 	}
-	for _, reason := range []string{ReasonDockerDenied, ReasonDockerMissing, ReasonPathDenied, ReasonPathUnwritable, ReasonNotSelfUpdatable, ReasonSudoMissing, ReasonProducerMissing, ReasonSudoDenied} {
+	for _, reason := range []string{ReasonDockerDenied, ReasonDockerMissing, ReasonPathDenied, ReasonPathUnwritable, ReasonNotSelfUpdatable, ReasonGateMissing, ReasonProducerMissing, ReasonGateDenied} {
 		if !slices.Contains(machine.UnavailableReasons(), reason) {
 			t.Errorf("%q manque à la liste des indisponibilités", reason)
 		}

@@ -119,10 +119,8 @@ export function fixOfRefusal(error: ApiError | string | null | undefined): Refus
   return payload.fix as RefusalFix;
 }
 
-// La machine n'a pas sudo, ou on le tient pour acquis : un hôte Proxmox n'en a pas
-// (Debian sans sudo), et l'agent le dit quand un droit en dépend (sudo_missing).
-// Les blocs à coller se proposent alors en root, sans sudo.
-export function lacksSudo(machine: Pick<Machine, "role" | "roles" | "agent">): boolean {
-  const reportsMissing = machine.agent?.capabilities.some((capability) => capability.unavailable === "sudo_missing") ?? false;
-  return machine.role === "proxmox" || detectedProxmox(machine) !== null || reportsMissing;
+// On tient pour acquis que la machine n'a pas sudo : un hôte Proxmox n'en a pas
+// (Debian sans sudo). Les blocs à coller se proposent alors en root, sans sudo.
+export function lacksSudo(machine: Pick<Machine, "role" | "roles">): boolean {
+  return machine.role === "proxmox" || detectedProxmox(machine) !== null;
 }

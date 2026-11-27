@@ -9,9 +9,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
-	"regexp"
-	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +16,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/domain/backup"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 	"github.com/ldesfontaine/kagu/internal/kit/wait"
@@ -40,7 +38,7 @@ const (
 	// Un résultat porte au plus MaxOutputLines lignes : la fin de la sortie
 	// d'erreur du producteur, et celles que l'agent ajoute.
 	producerTailLines = 32
-	// La sortie d'erreur de sudo a le temps de sortir après le signal d'arrêt.
+	// La sortie d'erreur de vzdump a le temps de sortir après le signal d'arrêt.
 	producerStopDelay = 15 * time.Second
 	maxParcelIDBytes  = 64
 )
@@ -143,7 +141,7 @@ func isProducePrefix(prefix string) bool {
 func (t produceTools) produce(ctx context.Context, checks hostChecks, sink parcelSink, job produceJob, now time.Time) ([]agentwire.OutputLine, error) {
 	ctx, cancel := context.WithTimeout(ctx, produceTimeout)
 	defer cancel()
-	if reason := producerReason(ctx, checks, job.params.Producer); reason != "" {
+	if reason := producerReason(checks, job.params.Producer); reason != "" {
 		return nil, refuseWith(reason, errors.New("the producer cannot run on this machine"))
 	}
 	if free, err := t.freeBytes(t.stateDir.Name()); err == nil && free < minProduceFreeBytes {
@@ -184,6 +182,10 @@ func (t produceTools) runProducer(ctx context.Context, dir *os.Root, name string
 	result, runErr := job.producer.run(ctx, producerRequest{target: job.params.Target, raw: raw, now: now})
 	if runErr != nil {
 		_ = raw.Close()
+		// Une porte absente ou qui refuse garde sa raison : rien n'a tourné.
+		if isUntouched(runErr) {
+			return packEntry{}, result.log, runErr
+		}
 		return packEntry{}, result.log, failWith(agentwire.ReasonProducerFailed, runErr)
 	}
 	info, err := raw.Stat()
@@ -353,16 +355,9 @@ func clearProduceDir(stateDir *os.Root) error {
 	return nil
 }
 
-// Le producteur proxmox-vzdump : sudo lance le script de root que la
-// préparation pose (brand.VzdumpWrapperPath), qui lance vzdump hors du bac à
-// sable de l'unité. vzdump écrit l'archive sur sa sortie standard (--stdout) et
-// son journal sur la sortie d'erreur.
-var (
-	vzdumpTarget = regexp.MustCompile(`^\d{1,9}$`)
-	// La ligne où vzdump nomme le type de l'invité qu'il sauvegarde.
-	vzdumpGuestLine = regexp.MustCompile(`Starting Backup of VM \d+ \((qemu|lxc)\)`)
-)
-
+// Le producteur proxmox-vzdump : la porte vzdump (vzdump_gate.go) lance
+// vzdump en root, hors du bac à sable de l'unité de l'agent ; il écrit
+// l'archive sur sa sortie standard (--stdout), que la porte rend par trames.
 const (
 	guestQEMU = "qemu"
 	guestLXC  = "lxc"
@@ -371,64 +366,27 @@ const (
 	maxGuestLine     = 4 << 10
 )
 
-// vzdumpProducer : sudo est le programme du PATH quand il est vide ; wrapper
-// est le script de root. Un test donne les siens.
+// vzdumpProducer demande vzdump à la porte ; un test donne sa socket.
 type vzdumpProducer struct {
-	sudo    string
-	wrapper string
+	gate vzdumpGateClient
 }
 
 func newVzdumpProducer() producer {
-	runner := vzdumpProducer{wrapper: brand.VzdumpWrapperPath}
-	return producer{validTarget: vzdumpTarget.MatchString, run: runner.run}
+	runner := vzdumpProducer{gate: vzdumpGateClient{socket: brand.VzdumpGateSocket}}
+	return producer{validTarget: vzdumpGuest.MatchString, run: runner.run}
 }
 
 func (v vzdumpProducer) run(ctx context.Context, request producerRequest) (producerResult, error) {
-	sudo := v.sudo
-	if sudo == "" {
-		found, err := exec.LookPath("sudo")
-		if err != nil {
-			return producerResult{}, err
-		}
-		sudo = found
-	}
-	// bounded: sudo est celui du PATH de l'unité, le script une constante de
-	// brand, la cible jugée par vzdumpTarget (chiffres seuls : jamais une option),
-	// les autres arguments des constantes.
-	command := exec.CommandContext(ctx, sudo, vzdumpArguments(v.wrapper, request.target, vzdumpCompressArchive)...) // #nosec G204 -- bounded: voir ci-dessus.
-	command.Env = producerEnvironment
-	command.Stdout = request.raw
-	tail := newLineTail(producerTailLines)
-	guest := &guestKindWriter{}
-	command.Stderr = io.MultiWriter(tail.writer("stderr"), guest)
-	// Un arrêt demande poliment : sudo relaie le signal à ce qu'il lance.
-	command.Cancel = func() error { return command.Process.Signal(syscall.SIGTERM) }
-	command.WaitDelay = producerStopDelay
-	err := command.Run()
-	tail.flush()
-	result := producerResult{log: tail.lines()}
+	end, err := v.gate.dump(ctx, request.target, machine.VzdumpCompressZstd, request.raw)
+	result := producerResult{log: end.Stderr}
 	if err != nil {
-		if ctx.Err() != nil {
-			err = fmt.Errorf("vzdump: %w", ctx.Err())
-		}
 		return result, err
 	}
-	result.entry = vzdumpEntryName(guest.kind(), request.target, request.now)
+	if end.Code != 0 {
+		return result, fmt.Errorf("vzdump exited with code %d", end.Code)
+	}
+	result.entry = vzdumpEntryName(end.Guest, request.target, request.now)
 	return result, nil
-}
-
-// La compression de vzdump : zstd pour une archive envoyée au serveur ; rien
-// pour restic, qui ne déduplique que du clair d'une sauvegarde à l'autre et
-// compresse lui-même.
-const (
-	vzdumpCompressArchive = "zstd"
-	vzdumpCompressNone    = "0"
-)
-
-// vzdumpArguments rend ce que sudo reçoit après son nom : le script de root,
-// l'invité, et vzdump en flux sur sa sortie standard.
-func vzdumpArguments(wrapper, target, compress string) []string {
-	return []string{"-n", wrapper, target, "--mode", "snapshot", "--compress", compress, "--stdout", "--quiet", "1"}
 }
 
 // vzdumpEntryName nomme l'entrée du tar comme vzdump nomme ses archives, pour
@@ -439,49 +397,4 @@ func vzdumpEntryName(guest, target string, at time.Time) string {
 		extension = "tar.zst"
 	}
 	return "vzdump-" + guest + "-" + target + "-" + at.UTC().Format(vzdumpTimeLayout) + "." + extension
-}
-
-// guestKindWriter lit la sortie d'erreur de vzdump ligne à ligne pour y trouver
-// le type de l'invité. À défaut de la ligne qui le nomme, une machine
-// virtuelle (qemu), sauf si une ligne parle de lxc : le type ne fait que
-// nommer l'entrée du tar, le contenu ne change pas.
-type guestKindWriter struct {
-	line   []byte
-	named  string
-	sawLXC bool
-}
-
-func (g *guestKindWriter) Write(data []byte) (int, error) {
-	for _, b := range data {
-		if b == '\n' || b == '\r' {
-			g.scan()
-			continue
-		}
-		if len(g.line) < maxGuestLine {
-			g.line = append(g.line, b)
-		}
-	}
-	return len(data), nil
-}
-
-func (g *guestKindWriter) scan() {
-	line := string(g.line)
-	g.line = g.line[:0]
-	if match := vzdumpGuestLine.FindStringSubmatch(line); match != nil && g.named == "" {
-		g.named = match[1]
-	}
-	if strings.Contains(strings.ToLower(line), guestLXC) {
-		g.sawLXC = true
-	}
-}
-
-func (g *guestKindWriter) kind() string {
-	g.scan()
-	switch {
-	case g.named != "":
-		return g.named
-	case g.sawLXC:
-		return guestLXC
-	}
-	return guestQEMU
 }

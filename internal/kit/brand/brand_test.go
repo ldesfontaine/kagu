@@ -26,7 +26,7 @@ func TestValues_AreFrozen(t *testing.T) {
 		"AgentStateDir":              {AgentStateDir, "/var/lib/kagu-agent"},
 		"AgentCurrentPath":           {AgentCurrentPath, "/var/lib/kagu-agent/bin/current"},
 		"AgentProduceDir":            {AgentProduceDir, "produce"},
-		"VzdumpWrapperPath":          {VzdumpWrapperPath, "/usr/local/sbin/kagu-vzdump"},
+		"VzdumpGateSocket":           {VzdumpGateSocket, "/run/kagu-vzdump.sock"},
 		"AgentAccount":               {AgentAccount, "kagu-agent"},
 		"RuntimeDir":                 {RuntimeDir, "/run/kagu"},
 		"AgentSocketPath":            {AgentSocketPath, "/run/kagu/agent.sock"},

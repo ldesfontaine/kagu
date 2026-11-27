@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/testkit"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
@@ -39,7 +41,7 @@ var producedName = agentwire.BackupFileName(producedPrefix, orderNow)
 // un producteur sans lancer vzdump. exit, s'il y en a un, est son échec.
 func echoProducer(content []byte, stderr []string, exit error) producer {
 	return producer{
-		validTarget: vzdumpTarget.MatchString,
+		validTarget: vzdumpGuest.MatchString,
 		run: func(_ context.Context, request producerRequest) (producerResult, error) {
 			result := producerResult{entry: producedEntry}
 			for _, line := range stderr {
@@ -426,34 +428,29 @@ func TestBackupProduce_TheJudgeRefusesBeforeRunningAnything(t *testing.T) {
 	}
 }
 
-// La machine ne laisse pas lancer le producteur (pas de sudo, règle absente,
-// script manquant) : l'ordre est accepté puis refusé avant la première écriture,
-// avec la même raison que le rapport des droits indisponibles. produce/ n'est
-// même pas créé.
+// La machine ne laisse pas lancer le producteur (vzdump absent, porte absente
+// ou fermée au compte) : l'ordre est accepté puis refusé avant la première
+// écriture, avec la même raison que le rapport des droits indisponibles.
+// produce/ n'est même pas créé.
 func TestBackupProduce_RefusesBeforeWritingWhenTheMachineCannotRunIt(t *testing.T) {
 	cases := map[string]struct {
 		change func(*hostChecks)
 		reason string
 	}{
-		"no sudo": {func(c *hostChecks) {
+		"no vzdump": {func(c *hostChecks) {
 			c.lookPath = func(name string) (string, error) {
-				if name == "sudo" {
-					return "", errors.New("not found")
-				}
-				return name, nil
-			}
-		}, agentwire.ReasonSudoMissing},
-		"no wrapper": {func(c *hostChecks) {
-			c.lookPath = func(name string) (string, error) {
-				if name == brand.VzdumpWrapperPath {
+				if name == machine.VzdumpBinary {
 					return "", errors.New("not found")
 				}
 				return name, nil
 			}
 		}, agentwire.ReasonProducerMissing},
-		"no sudo rule": {func(c *hostChecks) {
-			c.sudoList = func(context.Context, string) error { return errors.New("sudo: a password is required") }
-		}, agentwire.ReasonSudoDenied},
+		"no gate": {func(c *hostChecks) {
+			c.vzdumpGate = func() string { return agentwire.ReasonGateMissing }
+		}, agentwire.ReasonGateMissing},
+		"gate closed": {func(c *hostChecks) {
+			c.vzdumpGate = func() string { return agentwire.ReasonGateDenied }
+		}, agentwire.ReasonGateDenied},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -705,48 +702,72 @@ func TestBackupProduce_AHugeStreamIsNeverHeldInMemory(t *testing.T) {
 	}
 }
 
-// Le producteur proxmox-vzdump lance sudo -n sur le script de root avec des
-// arguments constants et la cible ; l'environnement est remplacé, jamais
-// hérité ; sa sortie standard est l'archive, sa sortie d'erreur le journal. Le
-// vrai sudo n'est jamais lancé : le test donne un faux sudo et un faux script.
+// Le producteur proxmox-vzdump demande vzdump à la porte : un vrai serveur
+// de la porte sur une socket du banc, qui lance un faux vzdump (un script qui
+// note ses arguments et son environnement). Le vrai vzdump ne se lance jamais.
 type fakeVzdump struct {
-	sudo, wrapper, record, environment string
+	socket, record, environment string
 }
 
-func newFakeVzdump(t *testing.T, wrapperBody string) fakeVzdump {
+func newFakeVzdump(t *testing.T, body string) fakeVzdump {
 	t.Helper()
 	dir := t.TempDir()
-	fake := fakeVzdump{
-		sudo: filepath.Join(dir, "sudo"), wrapper: filepath.Join(dir, "kagu-vzdump"),
-		record: filepath.Join(dir, "arguments"), environment: filepath.Join(dir, "environment"),
+	fake := fakeVzdump{record: filepath.Join(dir, "arguments"), environment: filepath.Join(dir, "environment")}
+	script := filepath.Join(dir, "vzdump")
+	program := "#!/bin/sh\nfor argument in \"$@\"; do printf '%s\\n' \"$argument\" >> " + fake.record + "; done\n/usr/bin/env > " + fake.environment + "\n" + body + "\n"
+	if err := writeProgram(script, []byte(program), 0o700); err != nil { // #nosec G306 -- un faux programme exécutable dans un dossier de test.
+		t.Fatal(err)
 	}
-	// Le faux sudo note ses arguments puis lance ce qui suit « -n », comme le
-	// ferait le vrai sudo avec une règle NOPASSWD.
-	sudo := "#!/bin/sh\nfor argument in \"$@\"; do printf '%s\\n' \"$argument\" >> " + fake.record + "; done\nshift\nexec \"$@\"\n"
-	wrapper := "#!/bin/sh\n/usr/bin/env > " + fake.environment + "\n" + wrapperBody + "\n"
-	for path, body := range map[string]string{fake.sudo: sudo, fake.wrapper: wrapper} {
-		if err := writeProgram(path, []byte(body), 0o700); err != nil { // #nosec G306 -- un faux programme exécutable dans un dossier de test.
-			t.Fatal(err)
-		}
-	}
+	fake.socket = serveFakeGate(t, runVzdumpAt(script))
 	return fake
 }
 
+// serveFakeGate sert la porte sur une socket courte (moins de 108 octets) ;
+// chaque connexion passe par le vrai serveur, le pair admis.
+func serveFakeGate(t *testing.T, launch vzdumpLaunch) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "gt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "g.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() { cancel(); _ = listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				_ = serveVzdumpGate(ctx, conn, true, launch)
+			}()
+		}
+	}()
+	return socket
+}
+
 func (f fakeVzdump) producer() producer {
-	runner := vzdumpProducer{sudo: f.sudo, wrapper: f.wrapper}
-	return producer{validTarget: vzdumpTarget.MatchString, run: runner.run}
+	runner := vzdumpProducer{gate: vzdumpGateClient{socket: f.socket}}
+	return producer{validTarget: vzdumpGuest.MatchString, run: runner.run}
 }
 
 func (f fakeVzdump) arguments(t *testing.T) []string {
 	t.Helper()
-	recorded, err := os.ReadFile(f.record) // #nosec G304 G703 -- le fichier du faux sudo, dans le dossier du test.
+	recorded, err := os.ReadFile(f.record) // #nosec G304 G703 -- le fichier du faux vzdump, dans le dossier du test.
 	if err != nil {
 		t.Fatal(err)
 	}
 	return strings.Fields(string(recorded))
 }
 
-func TestVzdumpProducer_RunsSudoOnTheWrapperAndStreamsItsOutput(t *testing.T) {
+func TestVzdumpProducer_AsksTheGateAndStreamsItsOutput(t *testing.T) {
 	t.Setenv("KAGU_TEST_LEAK", "ne-doit-pas-passer")
 	fake := newFakeVzdump(t, `printf 'VMA\000\377octets de vzdump' ; printf 'INFO: Starting Backup of VM 312 (qemu)\nINFO: transferred 1 GiB\n' >&2`)
 	b := newProduceRig(t)
@@ -755,11 +776,11 @@ func TestVzdumpProducer_RunsSudoOnTheWrapperAndStreamsItsOutput(t *testing.T) {
 	if len(results) != 2 || results[1].State != agentwire.ActionSucceeded {
 		t.Fatalf("results %+v", results)
 	}
-	wantArguments := []string{"-n", fake.wrapper, "312", "--mode", "snapshot", "--compress", "zstd", "--stdout", "--quiet", "1"}
+	wantArguments := []string{"312", "--mode", "snapshot", "--compress", "zstd", "--stdout", "--quiet", "1"}
 	if got := fake.arguments(t); !slices.Equal(got, wantArguments) {
-		t.Errorf("sudo ran with %q, want %q", got, wantArguments)
+		t.Errorf("vzdump ran with %q, want %q", got, wantArguments)
 	}
-	environment, err := os.ReadFile(fake.environment) // #nosec G304 G703 -- le fichier du faux script, dans le dossier du test.
+	environment, err := os.ReadFile(fake.environment) // #nosec G304 G703 -- le fichier du faux vzdump, dans le dossier du test.
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -769,7 +790,7 @@ func TestVzdumpProducer_RunsSudoOnTheWrapperAndStreamsItsOutput(t *testing.T) {
 		}
 	}
 	if strings.Contains(string(environment), "KAGU_TEST_LEAK") {
-		t.Errorf("the producer inherited the agent's environment:\n%s", environment)
+		t.Errorf("the producer inherited the gate's environment:\n%s", environment)
 	}
 	uploaded, _ := b.server.received()
 	entry, content := openArchive(t, uploaded[producedName], b.identity)
@@ -780,6 +801,7 @@ func TestVzdumpProducer_RunsSudoOnTheWrapperAndStreamsItsOutput(t *testing.T) {
 
 // Le type de l'invité nomme l'entrée du tar : la ligne de vzdump qui le dit
 // d'abord ; à défaut, lxc si une ligne en parle, sinon une machine virtuelle.
+// La porte le lit et le rend dans sa trame de fin.
 func TestVzdumpProducer_NamesTheEntryAfterTheGuestType(t *testing.T) {
 	for name, c := range map[string]struct{ stderr, entry string }{
 		"a container":          {`printf 'INFO: Starting Backup of VM 312 (lxc)\n' >&2`, "vzdump-lxc-312-2026_10_21-12_00_00.tar.zst"},
@@ -824,8 +846,8 @@ func TestVzdumpProducer_AFailingVzdumpFailsTheOrder(t *testing.T) {
 	assertDirEmpty(t, b.produceDir())
 }
 
-// Un producteur qui n'en finit pas s'arrête avec le contexte : sudo reçoit le
-// signal d'arrêt, l'ordre échoue, produce/ est vide.
+// Un producteur qui n'en finit pas s'arrête avec le contexte : la connexion
+// se ferme, la porte arrête vzdump, l'ordre échoue, produce/ est vide.
 func TestVzdumpProducer_ACancelledOrderStopsTheProducer(t *testing.T) {
 	fake := newFakeVzdump(t, "exec sleep 30")
 	b := newProduceRig(t)
@@ -848,17 +870,16 @@ func TestVzdumpProducer_ACancelledOrderStopsTheProducer(t *testing.T) {
 	assertDirEmpty(t, b.produceDir())
 }
 
-// Le vrai programme sudo n'est jamais lancé par les tests : sans sudo donné, le
-// producteur le cherche dans le PATH, et un PATH sans sudo est un échec
-// d'exécution, pas un lancement.
-func TestVzdumpProducer_WithoutSudoNothingRuns(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
+// Sans porte, rien ne se lance : la socket manque, l'échec le dit.
+func TestVzdumpProducer_WithoutTheGateNothingRuns(t *testing.T) {
 	raw, err := os.CreateTemp(t.TempDir(), "raw")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer raw.Close()
-	if _, err := (vzdumpProducer{wrapper: "/nulle/part"}).run(context.Background(), producerRequest{target: "312", raw: raw, now: orderNow}); err == nil {
-		t.Fatal("a producer ran without sudo")
+	producer := vzdumpProducer{gate: vzdumpGateClient{socket: "/nulle/part.sock"}}
+	_, err = producer.run(context.Background(), producerRequest{target: "312", raw: raw, now: orderNow})
+	if result := resultOf("run", nil, err); result.Reason != agentwire.ReasonGateMissing {
+		t.Fatalf("a producer without the gate: %+v (%v)", result, err)
 	}
 }

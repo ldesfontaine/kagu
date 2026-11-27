@@ -24,9 +24,14 @@ const (
 	StateDone    State = "done"
 	StateFailed  State = "failed"
 	StateSkipped State = "skipped"
+	// StateWarned : fait, avec une réserve que la ligne dit (la coche jaune
+	// de B1 : un daemon.json sans plafond, un jeu ramené à Observer). Seuls
+	// setup et join l'impriment, sur le terminal de root : aucun agent ne le
+	// rapporte, gesture_steps ne le garde pas.
+	StateWarned State = "warned"
 )
 
-// IsKnown : seuls ces quatre états s'écrivent.
+// IsKnown : seuls ces quatre états s'écrivent dans gesture_steps.
 func (s State) IsKnown() bool {
 	switch s {
 	case StateRunning, StateDone, StateFailed, StateSkipped:
@@ -130,6 +135,8 @@ func stateMark(state State) string {
 		return "✗"
 	case StateSkipped:
 		return "–"
+	case StateWarned:
+		return "!"
 	}
 	return "…"
 }

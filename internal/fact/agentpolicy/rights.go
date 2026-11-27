@@ -155,7 +155,7 @@ var knownRights = []knownRight{
 	{name: CapabilityDockerDeploy, group: GroupDeploy, opens: true, risk: manageRisk, dockerGroup: true},
 	{name: CapabilityDockerUpdate, group: GroupDeploy, risk: manageRisk, dockerGroup: true},
 	{name: CapabilityBackupReceive, group: GroupBackup, value: valueOnePath},
-	{name: CapabilityBackupProduce, group: GroupBackup, value: valueProducers, rootGate: true},
+	{name: CapabilityBackupProduce, group: GroupBackup, value: valueProducers},
 	{name: CapabilityFilesWrite, group: GroupDeploy, value: valuePaths},
 	{name: CapabilityProxmoxPower, group: GroupDeploy},
 	{name: CapabilityProxmoxSnapshot, group: GroupDeploy},
@@ -207,7 +207,8 @@ func NeedsDockerGroup(rights []Capability) bool {
 }
 
 // RootGateRights rend ceux de ces droits qui passent par la porte root (A5) :
-// terminal.host, network.private, backup.produce.
+// terminal.host, network.private. backup.produce a sa porte vzdump d'ici
+// T14-02 (décision de Lucas du 26/11/2026), que grant pose.
 func RootGateRights(rights []Capability) []string {
 	var names []string
 	for _, right := range rights {

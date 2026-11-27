@@ -11,7 +11,7 @@ import (
 )
 
 // UnitFile est l'unité de l'agent, telle que la migration la modifie.
-const UnitFile = "/etc/systemd/system/" + brand.AgentUnit
+const UnitFile = UnitDir + "/" + brand.AgentUnit
 
 // UnitDropInDir est le dossier des drop-ins de l'unité de l'agent ; systemd
 // les additionne tous, dans l'ordre de leur nom.
@@ -27,6 +27,10 @@ const RightsDropInFile = UnitDropInDir + "/droits.conf"
 // DockerGroup est le groupe dont la socket de Docker ouvre l'accès : il vaut
 // root (R-DROIT-7).
 const DockerGroup = "docker"
+
+// DockerBinary est le programme docker que l'agent lance, et celui dont setup
+// juge la présence avant de proposer d'installer Docker.
+const DockerBinary = "/usr/bin/docker"
 
 // RightFolder est un dossier où un droit écrit hors de l'état de l'agent :
 // créé au nom du compte de l'agent, avec ce mode, et ouvert par l'unité
@@ -101,6 +105,12 @@ func RightsDropInLines(folders []RightFolder) []string {
 	return []string{"[Service]", "ReadWritePaths=" + strings.Join(paths, " ")}
 }
 
+// UnitContent est le fichier d'une unité ou d'un drop-in : ses lignes, une
+// fin de ligne après la dernière.
+func UnitContent(lines []string) []byte {
+	return []byte(strings.Join(lines, "\n") + "\n")
+}
+
 // AgentUnitLines est l'unité de l'agent que la page d'installation donne à
 // poser, sans les commentaires de docs/installation/kagu-agent.service :
 // ce fichier reste le texte de référence, et un test échoue si les deux
@@ -139,6 +149,11 @@ func AgentUnitLines() []string {
 		"RestrictSUIDSGID=true",
 		"LockPersonality=true",
 		"RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
+		emptyBoundingSet,
+		"AmbientCapabilities=",
+		"SystemCallFilter=@system-service",
+		"SystemCallErrorNumber=EPERM",
+		"ProtectProc=invisible",
 		"",
 		"[Install]",
 		"WantedBy=multi-user.target",

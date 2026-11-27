@@ -124,6 +124,16 @@ func (s *quietSystem) WriteDropIn(name string, content []byte) error {
 	s.dropIn = content
 	return nil
 }
+func (*quietSystem) Exists(string) bool              { return false }
+func (*quietSystem) ReadUnit(string) ([]byte, error) { return nil, fs.ErrNotExist }
+func (s *quietSystem) WriteUnit(name string, _ []byte) error {
+	s.laid = append(s.laid, "unit "+name)
+	return nil
+}
+func (s *quietSystem) RemoveFile(path string) error {
+	s.laid = append(s.laid, "remove "+path)
+	return nil
+}
 func (s *quietSystem) RemoveDropIn(name string) error {
 	s.laid = append(s.laid, "remove "+name)
 	s.dropIn = nil

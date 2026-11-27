@@ -11,13 +11,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strings"
 	"syscall"
 	"testing"
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
-	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/wait/waittest"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
@@ -375,7 +373,7 @@ func TestJudgeRights_ANarrowedAgentSaysNothing(t *testing.T) {
 // serveur : une raison nouvelle dite par l'agent sans l'être par le serveur
 // serait ignorée en bloc à la lecture de l'en-tête.
 func TestJudgeRights_EveryReasonIsOneTheServerReads(t *testing.T) {
-	for _, reason := range []string{agentwire.ReasonDockerDenied, agentwire.ReasonDockerMissing, agentwire.ReasonPathDenied, agentwire.ReasonPathUnwritable, agentwire.ReasonNotSelfUpdatable, agentwire.ReasonSudoMissing, agentwire.ReasonProducerMissing, agentwire.ReasonSudoDenied} {
+	for _, reason := range []string{agentwire.ReasonDockerDenied, agentwire.ReasonDockerMissing, agentwire.ReasonPathDenied, agentwire.ReasonPathUnwritable, agentwire.ReasonNotSelfUpdatable, agentwire.ReasonGateMissing, agentwire.ReasonProducerMissing, agentwire.ReasonGateDenied} {
 		text := machine.FormatUnavailable(map[string]string{agentpolicy.CapabilityDockerDeploy: reason})
 		if _, err := machine.ParseUnavailable(text); err != nil {
 			t.Errorf("%s: the server cannot read %q: %v", reason, text, err)
@@ -395,14 +393,13 @@ func mapsEqual(a, b map[string]string) bool {
 	return true
 }
 
-// produceBench est une machine de test pour backup.produce : ce que lookPath et
-// sudoList répondent, et ce qu'on leur a demandé. Aucune commande ne se lance.
+// produceBench est une machine de test pour backup.produce : ce que lookPath
+// et la porte répondent, et ce qu'on leur a demandé. Rien ne se lance.
 type produceBench struct {
-	missing  map[string]bool
-	sudoErr  error
-	looked   []string
-	listed   []string
-	sudoRuns int
+	missing   map[string]bool
+	gate      string
+	looked    []string
+	gateAsked int
 }
 
 func (b *produceBench) checks() hostChecks {
@@ -414,34 +411,31 @@ func (b *produceBench) checks() hostChecks {
 		}
 		return name, nil
 	}
-	checks.sudoList = func(_ context.Context, program string) error {
-		b.sudoRuns++
-		b.listed = append(b.listed, program)
-		return b.sudoErr
+	checks.vzdumpGate = func() string {
+		b.gateAsked++
+		return b.gate
 	}
 	return checks
 }
 
-// Chaque manque a sa raison, dans l'ordre où l'agent les pose : sudo, puis les
-// deux programmes, puis la règle. Tout est là : rien n'est dit.
+// Chaque manque a sa raison, dans l'ordre où l'agent les pose : vzdump, puis
+// la porte. Tout est là : rien n'est dit.
 func TestJudgeRights_ProduceSaysWhatIsMissingInTheOrderItAsks(t *testing.T) {
 	cases := map[string]struct {
 		missing map[string]bool
-		sudoErr error
+		gate    string
 		want    string
 	}{
-		"everything is there": {nil, nil, ""},
-		"no sudo":             {map[string]bool{"sudo": true}, nil, agentwire.ReasonSudoMissing},
-		"no wrapper":          {map[string]bool{brand.VzdumpWrapperPath: true}, nil, agentwire.ReasonProducerMissing},
-		"no vzdump":           {map[string]bool{machine.VzdumpBinary: true}, nil, agentwire.ReasonProducerMissing},
-		"no rule":             {nil, errors.New("exit status 1"), agentwire.ReasonSudoDenied},
-		// Sans sudo, la règle ne se pose même pas la question ; sans script, non plus.
-		"no sudo and no rule": {map[string]bool{"sudo": true}, errors.New("exit status 1"), agentwire.ReasonSudoMissing},
-		"no wrapper, no rule": {map[string]bool{brand.VzdumpWrapperPath: true}, errors.New("exit status 1"), agentwire.ReasonProducerMissing},
+		"everything is there": {nil, "", ""},
+		"no vzdump":           {map[string]bool{machine.VzdumpBinary: true}, "", agentwire.ReasonProducerMissing},
+		"no gate":             {nil, agentwire.ReasonGateMissing, agentwire.ReasonGateMissing},
+		"gate closed":         {nil, agentwire.ReasonGateDenied, agentwire.ReasonGateDenied},
+		// Sans vzdump, grant ne pose pas la porte : la porte ne se juge pas.
+		"no vzdump, no gate": {map[string]bool{machine.VzdumpBinary: true}, agentwire.ReasonGateMissing, agentwire.ReasonProducerMissing},
 	}
 	for label, c := range cases {
 		t.Run(label, func(t *testing.T) {
-			bench := &produceBench{missing: c.missing, sudoErr: c.sudoErr}
+			bench := &produceBench{missing: c.missing, gate: c.gate}
 			got := reasonsOf(t, "backup.produce=proxmox-vzdump", bench.checks())
 			if got["backup.produce"] != c.want {
 				t.Errorf("reported %v, want %q", got, c.want)
@@ -449,18 +443,15 @@ func TestJudgeRights_ProduceSaysWhatIsMissingInTheOrderItAsks(t *testing.T) {
 			if c.want == "" && len(got) != 0 {
 				t.Errorf("an agent that can produce reported %v", got)
 			}
-			if c.want == agentwire.ReasonSudoDenied && !slices.Equal(bench.listed, []string{brand.VzdumpWrapperPath}) {
-				t.Errorf("sudo was asked about %v, want the wrapper alone", bench.listed)
-			}
-			if (c.want == agentwire.ReasonSudoMissing || c.want == agentwire.ReasonProducerMissing) && bench.sudoRuns != 0 {
-				t.Error("sudo was asked a question although a program is missing")
+			if c.want == agentwire.ReasonProducerMissing && bench.gateAsked != 0 {
+				t.Error("the gate was judged although vzdump is missing")
 			}
 		})
 	}
 }
 
 // Le droit ne pose de question qu'à lui-même : ni Docker ni les dossiers, et un
-// agent sans le droit n'est pas interrogé sur sudo.
+// agent sans le droit n'est pas interrogé sur la porte.
 func TestJudgeRights_ProduceAsksNothingElseAndOnlyWhenGranted(t *testing.T) {
 	bench := &produceBench{}
 	checks := bench.checks()
@@ -469,9 +460,9 @@ func TestJudgeRights_ProduceAsksNothingElseAndOnlyWhenGranted(t *testing.T) {
 	if got := reasonsOf(t, "backup.produce=proxmox-vzdump", checks); len(got) != 0 {
 		t.Errorf("produce reported %v although only Docker and the folders are refused", got)
 	}
-	bench = &produceBench{missing: map[string]bool{"sudo": true}, sudoErr: errors.New("no")}
-	if got := reasonsOf(t, "agent.update,backup.receive=/srv/a", bench.checks()); len(got) != 0 || len(bench.looked) != 0 || bench.sudoRuns != 0 {
-		t.Errorf("an agent without the right was asked about sudo: %v %v", got, bench.looked)
+	bench = &produceBench{gate: agentwire.ReasonGateMissing}
+	if got := reasonsOf(t, "agent.update,backup.receive=/srv/a", bench.checks()); len(got) != 0 || len(bench.looked) != 0 || bench.gateAsked != 0 {
+		t.Errorf("an agent without the right was asked about the gate: %v %v", got, bench.looked)
 	}
 }
 
@@ -486,7 +477,7 @@ func TestJudgeRights_ProduceIsNotJudgedByANarrowedAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	identity.narrowed = true
-	bench := &produceBench{missing: map[string]bool{"sudo": true}}
+	bench := &produceBench{gate: agentwire.ReasonGateMissing}
 	if got := judgeRights(context.Background(), identity.Capabilities(), identity.Root(), bench.checks()); len(got) != 0 || len(bench.looked) != 0 {
 		t.Errorf("a narrowed agent reported %v", got)
 	}
@@ -494,79 +485,48 @@ func TestJudgeRights_ProduceIsNotJudgedByANarrowedAgent(t *testing.T) {
 
 // Ce que l'agent dit part dans l'en-tête et le serveur le relit.
 func TestJudgeRights_ProduceReasonsTravelInTheHeader(t *testing.T) {
-	bench := &produceBench{sudoErr: errors.New("exit status 1")}
+	bench := &produceBench{gate: agentwire.ReasonGateDenied}
 	got := reasonsOf(t, "backup.receive=/srv/a,backup.produce=proxmox-vzdump", bench.checks())
 	parsed, err := machine.ParseUnavailable(machine.FormatUnavailable(got))
-	if err != nil || parsed["backup.produce"] != agentwire.ReasonSudoDenied {
+	if err != nil || parsed["backup.produce"] != agentwire.ReasonGateDenied {
 		t.Fatalf("the server reads %v %v from %v", parsed, err, got)
 	}
 }
 
-// sudoListsProgram lance « sudo -n -l <script> » avec un environnement
-// remplacé, et ne garde que le code de sortie. Le sudo du test est un témoin
-// sur un PATH de test : le vrai sudo ne se lance jamais.
-func TestSudoListsProgram_RunsSudoNonInteractivelyAndReadsTheExitCode(t *testing.T) {
-	shell, err := exec.LookPath("sh")
-	if err != nil {
-		t.Skip("no sh")
-	}
-	for _, exitCode := range []int{0, 1} {
-		stubs := t.TempDir()
-		record := filepath.Join(stubs, "record")
-		witness := "#!" + shell + "\nprintf '%s\\n' \"$@\" > " + record + "\nenv >> " + record + "\nexit " + fmt.Sprint(exitCode) + "\n"
-		if err := writeProgram(filepath.Join(stubs, "sudo"), []byte(witness), 0o700); err != nil { // #nosec G306 -- un témoin exécutable dans un dossier de test.
-			t.Fatal(err)
-		}
-		t.Setenv("PATH", stubs)
-		t.Setenv("KAGU_TEST_SECRET", "leak")
-		err := sudoListsProgram(context.Background(), brand.VzdumpWrapperPath)
-		if (err == nil) != (exitCode == 0) {
-			t.Errorf("exit %d gave %v", exitCode, err)
-		}
-		recorded, readErr := os.ReadFile(record) // #nosec G304 G703 -- le fichier du témoin, dans le dossier du test.
-		if readErr != nil {
-			t.Fatal(readErr)
-		}
-		lines := strings.Split(strings.TrimSpace(string(recorded)), "\n")
-		if !slices.Equal(lines[:3], []string{"-n", "-l", brand.VzdumpWrapperPath}) {
-			t.Errorf("sudo was called with %q", lines[:3])
-		}
-		if strings.Contains(string(recorded), "KAGU_TEST_SECRET") {
-			t.Error("the environment of the agent reached sudo")
-		}
-	}
-}
-
 // Un producteur que l'agent ne connaît pas n'est jamais dit disponible, et rien
-// ne se lance pour lui : la liste fermée l'empêche d'arriver jusque-là, le
+// ne se demande pour lui : la liste fermée l'empêche d'arriver jusque-là, le
 // jugement ferme quand même.
 func TestProducerReason_AnUnknownProducerIsMissingWithoutAsking(t *testing.T) {
 	bench := &produceBench{}
 	for _, producer := range []string{"", "borg", "proxmox-vzdump;id", "/usr/bin/vzdump"} {
-		if got := producerReason(context.Background(), bench.checks(), producer); got != agentwire.ReasonProducerMissing {
+		if got := producerReason(bench.checks(), producer); got != agentwire.ReasonProducerMissing {
 			t.Errorf("%q judged %q", producer, got)
 		}
 	}
-	if len(bench.looked) != 0 || bench.sudoRuns != 0 {
-		t.Errorf("an unknown producer asked %v and ran sudo %d times", bench.looked, bench.sudoRuns)
+	if len(bench.looked) != 0 || bench.gateAsked != 0 {
+		t.Errorf("an unknown producer asked %v and the gate %d times", bench.looked, bench.gateAsked)
 	}
 }
 
-// Sans sudo sur le PATH, la question ne se pose pas : une erreur, pas un lancement.
-func TestSudoListsProgram_NoSudoOnThePathIsAnError(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	if err := sudoListsProgram(context.Background(), brand.VzdumpWrapperPath); err == nil {
-		t.Fatal("sudo found in an empty directory")
+// La socket de la porte se juge par access(2), sans s'y connecter : absente,
+// gate_missing ; fermée au compte, gate_denied ; ouverte, rien.
+func TestVzdumpGateReason_JudgesTheSocketWithoutConnecting(t *testing.T) {
+	socket, listener := listenOn(t)
+	defer listener.Close()
+	if got := vzdumpGateReason(socket + ".absent"); got != agentwire.ReasonGateMissing {
+		t.Errorf("no socket: %q", got)
 	}
-}
-
-// Les vérifications de la vraie machine passent par exec.LookPath : sans sudo
-// sur le PATH, le droit est « sudo_missing » sans rien lancer.
-func TestNewHostChecks_ProduceFindsNoSudoOnAnEmptyPath(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	checks := newHostChecks("/nonexistent.sock", nil)
-	if got := producerReason(context.Background(), checks, agentpolicy.ProducerProxmoxVzdump); got != agentwire.ReasonSudoMissing {
-		t.Errorf("judged %q", got)
+	if got := vzdumpGateReason(socket); got != "" {
+		t.Errorf("open socket: %q", got)
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root opens every socket")
+	}
+	if err := os.Chmod(socket, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if got := vzdumpGateReason(socket); got != agentwire.ReasonGateDenied {
+		t.Errorf("closed socket: %q", got)
 	}
 }
 

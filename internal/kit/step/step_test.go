@@ -89,6 +89,7 @@ func TestPrint_WritesTheMarkTheLabelAndTheDetail(t *testing.T) {
 		{Step{Key: EnrollRestic, State: StateSkipped, At: at}, "  – restic installé\n"},
 		{Step{Key: EnrollSystem, State: StateFailed, Detail: "1 Gio libre", At: at}, "  ✗ Système reconnu               1 Gio libre\n"},
 		{Step{Key: EnrollUnit, State: StateRunning, At: at}, "  … Agent démarré\n"},
+		{Step{Key: EnrollDocker, State: StateWarned, Detail: "plafond à ajouter", At: at}, "  ! Docker installé               plafond à ajouter\n"},
 	} {
 		var printed bytes.Buffer
 		Print(&printed, french, test.step)
@@ -123,6 +124,7 @@ func TestClean_StripsTheDetailAndRefusesWhatIsOutOfShape(t *testing.T) {
 	for name, reported := range map[string]Step{
 		"malformed key":   {Key: "docker", State: StateDone, At: at},
 		"unknown state":   {Key: EnrollDocker, State: "queued", At: at},
+		"terminal only":   {Key: EnrollDocker, State: StateWarned, At: at},
 		"no time":         {Key: EnrollDocker, State: StateDone},
 		"detail too long": {Key: EnrollDocker, State: StateDone, Detail: strings.Repeat("é", MaxDetailRunes+1), At: at},
 	} {

@@ -71,6 +71,12 @@ type setupSystem interface {
 	// sur l'entrée standard : jamais dans les arguments, que tout compte lit
 	// dans /proc.
 	EnrollAgent(account fsx.Owner, args []string, token string) error
+	// Release dit le système, pour le dépôt de Docker.
+	Release() hostinfo.Release
+	// Download lit une adresse HTTPS, au plus limit octets.
+	Download(url string, limit int64) ([]byte, error)
+	// InstallPackages pose ces paquets par APT.
+	InstallPackages(packages []string) error
 }
 
 // checkSystem : un système connu, mené par systemd, avec de la place.
@@ -365,7 +371,7 @@ func writeUnitFile(unitDir, unit string, lines []string) (bool, error) {
 		return false, err
 	}
 	defer dir.Close()
-	content := []byte(strings.Join(lines, "\n") + "\n")
+	content := machine.UnitContent(lines)
 	if existing, err := dir.ReadFile(unit); err == nil && bytes.Equal(existing, content) {
 		return false, nil
 	}
@@ -433,6 +439,11 @@ func (r *setupRun) installLocalAgent(ctx context.Context) (step.State, string, e
 		return "", "", &stepFailure{reason: r.text.Format("setup.agent_silent", int(r.wait.Seconds())), todo: r.text.Get("setup.agent_silent_todo")}
 	}
 	detail := r.text.Format("setup.agent_detail", r.text.Get("rights."+string(r.rights)))
+	if r.requested != "" {
+		// Docker refusé : le jeu posé est Observer, en jaune, avec la commande
+		// qui posera le jeu demandé plus tard.
+		return step.StateWarned, r.text.Format("setup.agent_lowered", detail, agentpolicy.GrantSetLine(r.requested)), nil
+	}
 	if !changed && !laid && !started {
 		detail = r.text.Get("setup.already_done") + ", " + detail
 	}

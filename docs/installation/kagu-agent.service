@@ -68,16 +68,11 @@ RestartPreventExitStatus=2
 # Il lit /proc, les volumes et, s'il a Docker, la socket ; il n'écrit que
 # dans son état (StateDirectory ci-dessus, aussi son dossier personnel, où
 # docker et compose rangent leur configuration).
-# NoNewPrivileges=true interdit tout sudo. Seul le droit backup.produce
-# (vzdump Proxmox) le desserre, et seulement sur l'hôte qui le porte : la
-# préparation de la page du jeton pose le drop-in
-# /etc/systemd/system/kagu-agent.service.d/produce.conf
-#   [Service]
-#   NoNewPrivileges=false
-# (voir « backup.produce équivaut à root » dans installation.md). Ne le posez
-# pas ailleurs, et ne changez pas cette ligne-ci. « kagu agent grant » ne
-# pose ni ne retire jamais ce drop-in : ce qui demande root passera par la
-# porte root.
+# NoNewPrivileges=true interdit tout sudo, partout, et rien ne le desserre :
+# vzdump (backup.produce, hôte Proxmox) passe par la porte vzdump, une socket
+# de root que « kagu agent grant » pose (kagu-vzdump.socket, voir
+# « backup.produce : la porte vzdump » dans installation.md). Un ancien drop-in
+# produce.conf (NoNewPrivileges=false) est retiré par grant.
 NoNewPrivileges=true
 ProtectSystem=strict
 # Un droit qui écrit ailleurs (backup.receive=/srv/backups, restic.target,
@@ -107,6 +102,20 @@ RestrictSUIDSGID=true
 LockPersonality=true
 # AF_NETLINK : la liste des interfaces réseau de la machine.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# Aucune capacité, même héritée : le compte de l'agent n'en a pas besoin, et
+# un agent pris ne peut pas en regagner (R-B1-16). Un agent gardé en root
+# (root.conf) les retrouve par « CapabilityBoundingSet=~ » dans son drop-in.
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Les appels système d'un service ordinaire, et EPERM pour les autres plutôt
+# que la mort du processus : docker compose et restic, lancés par l'agent,
+# tournent sous ce filtre.
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# Les processus des autres comptes sont cachés. Pas de ProcSubset=pid : l'agent
+# lit /proc/stat, meminfo, loadavg, mounts, net/dev, net/tcp, uptime et
+# sys/kernel/random/boot_id (l'horloge monotone de ses droits à durée).
+ProtectProc=invisible
 
 [Install]
 WantedBy=multi-user.target

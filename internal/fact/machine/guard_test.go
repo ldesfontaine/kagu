@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -180,6 +181,37 @@ func TestAgentUnitLines_MatchTheShippedUnit(t *testing.T) {
 	got := strings.Join(AgentUnitLines(), "\n")
 	if strings.TrimRight(strings.Join(want, "\n"), "\n") != got {
 		t.Fatalf("la page d'installation et le fichier livré diffèrent.\npage :\n%s\nfichier :\n%s", got, strings.Join(want, "\n"))
+	}
+}
+
+// R-B1-16 : l'unité de l'agent n'a aucune capacité, filtre ses appels
+// système et cache les processus des autres comptes ; NoNewPrivileges reste
+// vrai (décision du 26/11 : vzdump passe par la porte, jamais par sudo). Pas
+// de ProcSubset=pid : l'agent lit /proc/stat et boot_id (ARB-2). La forme
+// livrée suit par TestAgentUnitLines_MatchTheShippedUnit.
+func TestR_B1_16_TheAgentUnitIsHardened(t *testing.T) {
+	lines := AgentUnitLines()
+	for _, want := range []string{
+		emptyBoundingSet, "AmbientCapabilities=", "SystemCallFilter=@system-service",
+		"SystemCallErrorNumber=EPERM", "ProtectProc=invisible", "NoNewPrivileges=true",
+	} {
+		if !slices.Contains(lines, want) {
+			t.Errorf("the agent unit lacks %q", want)
+		}
+	}
+	for _, line := range lines {
+		if strings.HasPrefix(line, "ProcSubset=") || strings.HasPrefix(line, "NoNewPrivileges=false") {
+			t.Errorf("the agent unit carries %q", line)
+		}
+	}
+	// La porte ne desserre rien de l'unité de l'agent : elle vit dans les
+	// siennes, et ce que grant retire comprend l'ancien produce.conf.
+	gate := strings.Join(append(VzdumpGateSocketLines(brand.AgentAccount), VzdumpGateServiceLines()...), "\n")
+	if strings.Contains(gate, brand.AgentUnit) || strings.Contains(gate, "NoNewPrivileges") {
+		t.Fatalf("the vzdump gate touches the agent unit:\n%s", gate)
+	}
+	if !slices.Contains(LegacyProducePreparation(), UnitDropInDir+"/produce.conf") {
+		t.Fatal("grant does not remove the old produce.conf")
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 )
 
@@ -71,6 +72,8 @@ func main() {
 		err = runAgent(os.Args[2:])
 	case "guard":
 		err = runGuard(os.Args[2:])
+	case machine.VzdumpGateCommand:
+		err = runVzdumpGate(os.Args[2:])
 	case "auth":
 		err = runAuth(os.Args[2:])
 	case "admin":
