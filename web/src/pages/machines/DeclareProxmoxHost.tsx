@@ -1,7 +1,7 @@
-import { Navigate, useNavigate, useParams } from "react-router";
+import { useNavigate } from "react-router";
 
 import { setMachineProxmox, useMachineProxmox } from "../../api/proxmox";
-import { useMachines, type Machine } from "../../api/machines";
+import type { Machine } from "../../api/machines";
 import { AddressCheck, CertificateFingerprint } from "../../components/CertificateCheck";
 import { Field, Input } from "../../components/Field";
 import { Modal } from "../../components/Modal";
@@ -14,6 +14,7 @@ import { credentialText, hintText } from "../../lib/credential";
 import { displayPin } from "../../lib/fingerprint";
 import { isHTTPSAddress } from "../../lib/firewallForm";
 import { detectedProxmox, emptyProxmoxForm, isProxmoxFormModified, proxmoxAccessMissing, proxmoxDefinitionOf, proxmoxFormOf, suggestedProxmoxURL, type ProxmoxFormValues } from "../../lib/proxmox";
+import { RoutedMachine } from "./RoutedMachine";
 
 // « Déclarer l'hôte Proxmox » : la fenêtre de la fiche d'une machine, à
 // l'adresse /machines/:id/proxmox, aussi pour modifier un hôte déjà déclaré.
@@ -21,13 +22,7 @@ import { detectedProxmox, emptyProxmoxForm, isProxmoxFormModified, proxmoxAccess
 // interroge l'API avec le jeton avant de rien garder ; un refus reste sur le
 // récapitulatif.
 export function DeclareProxmoxHost() {
-  const { id = "" } = useParams();
-  const machines = useMachines();
-  const current = machines.data?.machines.find((machine) => machine.id === id);
-  if (machines.data && !current) {
-    return <Navigate to="/machines" replace />;
-  }
-  return current ? <ProxmoxDialog machine={current} /> : null;
+  return <RoutedMachine>{(machine) => <ProxmoxDialog machine={machine} />}</RoutedMachine>;
 }
 
 function ProxmoxDialog({ machine }: { machine: Machine }) {

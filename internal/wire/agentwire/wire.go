@@ -149,6 +149,20 @@ type EnrollRequest struct {
 	// la machine Kagu. Absente chez un agent plus vieux ou sur une
 	// machine sans identifiant : pas de rapprochement.
 	HostFingerprint string `json:"host_fingerprint,omitempty"`
+	// La moitié publique X25519 que l'agent vient de tirer (base64), que le
+	// serveur garde pour sceller le champ secret des ordres (R-B1-18).
+	SealPublicKey string `json:"seal_public_key,omitempty"`
+}
+
+// ServerKeyRoute rend la clé publique qui signe les ordres, sans
+// authentification : join la compare à l'empreinte de la ligne collée avant
+// d'envoyer le jeton (R-B1-13).
+const ServerKeyRoute = "/agent/server-key"
+
+// ServerKeyResponse est la réponse de ServerKeyRoute : la même clé que
+// EnrollResponse.ServerKey, en base64.
+type ServerKeyResponse struct {
+	ServerKey string `json:"server_key"`
 }
 
 // La réponse à l'enrôlement : l'identifiant retenu pour la machine, son nom,

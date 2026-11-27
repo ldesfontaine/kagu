@@ -276,6 +276,30 @@ func (library *Library) Artifact(version Version, arch string) (Artifact, error)
 	}, nil
 }
 
+// OpenServed ouvre un fichier d'une version importée tel que la route des
+// versions le sert à une machine qui s'ajoute (R-B1-12) : les sommes, leur
+// signature, ou le binaire d'une architecture, et rien d'autre. Tout est
+// revérifié avant (Artifact pour un binaire) ; la machine le revérifie de
+// toute façon avec les clés de son script. ErrNoRelease pour un autre nom.
+func (library *Library) OpenServed(version Version, name string) (*os.File, error) {
+	switch name {
+	case brand.ReleaseSumsFile, brand.ReleaseSignatureFile:
+		if _, err := library.verifiedSums(version); err != nil {
+			return nil, err
+		}
+		return library.root.Open(path.Join(versionDir(version), name))
+	}
+	arch, isBinary := strings.CutPrefix(name, brand.ReleaseBinaryPrefix)
+	if !isBinary {
+		return nil, fmt.Errorf("%w: %s is not served", ErrNoRelease, name)
+	}
+	artifact, err := library.Artifact(version, arch)
+	if err != nil {
+		return nil, err
+	}
+	return library.root.Open(artifact.Path)
+}
+
 // verifiedSums relit les sommes d'une version importée et leur signature, et
 // vérifie que le dossier porte bien la version qu'il nomme.
 func (library *Library) verifiedSums(version Version) (Release, error) {

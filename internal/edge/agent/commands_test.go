@@ -130,7 +130,7 @@ func TestCommandRunner_ServesLogsUntilStopped(t *testing.T) {
 	posted := &postedLogs{batches: make(map[string][]container.LogBatch), wake: make(chan struct{}, 16)}
 	server := httptest.NewServer(http.HandlerFunc(posted.handler))
 	defer server.Close()
-	client, err := NewClient(server.URL, "", "v", false)
+	client, err := NewClient(server.URL, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestR_A4_22_FollowStopsAtItsLimit(t *testing.T) {
 	posted := &postedLogs{batches: make(map[string][]container.LogBatch), wake: make(chan struct{}, 16)}
 	server := httptest.NewServer(http.HandlerFunc(posted.handler))
 	defer server.Close()
-	client, err := NewClient(server.URL, "", "v", false)
+	client, err := NewClient(server.URL, "v")
 	if err != nil {
 		t.Fatal(err)
 	}

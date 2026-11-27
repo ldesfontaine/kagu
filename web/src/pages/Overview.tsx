@@ -9,6 +9,7 @@ import { useCurrentResources } from "../api/resources";
 import { ActionButton } from "../components/ActionButton";
 import { EmptyCard, Stat } from "../components/Card";
 import { Failure } from "../components/Failure";
+import { JoinNeedsDomain } from "../components/JoinNeedsDomain";
 import { NetworkMap } from "../components/netmap/NetworkMap";
 import { PageHead } from "../components/PageHead";
 import { TodoCard } from "../components/TodoCard";
@@ -161,12 +162,13 @@ export function Overview() {
         title={t("nav.overview")}
         subtitle={machines.data && list.length === 0 ? machinesSubtitle(t, 0, 0) : ""}
         actions={
-          <ActionButton route="POST /api/machines/tokens" icon="plus" to="/machines/nouvelle">
+          <ActionButton route="POST /api/machines/tokens" icon="plus" to="/machines/nouvelle" disabled={machines.data?.join.ready !== true}>
             {t("machine.add")}
           </ActionButton>
         }
       />
       {machines.error && <Failure error={machines.error} />}
+      <JoinNeedsDomain join={machines.data?.join} />
       <VerbRequestsCard />
       <TodoCard todos={modulesToConfigure(counts.data, list)} />
       {machines.data && list.length === 0 && (

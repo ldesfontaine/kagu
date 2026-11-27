@@ -1,18 +1,12 @@
 import { useState } from "react";
 
 import { setup, type AuthState } from "../api/auth";
-import { offerLocalEnrollment, type TokenResponse } from "../api/machines";
-import { Button } from "../components/Button";
-import { Card, CardBody, CardHeader, Note } from "../components/Card";
+import { Card, CardBody, CardHeader } from "../components/Card";
 import { Failure } from "../components/Failure";
 import { Field, Input } from "../components/Field";
-import { InstallSteps } from "../components/InstallSteps";
-import { PublicUrlNote } from "../components/PublicUrlNote";
 import { EnumSelect } from "../components/Select";
 import { useAction } from "../hooks/useAction";
-import { useChecklist } from "../hooks/useChecklist";
 import { useT } from "../i18n/context";
-import { formatRemaining } from "../lib/time";
 import { AccessPage } from "./AccessPage";
 import { AccessCredentialsForm } from "./settings/AccessCredentialsForm";
 import { AccessForwardForm } from "./settings/AccessForwardForm";
@@ -28,50 +22,29 @@ const setupModes = ["native", "forward"] as const;
 // En connexion native, la réponse pose le cookie de la première session ; en
 // mode SSO, la requête est déjà passée par lui. En native, la marche 3
 // propose le code à six chiffres (06 §4.2), « Activer » ou « Plus tard » :
-// proposé, jamais imposé (R-CNX-2) ; en SSO, elle n'existe pas. Puis la
-// première étape de l'installation : la ligne qui installe l'agent de cette
-// machine, tant qu'elle n'en a jamais eu ; sinon l'interface s'ouvre.
+// proposé, jamais imposé (R-CNX-2) ; en SSO, elle n'existe pas. Puis
+// l'interface s'ouvre : l'agent de cette machine est déjà posé par setup.
 export function FirstSetup({ state, onConfigured }: { state: AuthState; onConfigured: () => void }) {
   const t = useT();
   const action = useAction();
   const [mode, setMode] = useState<(typeof setupModes)[number]>("native");
-  const [agentLine, setAgentLine] = useState<TokenResponse | null>(null);
   const [setupCode, setSetupCode] = useState("");
   const [offerTOTP, setOfferTOTP] = useState(false);
 
-  const showAgentLineOrOpen = (line: TokenResponse | null) => {
-    if (line === null) {
-      onConfigured();
-      return;
-    }
-    setAgentLine(line);
-  };
   const createAccount = (username: string, password: string) => {
     action.run(() => setup({ setup_code: setupCode, mode: "native", username, password }), { onDone: () => setOfferTOTP(true) });
   };
-  const continueToAgentLine = () => {
-    action.run(agentLineOrNull, { onDone: showAgentLineOrOpen });
-  };
   const trustProxy = (header: string) => {
-    action.run(
-      async () => {
-        await setup({ setup_code: setupCode, mode: "forward", header });
-        return agentLineOrNull();
-      },
-      { onDone: showAgentLineOrOpen },
-    );
+    action.run(() => setup({ setup_code: setupCode, mode: "forward", header }), { onDone: onConfigured });
   };
 
-  if (agentLine !== null) {
-    return <AgentLine line={agentLine} onContinue={onConfigured} />;
-  }
   if (offerTOTP) {
     return (
       <AccessPage>
         <Card className="form-card">
           <CardHeader title={t("auth.totp_title")} />
           <CardBody>
-            <AccessTOTPEnrolment onEnabled={continueToAgentLine} onLater={continueToAgentLine} />
+            <AccessTOTPEnrolment onEnabled={onConfigured} onLater={onConfigured} />
           </CardBody>
         </Card>
       </AccessPage>
@@ -103,44 +76,6 @@ export function FirstSetup({ state, onConfigured }: { state: AuthState; onConfig
           </CardBody>
           {mode === "native" && <AccessCredentialsForm minLength={state.password_min_length} busy={action.busy} onSubmit={createAccount} />}
           {mode === "forward" && <AccessForwardForm busy={action.busy} onSubmit={trustProxy} />}
-        </Card>
-    </AccessPage>
-  );
-}
-
-// La ligne de l'agent de cette machine, ou rien : elle a déjà eu un agent
-// (409), ou la ligne ne s'obtient pas. Le compte est créé quoi qu'il arrive,
-// l'interface doit pouvoir s'ouvrir ; la fiche de la machine redonne la
-// ligne (Ré-enrôler).
-async function agentLineOrNull(): Promise<TokenResponse | null> {
-  try {
-    return await offerLocalEnrollment();
-  } catch {
-    return null;
-  }
-}
-
-// La deuxième étape : les étapes qui installent l'agent de la machine où tourne
-// le serveur, à coller sur elle. Elles ne s'affichent qu'ici, une fois.
-function AgentLine({ line, onContinue }: { line: TokenResponse; onContinue: () => void }) {
-  const t = useT();
-  const installed = useChecklist();
-  const expiresIn = formatRemaining(t, Date.parse(line.expires_at) - Date.now());
-  return (
-    <AccessPage>
-        <Card className="form-card">
-          <CardHeader title={t("auth.setup_agent_title")} />
-          <CardBody>
-            <p>{t("auth.setup_agent_intro")}</p>
-            <Note tone="warn">{t("machine.token_once", expiresIn)}</Note>
-            <p className="secondary">{t("machine.install_root_note")}</p>
-            <InstallSteps steps={line.steps} produces={false} done={installed.done} onToggle={installed.toggle} />
-            <PublicUrlNote local={line.url_local} suggestion={line.url_suggestion} />
-            <p className="secondary">{t("auth.setup_agent_later")}</p>
-            <div className="cluster">
-              <Button onClick={onContinue}>{t("auth.setup_continue")}</Button>
-            </div>
-          </CardBody>
         </Card>
     </AccessPage>
   );

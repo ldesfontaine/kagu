@@ -2,9 +2,7 @@ package agent
 
 import (
 	"context"
-	"crypto/ed25519"
 	"crypto/x509"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -64,13 +62,13 @@ type Options struct {
 	// Server et Token ne servent qu'au premier démarrage, pour s'enrôler.
 	Server string
 	Token  string
-	Pin    string
+	// ServerKey est l'empreinte attendue de la clé du serveur (« SHA256:… »,
+	// la ligne de join) : comparée avant que le jeton parte, puis à la réponse
+	// d'enrôlement (R-B1-13). Exigée pour un serveur distant.
+	ServerKey string
 	// EnrollOnly rend la main dès l'identité écrite, ou relue si l'agent est
 	// déjà enrôlé : ni flux, ni geste. C'est la reprise de setup.
 	EnrollOnly bool
-	// AllowPlain accepte http:// vers un serveur distant ; à réserver à un
-	// réseau déjà chiffré.
-	AllowPlain bool
 	// Language est la langue de l'opérateur, donnée par la commande
 	// d'installation ; l'identité la garde ensuite.
 	Language lang.Code
@@ -160,7 +158,7 @@ func Run(ctx context.Context, opts Options) error {
 		identity.narrowed = true
 		opts.Logger.Warn("state dir is not safe, writing rights are off", "error", opts.UnsafeState.Error())
 	}
-	client, err := NewClient(identity.Server, identity.Pin, opts.Version, opts.AllowPlain)
+	client, err := NewClient(identity.Server, opts.Version)
 	if err != nil {
 		return err
 	}
@@ -383,23 +381,34 @@ func enroll(ctx context.Context, opts Options) (Identity, error) {
 	if err != nil {
 		return Identity{}, err
 	}
-	identity, err := NewIdentity(opts.Server, opts.Pin, opts.Language, rights)
+	identity, err := NewIdentity(opts.Server, opts.Language, rights)
 	if err != nil {
 		return Identity{}, err
 	}
 	identity.RootDir = opts.RootDir
 	identity.Anchors = opts.Anchors
-	client, err := NewClient(identity.Server, identity.Pin, opts.Version, opts.AllowPlain)
+	client, err := NewClient(identity.Server, opts.Version)
 	if err != nil {
+		return Identity{}, err
+	}
+	if err := checkServerKeyBeforeToken(ctx, client, opts); err != nil {
 		return Identity{}, err
 	}
 	response, err := client.Enroll(ctx, identity, opts.Token, hostinfo.Collect())
 	if err != nil {
 		return Identity{}, err
 	}
-	serverKey, err := base64.StdEncoding.DecodeString(response.ServerKey)
-	if err != nil || len(serverKey) != ed25519.PublicKeySize {
-		return Identity{}, ErrServerKeyMissing
+	serverKey, err := decodeServerKey(response.ServerKey)
+	if err != nil {
+		return Identity{}, err
+	}
+	// Une seconde fois : la clé qui sera épinglée est celle de la ligne,
+	// pas celle qu'un intermédiaire aurait glissée dans la réponse. Le jeton
+	// est consommé, mais rien n'est écrit.
+	if opts.ServerKey != "" {
+		if err := sameServerKey(serverKey, opts.ServerKey); err != nil {
+			return Identity{}, err
+		}
 	}
 	identity.MachineID = response.MachineID
 	identity.AgentID = response.AgentID
@@ -411,6 +420,25 @@ func enroll(ctx context.Context, opts Options) (Identity, error) {
 	opts.Logger.Info("enrolled", "machine_id", identity.MachineID, "name", response.Name, "rights", strings.Join(identity.Rights, ","),
 		"server_key", identity.ServerKeyFingerprint())
 	return identity, nil
+}
+
+// ErrServerKeyRequired : un serveur distant s'enrôle avec l'empreinte de sa
+// clé (-server-key), sans quoi la clé s'apprendrait de qui répond (N-M1).
+var ErrServerKeyRequired = errors.New("enrolling with a remote server needs its key fingerprint")
+
+// checkServerKeyBeforeToken compare la clé que le serveur présente à
+// l'empreinte attendue avant que le jeton parte : un écart laisse le jeton
+// valable (R-B1-13). Par la socket locale ou la boucle, la machine est celle
+// du serveur : rien à comparer si l'empreinte manque.
+func checkServerKeyBeforeToken(ctx context.Context, client *Client, opts Options) error {
+	if opts.ServerKey == "" {
+		if strings.HasPrefix(opts.Server, unixScheme) || isLoopback(opts.Server) {
+			return nil
+		}
+		return ErrServerKeyRequired
+	}
+	_, err := CheckServerKey(ctx, client, opts.ServerKey)
+	return err
 }
 
 // errPolicyChanged ferme le flux pour le rouvrir avec ce que la politique et

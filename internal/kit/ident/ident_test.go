@@ -99,3 +99,20 @@ func TestHashToken_DiffersPerTokenAndPerCase(t *testing.T) {
 		t.Fatal("two different tokens share a hash")
 	}
 }
+
+// L'empreinte est celle d'OpenSSH : « SHA256: » et 43 caractères ; la forme
+// se reconnaît, et rien d'autre.
+func TestKeyFingerprint_HasTheOpenSSHForm(t *testing.T) {
+	got := KeyFingerprint(make([]byte, 32))
+	if got != "SHA256:Zmh6rfhivXdsj8GLjp+OIAiXFIVu4jOzkCpZHQ1fKSU" {
+		t.Fatalf("got %s", got)
+	}
+	if !IsKeyFingerprint(got) {
+		t.Errorf("%s is not recognised", got)
+	}
+	for _, refused := range []string{"", "SHA256:", "sha256:" + got[7:], got + "=", got[:len(got)-1], "MD5:" + got[7:], got[:20] + "!" + got[21:]} {
+		if IsKeyFingerprint(refused) {
+			t.Errorf("%q is recognised as a fingerprint", refused)
+		}
+	}
+}

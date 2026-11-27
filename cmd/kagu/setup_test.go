@@ -135,7 +135,10 @@ func (b *setupBench) started(unit string) {
 	case brand.ServerUnit:
 		b.startServe()
 	case brand.AgentUnit:
-		b.reportAgent()
+		// Sur une machine ajoutée par join, serve est ailleurs.
+		if b.parts != nil {
+			b.reportAgent()
+		}
 	}
 }
 
@@ -188,6 +191,10 @@ func (b *setupBench) countEnrollments(next http.Handler) http.Handler {
 // agents locaux, avec le jeton reçu sur son entrée standard.
 func (b *setupBench) enroll(args []string, token string) error {
 	server := args[slices.Index(args, "-server")+1]
+	serverKey := ""
+	if at := slices.Index(args, "-server-key"); at >= 0 {
+		serverKey = args[at+1]
+	}
 	root, err := os.OpenRoot(b.paths.agentStateDir)
 	if err != nil {
 		return err
@@ -196,7 +203,7 @@ func (b *setupBench) enroll(args []string, token string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	return agent.Run(ctx, agent.Options{
-		StateDir: root, Server: server, Token: token, EnrollOnly: true, Language: lang.French,
+		StateDir: root, Server: server, ServerKey: serverKey, Token: token, EnrollOnly: true, Language: lang.French,
 		Version: version.Number(), Logger: slog.New(slog.DiscardHandler),
 	})
 }
@@ -345,7 +352,8 @@ func TestR_B1_3_ResumeAfterACutAtEachStepWithoutDuplicates(t *testing.T) {
 			t.Fatalf("%s enabled %d times, want 1", unit, got)
 		}
 	}
-	for index, cut := range setupSteps {
+	steps := (&setupRun{}).steps()
+	for index, cut := range steps {
 		t.Run(string(cut.key), func(t *testing.T) {
 			b := newSetupBench(t)
 			first, err := b.run(noTerminal, cut.key)
@@ -356,7 +364,7 @@ func TestR_B1_3_ResumeAfterACutAtEachStepWithoutDuplicates(t *testing.T) {
 			if err != nil {
 				t.Fatalf("resume: %v\n%s", err, second)
 			}
-			for _, done := range setupSteps[1 : index+1] {
+			for _, done := range steps[1 : index+1] {
 				if done.key == step.EnrollWorkspace {
 					continue
 				}

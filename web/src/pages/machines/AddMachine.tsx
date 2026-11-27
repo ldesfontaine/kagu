@@ -1,51 +1,53 @@
 import { useId, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 
-import { createMachineToken, useMachines, type RoleID } from "../../api/machines";
+import { createMachineToken, useMachines, type RoleID, type TokenResponse } from "../../api/machines";
 import { Button } from "../../components/Button";
-import { Fold } from "../../components/Disclosure";
 import { Failure } from "../../components/Failure";
 import { Field, Input } from "../../components/Field";
+import { JoinNeedsDomain } from "../../components/JoinNeedsDomain";
 import { Select } from "../../components/Select";
 import { Modal, ModalCancel } from "../../components/Modal";
-import { RightsFields } from "../../components/RightsFields";
+import { RightsSetChoice } from "../../components/RightsSetChoice";
 import { WizardBar } from "../../components/Wizard";
 import { useAction } from "../../hooks/useAction";
 import { useForm } from "../../hooks/useForm";
-import { useRightNames, useRoles, useT } from "../../i18n/context";
-import { anchorsOf } from "../../lib/anchors";
-import { capabilitiesOf, emptyMachineForm, isMachineFormModified, rolePatch, tokenPageState, type TokenPageState } from "../../lib/machines";
+import { useRoles, useT } from "../../i18n/context";
+import { emptyMachineForm, isMachineFormModified } from "../../lib/machines";
 import { EnrollFlow } from "./EnrollFlow";
 
 // « Ajouter une machine » : une fenêtre à trois étapes sur la liste des
 // machines, à l'adresse /machines/nouvelle (la liste est le fond, comme au
-// rechargement). 1. nommer la machine et choisir son rôle, qui coche d'avance
-// les droits de l'agent (sous « Avancé ») ; 2. la commande à coller dessus ;
-// 3. l'attente de l'agent, en direct (EnrollFlow). Le jeton naît à la fin de
-// la première étape et ne vit que dans cette fenêtre.
+// rechargement). 1. nommer la machine, choisir son rôle (ses modules) et le
+// jeu de droits de son agent ; 2. les deux lignes à coller dessus ; 3.
+// l'attente de l'agent, en direct (EnrollFlow). Le jeton naît à la fin de la
+// première étape et ne vit que dans cette fenêtre.
 export function AddMachine() {
   const t = useT();
   const roles = useRoles();
-  const rightNames = useRightNames();
   const navigate = useNavigate();
   const form = useForm(emptyMachineForm);
   const { values, change } = form;
   const action = useAction();
   const formID = useId();
-  const [token, setToken] = useState<TokenPageState | null>(null);
+  const [token, setToken] = useState<TokenResponse | null>(null);
   // Les machines d'avant le jeton : l'arrivée de l'agent se reconnaît à ce qui s'y ajoute.
   const machines = useMachines();
+  const join = machines.data?.join;
   const [knownIDs, setKnownIDs] = useState<string[]>([]);
   const close = () => void navigate("/machines", { replace: true });
 
   const create = (event: FormEvent) => {
     event.preventDefault();
-    const rights = capabilitiesOf(rightNames, values);
-    action.run(() => createMachineToken(values.name, values.role, rights, anchorsOf(values.anchors, values.rights)), {
+    const set = values.set;
+    if (set === "") {
+      return;
+    }
+    action.run(() => createMachineToken(values.name, values.role, set), {
       topic: "all",
       onDone: (created) => {
         setKnownIDs((machines.data?.machines ?? []).map((machine) => machine.id));
-        setToken(tokenPageState(created, rights));
+        setToken(created);
       },
     });
   };
@@ -64,7 +66,7 @@ export function AddMachine() {
       actions={
         <>
           <ModalCancel />
-          <Button type="submit" form={formID} variant="primary" icon="plus" disabled={action.busy || values.name.trim() === ""}>
+          <Button type="submit" form={formID} variant="primary" icon="plus" disabled={action.busy || join?.ready !== true || values.name.trim() === "" || values.set === ""}>
             {t("machine.create_token")}
           </Button>
         </>
@@ -73,6 +75,7 @@ export function AddMachine() {
       <WizardBar titles={titles} position={0} reached={0} canJump={false} onJump={() => undefined} />
       <form id={formID} className="modal-form" onSubmit={create}>
         <p className="secondary">{t("machine.new_subtitle")}</p>
+        <JoinNeedsDomain join={join} />
         <Field label={t("machine.name_label")} htmlFor="machine-name" help={t("machine.name_help")}>
           <Input
             id="machine-name"
@@ -90,13 +93,12 @@ export function AddMachine() {
             id="machine-role"
             value={values.role}
             options={roles.map((offered) => ({ value: offered.id, label: t(`role.${offered.id}`) }))}
-            onChange={(role) => form.update(rolePatch(role as RoleID, roles))}
+            onChange={(role) => change("role", role as RoleID)}
           />
         </Field>
-        <Fold label={t("machine.rights_advanced")} initiallyOpen={false}>
-          {/* Le rôle Proxmox propose les droits proxmox.* : l'hôte n'est pas encore enrôlé, rien n'est détecté. */}
-          <RightsFields values={values} update={form.update} proxmoxDetected={values.role === "proxmox"} />
-        </Fold>
+        <Field label={t("machine.set_label")}>
+          <RightsSetChoice sets={join?.sets ?? []} value={values.set} onChange={(set) => change("set", set)} />
+        </Field>
         <Failure error={action.error} />
       </form>
     </Modal>

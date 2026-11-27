@@ -12,12 +12,15 @@ import (
 // dernier signe de vie, ses droits. Ré-enrôler en installe un nouveau et
 // révoque l'ancien ; la machine, elle, reste.
 type Agent struct {
-	ID         string
-	MachineID  string
-	PublicKey  []byte
-	Version    string
-	RootDir    string
-	EnrolledAt time.Time
+	ID        string
+	MachineID string
+	PublicKey []byte
+	// La moitié publique X25519 que l'agent a tirée à l'enrôlement (R-B1-18),
+	// pour sceller le champ secret de ses ordres ; vide chez un agent d'avant.
+	SealPublicKey []byte
+	Version       string
+	RootDir       string
+	EnrolledAt    time.Time
 	// Zéro tant qu'il n'a donné aucun signe de vie.
 	LastSeenAt time.Time
 	// Zéro tant qu'il n'est pas révoqué.

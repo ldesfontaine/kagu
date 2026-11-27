@@ -9,6 +9,7 @@ import { Button } from "../components/Button";
 import { Card, CardBody, CardHeader, Note } from "../components/Card";
 import { TokenBox } from "../components/Copy";
 import { Failure } from "../components/Failure";
+import { JoinNeedsDomain } from "../components/JoinNeedsDomain";
 import { PageHead } from "../components/PageHead";
 import { TabNav } from "../components/TabNav";
 import { Dot, Pill } from "../components/Pill";
@@ -45,11 +46,12 @@ export function Machines({ tab }: { tab: MachinesTab }) {
         title={t("nav.machines")}
         subtitle={machines.data ? machinesSubtitle(t, live.length, online) : ""}
         actions={
-          <ActionButton route="POST /api/machines/tokens" icon="plus" to="/machines/nouvelle">
+          <ActionButton route="POST /api/machines/tokens" icon="plus" to="/machines/nouvelle" disabled={machines.data?.join.ready !== true}>
             {t("machine.add")}
           </ActionButton>
         }
       />
+      <JoinNeedsDomain join={machines.data?.join} />
       {machines.data && <TabNav tabs={machinesListTabs(list)} />}
       {machines.error && <Failure error={machines.error} />}
       {machines.data && tab === "ssh" && <SSHAccess />}
@@ -72,7 +74,7 @@ export function Machines({ tab }: { tab: MachinesTab }) {
                 </tr>
               </thead>
               <tbody>
-                <MachineTreeRows rows={rows} resources={currents} now={now} />
+                <MachineTreeRows rows={rows} resources={currents} now={now} canJoin={machines.data.join.ready} />
               </tbody>
             </Table>
           </Card>

@@ -155,7 +155,7 @@ func (r *setupRun) command(ctx context.Context, args []string) error {
 		return err
 	}
 	r.state.Rights = r.rights
-	if err := r.runSteps(ctx); err != nil {
+	if err := r.runSteps(ctx, r.steps()); err != nil {
 		return err
 	}
 	return r.finish(ctx)
@@ -199,6 +199,10 @@ func readSetupState(path string) (setupState, error) {
 // dossier de la configuration n'existe pas, rien ne s'écrit : la première
 // étape se rejoue toujours.
 func (r *setupRun) saveSetupState() error {
+	// join ne garde rien : ses étapes relisent la machine.
+	if r.paths.stateFile == "" {
+		return nil
+	}
 	dir, err := os.OpenRoot(filepath.Dir(r.paths.stateFile))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -281,27 +285,29 @@ func (f *stepFailure) Error() string {
 	return f.reason
 }
 
-// setupStep est une ligne de setup : sa clé et ce qui la vérifie.
+// setupStep est une ligne de setup ou de join : sa clé et ce qui la vérifie.
 type setupStep struct {
 	key step.Key
-	run func(r *setupRun, ctx context.Context) (step.State, string, error)
+	run func(ctx context.Context) (step.State, string, error)
 }
 
-// setupSteps, dans l'ordre de B1 §5 jusqu'à « Dossier des services ».
-// Docker et restic viendront entre le système et les comptes.
-var setupSteps = []setupStep{
-	{step.EnrollSystem, (*setupRun).checkSystem},
-	{step.SetupAccount, (*setupRun).prepareAccounts},
-	{step.SetupServer, (*setupRun).startServer},
-	{step.SetupAgent, (*setupRun).installLocalAgent},
-	{step.EnrollWorkspace, (*setupRun).checkWorkspace},
+// steps : celles de setup, dans l'ordre de B1 §5 jusqu'à « Dossier des
+// services ». Docker et restic viendront entre le système et les comptes.
+func (r *setupRun) steps() []setupStep {
+	return []setupStep{
+		{step.EnrollSystem, r.checkSystem},
+		{step.SetupAccount, r.prepareAccounts},
+		{step.SetupServer, r.startServer},
+		{step.SetupAgent, r.installLocalAgent},
+		{step.EnrollWorkspace, r.checkWorkspace},
+	}
 }
 
 // runSteps joue chaque étape, la coche, l'écrit dans setup.json, et s'arrête
 // à la première en échec.
-func (r *setupRun) runSteps(ctx context.Context) error {
-	for _, current := range setupSteps {
-		state, detail, err := current.run(r, ctx)
+func (r *setupRun) runSteps(ctx context.Context, steps []setupStep) error {
+	for _, current := range steps {
+		state, detail, err := current.run(ctx)
 		if err != nil {
 			reason, todo := explainStepFailure(err, r.text)
 			r.check(current.key, step.StateFailed, reason)

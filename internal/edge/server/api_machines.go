@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -15,7 +14,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/fact/role"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
-	"github.com/ldesfontaine/kagu/internal/kit/lang"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/module"
 	"github.com/ldesfontaine/kagu/internal/kit/version"
 	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
@@ -90,6 +89,9 @@ type agentJSON struct {
 	// tant qu'il n'a rien dit. Différente de GET /api/agents/server-key :
 	// l'agent refuserait les ordres de ce serveur.
 	ServerKeyFingerprint string `json:"server_key_fingerprint"`
+	// L'empreinte de la clé de l'agent, celle que join affiche à la fin de
+	// l'ajout, à comparer (R-B1-10).
+	KeyFingerprint string `json:"key_fingerprint"`
 	// Le compte sous lequel l'agent dit tourner ; null tant qu'il ne l'a pas
 	// dit (un agent d'avant).
 	RunAs *accountJSON `json:"run_as"`
@@ -334,48 +336,56 @@ type pendingTokenJSON struct {
 type machinesResponse struct {
 	Machines []machineJSON      `json:"machines"`
 	Pending  []pendingTokenJSON `json:"pending"`
+	// Ce que l'écran « Ajouter une machine » montre ; un jeton d'API n'en a
+	// pas l'usage.
+	Join *joinOfferJSON `json:"join,omitempty"`
 }
 
+// L'offre d'ajout d'une machine : prête quand le serveur a une adresse
+// publique en https (R-B1-13), sinon la commande qui lui donne un domaine ;
+// et les trois jeux, chacun avec ses droits groupés pour « Voir le détail ».
+type joinOfferJSON struct {
+	Ready      bool          `json:"ready"`
+	DomainLine string        `json:"domain_line"`
+	Sets       []joinSetJSON `json:"sets"`
+}
+
+type joinSetJSON struct {
+	Set    string          `json:"set"`
+	Groups []joinGroupJSON `json:"groups"`
+}
+
+type joinGroupJSON struct {
+	Name   string   `json:"name"`
+	Rights []string `json:"rights"`
+}
+
+// Un ajout nomme la machine, son rôle (les modules affichés) et le jeu de
+// droits que la ligne portera.
 type tokenRequest struct {
 	Name string `json:"name"`
 	// Le rôle de la machine ; absent, générique.
 	Role string `json:"role"`
-	// Les droits cochés ; observe s'y ajoute toujours.
-	Capabilities []capabilityJSON `json:"capabilities"`
-	// Les ancres de confiance locales à poser au premier lancement, par type
-	// (anchor.Kinds) ; la ligne d'installation les porte en drapeaux.
-	Anchors map[string][]string `json:"anchors"`
+	Set  string `json:"set"`
 }
 
-// Ré-enrôler, avec les droits du nouvel agent ; absents, ceux du jeton de
-// l'agent courant.
+// Ré-enrôler, avec le jeu que la ligne portera.
 type reenrollRequest struct {
-	Capabilities *[]capabilityJSON   `json:"capabilities"`
-	Anchors      map[string][]string `json:"anchors"`
+	Set string `json:"set"`
 }
 
-// Le jeton en clair, une seule fois, avec les étapes à jouer sur la machine.
+// Le jeton en clair, une seule fois, à part de la ligne d'ajout, qui ne le
+// porte jamais (R-B1-10) : l'écran copie la ligne puis le jeton.
 type tokenResponse struct {
-	Name  string `json:"name"`
-	Token string `json:"token"`
-	// Les étapes de l'installation, dans l'ordre où on les colle ; le jeton
-	// n'est que dans celle de l'enrôlement.
-	Steps []installStepJSON `json:"steps"`
-	// Les commandes à jouer en root sur l'hôte Proxmox pour créer le jeton local
-	// des droits proxmox.* ; vide sans l'un de ces droits. Aucune ne porte de
-	// secret : il se saisit sur l'hôte, sans écho.
-	ProxmoxCommands string    `json:"proxmox_commands"`
-	ExpiresAt       time.Time `json:"expires_at"`
-	URLLocal        bool      `json:"url_local"`
-	// L'adresse de la page quand elle est publique et que public_url ne l'est pas.
-	URLSuggestion string `json:"url_suggestion"`
-}
-
-// Une étape de l'installation : son identifiant (le front en dit le titre) et
-// le bloc de commandes à coller tel quel.
-type installStepJSON struct {
-	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Token   string `json:"token"`
+	Set     string `json:"set"`
 	Command string `json:"command"`
+	// Ré-enrôler : les deux commandes qui arrêtent l'agent en place et
+	// retirent son identité, à jouer avant, l'une après l'autre ; vide pour
+	// un ajout.
+	ReenrollLines []string  `json:"reenroll_lines"`
+	ExpiresAt     time.Time `json:"expires_at"`
 }
 
 func machineToJSON(machineStatus machine.Status) machineJSON {
@@ -410,6 +420,7 @@ func agentToJSON(agent machine.Agent) *agentJSON {
 		CapabilitiesDiffer: agent.CapabilitiesDiffer(),
 
 		ServerKeyFingerprint: agent.ServerKeyFingerprint,
+		KeyFingerprint:       ident.KeyFingerprint(agent.PublicKey),
 		RunAs:                accountToJSON(agent.RunAs),
 		RollbackCapable:      agent.CanRollBack(),
 		Anchors:              anchorsToJSON(agent.Anchors),
@@ -449,10 +460,6 @@ func reportedCapabilitiesToJSON(agent machine.Agent) []reportedCapabilityJSON {
 
 func capabilityToJSON(capability agentpolicy.Capability) capabilityJSON {
 	return capabilityJSON{Name: capability.Name, Paths: orEmpty(capability.Paths)}
-}
-
-func capabilityFromJSON(capability capabilityJSON) agentpolicy.Capability {
-	return agentpolicy.Capability{Name: capability.Name, Paths: capability.Paths}
 }
 
 func roleToJSON(detected role.Role) roleJSON {
@@ -537,6 +544,9 @@ func (s *Server) listMachines(w http.ResponseWriter, r *http.Request) {
 			return s.machineJSONOf(machineStatus, facts)
 		}),
 		Pending: make([]pendingTokenJSON, 0, len(pending)),
+	}
+	if _, byToken := apiTokenFrom(r.Context()); !byToken {
+		response.Join = s.joinOffer()
 	}
 	for _, token := range pending {
 		response.Pending = append(response.Pending, pendingTokenJSON{
@@ -641,7 +651,9 @@ func (s *Server) setRole(w http.ResponseWriter, r *http.Request) {
 	s.writeAPI(w, http.StatusOK, s.machineJSONOf(found, facts))
 }
 
-// L'opérateur nomme la machine ; le jeton naît et se montre une seule fois.
+// L'opérateur nomme la machine et choisit le jeu ; le jeton naît et se
+// montre une seule fois. Sans adresse publique en https, aucun jeton ne
+// naît : il n'y aurait pas de ligne pour lui.
 func (s *Server) createMachineToken(w http.ResponseWriter, r *http.Request) {
 	var request tokenRequest
 	if !s.readAPI(w, r, &request) {
@@ -651,177 +663,66 @@ func (s *Server) createMachineToken(w http.ResponseWriter, r *http.Request) {
 	if s.failed(w, r, err, nil) {
 		return
 	}
-	capabilities := httpx.ConvertAll(request.Capabilities, capabilityFromJSON)
-	if s.failed(w, r, machine.ValidateAnchors(request.Anchors), nil) {
-		return
-	}
-	cleartext, token, err := s.machines.CreateToken(r.Context(), request.Name, role, capabilities)
+	set, err := agentpolicy.ParseSet(request.Set)
 	if s.failed(w, r, err, nil) {
 		return
 	}
-	s.writeToken(w, r, token, cleartext, installTarget{anchors: request.Anchors})
+	if s.failed(w, r, s.joinReady(), nil) {
+		return
+	}
+	cleartext, token, err := s.machines.CreateToken(r.Context(), request.Name, role, setRightsShown(set))
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	s.writeToken(w, r, token, cleartext, set, []string{})
 }
 
-func (s *Server) writeToken(w http.ResponseWriter, r *http.Request, token machine.Token, cleartext string, target installTarget) {
-	address := s.resolvePublicURL(r)
-	language, err := s.language(r.Context())
+// setRightsShown : ce que le jeton garde du jeu, pour l'écran seulement ;
+// aucun droit ne se pose depuis le jeton (R-DROIT-6), le jeu vient de la
+// ligne.
+func setRightsShown(set agentpolicy.Set) []agentpolicy.Capability {
+	return set.Rights(agentpolicy.SetHost{ServicesRoot: brand.WorkspaceRoot})
+}
+
+// joinReady refuse l'ajout d'une machine tant que le serveur n'a pas
+// d'adresse publique en https.
+func (s *Server) joinReady() error {
+	if !machine.JoinReady(s.publicURL) {
+		return machine.ErrJoinNeedsDomain
+	}
+	return nil
+}
+
+func (s *Server) writeToken(w http.ResponseWriter, r *http.Request, token machine.Token, cleartext string, set agentpolicy.Set, reenrollLines []string) {
+	_, fingerprint, err := s.actions.ServerKey()
+	if s.failed(w, r, err, nil) {
+		return
+	}
+	command, err := machine.JoinLine(s.releasesURL, version.Number(), strings.TrimRight(s.publicURL, "/"), fingerprint, set)
 	if s.failed(w, r, err, nil) {
 		return
 	}
 	s.writeAPI(w, http.StatusCreated, tokenResponse{
-		Name:            token.Name,
-		Token:           cleartext,
-		Steps:           installSteps(address.URL, s.releasesURL, cleartext, language, token.Capabilities, target),
-		ProxmoxCommands: proxmoxCommands(token.Capabilities),
-		ExpiresAt:       token.ExpiresAt.UTC(),
-		URLLocal:        address.Local,
-		URLSuggestion:   address.Suggestion,
+		Name:          token.Name,
+		Token:         cleartext,
+		Set:           string(set),
+		Command:       command,
+		ReenrollLines: reenrollLines,
+		ExpiresAt:     token.ExpiresAt.UTC(),
 	})
 }
 
-// La commande à coller ; la langue n'y figure que si elle n'est pas celle
-// par défaut, les droits que s'ils dépassent observe, pour rester courte. Le
-// jeton passe par printf, un builtin du shell : aucun processus ne le porte
-// dans ses arguments, alors que /proc/<pid>/cmdline de l'agent et de runuser
-// se lit depuis tous les comptes de la machine. Un jeton n'a que des
-// minuscules, des chiffres et « _ » : les guillemets simples suffisent. Pas
-// de « VAR=… runuser » : la variable finirait dans les arguments. La ligne se
-// joue en root, comme toutes les étapes : runuser, de util-linux, ne demande
-// pas sudo, qu'un hôte Proxmox n'a pas. Les
-// droits, eux, ne sont pas un secret : ils restent lisibles dans la ligne,
-// et leur forme (lettres, chiffres, « . _ - / = : , ») passe sans guillemets.
-// Le binaire est celui de l'état de l'agent, pas /usr/local/bin/kagu : un
-// lien root vers un fichier que le compte de l'agent peut remplacer serait une
-// escalade sur une machine sans Docker.
-func installCommand(publicURL, token string, code lang.Code, capabilities []agentpolicy.Capability, anchors map[string][]string) string {
-	command := "printf '%s\\n' '" + token + "' | runuser -u " + brand.AgentAccount + " -- " + brand.AgentCurrentPath +
-		" agent -server " + publicURL
-	if code != lang.Default {
-		command += " -lang " + string(code)
-	}
-	if rights := agentpolicy.FormatCapabilities(capabilities); rights != "" && rights != agentpolicy.CapabilityObserve {
-		command += " -rights " + rights
-	}
-	return command + installAnchorFlags(capabilities, anchors)
-}
-
-// installAnchorFlags écrit les drapeaux d'ancres, un par type du registre dont
-// le droit est coché et dont l'opérateur a donné des valeurs. Sans valeur, le
-// drapeau manque : l'agent refusera l'ordre (refus par défaut), et la fiche dira
-// la commande qui pose l'ancre. Les valeurs ont la forme du type (lettres
-// minuscules et chiffres) : elles passent sans guillemets.
-func installAnchorFlags(capabilities []agentpolicy.Capability, anchors map[string][]string) string {
-	var flags string
-	for _, kind := range anchor.Kinds() {
-		values := anchors[kind.Name]
-		if len(values) == 0 || !agentpolicy.HasCapability(capabilities, kind.Right) {
-			continue
+// joinOffer : ce que l'écran « Ajouter une machine » montre.
+func (s *Server) joinOffer() *joinOfferJSON {
+	offer := &joinOfferJSON{Ready: s.joinReady() == nil, DomainLine: machine.DomainLine()}
+	for _, set := range agentpolicy.Sets() {
+		shown := joinSetJSON{Set: string(set), Groups: []joinGroupJSON{}}
+		for _, grouped := range set.Groups() {
+			shown.Groups = append(shown.Groups, joinGroupJSON{Name: string(grouped.Group), Rights: grouped.Rights})
 		}
-		flags += " -" + kind.Flag + " " + anchor.FormatList(values)
+		offer.Sets = append(offer.Sets, shown)
 	}
-	return flags
-}
-
-// Les commandes à jouer une fois, en root, avant la ligne d'installation : le
-// compte de l'agent (dans le groupe docker si la machine en a un), son dossier
-// d'état et son binaire, puis un dossier par droit qui écrit ailleurs, à lui.
-// Le groupe docker équivaut à root : la page et la documentation le disent.
-// Rien n'y est protégé pour le shell : le compte, les chemins de
-// l'état et la version sont des constantes, et un chemin de droit ne porte
-// que des lettres, chiffres et « . _ - / » (agentpolicy.ValidCapabilityPath).
-// Jamais le jeton. useradd échoue sur un compte qui existe : sans effet sur
-// les lignes suivantes, qui ne dépendent pas de lui. Le lien current ne bouge
-// que si le binaire a été posé, pour ne jamais viser un fichier absent.
-//
-// La ligne se rejoue sur une machine déjà préparée (Changer les droits), où le
-// compte possède son état et peut-être un agent compromis : root n'y agit
-// jamais sur un nom que le compte contrôle. install -d suit un lien et donne
-// sa cible ; bin/, le binaire et un dossier de droit sous un dossier du
-// compte se font donc sous le compte (runuser), et un dossier de droit que
-// root donne est d'abord vérifié n'être pas un lien.
-func installPreparation(capabilities []agentpolicy.Capability, number string, local bool) string {
-	account := brand.AgentAccount
-	owner := "-o " + account + " -g " + account
-	asAccount := "runuser -u " + account + " -- "
-	source := "/tmp/" + brand.Command
-	if local {
-		source = brand.InstalledBinary
-	}
-	binDir := brand.AgentStateDir + "/" + brand.AgentBinDir
-	binaryName := brand.AgentBinaryPrefix + number
-	lines := []string{
-		"useradd --system --home-dir " + brand.AgentStateDir + " --shell /usr/sbin/nologin " + account,
-		"getent group docker >/dev/null && usermod -aG docker " + account,
-		"install -d -m 0700 " + owner + " " + brand.AgentStateDir,
-		asAccount + "install -d -m 0700 " + binDir,
-		asAccount + "install -m 0755 " + source + " " + binDir + "/" + binaryName +
-			" && " + asAccount + "ln -sfn " + binaryName + " " + binDir + "/" + brand.AgentCurrentLink,
-	}
-	// Le lanceur stable, que l'unité lance : sans lui, l'agent ne rapporte pas
-	// de retour arrière et le serveur ne lui envoie aucune mise à jour.
-	lines = append(lines, machine.GuardInstallLines(source)...)
-	lines = append(lines, producePreparation(capabilities, asAccount)...)
-	folders := machine.RightFolders(capabilities, brand.WorkspaceRoot)
-	// Un dossier sous un autre dossier du compte vient après lui, sous le compte.
-	var nested []string
-	for _, folder := range folders {
-		mode := fmt.Sprintf("%04o", folder.Mode)
-		comment := " # " + strings.Join(folder.Rights, ", ")
-		if machine.UnderAccountFolder(folder.Path, folders) {
-			nested = append(nested, asAccount+"install -d -m "+mode+" "+folder.Path+comment)
-			continue
-		}
-		lines = append(lines, "test ! -L "+folder.Path+" && install -d -m "+mode+" "+owner+" "+folder.Path+comment)
-	}
-	return strings.Join(append(lines, nested...), "\n")
-}
-
-// producePreparation : ce que backup.produce=proxmox-vzdump demande de plus,
-// une ligne par geste (six), après le compte. NoNewPrivileges=true, dans
-// l'unité de l'agent, interdit tout sudo : le drop-in le desserre, c'est le
-// seul desserrement. Le script de root et la règle sudo sont de root, sur des
-// chemins que le compte ne contrôle pas ; seul le dossier de production, sous
-// l'état, est fait sous le compte. Les textes viennent de machine/produce.go :
-// aucune apostrophe, aucun nom de l'opérateur. Ce droit vaut root pour un agent
-// compromis (vzdump --script), comme le groupe docker.
-func producePreparation(capabilities []agentpolicy.Capability, asAccount string) []string {
-	if !agentpolicy.CoversProducer(capabilities, agentpolicy.ProducerProxmoxVzdump) {
-		return nil
-	}
-	return []string{
-		asAccount + "install -d -m 0700 " + machine.ProduceDir,
-		printfLines(machine.VzdumpWrapperLines()) + " | install -m 0755 -o root -g root /dev/stdin " + brand.VzdumpWrapperPath,
-		sudoersPreparation(),
-		"install -d -m 0755 " + machine.UnitDropInDir,
-		printfLines(machine.ProduceDropInLines()) + " | install -m 0644 /dev/stdin " + machine.ProduceDropInFile,
-		"systemctl daemon-reload",
-	}
-}
-
-// sudoersPreparation pose la règle sudo en un geste : écrite dans un fichier que
-// sudo ignore, jugée par visudo, puis renommée. Si l'un des trois échoue, le
-// fichier provisoire part et rien n'est posé ; la ligne rend alors une erreur
-// (false), que le shell de l'opérateur voit.
-func sudoersPreparation() string {
-	temp := machine.SudoersTempFile
-	return printfLines(machine.SudoersRuleLines()) + " | install -m 0440 -o root -g root /dev/stdin " + temp +
-		" && visudo -cf " + temp + " && mv " + temp + " " + machine.SudoersFile +
-		" || { rm -f " + temp + "; false; }"
-}
-
-// proxmoxCommands : ce que l'opérateur joue lui-même sur l'hôte Proxmox pour les
-// droits proxmox.* (machine.ProxmoxTokenCommands), une commande par ligne.
-func proxmoxCommands(capabilities []agentpolicy.Capability) string {
-	if !machine.ProxmoxRights(capabilities) {
-		return ""
-	}
-	return strings.Join(machine.ProxmoxTokenCommands(), "\n")
-}
-
-// printfLines écrit des lignes de texte en une commande : printf, un builtin,
-// une ligne par argument entre apostrophes. Les textes n'en portent pas.
-func printfLines(lines []string) string {
-	return "printf '%s\\n' '" + strings.Join(lines, "' '") + "'"
+	return offer
 }
 
 // Un jeton déjà parti est un jeton annulé : 204 dans les deux cas.
@@ -852,37 +753,26 @@ func (s *Server) removeMachine(w http.ResponseWriter, r *http.Request) {
 	s.finishAPIAction(w, r, err, machine.ErrNotFound)
 }
 
-// Ré-enrôler : un nouveau jeton pour la même machine, qui garde son id.
-// C'est aussi changer les droits de son agent : sans capabilities (ou sans
-// corps), ceux d'avant.
+// Ré-enrôler : un nouveau jeton pour la même machine, qui garde son id, et
+// la ligne d'ajout avec le jeu choisi ; l'agent en place s'arrête d'abord.
+// La machine Kagu ne se ré-enrôle que par setup.
 func (s *Server) reenrollMachine(w http.ResponseWriter, r *http.Request) {
 	var request reenrollRequest
-	if r.ContentLength != 0 && !s.readAPI(w, r, &request) {
+	if !s.readAPI(w, r, &request) {
 		return
 	}
-	var capabilities []agentpolicy.Capability
-	if request.Capabilities != nil {
-		capabilities = httpx.ConvertAll(*request.Capabilities, capabilityFromJSON)
-	}
-	if s.failed(w, r, machine.ValidateAnchors(request.Anchors), nil) {
-		return
-	}
-	cleartext, token, err := s.machines.CreateReenrollToken(r.Context(), r.PathValue("id"), capabilities)
-	if s.failed(w, r, err, machine.ErrNotFound) {
-		return
-	}
-	s.writeToken(w, r, token, cleartext, installTarget{local: token.MachineID == machine.LocalID, reenroll: true, anchors: request.Anchors})
-}
-
-// La ligne d'installation de l'agent de la machine Kagu, tant qu'elle
-// n'en a jamais eu : l'écran de première configuration la montre, une fois
-// le compte créé. 409 machine.local_enrolled ensuite.
-func (s *Server) offerLocalEnrollment(w http.ResponseWriter, r *http.Request) {
-	cleartext, token, err := s.machines.OfferLocalEnrollment(r.Context())
+	set, err := agentpolicy.ParseSet(request.Set)
 	if s.failed(w, r, err, nil) {
 		return
 	}
-	s.writeToken(w, r, token, cleartext, installTarget{local: true})
+	if s.failed(w, r, s.joinReady(), nil) {
+		return
+	}
+	cleartext, token, err := s.machines.CreateReenrollToken(r.Context(), r.PathValue("id"), setRightsShown(set))
+	if s.failed(w, r, err, machine.ErrNotFound) {
+		return
+	}
+	s.writeToken(w, r, token, cleartext, set, machine.ReenrollLines())
 }
 
 // hostingOf dit quel hôte porte la machine : celui que l'opérateur a désigné

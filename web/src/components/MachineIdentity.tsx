@@ -11,7 +11,8 @@ import { MachineKind } from "./MachineKind";
 
 // L'identité fixe d'une machine, à droite de sa fiche : où elle tourne (type,
 // hôte, grappe), son adresse, son système, et ce que son hôte lui alloue. C'est
-// ce qui disait « Sur l'hôte Proxmox » et « Proxmox », fondu en un seul bloc.
+// ce qui disait « Sur l'hôte Proxmox » et « Proxmox », fondu en un seul bloc ;
+// et l'empreinte de la clé de son agent.
 export function MachineIdentity({ machine, all }: { machine: Machine; all: Machine[] }) {
   const { t, language } = useI18n();
   const now = useNow();
@@ -59,6 +60,8 @@ export function MachineIdentity({ machine, all }: { machine: Machine; all: Machi
         <KeyValue label={t("machine.identity_address")} value={machine.address === "" ? "—" : machine.address} mono={machine.address !== ""} />
         <KeyValue label={t("machine.identity_os")} value={`${machine.os} · ${machine.arch}`} />
         <KeyValue label={t("machine.identity_agent")} value={machine.agent?.version ?? "—"} mono />
+        {/* La même empreinte que join affiche dans le terminal (R-B1-10). */}
+        {machine.agent !== null && machine.agent.key_fingerprint !== "" && <KeyValue label={t("machine.identity_agent_key")} value={machine.agent.key_fingerprint} mono />}
         {hosted !== null && (
           <>
             <KeyValue label={t("machine.identity_guest")} value={`${hosted.vmid} · ${hosted.name}`} mono />

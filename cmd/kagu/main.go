@@ -17,8 +17,11 @@ Commandes :
             (option --rights observe|manage|root)
   upgrade   monte le serveur de cette machine à une version signée, en root
             (options --to <version>, --from <dossier>, --status)
+  join      ajoute cette machine à un {command} distant, en root : la ligne
+            de l'écran « Ajouter une machine », puis le jeton (options
+            --server --server-key --rights, --token-file --yes sans terminal)
   serve     démarre le serveur web (option -config)
-  agent     tourne sur une machine gérée (options -server -lang -pin -allow-plain -state ; jeton d'enrôlement sur l'entrée standard) ;
+  agent     tourne sur une machine gérée (options -server -server-key -lang -state ; jeton d'enrôlement sur l'entrée standard) ;
             agent trust list | add | remove : les ancres de confiance locales de l'agent, en root (option -state)
   guard     lanceur stable de l'agent : lance bin/current et revient à la version
             précédente si une mise à jour n'est pas confirmée (option -state)
@@ -60,6 +63,8 @@ func main() {
 		err = runSetup(os.Args[2:])
 	case "upgrade":
 		err = runUpgrade(os.Args[2:])
+	case "join":
+		err = runJoin(os.Args[2:])
 	case "serve":
 		err = runServe(os.Args[2:])
 	case "agent":

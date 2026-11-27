@@ -1,14 +1,23 @@
 #!/bin/sh
-# Installe Kagu sur cette machine, en root (fiche B1, R-B1-14) :
+# Installe Kagu sur cette machine, en root (fiche B1). Deux usages :
 #   curl -fsSL <adresse des versions>/v<version>/install.sh -o install.sh
 #   sudo sh install.sh [options de setup]
+# installe la machine Kagu et lance setup (R-B1-14) ;
+#   curl -fsSL <adresse des versions>/install.sh |
+#     sudo sh -s -- join --server https://… --server-key SHA256:… --rights <jeu>
+# ajoute une machine et lance join (R-B1-12) : la ligne vient de l'écran,
+# le script toujours de l'adresse des versions, jamais de serve.
 # Télécharge la version, vérifie la signature globale de minisign (celle qui
 # couvre le commentaire de confiance, où est écrite la version) avec les clés
 # écrites ci-dessous, refuse une version plus ancienne que MIN_VERSION, vérifie
-# les sommes, puis installe le binaire et lance setup. Rien ne s'écrit hors
-# d'un dossier temporaire avant que tout soit vérifié.
+# les sommes, puis installe le binaire et lance setup ou join. Rien ne s'écrit
+# hors d'un dossier temporaire avant que tout soit vérifié.
 # Seul le commentaire de confiance est signé : la version ne se lit jamais
 # dans une adresse ni dans un nom de fichier.
+# join prend la version à la bibliothèque de serve quand l'adresse des
+# versions ne répond pas : un serveur n'est qu'une source de fichiers, vérifiés
+# par les mêmes clés (N-M8). Aucun jeton ne passe par ce script : join le lit
+# sur le terminal ou dans --token-file.
 set -eu
 
 # La version de ce script, écrite à sa publication (release.yml). Vide : le
@@ -52,6 +61,36 @@ machine_arch() {
 download() {
 	curl -fsSL --proto-redir '=https' -o "$work/$1" "$base/$1" ||
 		fail "téléchargement impossible : $base/$1"
+}
+
+# server_argument rend la valeur de --server (ou -server, la forme des options
+# de Go), écrite « --server X » ou « --server=X ».
+server_argument() {
+	while [ $# -gt 0 ]; do
+		case $1 in
+		--server=* | -server=*) echo "${1#*=}"; return 0 ;;
+		--server | -server) [ $# -ge 2 ] && { echo "$2"; return 0; } ;;
+		esac
+		shift
+	done
+	return 1
+}
+
+# choose_source fixe base, d'où viendront les trois fichiers, sur la réponse
+# de l'adresse des versions pour les sommes. join se replie sur la bibliothèque
+# de serve ; setup n'a pas de repli.
+choose_source() {
+	base="${KAGU_RELEASES%/}/v$MIN_VERSION"
+	if curl -fsL --proto-redir '=https' -o "$work/$SUMS_FILE" "$base/$SUMS_FILE" 2>/dev/null; then
+		printf "Version prise à l'adresse des versions : %s\n" "$base"
+		return 0
+	fi
+	[ "$mode" = join ] || fail "téléchargement impossible : $base/$SUMS_FILE"
+	server=$(server_argument "$@") ||
+		fail "adresse des versions injoignable ($base) et pas de --server pour la bibliothèque"
+	base="${server%/}/releases/v$MIN_VERSION"
+	printf 'Adresse des versions injoignable : version prise à la bibliothèque du serveur, %s\n' "$base"
+	download "$SUMS_FILE"
 }
 
 # decode_line écrit la ligne line du .minisig, décodée, dans file, et refuse
@@ -154,14 +193,19 @@ check_sums_names() {
 		fail "la version ne contient pas de binaire pour $arch"
 }
 
+mode=setup
+if [ "${1:-}" = join ]; then
+	mode=join
+	shift
+fi
+
 [ "$(id -u)" -eq 0 ] || fail "à lancer en root (sudo sh install.sh)"
 is_version "$MIN_VERSION" || fail "ce script n'est pas celui d'une version publiée (MIN_VERSION vide)"
 arch=$(machine_arch)
-base="${KAGU_RELEASES%/}/v$MIN_VERSION"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-download "$SUMS_FILE"
+choose_source "$@"
 download "$SIGNATURE_FILE"
 read_signature
 key=$(signer_key)
@@ -179,27 +223,41 @@ version_at_least "${version#v}" "$MIN_VERSION" ||
 	fail "version plus ancienne que celle attendue : $version servie, v$MIN_VERSION au moins"
 
 check_sums_names
-binaries=$(sed 's/^[0-9a-f]*  //' "$work/$SUMS_FILE")
+# setup garde tous les binaires pour la bibliothèque ; join ne prend que le
+# sien, et ne vérifie que sa somme.
+if [ "$mode" = join ]; then
+	binaries="$BINARY_PREFIX$arch"
+else
+	binaries=$(sed 's/^[0-9a-f]*  //' "$work/$SUMS_FILE")
+fi
 for binary in $binaries; do
 	download "$binary"
+	grep -Ex "[0-9a-f]{64}  $binary" "$work/$SUMS_FILE" >>"$work/checked.sums"
 done
-(cd "$work" && sha256sum --strict --quiet -c "$SUMS_FILE") || fail "somme fausse : binaire changé"
+(cd "$work" && sha256sum --strict --quiet -c checked.sums) || fail "somme fausse : binaire changé"
 printf 'Version %s vérifiée : signature globale et sommes.\n' "$version"
 
-# Tout est vérifié : les fichiers de la version restent pour que setup les
-# importe dans la bibliothèque (lus par le compte du serveur), puis le
-# binaire de cette machine est posé.
-install -d -m 0755 "$KEPT_DIR"
-for file in "$SUMS_FILE" "$SIGNATURE_FILE" $binaries; do
-	install -m 0644 "$work/$file" "$KEPT_DIR/$file"
-done
+# Tout est vérifié : pour setup, les fichiers de la version restent pour
+# qu'il les importe dans la bibliothèque (lus par le compte du serveur) ;
+# puis le binaire de cette machine est posé.
+if [ "$mode" = setup ]; then
+	install -d -m 0755 "$KEPT_DIR"
+	for file in "$SUMS_FILE" "$SIGNATURE_FILE" $binaries; do
+		install -m 0644 "$work/$file" "$KEPT_DIR/$file"
+	done
+fi
 install -m 0755 "$work/$BINARY_PREFIX$arch" "$INSTALLED_BINARY"
 rm -rf "$work"
 trap - EXIT
 
-# Sous « curl | sh », l'entrée standard est le script : setup pose sa
-# question sur le terminal, et s'en passe sans terminal (cloud-init).
-if (: </dev/tty) 2>/dev/null; then
-	exec "$INSTALLED_BINARY" setup --releases-url "$KAGU_RELEASES" "$@" </dev/tty
+# Sous « curl | sh », l'entrée standard est le script : setup et join posent
+# leurs questions sur le terminal, et s'en passent sans terminal (cloud-init).
+if [ "$mode" = join ]; then
+	set -- join "$@"
+else
+	set -- setup --releases-url "$KAGU_RELEASES" "$@"
 fi
-exec "$INSTALLED_BINARY" setup --releases-url "$KAGU_RELEASES" "$@" </dev/null
+if (: </dev/tty) 2>/dev/null; then
+	exec "$INSTALLED_BINARY" "$@" </dev/tty
+fi
+exec "$INSTALLED_BINARY" "$@" </dev/null

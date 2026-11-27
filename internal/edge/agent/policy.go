@@ -15,7 +15,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
 	"github.com/ldesfontaine/kagu/internal/kit/hostinfo"
-	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 )
 
 // La politique de l'agent (fiche A3) : un fichier à root, hors de l'état de
@@ -103,7 +103,7 @@ func (p AppliedPolicy) report() string {
 func (p AppliedPolicy) serverKeyFingerprints() string {
 	fingerprints := make([]string, 0, len(p.ServerKeys))
 	for _, key := range p.ServerKeys {
-		fingerprints = append(fingerprints, agentwire.KeyFingerprint(key))
+		fingerprints = append(fingerprints, ident.KeyFingerprint(key))
 	}
 	return strings.Join(fingerprints, ",")
 }

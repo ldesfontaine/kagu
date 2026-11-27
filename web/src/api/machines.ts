@@ -107,6 +107,9 @@ export interface Agent {
   // L'empreinte de la clé du serveur que l'agent a épinglée ; vide tant
   // qu'il n'a rien dit, ou s'il n'en a pas.
   server_key_fingerprint: string;
+  // L'empreinte « SHA256:… » de la clé de l'agent : join affiche la même
+  // dans le terminal (R-B1-10).
+  key_fingerprint: string;
   // Le compte que l'agent a dit à l'ouverture de son flux ; null tant qu'il
   // n'a rien dit (un agent plus ancien).
   run_as: Account | null;
@@ -231,9 +234,6 @@ export interface AgentAnchors {
   kinds: AnchorKind[];
 }
 
-// Les ancres à poser à l'installation, par type d'ancre.
-export type Anchors = Record<string, string[]>;
-
 export interface PendingToken {
   id: string;
   name: string;
@@ -245,27 +245,40 @@ export interface PendingToken {
 export interface MachinesResponse {
   machines: Machine[];
   pending: PendingToken[];
+  join: JoinOffer;
 }
 
-// Une étape de l'installation de l'agent : son identifiant (le titre vient du
-// catalogue) et le bloc à coller tel quel sur la machine.
-export interface InstallStep {
-  id: "stop" | "binary" | "prepare" | "enroll" | "unit" | "rights";
-  command: string;
+// Ce que l'écran « Ajouter une machine » montre (B1) : ready est faux sans
+// adresse publique en https, l'ajout est alors fermé et domain_line dit la
+// commande qui pose le domaine (R-B1-13) ; sets, les trois jeux dans l'ordre,
+// chacun avec ses droits groupés comme l'onglet Droits.
+export interface JoinOffer {
+  ready: boolean;
+  domain_line: string;
+  sets: JoinSet[];
 }
 
+export interface JoinSet {
+  set: RightsSet;
+  groups: JoinGroup[];
+}
+
+export interface JoinGroup {
+  name: RightsGroupName;
+  rights: string[];
+}
+
+// La réponse d'un jeton d'enrôlement : command est la ligne join, sans le
+// jeton, qui se colle seul en seconde ligne. reenroll_lines, les deux
+// commandes qui arrêtent l'agent en place et retirent son identité avant
+// join, l'une après l'autre ; vide pour un ajout.
 export interface TokenResponse {
   name: string;
-  // Le jeton n'est montré qu'une fois, dans la commande de l'étape « enroll ».
   token: string;
-  steps: InstallStep[];
-  // Les commandes à jouer en root sur l'hôte Proxmox, une par ligne, pour créer
-  // le jeton local des droits proxmox.* ; vide sans l'un de ces droits.
-  proxmox_commands: string;
+  set: RightsSet;
+  command: string;
+  reenroll_lines: string[];
   expires_at: string;
-  url_local: boolean;
-  // L'adresse de la page quand elle est publique et que public_url ne l'est pas.
-  url_suggestion: string;
 }
 
 const machinesPath = "/api/machines";
@@ -279,10 +292,10 @@ export function useMachines(wanted = true): Resource<MachinesResponse> {
   return useResource<MachinesResponse>(wanted ? machinesPath : null);
 }
 
-// Un jeton à usage unique pour enrôler une machine neuve, avec les droits
-// cochés ; observe s'y ajoute toujours.
-export async function createMachineToken(name: string, role: RoleID, capabilities: Capability[], anchors: Anchors): Promise<TokenResponse> {
-  return api.send<TokenResponse>(route("POST /api/machines/tokens"), { name, role, capabilities, anchors });
+// Un jeton à usage unique pour enrôler une machine neuve, avec le jeu de
+// droits choisi, que la ligne join porte en clair.
+export async function createMachineToken(name: string, role: RoleID, set: RightsSet): Promise<TokenResponse> {
+  return api.send<TokenResponse>(route("POST /api/machines/tokens"), { name, role, set });
 }
 
 // Change le rôle de la machine, donc ses modules ; ses droits ne bougent pas.
@@ -300,16 +313,10 @@ export async function deleteMachineToken(id: string): Promise<void> {
   return api.send(route("DELETE /api/machines/tokens/{id}", { id }));
 }
 
-// La ligne d'installation de l'agent de la machine Kagu, tant qu'elle
-// n'en a jamais eu : l'écran de première configuration la montre.
-export async function offerLocalEnrollment(): Promise<TokenResponse> {
-  return api.send<TokenResponse>(route("POST /api/machines/local-enrollment"));
-}
-
-// Un nouveau jeton pour le même identifiant de machine, avec les droits de son
-// nouvel agent : c'est ainsi qu'on change ceux d'un agent.
-export async function reenrollMachine(id: string, capabilities: Capability[], anchors: Anchors): Promise<TokenResponse> {
-  return api.send<TokenResponse>(route("POST /api/machines/{id}/actions/reenroll", { id }), { capabilities, anchors });
+// Un nouveau jeton pour le même identifiant de machine, avec le jeu de son
+// nouvel agent.
+export async function reenrollMachine(id: string, set: RightsSet): Promise<TokenResponse> {
+  return api.send<TokenResponse>(route("POST /api/machines/{id}/actions/reenroll", { id }), { set });
 }
 
 // Supprimer la machine : effacée avec son historique, ou, avec keepHistory,

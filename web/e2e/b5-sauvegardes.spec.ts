@@ -214,32 +214,3 @@ test("la vue d'ensemble : la tuile Sauvegardes mène à la page", async ({ page,
   expect(findings.unknown()).toEqual([]);
 });
 
-test("l'enrôlement offre le droit « Parcourir les dépôts reçus », décoché d'avance, avec sa note", async ({ page, findings }) => {
-  findings.where = "/machines/nouvelle › restic.browse";
-  await page.goto("/machines/nouvelle");
-  const dialog = page.locator("dialog[open]");
-  await dialog.getByText(label("machine.rights_advanced")).click();
-  const right = dialog.getByRole("checkbox", { name: label("machine.capability_restic_browse") });
-  await expect(right).not.toBeChecked();
-  await right.check();
-  const note = label("machine.capability_restic_browse_note").split("{product}")[0]?.slice(0, 40) ?? "";
-  await expect(dialog).toContainText(note);
-  await right.uncheck();
-  await expect(dialog.getByText(note)).toHaveCount(0);
-  expect(findings.unknown()).toEqual([]);
-});
-
-test("l'enrôlement offre le droit « Restaurer des sauvegardes sur cette machine », décoché d'avance, avec sa note", async ({ page, findings }) => {
-  findings.where = "/machines/nouvelle › restic.restore";
-  await page.goto("/machines/nouvelle");
-  const dialog = page.locator("dialog[open]");
-  await dialog.getByText(label("machine.rights_advanced")).click();
-  const right = dialog.getByRole("checkbox", { name: label("machine.capability_restic_restore") });
-  await expect(right).not.toBeChecked();
-  await right.check();
-  const note = label("machine.capability_restic_restore_note").split("{product}")[0]?.slice(0, 40) ?? "";
-  await expect(dialog).toContainText(note);
-  await right.uncheck();
-  await expect(dialog.getByText(note)).toHaveCount(0);
-  expect(findings.unknown()).toEqual([]);
-});

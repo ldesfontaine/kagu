@@ -184,7 +184,13 @@ func (b *installBench) serve(dir string) {
 // s'il a fini sans erreur.
 func (b *installBench) run() (string, bool) {
 	b.t.Helper()
-	command := exec.Command(b.shell, b.script, "--rights", "observe") // #nosec G204 -- le script du dépôt, joué par le test.
+	return b.runWith("--rights", "observe")
+}
+
+// runWith lance « sh install.sh args… ».
+func (b *installBench) runWith(args ...string) (string, bool) {
+	b.t.Helper()
+	command := exec.Command(b.shell, append([]string{b.script}, args...)...) // #nosec G204 -- le script du dépôt, joué par le test.
 	command.Env = []string{"PATH=" + b.tools, "TMPDIR=" + b.work, brand.EnvPrefix + "RELEASES=file://" + b.releases}
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
@@ -426,4 +432,157 @@ func legacySignature(t *testing.T, name string) {
 	if err := os.WriteFile(name, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// serveLibrary met dir dans la bibliothèque d'un faux serve, à
+// <serveur>/releases/v<MIN_VERSION>/ ; rend l'adresse du serveur.
+func (b *installBench) serveLibrary(dir string) string {
+	b.t.Helper()
+	library := filepath.Join(filepath.Dir(b.releases), "serve", "releases")
+	if err := os.MkdirAll(library, 0o755); err != nil {
+		b.t.Fatal(err)
+	}
+	if err := os.Symlink(dir, filepath.Join(library, "v"+b.minVersion)); err != nil {
+		b.t.Fatal(err)
+	}
+	return "file://" + filepath.Dir(library)
+}
+
+// joined vérifie que le binaire de cette machine est posé depuis served, que
+// rien n'est gardé pour setup, et que join a reçu les arguments de la ligne,
+// tels quels.
+func (b *installBench) joined(stderr string, ok bool, served string, args ...string) {
+	b.t.Helper()
+	if !ok {
+		b.t.Fatalf("install.sh join refused:\n%s", stderr)
+	}
+	want, err := os.ReadFile(filepath.Join(served, release.BinaryName(runtime.GOARCH)))
+	if err != nil {
+		b.t.Fatal(err)
+	}
+	if got, err := os.ReadFile(b.binary); err != nil || !bytes.Equal(got, want) {
+		b.t.Fatalf("installed binary %q %v", got, err)
+	}
+	if _, err := os.Lstat(filepath.Dir(filepath.Dir(b.kept))); !errors.Is(err, os.ErrNotExist) {
+		b.t.Errorf("join kept the release for setup: %v", err)
+	}
+	received, err := os.ReadFile(b.marker)
+	if err != nil {
+		b.t.Fatalf("join was not launched: %v", err)
+	}
+	if wantArgs := strings.Join(args, "\n") + "\n"; string(received) != wantArgs {
+		b.t.Fatalf("join received %q, want %q", received, wantArgs)
+	}
+}
+
+// joinLine rend les arguments de la ligne d'ajout, join en tête.
+func joinLine(server string) []string {
+	return []string{"join", "--server", server, "--server-key", "SHA256:kq3V9xA", "--rights", "manage"}
+}
+
+// withoutOtherBinaries retire de la version servie les binaires d'une autre
+// architecture : join ne prend que le sien.
+func withoutOtherBinaries(t *testing.T, served string) {
+	t.Helper()
+	for _, arch := range []string{"amd64", "arm64"} {
+		if arch == runtime.GOARCH {
+			continue
+		}
+		if err := os.Remove(filepath.Join(served, release.BinaryName(arch))); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// R-B1-12, N-M8 : la ligne d'ajout lance ce même script, qui vérifie la
+// version comme pour setup puis lance join. La bibliothèque de serve n'est
+// qu'une source de fichiers, prise quand l'adresse des versions ne répond
+// pas : un binaire changé, des sommes changées ou une version signée par une
+// autre clé y sont refusés avant toute écriture. Par minisign comme par
+// openssl.
+func TestR_B1_12_TheJoinLineRunsTheReleasesScriptNeverOneFromServe(t *testing.T) {
+	_, stranger, err := release.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, verifier := range installVerifiers {
+		t.Run(verifier, func(t *testing.T) {
+			keys, private := testReleaseKeys(t)
+
+			t.Run("from the releases address", func(t *testing.T) {
+				b := newInstallBench(t, verifier, keys, "1.0.0")
+				served := releasetest.Write(t, private, "v1.0.0", b.binaries("v1.0.0"))
+				withoutOtherBinaries(t, served)
+				b.serve(served)
+				line := joinLine("https://kagu.example.org")
+				stderr, ok := b.runWith(line...)
+				b.joined(stderr, ok, served, line...)
+			})
+
+			t.Run("from the library of serve", func(t *testing.T) {
+				b := newInstallBench(t, verifier, keys, "1.0.0")
+				served := releasetest.Write(t, private, "v1.0.0", b.binaries("v1.0.0"))
+				line := joinLine(b.serveLibrary(served))
+				stderr, ok := b.runWith(line...)
+				b.joined(stderr, ok, served, line...)
+			})
+
+			t.Run("from the library, --server=", func(t *testing.T) {
+				b := newInstallBench(t, verifier, keys, "1.0.0")
+				served := releasetest.Write(t, private, "v1.0.0", b.binaries("v1.0.0"))
+				line := []string{"join", "--server=" + b.serveLibrary(served), "--rights", "observe"}
+				stderr, ok := b.runWith(line...)
+				b.joined(stderr, ok, served, line...)
+			})
+
+			refusals := []struct {
+				name   string
+				signer release.PrivateKey
+				change func(t *testing.T, served string)
+				reason string
+			}{
+				{name: "changed binary in the library", signer: private, reason: "somme fausse",
+					change: func(t *testing.T, served string) {
+						rewriteFile(t, filepath.Join(served, release.BinaryName(runtime.GOARCH)), "printf", "echo pwned;printf")
+					}},
+				{name: "changed sums in the library", signer: private, reason: "signature refusée",
+					change: func(t *testing.T, served string) {
+						rewriteFile(t, filepath.Join(served, brand.ReleaseSumsFile), "  ", "  ./")
+					}},
+				{name: "release signed by another key in the library", signer: stranger, reason: "faite par une autre clé"},
+				{name: "older release in the library", signer: private, reason: "version plus ancienne"},
+			}
+			for _, c := range refusals {
+				t.Run(c.name, func(t *testing.T) {
+					b := newInstallBench(t, verifier, keys, "1.0.0")
+					version := "v1.0.0"
+					if strings.HasPrefix(c.name, "older") {
+						version = "v0.9.0"
+					}
+					served := releasetest.Write(t, c.signer, version, b.binaries(version))
+					if c.change != nil {
+						c.change(t, served)
+					}
+					stderr, ok := b.runWith(joinLine(b.serveLibrary(served))...)
+					b.refused(stderr, ok, c.reason)
+				})
+			}
+
+			t.Run("no releases address and no server", func(t *testing.T) {
+				b := newInstallBench(t, verifier, keys, "1.0.0")
+				stderr, ok := b.runWith("join", "--rights", "observe")
+				b.refused(stderr, ok, "pas de --server")
+			})
+		})
+	}
+}
+
+// setup n'a pas de repli : sans l'adresse des versions, il refuse même si
+// une bibliothèque répond.
+func TestInstallScript_SetupHasNoLibraryFallback(t *testing.T) {
+	keys, private := testReleaseKeys(t)
+	b := newInstallBench(t, "openssl", keys, "1.0.0")
+	served := releasetest.Write(t, private, "v1.0.0", b.binaries("v1.0.0"))
+	stderr, ok := b.runWith("--server", b.serveLibrary(served), "--rights", "observe")
+	b.refused(stderr, ok, "téléchargement impossible")
 }

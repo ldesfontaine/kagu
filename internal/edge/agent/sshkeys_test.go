@@ -105,7 +105,7 @@ func TestSignal_TheSSHSectionGoesOnceThenOnlyAfterAChangeOrANewStream(t *testing
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	t.Cleanup(server.Close)
-	client, err := NewClient(server.URL, "", "v", false)
+	client, err := NewClient(server.URL, "v")
 	if err != nil {
 		t.Fatal(err)
 	}

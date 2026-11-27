@@ -12,6 +12,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/edge/agent"
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/lang"
 )
 
 // writePending écrit dans l'état la liste que l'agent tient, comme il
@@ -151,7 +152,16 @@ func TestR_DROIT_8_PendingOutputCarriesThePasteWarning(t *testing.T) {
 	stateDir, place := policyState(t)
 	writePending(t, stateDir, refusedNow())
 	out, _ := runPolicy(t, place, fakeTerminal("\n"), policyGrant, "-state", stateDir, "--pending")
-	want := "Une ligne venue de " + brand.ProductName + " est une seule commande « sudo " + brand.Command + " agent … », sans « ; », « | », « && » ni « --yes » : sinon, ne la collez pas."
+	catalogs, err := lang.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// La phrase validée par Lucas (ARB-4), lue dans le catalogue : la sortie
+	// et l'écran disent la même.
+	want := catalogs.For(lang.Default).Get("rights.paste_only_pending")
+	if !strings.HasPrefix(want, "Une ligne de droits venue de "+brand.ProductName+" ") {
+		t.Fatalf("the catalog lost the validated warning: %q", want)
+	}
 	if !strings.Contains(out, want) {
 		t.Fatalf("no warning in the --pending output, want %q:\n%s", want, out)
 	}

@@ -13,7 +13,7 @@ import type { Firewall, FirewallCounts, FirewallDetail, FirewallFlowsResponse, F
 import type { DeletionCount, DeletionPlan } from "./deletion";
 import type { DeclaredServiceDetail, DeclaredServicesResponse, DeployPlan, GapsResponse, ProjectsResponse, ProposalResponse, ServiceUpdate } from "./directory";
 import type { JobResponse, JobsResponse } from "./jobs";
-import type { Account, Agent, AgentAnchors, AgentRights, AnchorKind, Capability, GroupRight, Machine, MachineHost, MachineRole, MachinesResponse, PolicyRefusal, ReportedCapability, RightFit, RightsGroup, SetLine } from "./machines";
+import type { Account, Agent, AgentAnchors, AgentRights, AnchorKind, Capability, GroupRight, JoinGroup, JoinOffer, JoinSet, Machine, MachineHost, MachineRole, MachinesResponse, PolicyRefusal, ReportedCapability, RightFit, RightsGroup, SetLine } from "./machines";
 import type { MachineStorage, PhysicalDisk, StoragePool } from "./storage";
 import type { AppliesResponse, Apply } from "./manifest";
 import type { MCPCheck } from "./mcpCheck";
@@ -129,6 +129,7 @@ const machine = shape<Machine>("Machine", {
     reported_at: value,
     requested: capability,
     server_key_fingerprint: value,
+    key_fingerprint: value,
     capabilities_differ: value,
     run_as: shape<Account>("Account", { uid: value, name: value }),
     rollback_capable: value,
@@ -213,6 +214,11 @@ const machineStorage = shape<MachineStorage>("MachineStorage", {
 const machines = shape<MachinesResponse>("MachinesResponse", {
   machines: machine,
   pending: shape("PendingToken", { id: value, name: value, masked: value, expires_at: value, reenroll: value }),
+  join: shape<JoinOffer>("JoinOffer", {
+    ready: value,
+    domain_line: value,
+    sets: shape<JoinSet>("JoinSet", { set: value, groups: shape<JoinGroup>("JoinGroup", { name: value, rights: value }) }),
+  }),
 });
 
 type ContainerJSON = ContainersResponse["containers"][number];

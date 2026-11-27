@@ -47,37 +47,6 @@ test("la fiche dit les deux états : aucune ancre posée, ancres illisibles, et 
   expect(findings.unknown()).toEqual([]);
 });
 
-test("Ré-enrôler : les ancres se demandent avec le droit, la clé du trousseau est proposée, la ligne les porte", async ({ page, findings }) => {
-  findings.where = `/machines/${noneMachine}/reenroller`;
-  await page.goto(`/machines/${noneMachine}/reenroller`);
-  const dialog = page.locator("dialog[open]");
-  const produce = dialog.getByLabel(label("machine.capability_backup_produce"));
-  // Le jeton d'avant ne demandait aucun droit : on le coche, et les champs apparaissent.
-  await expect(dialog.locator("fieldset.anchor-fields")).toHaveCount(0);
-  await produce.check();
-  const fields = dialog.locator("fieldset.anchor-fields");
-  await expect(fields).toContainText(label("anchor.form_title"));
-  await expect(fields.getByLabel(label("anchor.label_backup_recipient"))).toHaveValue(/^age1/);
-  await expect(fields.getByLabel(label("anchor.label_restic_target_cert"))).toHaveCount(0);
-  await dialog.getByLabel(label("machine.capability_restic_produce")).check();
-  await expect(fields.getByLabel(label("anchor.label_restic_target_cert"))).toBeVisible();
-
-  // Une valeur qui n'a pas la forme du type est refusée par le serveur.
-  await fields.getByLabel(label("anchor.label_backup_guest")).fill("0101");
-  await dialog.getByRole("button", { name: label("machine.rights_submit") }).click();
-  await expect(dialog).toContainText(label("machine.anchor_invalid"));
-
-  await fields.getByLabel(label("anchor.label_backup_guest")).fill("312, 313");
-  await fields.getByLabel(label("anchor.label_restic_target_cert")).fill("ab".repeat(32));
-  await dialog.getByRole("button", { name: label("machine.rights_submit") }).click();
-  const enroll = dialog.locator(".checklist-item").filter({ hasText: label("machine.install_enroll_title") });
-  const line = await enroll.locator(".token-box").innerText();
-  expect(line).toMatch(/ -backup-recipient age1[a-z0-9]+ -backup-guest 312,313 -restic-target-cert (ab){32}/);
-  await dialog.getByRole("button", { name: label("wizard.next") }).click();
-  await dialog.locator(".modal-foot").getByRole("button", { name: label("modal.close") }).click();
-  expect(findings.unknown()).toEqual([]);
-});
-
 test("un ordre que les ancres feraient refuser n'est pas envoyé : le refus donne la commande exacte", async ({ page, findings }) => {
   findings.where = "/sauvegardes/nouvelle (VM de pve-ancres)";
   await page.goto("/sauvegardes/nouvelle");

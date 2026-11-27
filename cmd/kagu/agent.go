@@ -20,6 +20,7 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	"github.com/ldesfontaine/kagu/internal/kit/release"
 	"github.com/ldesfontaine/kagu/internal/kit/trust"
@@ -66,11 +67,10 @@ func runAgent(args []string) error {
 	// -token n'existe que pour être refusé avec une phrase claire, plutôt que
 	// l'erreur générique d'un drapeau inconnu.
 	flags.String("token", "", "refusé : le jeton se lit sur l'entrée standard")
-	pin := flags.String("pin", "", "empreinte SHA-256 du certificat de "+brand.ProductName+", s'il est auto-signé")
+	serverKey := flags.String("server-key", "", "empreinte « SHA256:… » de la clé de "+brand.ProductName+", premier lancement seulement")
 	language := flags.String("lang", string(lang.Default), "langue des messages, premier lancement seulement")
 	rights := flags.String("rights", "", "droits cochés à l'installation, premier lancement seulement (observe par défaut)")
 	rootDir := flags.String("root-dir", brand.WorkspaceRoot, "racine des services déployés, premier lancement seulement")
-	allowPlain := flags.Bool("allow-plain", false, "accepte http:// vers un serveur distant (réseau déjà chiffré seulement)")
 	stateDir := flags.String("state", defaultAgentStateDir, "répertoire d'état de l'agent")
 	dockerSocket := flags.String("docker-socket", dockerapi.DefaultSocket, "socket du démon Docker de cette machine")
 	caFile := flags.String("ca-file", "", "paquet PEM d'une autorité interne, ajouté au magasin du système pour les sondes")
@@ -101,6 +101,10 @@ func runAgent(args []string) error {
 	// de la machine par /proc : le premier qui le copie prend l'identité.
 	if flagIsSet(flags, "token") {
 		return &refusal{message: catalogs.For(code).Get("agent.token_flag_refused")}
+	}
+	// L'empreinte aussi : mal écrite, elle ne serait égale à aucune clé.
+	if *serverKey != "" && !ident.IsKeyFingerprint(*serverKey) {
+		return &refusal{message: catalogs.For(code).Get("agent.server_key_invalid")}
 	}
 	// Les droits se jugent avant l'enrôlement : un droit mal écrit ne doit
 	// pas consommer le jeton.
@@ -155,8 +159,7 @@ func runAgent(args []string) error {
 		Server:       *server,
 		Token:        enrollmentToken,
 		EnrollOnly:   *enrollOnly,
-		Pin:          *pin,
-		AllowPlain:   *allowPlain,
+		ServerKey:    *serverKey,
 		Language:     code,
 		Rights:       capabilities,
 		Anchors:      anchors,

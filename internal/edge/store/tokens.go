@@ -79,7 +79,7 @@ func scanToken(row scanner) (machine.Token, error) {
 	t.Role = machine.Role(role)
 	t.AgentID = agentID.String
 	if requested != "" {
-		t.Capabilities, _ = agentpolicy.ParseCapabilities(requested)
+		t.Capabilities, _ = agentpolicy.ParsePolicyRights(requested)
 	}
 	t.CreatedAt = time.Unix(createdAt, 0)
 	t.ExpiresAt = time.Unix(expiresAt, 0)

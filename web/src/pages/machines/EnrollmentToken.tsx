@@ -1,58 +1,35 @@
-import { Note } from "../../components/Card";
-import { Checklist } from "../../components/Checklist";
-import { InstallSteps } from "../../components/InstallSteps";
-import { PublicUrlNote } from "../../components/PublicUrlNote";
+import type { TokenResponse } from "../../api/machines";
+import { KeyValue, Note } from "../../components/Card";
 import { TokenBox } from "../../components/Copy";
-import { useChecklist } from "../../hooks/useChecklist";
 import { useT } from "../../i18n/context";
-import type { TokenPageState } from "../../lib/machines";
+import { joinPasteText } from "../../lib/machines";
 import { formatRemaining } from "../../lib/time";
 
-// Le jeton d'une machine et les étapes à coller dessus. Il ne s'affiche
-// qu'une fois, dans la commande de l'enrôlement : l'appelant tient la réponse
-// en mémoire, jamais dans l'adresse ni dans l'historique du navigateur.
-// checklist : les cases cochées des étapes, tenues par l'appelant.
-export function EnrollmentToken({ token, checklist }: { token: TokenPageState; checklist: { done: readonly string[]; toggle: (id: string, checked: boolean) => void } }) {
+// Les deux lignes à coller sur la machine (B1 §3) : la commande join, écrite
+// par le serveur, puis le jeton, montré à part. Un seul « Copier » prend les
+// deux. Le jeton ne s'affiche qu'une fois : l'appelant tient la réponse en
+// mémoire, jamais dans l'adresse ni dans l'historique du navigateur. Pour un
+// ré-enrôlement, les deux commandes qui retirent l'agent en place passent
+// avant, une par ligne. Aucune n'est une commande de l'agent : pas de
+// RootCommand ni de son avertissement (ARB-4) ; la ligne d'ajout porte sa note.
+export function EnrollmentToken({ token }: { token: TokenResponse }) {
   const t = useT();
   const expiresIn = formatRemaining(t, Date.parse(token.expires_at) - Date.now());
   return (
     <>
       <p className="secondary">{t("machine.token_subtitle", token.name)}</p>
       <Note tone="warn">{t("machine.token_once", expiresIn)}</Note>
-      <p className="secondary">{t("machine.install_root_note")}</p>
-      <InstallSteps steps={token.steps} produces={token.rights.some((right) => right.name === "backup.produce")} done={checklist.done} onToggle={checklist.toggle} />
-      {token.proxmox_commands !== "" && <ProxmoxToken commands={token.proxmox_commands} />}
-      <PublicUrlNote local={token.url_local} suggestion={token.url_suggestion} />
+      {token.reenroll_lines.length > 0 && (
+        <>
+          <p className="secondary">{t("machine.join_reenroll_first")}</p>
+          <TokenBox value={token.reenroll_lines.join("\n")} lines />
+        </>
+      )}
+      <p>{t("machine.join_paste")}</p>
+      <TokenBox value={token.command} copy={joinPasteText(token)} />
+      <p className="secondary">{t("machine.join_line_check")}</p>
+      <KeyValue label={t("machine.join_token")} value={token.token} mono />
+      <p className="secondary">{t("machine.join_confirm")}</p>
     </>
-  );
-}
-
-// Les droits proxmox.* passent par un jeton Proxmox local que l'opérateur crée
-// lui-même sur l'hôte : le secret ne quitte jamais l'hôte.
-function ProxmoxToken({ commands }: { commands: string }) {
-  const t = useT();
-  const gestures = useChecklist();
-  return (
-    <div className="field">
-      <span className="field-label">{t("machine.proxmox_token_title")}</span>
-      <Checklist
-        done={gestures.done}
-        onToggle={gestures.toggle}
-        items={[
-          {
-            id: "run",
-            title: t("machine.proxmox_token_run_title"),
-            content: (
-              <>
-                <p>{t("machine.proxmox_token_run_text")}</p>
-                <TokenBox value={commands} lines />
-              </>
-            ),
-          },
-          { id: "secret", title: t("machine.proxmox_token_secret_title"), content: <p>{t("machine.proxmox_token_secret_text")}</p> },
-        ]}
-      />
-      <Note tone="warn">{t("machine.capability_proxmox_warning")}</Note>
-    </div>
   );
 }

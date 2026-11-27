@@ -67,13 +67,4 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.locator(".alert-row").first()).toBeVisible();
     await shoot(page, "alertes", theme, true);
   });
-
-  test(`enrôlement avec restic.verify ${theme}`, async ({ page }) => {
-    await open(page, theme, "/machines/nouvelle");
-    const dialog = page.locator("dialog[open]");
-    await dialog.getByLabel(label("machine.name_label")).fill("nas-sauvegardes");
-    await dialog.getByText(label("machine.rights_advanced")).click();
-    await dialog.getByLabel(label("machine.capability_restic_verify")).check();
-    await shoot(page, "droit-restic-verify", theme);
-  });
 }

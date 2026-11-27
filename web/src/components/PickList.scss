@@ -104,6 +104,14 @@
   justify-content: flex-end;
 }
 
+// Le pli sous la ligne passe lui aussi au-dessus du libellé étiré : l'ouvrir
+// ne choisit pas la ligne.
+.pick-more {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / -1;
+}
+
 .pick-empty {
   padding: 12px;
   border: 1px dashed var(--line-strong);

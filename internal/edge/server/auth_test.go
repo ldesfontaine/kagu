@@ -174,6 +174,9 @@ var wantOpenRoutes = []string{
 	"/ping/{token}", "/ping/{token}/start", "/ping/{token}/{code}",
 	"/statut", "/statut/{$}", "/statut/{slug}", "/statut/{slug}/{$}",
 	"/statut/{slug}/api/status", "/statut/{slug}/api/i18n", "/statut/{slug}/api/events", "/statut/",
+	// La clé publique des ordres et la bibliothèque des versions, que join lit
+	// avant d'être enrôlé (R-B1-12, R-B1-13).
+	"/agent/server-key", "/releases/{version}/{name}",
 }
 
 func checkOpenRoutes(t *testing.T, open map[string]bool) {

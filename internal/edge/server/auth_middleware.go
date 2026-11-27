@@ -125,7 +125,7 @@ func isBeforeSignInRoute(method, pattern string) bool {
 
 // Les préfixes qui ne passent jamais par l'authentification de
 // l'opérateur. Tout le reste, fourre-tout du front compris, y passe.
-var openRoutePrefixes = []string{"/agent/", "/ping/", "/statut"}
+var openRoutePrefixes = []string{"/agent/", "/ping/", "/statut", "/releases/"}
 
 // isOperatorRoute dit si le motif de route est réservé à l'opérateur. Le
 // jugement porte sur le motif enregistré, pas sur le chemin reçu : un

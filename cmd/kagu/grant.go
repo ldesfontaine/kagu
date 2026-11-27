@@ -14,9 +14,9 @@ import (
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
 	"github.com/ldesfontaine/kagu/internal/fact/anchor"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
+	"github.com/ldesfontaine/kagu/internal/kit/ident"
 	"github.com/ldesfontaine/kagu/internal/kit/lang"
 	kitrefusal "github.com/ldesfontaine/kagu/internal/kit/refusal"
-	"github.com/ldesfontaine/kagu/internal/wire/agentwire"
 )
 
 // kagu agent rights | grant <droit>[=valeur]… [--for <durée>|permanent]
@@ -353,12 +353,12 @@ func printServerKeyChanges(out io.Writer, text lang.Catalog, before, after []age
 	}
 	for _, key := range before {
 		if !held(after, key.Key) {
-			fmt.Fprintln(out, text.Format("agent.trust_server_key_removed", agentwire.KeyFingerprint(key.Key)))
+			fmt.Fprintln(out, text.Format("agent.trust_server_key_removed", ident.KeyFingerprint(key.Key)))
 		}
 	}
 	var added []string
 	for _, key := range after {
-		fingerprint := agentwire.KeyFingerprint(key.Key)
+		fingerprint := ident.KeyFingerprint(key.Key)
 		switch {
 		case !held(before, key.Key):
 			added = append(added, fingerprint)

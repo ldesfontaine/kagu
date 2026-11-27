@@ -212,10 +212,6 @@ test("première configuration native : le compte créé, l'interface s'ouvre san
   await page.route("**/api/auth/totp/proposal", (route) =>
     route.fulfill({ json: { secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP", uri: "otpauth://totp/x", qr_code: "data:image/png;base64," } }),
   );
-  // La machine a déjà un agent : pas d'étape d'installation, l'interface s'ouvre.
-  await page.route("**/api/machines/local-enrollment", (route) =>
-    route.fulfill({ status: 409, json: { error: "machine.local_has_agent" } }),
-  );
 
   await page.goto("/");
   await expect(

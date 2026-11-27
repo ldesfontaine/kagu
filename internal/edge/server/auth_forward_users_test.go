@@ -328,9 +328,10 @@ func TestForwardUsers_EveryOperatorRouteRefusesAnUnlistedIdentity(t *testing.T) 
 		if !isOperatorRoute(route.pattern) {
 			// Une route sortie de la porte ne sortirait pas du parcours en
 			// silence : les seules ouvertes sont celles qui ont leur propre
-			// preuve (agent, pings) ou n'en ont pas besoin (statut).
-			if !strings.HasPrefix(route.pattern, "/agent/") && !strings.HasPrefix(route.pattern, "/ping/") && !strings.HasPrefix(route.pattern, "/statut") {
-				t.Errorf("%s %s: open route outside the agent, pings and status page", route.method, route.pattern)
+			// preuve (agent, pings) ou n'en ont pas besoin (statut, versions
+			// signées).
+			if !strings.HasPrefix(route.pattern, "/agent/") && !strings.HasPrefix(route.pattern, "/ping/") && !strings.HasPrefix(route.pattern, "/statut") && !strings.HasPrefix(route.pattern, "/releases/") {
+				t.Errorf("%s %s: open route outside the agent, pings, status page and releases", route.method, route.pattern)
 			}
 			continue
 		}

@@ -3,13 +3,11 @@ package machine
 import (
 	"context"
 	"crypto/ed25519"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -229,8 +227,10 @@ func (s *Service) Count(ctx context.Context) (total, online int, err error) {
 }
 
 // CreateToken émet le jeton d'une nouvelle machine, nommée par l'opérateur,
-// avec le rôle qu'il lui donne et les droits qu'il a cochés ; observe s'y
-// ajoute toujours.
+// avec le rôle qu'il lui donne et les droits du jeu qu'il a choisi, gardés
+// pour l'écran seulement : aucun ne se pose depuis le jeton (R-DROIT-6), le
+// jeu vient de la ligne. Ils se lisent comme dans la politique, où le jeu
+// les pose ; observe s'y ajoute toujours.
 func (s *Service) CreateToken(ctx context.Context, name string, role Role, capabilities []agentpolicy.Capability) (string, Token, error) {
 	if err := ValidateName(name); err != nil {
 		return "", Token{}, err
@@ -238,7 +238,7 @@ func (s *Service) CreateToken(ctx context.Context, name string, role Role, capab
 	if !slices.Contains(Roles(), role) {
 		return "", Token{}, ErrRoleUnknown
 	}
-	normalized, err := agentpolicy.NormalizeCapabilities(capabilities)
+	normalized, err := agentpolicy.NormalizePolicyRights(capabilities)
 	if err != nil {
 		return "", Token{}, err
 	}
@@ -252,6 +252,9 @@ func (s *Service) CreateToken(ctx context.Context, name string, role Role, capab
 // que le jeton du précédent demandait, observe seul s'il n'en demandait
 // aucun.
 func (s *Service) CreateReenrollToken(ctx context.Context, machineID string, capabilities []agentpolicy.Capability) (string, Token, error) {
+	if machineID == LocalID {
+		return "", Token{}, ErrLocalReenrollBySetup
+	}
 	machine, err := s.store.GetMachine(ctx, machineID)
 	if err != nil {
 		return "", Token{}, err
@@ -259,7 +262,7 @@ func (s *Service) CreateReenrollToken(ctx context.Context, machineID string, cap
 	if capabilities == nil {
 		capabilities = machine.Agent.Requested
 	}
-	normalized, err := agentpolicy.NormalizeCapabilities(capabilities)
+	normalized, err := agentpolicy.NormalizePolicyRights(capabilities)
 	if err != nil {
 		return "", Token{}, err
 	}
@@ -395,6 +398,11 @@ func (s *Service) Enroll(ctx context.Context, request Enrollment) (Machine, erro
 	if len(request.PublicKey) != ed25519.PublicKeySize {
 		return Machine{}, ErrBadKey
 	}
+	// La moitié publique X25519 a la taille d'une clé, ou manque (un agent
+	// d'avant) ; jugée avant le jeton, qu'une clé mal formée ne brûle pas.
+	if len(request.SealPublicKey) != 0 && len(request.SealPublicKey) != SealKeySize {
+		return Machine{}, ErrBadKey
+	}
 	// Avant le jeton : un champ refusé ne brûle pas la ligne de l'opérateur.
 	said := Reported{Hostname: request.Hostname, System: request.OS, Arch: request.Arch, Version: request.AgentVersion}
 	if RefusedFields(said) != nil {
@@ -413,7 +421,7 @@ func (s *Service) Enroll(ctx context.Context, request Enrollment) (Machine, erro
 		Arch:      request.Arch,
 		CreatedAt: now,
 	}
-	agent := Agent{ID: agentID, PublicKey: request.PublicKey, Version: request.AgentVersion, EnrolledAt: now}
+	agent := Agent{ID: agentID, PublicKey: request.PublicKey, SealPublicKey: request.SealPublicKey, Version: request.AgentVersion, EnrolledAt: now}
 	machine, err := s.store.Enroll(ctx, ident.HashToken(request.Token), candidate, agent, now)
 	if err != nil {
 		return Machine{}, err
@@ -594,7 +602,7 @@ func (s *Service) readAgentAccount(connection *Connection, account, unavailable 
 // ne vérifierait pas les ordres de ce serveur. Une forme qui n'est pas une
 // empreinte, ou rien, s'écrit vide.
 func (s *Service) NoteServerKey(ctx context.Context, agentID, fingerprint string) error {
-	if !isKeyFingerprint(fingerprint) {
+	if !ident.IsKeyFingerprint(fingerprint) {
 		fingerprint = ""
 	}
 	return s.store.RecordServerKey(ctx, agentID, fingerprint)
@@ -869,17 +877,6 @@ func (s *Service) RecordHost(ctx context.Context, machineID string, report hosti
 		s.changed(machineID)
 	}
 	return nil
-}
-
-// isKeyFingerprint : « SHA256: » et 43 caractères de base64 sans
-// remplissage, la forme d'agentwire.KeyFingerprint.
-func isKeyFingerprint(text string) bool {
-	digest, found := strings.CutPrefix(text, "SHA256:")
-	if !found || len(digest) != 43 {
-		return false
-	}
-	_, err := base64.RawStdEncoding.Strict().DecodeString(digest)
-	return err == nil
 }
 
 // MaxSystemLength borne ce qu'un agent dit de son système.

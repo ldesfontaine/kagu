@@ -3,9 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { label } from "./support/catalog";
 
 // Les captures des ancres de confiance locales (docs/projet/refonte-ux/captures/
-// AL-*.png) : la fiche d'un agent sans ancre posée, puis la fenêtre
-// « Ré-enrôler » ouverte avec ses champs d'ancres et la clé du trousseau
-// proposée. Données fictives seulement. Hors `make ci` : `E2E_CAPTURES=1 npm run e2e`.
+// AL-*.png) : la fiche d'un agent sans ancre posée, puis la page Sauvegardes.
+// Données fictives seulement. Hors `make ci` : `E2E_CAPTURES=1 npm run e2e`.
 test.skip(process.env.E2E_CAPTURES !== "1", "captures demandées par E2E_CAPTURES=1");
 
 const folder = new URL("../../docs/projet/refonte-ux/captures/", import.meta.url);
@@ -29,16 +28,6 @@ test("la fiche : aucune ancre posée, la commande à coller", async ({ page }) =
   await expect(card).toContainText(label("anchor.none_title"));
   await card.scrollIntoViewIfNeeded();
   await shoot(page, "fiche");
-});
-
-test("la fenêtre Ré-enrôler ouverte : les ancres demandées avec le droit", async ({ page }) => {
-  await open(page, `/machines/${noneMachine}/reenroller`);
-  const dialog = page.locator("dialog[open]");
-  await dialog.getByLabel(label("machine.capability_backup_produce")).check();
-  await dialog.getByLabel(label("machine.capability_restic_produce")).check();
-  await dialog.getByLabel(label("anchor.label_backup_guest")).fill("312, 313");
-  await expect(dialog.getByLabel(label("anchor.label_backup_recipient"))).toHaveValue(/^age1/);
-  await shoot(page, "reenroler");
 });
 
 test("la page Sauvegardes : la passe refusée par une ancre, la commande à coller", async ({ page }) => {

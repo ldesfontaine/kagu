@@ -125,20 +125,6 @@ test("la cible sans restic.verify : la carte le dit, le geste ré-enrôle avec c
   expect(findings.unknown()).toEqual([]);
 });
 
-test("l'enrôlement offre le droit « Vérifier les dépôts reçus », décoché d'avance, avec sa note", async ({ page, findings }) => {
-  findings.where = "/machines/nouvelle › restic.verify";
-  await page.goto("/machines/nouvelle");
-  const dialog = page.locator("dialog[open]");
-  await dialog.getByText(label("machine.rights_advanced")).click();
-  const right = dialog.getByRole("checkbox", { name: label("machine.capability_restic_verify") });
-  await expect(right).not.toBeChecked();
-  await right.check();
-  await expect(dialog).toContainText(label("machine.capability_restic_verify_note").split("{product}")[0]?.slice(0, 40) ?? "");
-  await right.uncheck();
-  await expect(dialog.getByText(label("machine.capability_restic_verify_note").split("{product}")[0]?.slice(0, 40) ?? "")).toHaveCount(0);
-  expect(findings.unknown()).toEqual([]);
-});
-
 test("les alertes de sauvegarde ouvertes se filtrent par type dans la boîte des alertes", async ({ page, findings }) => {
   findings.where = "/alertes › genres de sauvegarde";
   await page.goto("/alertes");

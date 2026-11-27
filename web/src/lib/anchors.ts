@@ -1,9 +1,9 @@
-import type { AgentAnchors, AnchorKind, Anchors } from "../api/machines";
+import type { AgentAnchors, AnchorKind } from "../api/machines";
 
 // Les ancres de confiance locales : des valeurs que seul l'administrateur de la
 // machine pose (à l'installation, ou en root avec « agent trust »). Aucun ordre
 // de Kagu ne peut les changer ; sans ancre, l'agent refuse l'ordre qu'elle
-// borne. Ce fichier dit comment un écran les montre et les demande.
+// borne. Ce fichier dit comment un écran les montre.
 
 // Le registre du serveur (internal/fact/anchor), dans son ordre : le droit dont
 // l'ordre est borné, et ce que l'ancre accepte. Un test relit les noms et les
@@ -13,11 +13,6 @@ export const anchorKinds = [
   { name: "backup.guest", right: "backup.produce", max: 32 },
   { name: "restic.target-cert", right: "restic.produce", max: 4 },
 ] as const;
-
-// Le texte de chaque champ du formulaire, par type d'ancre.
-export type AnchorFields = Record<string, string>;
-
-export const emptyAnchorFields: AnchorFields = {};
 
 // Le suffixe des clés du catalogue d'un type : « restic.target-cert » devient
 // « restic_target_cert ».
@@ -29,61 +24,9 @@ export function anchorLabelKey(name: string): string {
   return `anchor.label_${anchorKey(name)}`;
 }
 
-export function anchorHelpKey(name: string): string {
-  return `anchor.help_${anchorKey(name)}`;
-}
-
-// Les types d'ancre que les droits cochés rendent utiles.
+// Les types d'ancre que les droits portés rendent utiles.
 export function anchorKindsFor(rights: readonly string[]): typeof anchorKinds[number][] {
   return anchorKinds.filter((kind) => rights.includes(kind.right));
-}
-
-// Les valeurs d'un champ : séparées par des virgules, des espaces ou des fins de ligne.
-export function splitAnchorValues(text: string): string[] {
-  return text
-    .split(/[\s,]+/)
-    .map((value) => value.trim())
-    .filter((value) => value !== "");
-}
-
-// Le corps de la requête : les valeurs des seuls types dont le droit est coché.
-// Le serveur juge leur forme.
-export function anchorsOf(fields: AnchorFields, rights: readonly string[]): Anchors {
-  const anchors: Anchors = {};
-  for (const kind of anchorKindsFor(rights)) {
-    const values = splitAnchorValues(fields[kind.name] ?? "");
-    if (values.length > 0) {
-      anchors[kind.name] = values;
-    }
-  }
-  return anchors;
-}
-
-// Les ancres que l'agent tient, en champs du formulaire : un ré-enrôlement
-// efface son fichier, ses ancres se redonnent. Un type illisible n'a rien à
-// recopier.
-export function anchorFieldsOf(anchors: AgentAnchors | undefined): AnchorFields {
-  const fields: AnchorFields = {};
-  for (const kind of anchors?.kinds ?? []) {
-    if (kind.state === "set") {
-      fields[kind.name] = kind.values.join(", ");
-    }
-  }
-  return fields;
-}
-
-// Cocher backup.produce propose la clé du trousseau de sauvegarde : c'est elle
-// que cette machine chiffrera. Une saisie de l'opérateur reste.
-export function withKeyringRecipient(fields: AnchorFields, recipient: string | undefined): AnchorFields {
-  if (recipient === undefined || recipient === "" || (fields["backup.recipient"] ?? "").trim() !== "") {
-    return fields;
-  }
-  return { ...fields, "backup.recipient": recipient };
-}
-
-// Les ancres ont changé depuis celles d'origine.
-export function areAnchorsModified(fields: AnchorFields, initial: AnchorFields): boolean {
-  return anchorKinds.some((kind) => splitAnchorValues(fields[kind.name] ?? "").join(",") !== splitAnchorValues(initial[kind.name] ?? "").join(","));
 }
 
 // Les types dont l'ordre est refusé aujourd'hui sur cette machine : le droit

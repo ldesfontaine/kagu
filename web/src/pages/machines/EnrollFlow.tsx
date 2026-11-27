@@ -1,24 +1,22 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 
-import { useMachines } from "../../api/machines";
+import { useMachines, type TokenResponse } from "../../api/machines";
 import { Button } from "../../components/Button";
 import { Note } from "../../components/Card";
 import { Modal } from "../../components/Modal";
 import { Pill } from "../../components/Pill";
 import { WizardBar } from "../../components/Wizard";
-import { useChecklist } from "../../hooks/useChecklist";
 import { useNow } from "../../hooks/useNow";
 import { useT } from "../../i18n/context";
 import { enrollProgress, type EnrollProgress, type EnrollTarget } from "../../lib/enrollWait";
-import type { TokenPageState } from "../../lib/machines";
 import { formatRemaining } from "../../lib/time";
 import { EnrollmentToken } from "./EnrollmentToken";
 
 type Stage = "command" | "wait";
 
 // Les deux dernières étapes d'un enrôlement, communes à l'ajout et au
-// ré-enrôlement : la commande à coller sur la machine, puis l'attente de
+// ré-enrôlement : les deux lignes à coller sur la machine, puis l'attente de
 // l'agent, qui se lit sur la liste des machines que le direct relit. Le
 // jeton reste en mémoire dans cette fenêtre : il ne s'affiche qu'une fois.
 // titles : les trois étapes de l'assistant ; la première est celle de
@@ -32,7 +30,7 @@ export function EnrollFlow({
 }: {
   title: string;
   titles: string[];
-  token: TokenPageState;
+  token: TokenResponse;
   target: EnrollTarget;
   onClose: () => void;
 }) {
@@ -41,7 +39,6 @@ export function EnrollFlow({
   const now = useNow();
   const machines = useMachines();
   const [stage, setStage] = useState<Stage>("command");
-  const installed = useChecklist();
   const progress = enrollProgress(target, machines.data?.machines ?? [], Date.parse(token.expires_at), now);
 
   const actions =
@@ -70,7 +67,7 @@ export function EnrollFlow({
   return (
     <Modal title={title} onClose={onClose} wide actions={actions}>
       <WizardBar titles={titles} position={stage === "command" ? 1 : 2} reached={stage === "command" ? 1 : 2} canJump={false} onJump={() => undefined} />
-      {stage === "command" ? <EnrollmentToken token={token} checklist={installed} /> : <AgentWait name={token.name} progress={progress} remaining={Date.parse(token.expires_at) - now} />}
+      {stage === "command" ? <EnrollmentToken token={token} /> : <AgentWait name={token.name} progress={progress} remaining={Date.parse(token.expires_at) - now} />}
     </Modal>
   );
 }

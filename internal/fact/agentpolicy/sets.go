@@ -76,8 +76,8 @@ type SetHost struct {
 	Proxmox      bool
 }
 
-// rightsOf rend les droits que le jeu pose sur cette machine.
-func (s Set) rightsOf(host SetHost) []Capability {
+// Rights rend les droits que le jeu pose sur cette machine.
+func (s Set) Rights(host SetHost) []Capability {
 	listed := sets[s].everywhere
 	if host.Proxmox {
 		listed = slices.Concat(listed, sets[s].onProxmox)
@@ -122,7 +122,7 @@ func (d Document) GrantSet(set Set, host SetHost) (Document, error) {
 		}
 	}
 	d.Rights, d.Expiries = kept, expiriesWithout(d.Expiries, replaced)
-	return d.Grant(set.rightsOf(host), Term{Permanent: true}, Clock{})
+	return d.Grant(set.Rights(host), Term{Permanent: true}, Clock{})
 }
 
 // CoversSet dit si des droits portent tout ce que le jeu pose partout : la

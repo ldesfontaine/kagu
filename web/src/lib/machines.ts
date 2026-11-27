@@ -1,8 +1,6 @@
-import type { Account, Agent, Capability, Machine, ReportedCapability, RoleID, TokenResponse } from "../api/machines";
-import type { SessionRole } from "../api/session";
+import type { Account, Agent, Capability, Machine, ReportedCapability, RightsSet, RoleID, TokenResponse } from "../api/machines";
 import type { Translate } from "../i18n/context";
 import type { SelectOption } from "./select";
-import { areAnchorsModified, emptyAnchorFields, type AnchorFields } from "./anchors";
 import { seenAgo } from "./time";
 
 // Le sous-titre des pages qui comptent les machines : rien, une, plusieurs.
@@ -16,137 +14,36 @@ export function machinesSubtitle(t: Translate, total: number, online: number): s
   return t("machines.subtitle", total, online);
 }
 
-// Les droits d'un agent tels que le formulaire les tient : à l'ajout d'une
-// machine, ou au ré-enrôlement qui les change.
-export interface RightsValues {
-  // Les droits cochés, hors observe, toujours là.
-  rights: string[];
-  // Le dossier où recevoir des sauvegardes, et ceux où écrire, séparés par
-  // des virgules.
-  backupPath: string;
-  writePaths: string;
-  // Le dossier des dépôts d'une cible restic : un seul.
-  resticPath: string;
-  // Les ancres de confiance locales à poser à l'installation (lib/anchors.ts).
-  anchors: AnchorFields;
-}
-
-// Le formulaire d'une machine neuve : l'opérateur la nomme et coche les
-// droits de son agent, le serveur répond par un jeton et la ligne
-// d'installation qui les porte.
-interface MachineFormValues extends RightsValues {
+// Le formulaire d'une machine neuve : son nom, son rôle (les modules qu'elle
+// montre, aucun droit) et le jeu de droits de son agent, vide tant qu'aucun
+// n'est choisi.
+interface MachineFormValues {
   name: string;
   role: RoleID;
+  set: RightsSet | "";
 }
 
-// Le rôle générique d'abord, et probe.lan coché d'emblée : les sondes d'une
-// machine visent d'abord son réseau local ; l'opérateur le décoche s'il veut
-// les en empêcher. C'est le préréglage de ce rôle (machine.RolePreset).
-export const emptyMachineForm: MachineFormValues = { name: "", role: "generic", rights: ["probe.lan"], backupPath: "", writePaths: "", resticPath: "", anchors: emptyAnchorFields };
-
-// Choisir un rôle coche d'avance ses droits, tels que le serveur les dit à la
-// session ; l'opérateur les ajuste ensuite sous « Avancé ».
-export function rolePatch(role: RoleID, roles: readonly SessionRole[]): Pick<MachineFormValues, "role" | "rights"> {
-  const preset = roles.find((offered) => offered.id === role)?.capabilities ?? [];
-  return { role, rights: preset.filter((name) => name !== alwaysGranted) };
-}
+export const emptyMachineForm: MachineFormValues = { name: "", role: "generic", set: "" };
 
 // La saisie a changé depuis le formulaire neuf : fermer la fenêtre de l'ajout
 // demande alors s'il faut l'abandonner.
 export function isMachineFormModified(values: MachineFormValues): boolean {
-  const sameRights = values.rights.length === emptyMachineForm.rights.length && values.rights.every((right) => emptyMachineForm.rights.includes(right));
-  return values.name.trim() !== "" || values.role !== emptyMachineForm.role || values.backupPath.trim() !== "" || values.writePaths.trim() !== "" || values.resticPath.trim() !== "" || !sameRights || areAnchorsModified(values.anchors, emptyAnchorFields);
+  return values.name.trim() !== "" || values.role !== emptyMachineForm.role || values.set !== emptyMachineForm.set;
 }
 
-// Les droits ont changé depuis ceux d'origine (l'ordre des cases n'y compte pas) :
-// fermer la fenêtre du ré-enrôlement demande alors s'il faut les abandonner.
-export function isRightsModified(values: RightsValues, initial: RightsValues): boolean {
-  const sameRights = values.rights.length === initial.rights.length && values.rights.every((right) => initial.rights.includes(right));
-  return !sameRights || values.backupPath.trim() !== initial.backupPath.trim() || values.writePaths.trim() !== initial.writePaths.trim() || values.resticPath.trim() !== initial.resticPath.trim() || areAnchorsModified(values.anchors, initial.anchors);
+// Ce que le bouton « Copier » de l'ajout met dans le presse-papiers : la
+// commande, puis le jeton, chacun sur sa ligne. Collées ensemble, join lit la
+// seconde sur le terminal sans l'afficher.
+export function joinPasteText(token: Pick<TokenResponse, "command" | "token">): string {
+  return `${token.command}\n${token.token}\n`;
 }
 
-// Les droits d'un agent en valeurs du formulaire : ce que son jeton
-// demandait, pour les changer, avec les ancres qu'il tient (un ré-enrôlement
-// efface son fichier : elles se redonnent).
-export function rightsFormOf(capabilities: Capability[], anchors: AnchorFields = emptyAnchorFields): RightsValues {
-  const pathsOf = (name: string) => capabilities.find((capability) => capability.name === name)?.paths ?? [];
-  return {
-    rights: capabilities.map((capability) => capability.name).filter((name) => name !== alwaysGranted),
-    backupPath: pathsOf("backup.receive").join(", "),
-    writePaths: pathsOf("files.write").join(", "),
-    resticPath: pathsOf("restic.target").join(", "),
-    anchors,
-  };
-}
-
-// Ce que la page du jeton reçoit : la réponse du serveur, et les droits que
-// le jeton porte, pour dire ce que l'unité de l'agent doit autoriser.
-export interface TokenPageState extends TokenResponse {
-  rights: Capability[];
-}
-
-export function tokenPageState(token: TokenResponse, rights: Capability[]): TokenPageState {
-  return { ...token, rights };
-}
-
-// Les droits qui agissent sur les invités d'un hôte Proxmox, sans chemin.
-const proxmoxRights: readonly string[] = ["proxmox.power", "proxmox.snapshot"];
-
-// Les droits que le formulaire propose, parmi ceux de la session
-// (useRightNames) : ceux de Proxmox seulement quand l'agent a reconnu un hôte
-// Proxmox VE sur la machine. Un droit déjà coché reste, pour pouvoir le
-// décocher si le rôle a disparu.
-export function offeredCapabilities(rightNames: readonly string[], proxmoxDetected: boolean, checked: string[]): string[] {
-  return rightNames.filter((name) => proxmoxDetected || !proxmoxRights.includes(name) || checked.includes(name));
-}
-
-// Le seul producteur de sauvegardes que le serveur connaisse (agentpolicy.Producers) :
-// la portée de backup.produce est fixée, la case suffit.
-export const backupProducer = "proxmox-vzdump";
-
-// observe est toujours accordé : la case se montre cochée et grisée.
+// observe est toujours accordé.
 export const alwaysGranted = "observe";
 
 // La clé du libellé d'un droit : le point du nom devient « _ ».
 export function capabilityLabelKey(name: string): string {
   return `machine.capability_${name.split(".").join("_")}`;
-}
-
-// Coche ou décoche un droit.
-export function toggleRight(rights: string[], name: string): string[] {
-  return rights.includes(name) ? rights.filter((right) => right !== name) : [...rights, name];
-}
-
-// Le corps de la requête : chaque droit coché, dans l'ordre de la session
-// (useRightNames), avec ses chemins pour un droit borné. Le serveur ajoute
-// observe et juge les chemins.
-export function capabilitiesOf(rightNames: readonly string[], values: RightsValues): Capability[] {
-  return rightNames
-    .filter((name) => name !== alwaysGranted && values.rights.includes(name))
-    .map((name) => ({ name, paths: pathsOf(name, values) }));
-}
-
-function pathsOf(name: string, values: RightsValues): string[] {
-  if (name === "backup.receive") {
-    return splitPaths(values.backupPath);
-  }
-  if (name === "files.write") {
-    return splitPaths(values.writePaths);
-  }
-  if (name === "restic.target") {
-    return splitPaths(values.resticPath);
-  }
-  if (name === "backup.produce") {
-    return [backupProducer];
-  }
-  return [];
-}
-
-function splitPaths(text: string): string[] {
-  return text
-    .split(",")
-    .map((path) => path.trim())
-    .filter((path) => path !== "");
 }
 
 // Un droit en une ligne : son libellé, puis ses chemins.

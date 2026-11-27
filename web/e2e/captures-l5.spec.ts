@@ -33,17 +33,6 @@ for (const theme of ["light", "dark"] as const) {
       await page.clock.setFixedTime(new Date("2026-09-12T12:00:00Z"));
     });
 
-    test(`Ajouter une machine, droit d'environnement coché ${theme}`, async ({ page }) => {
-      await page.goto("/machines/nouvelle");
-      const dialog = page.locator("dialog[open]");
-      await dialog.getByLabel(label("machine.name_label")).fill("vps-env-1");
-      await dialog.getByText(label("machine.rights_advanced")).click();
-      await dialog.getByRole("checkbox", { name: label("machine.capability_observe_env") }).check();
-      await expect(dialog.getByText(label("machine.capability_observe_env_note"))).toBeVisible();
-      await dialog.getByText(label("machine.capability_observe_env_note")).scrollIntoViewIfNeeded();
-      await shoot(page, "ajouter-droit", theme);
-    });
-
     test(`Ajouter une machine, menu du rôle ouvert ${theme}`, async ({ page }) => {
       await page.goto("/machines/nouvelle");
       const dialog = page.locator("dialog[open]");
@@ -58,15 +47,6 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.locator(".note", { hasText: label("link.environment_off") })).toBeVisible();
       await page.getByText(label("link.title"), { exact: true }).scrollIntoViewIfNeeded();
       await shoot(page, "fiche-liens", theme);
-    });
-
-    test(`Ré-enrôler ouvert par le bouton du droit manquant ${theme}`, async ({ page }) => {
-      await openService(page, "notes");
-      await page.locator(".note", { hasText: label("link.environment_off") }).getByRole("link").click();
-      const dialog = page.locator("dialog[open]");
-      await expect(dialog.getByRole("checkbox", { name: label("machine.capability_observe_env") })).toBeChecked();
-      await dialog.getByText(label("machine.capability_observe_env_note")).scrollIntoViewIfNeeded();
-      await shoot(page, "reenroller-coche", theme);
     });
   });
 }

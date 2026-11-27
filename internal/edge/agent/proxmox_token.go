@@ -19,7 +19,7 @@ import (
 const maxProxmoxTokenBytes = 4 << 10
 
 // proxmoxToken est le jeton local de l'agent : l'opérateur l'a posé dans l'état
-// de l'agent (machine.ProxmoxTokenCommands). Le secret n'en sort jamais :
+// de l'agent (sa pose revient avec #902). Le secret n'en sort jamais :
 // ni journal, ni résultat d'ordre, ni message d'erreur.
 type proxmoxToken struct {
 	ID          string `json:"token_id"`

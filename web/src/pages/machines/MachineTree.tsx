@@ -20,7 +20,8 @@ const columns = 7;
 
 // Les lignes du tableau des machines : un hôte, ses invités en retrait (machines
 // enrôlées, puis invités que nul agent ne suit), une grappe et ses nœuds.
-export function MachineTreeRows({ rows, resources, now }: { rows: TreeRow[]; resources: ReadonlyMap<string, Current>; now: number }) {
+// canJoin : une machine peut s'ajouter (le serveur a son domaine en https).
+export function MachineTreeRows({ rows, resources, now, canJoin }: { rows: TreeRow[]; resources: ReadonlyMap<string, Current>; now: number; canJoin: boolean }) {
   return (
     <>
       {rows.map((row) => {
@@ -28,7 +29,7 @@ export function MachineTreeRows({ rows, resources, now }: { rows: TreeRow[]; res
           case "machine":
             return <MachineRow key={row.key} row={row} current={resources.get(row.machine.id)} now={now} />;
           case "guest":
-            return <GuestRow key={row.key} row={row} />;
+            return <GuestRow key={row.key} row={row} canJoin={canJoin} />;
           case "cluster":
             return <GroupRow key={row.key} depth={row.depth} icon="network" label={row.cluster.name} countKey="machines.cluster_nodes" count={row.nodes} />;
           case "node":
@@ -105,7 +106,7 @@ function AgentCell({ agent }: { agent: Agent | null }) {
 
 // Un invité que l'hôte voit et qu'aucun agent ne suit : grisé, avec de quoi
 // l'enrôler. Ce qui lui est alloué est ce que l'hôte annonce, pas ce qu'il consomme.
-function GuestRow({ row }: { row: Extract<TreeRow, { type: "guest" }> }) {
+function GuestRow({ row, canJoin }: { row: Extract<TreeRow, { type: "guest" }>; canJoin: boolean }) {
   const { t, language } = useI18n();
   const guest = row.guest;
   return (
@@ -128,7 +129,7 @@ function GuestRow({ row }: { row: Extract<TreeRow, { type: "guest" }> }) {
       <td className="secondary nowrap">—</td>
       <td className="num wide-only">—</td>
       <td className="td-end wide-only">
-        <Button variant="ghost" small to="/machines/nouvelle">
+        <Button variant="ghost" small to="/machines/nouvelle" disabled={!canJoin}>
           {t("machines.enroll_guest")}
         </Button>
       </td>

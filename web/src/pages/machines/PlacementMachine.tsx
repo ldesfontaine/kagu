@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router";
+import { useNavigate } from "react-router";
 
-import { setMachinePlacement, useMachines, type KindID, type Machine } from "../../api/machines";
+import { setMachinePlacement, type KindID, type Machine } from "../../api/machines";
 import { Field } from "../../components/Field";
 import { ModalForm } from "../../components/ModalForm";
 import { Select } from "../../components/Select";
 import { useAction } from "../../hooks/useAction";
 import { useT } from "../../i18n/context";
 import { hostCandidates, hostOptions, isPlacementModified, kindIDs, placementOf, type PlacementValues } from "../../lib/placement";
+import { RoutedMachine } from "./RoutedMachine";
 
 // « Corriger le type et l'hôte » : la fenêtre de la fiche d'une machine, à
 // l'adresse /machines/:id/emplacement. Le type se déduit (l'agent, l'hôte) et
@@ -15,13 +16,7 @@ import { hostCandidates, hostOptions, isPlacementModified, kindIDs, placementOf,
 // déduction se trompe, par exemple un VPS dont l'hébergeur est inconnu. Vider
 // un champ rend la main à la déduction.
 export function PlacementMachine() {
-  const { id = "" } = useParams();
-  const machines = useMachines();
-  const current = machines.data?.machines.find((machine) => machine.id === id);
-  if (machines.data && !current) {
-    return <Navigate to="/machines" replace />;
-  }
-  return current && machines.data ? <PlacementDialog machine={current} all={machines.data.machines} /> : null;
+  return <RoutedMachine>{(machine, machines) => <PlacementDialog machine={machine} all={machines.machines} />}</RoutedMachine>;
 }
 
 function PlacementDialog({ machine, all }: { machine: Machine; all: Machine[] }) {
