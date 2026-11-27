@@ -16,7 +16,7 @@ FRONT_DIR   := web
 
 export CGO_ENABLED = 0
 
-.PHONY: build release release-binaries run test ci fmt vet staticcheck vulncheck gosec dupl front front-check e2e clean
+.PHONY: build release release-binaries run test ci fmt vet staticcheck vulncheck gosec dupl scripts-test front front-check e2e clean
 
 # Le front compilé est embarqué par go:embed : il précède tout build ou test Go.
 build: front
@@ -71,7 +71,7 @@ run: build
 test: front
 	go test ./...
 
-ci: fmt vet staticcheck front-check e2e test vulncheck gosec dupl build
+ci: fmt vet staticcheck front-check e2e test vulncheck gosec dupl scripts-test build
 
 fmt:
 	@unformatted="$$(gofmt -l . ; go run $(GOIMPORTS) -l .)"; \
@@ -94,6 +94,10 @@ gosec:
 # copies admises (scripts/dupl-admises.txt) : elle ne fait que raccourcir.
 dupl:
 	go run $(DUPL) -t 80 -plumbing internal cmd | scripts/dupl-releve.sh
+
+# Les tests des scripts du dépôt (lancement du serveur de démo des captures).
+scripts-test:
+	scripts/captures-serveur-test.sh
 
 clean:
 	rm -rf bin/kagu dist dist-release

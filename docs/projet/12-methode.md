@@ -163,7 +163,7 @@ et `-telephone.webp` : toutes les routes de `web/src/App.tsx`, mode sombre,
   (`TestR_NETMAPDEMO_NoRealInstallationInPublicFixtures`). Sans ce fichier, le
   script refuse de partir. `scripts/captures.sh --garde <fichier>` lit un
   fichier contre la même liste.
-- Le lancement du serveur de démo est dans `scripts/captures-serveur.sh` ; `scripts/captures-serveur-test.sh` (hors `make ci`) échoue si ssh ne rend pas la main.
+- Le lancement du serveur de démo est dans `scripts/captures-serveur.sh` ; `scripts/captures-serveur-test.sh` (cible `make scripts-test`, dans `make ci`) échoue si ssh ne rend pas la main ou si une fonction déclare un `local` du nom d'une variable en lecture seule de `captures.sh`.
 - Le coût : 56 routes × 2 formats pèsent environ 16 Mo de WebP à chaque rejeu
   gardé dans l'historique.
 
