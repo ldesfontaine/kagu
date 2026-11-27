@@ -231,6 +231,42 @@ func TestReleaseSign_RefusesABadVersionAndUnreadableSums(t *testing.T) {
 	mustRefuse(t, releaseCommand([]string{"sign", "-key-env", testKeyVariable, "-version", "v0.0.2", notSums}, &bytes.Buffer{}, getenv, nil), "n'est pas un fichier de sommes")
 }
 
+// R-B2-11, QA-17 : -floor pose le plancher dans le commentaire de confiance
+// signé, jamais dans SHA256SUMS ; un plancher mal écrit ou au-dessus de la
+// version est refusé avant de signer.
+func TestReleaseSign_PutsTheFloorInTheTrustedComment(t *testing.T) {
+	fixture := newReleaseFixture(t)
+	getenv := func(string) string { return fixture.privateKey(t) }
+	sign := func(floor string) error {
+		return releaseCommand([]string{"sign", "-key-env", testKeyVariable, "-version", "v0.0.2", "-floor", floor, fixture.sums}, &bytes.Buffer{}, getenv, nil)
+	}
+	mustRefuse(t, sign("0.0.1"), "le plancher doit s'écrire vX.Y.Z")
+	mustRefuse(t, sign("v0.0.3"), "le plancher v0.0.3 est au-dessus de la version v0.0.2")
+	if _, err := os.Stat(fixture.sums + ".minisig"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("signed after a refusal: %v", err)
+	}
+	sumsBefore, err := os.ReadFile(fixture.sums)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sign("v0.0.2"); err != nil {
+		t.Fatal(err)
+	}
+	sums, err := os.ReadFile(fixture.sums)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature, err := os.ReadFile(fixture.sums + ".minisig")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys, _ := fixture.trusted()
+	signed, err := release.VerifySums(sums, signature, keys)
+	if err != nil || signed.Floor != (release.Version{Patch: 2}) || !bytes.Equal(sums, sumsBefore) {
+		t.Fatalf("floor %s, sums changed %v, %v", signed.Floor, !bytes.Equal(sums, sumsBefore), err)
+	}
+}
+
 func TestReleaseKeygen_RefusesAnExistingFileAndWrites0600(t *testing.T) {
 	fixture := newReleaseFixture(t)
 	info, err := os.Stat(fixture.keyFile)

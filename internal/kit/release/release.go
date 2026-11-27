@@ -25,17 +25,26 @@ var (
 // Un fichier de sommes ou de signature tient en quelques centaines d'octets.
 const maxSmallFileSize = 1 << 20
 
+// Le champ du commentaire de confiance qui porte le plancher (QA-17) : jamais
+// dans SHA256SUMS, que ParseSums et « sha256sum --strict » liraient comme une
+// somme fausse.
+const floorField = "floor"
+
 // Release est une version dont les sommes sont signées par une clé de confiance.
 type Release struct {
 	Version Version
 	Sums    map[string]string
 	// ByBackup : la clé de secours l'a signée ; elle devient la courante.
 	ByBackup bool
+	// Floor est le plancher de sécurité de la version (R-B2-11) : un agent
+	// qui l'a confirmée ne redescend plus sous lui. Zéro : pas de plancher.
+	Floor Version
 }
 
-// VerifySums vérifie la signature des sommes, puis lit la version dans le
-// commentaire de confiance : c'est la seule partie du fichier de signature
-// que la signature couvre en plus des sommes, et la seule source de la version.
+// VerifySums vérifie la signature des sommes, puis lit la version et son
+// plancher dans le commentaire de confiance : c'est la seule partie du fichier
+// de signature que la signature couvre en plus des sommes, et la seule source
+// des deux. Un plancher au-dessus de sa propre version est refusé.
 func VerifySums(sums, signature []byte, keys Keys) (Release, error) {
 	comment, byBackup, err := Verify(sums, signature, keys)
 	if err != nil {
@@ -52,11 +61,42 @@ func VerifySums(sums, signature []byte, keys Keys) (Release, error) {
 	if err != nil {
 		return Release{}, err
 	}
+	floor, err := parseFloor(fields, version)
+	if err != nil {
+		return Release{}, err
+	}
 	parsed, err := ParseSums(sums)
 	if err != nil {
 		return Release{}, err
 	}
-	return Release{Version: version, Sums: parsed, ByBackup: byBackup}, nil
+	return Release{Version: version, Sums: parsed, ByBackup: byBackup, Floor: floor}, nil
+}
+
+// parseFloor lit le champ « floor » : absent (une version signée avant le
+// plancher), il vaut zéro.
+func parseFloor(fields map[string]string, version Version) (Version, error) {
+	text, present := fields[floorField]
+	if !present {
+		return Version{}, nil
+	}
+	floor, err := ParseVersion(text)
+	if err != nil {
+		return Version{}, err
+	}
+	if IsBelowFloor(version, floor) {
+		return Version{}, fmt.Errorf("%w: floor %s above version %s", ErrMalformed, floor, version)
+	}
+	return floor, nil
+}
+
+// TrustedComment écrit le commentaire de confiance d'une version : l'instant,
+// le fichier signé, la version, et le plancher s'il y en a un.
+func TrustedComment(timestamp int64, version, floor Version) string {
+	comment := fmt.Sprintf("timestamp:%d\tfile:%s\tversion:%s", timestamp, brand.ReleaseSumsFile, version)
+	if floor != (Version{}) {
+		comment += "\t" + floorField + ":" + floor.String()
+	}
+	return comment
 }
 
 // parseTrustedComment lit les paires « clé:valeur » séparées par des tabulations.

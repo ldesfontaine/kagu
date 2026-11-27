@@ -300,6 +300,12 @@ func (library *Library) OpenServed(version Version, name string) (*os.File, erro
 	return library.root.Open(artifact.Path)
 }
 
+// Signed rend une version importée telle que sa signature la dit (sommes,
+// plancher), sans relire ses binaires.
+func (library *Library) Signed(version Version) (Release, error) {
+	return library.verifiedSums(version)
+}
+
 // verifiedSums relit les sommes d'une version importée et leur signature, et
 // vérifie que le dossier porte bien la version qu'il nomme.
 func (library *Library) verifiedSums(version Version) (Release, error) {

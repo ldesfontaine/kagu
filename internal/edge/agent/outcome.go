@@ -92,9 +92,9 @@ func (o *updateOutcome) announce() {
 
 // confirm, une fois le flux ouvert (le serveur a vu la version et l'a
 // acquittée), clôt la mise à jour en attente si c'est bien la version visée
-// qui tourne. Une mise à jour se ferme du côté du serveur à ce retour même ;
-// un retour arrière demandé n'a pas de version à attendre côté serveur, il le
-// dit lui-même.
+// qui tourne, et efface la version d'avant si elle est sous le plancher. Une
+// mise à jour se ferme du côté du serveur à ce retour même ; un retour arrière
+// demandé n'a pas de version à attendre côté serveur, il le dit lui-même.
 func (o *updateOutcome) confirm() {
 	if o == nil {
 		return
@@ -111,6 +111,9 @@ func (o *updateOutcome) confirm() {
 			return
 		}
 		o.logger.Info("update confirmed", "run_id", marker.RunID, "version", o.version)
+		if err := eraseBelowFloor(o.stateDir); err != nil {
+			o.logger.Error("erase the previous version below the release floor", "error", err)
+		}
 		return
 	}
 	marker.State = rollback.StateConfirmed

@@ -221,6 +221,15 @@ case $version in v*) ;; *) fail "commentaire de confiance : version mal formée"
 is_version "${version#v}" || fail "commentaire de confiance : version mal formée"
 version_at_least "${version#v}" "$MIN_VERSION" ||
 	fail "version plus ancienne que celle attendue : $version servie, v$MIN_VERSION au moins"
+# Le plancher de sécurité (R-B2-11) est facultatif : présent, il s'écrit comme
+# la version et ne la dépasse pas, sinon release.VerifySums refuse la version.
+if printf '%s\n' "$trusted_comment" | tr '\t' '\n' | grep -q '^floor:'; then
+	floor=$(comment_field floor)
+	case $floor in v*) ;; *) fail "commentaire de confiance : plancher mal formé" ;; esac
+	is_version "${floor#v}" || fail "commentaire de confiance : plancher mal formé"
+	version_at_least "${version#v}" "${floor#v}" ||
+		fail "commentaire de confiance : plancher $floor au-dessus de la version $version"
+fi
 
 check_sums_names
 # setup garde tous les binaires pour la bibliothèque ; join ne prend que le
