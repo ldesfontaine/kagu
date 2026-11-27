@@ -1270,7 +1270,9 @@ remplacé »** (une machine éteinte, l'unité tuée), ni finie ni revenue :
 (`--finish`) ; sinon il redémarre si « Serveur redémarré » manque, attend la
 version visée, et revient si elle reste muette ; un retour commencé n'est
 jamais rejoué : si la version d'avant répond, il est noté fait (« revenu à la
-main »), sinon les trois commandes sont redites. **Le coût** : un processus
+main »), sinon les trois commandes sont redites. Le retour remet la version
+en place avant la montée, même si elle est sous le plancher de la version
+visée (R-B2-11) : il ne descend jamais plus bas que ce qui tournait. **Le coût** : un processus
 root parle à l'adresse des versions (décision de Lucas, QA-16) ; `--from`
 s'en passe. Les unités réécrites ne valent qu'au prochain redémarrage du
 service. L'attente de 10 minutes pour des migrations lentes n'est pas
