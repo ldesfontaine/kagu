@@ -34,4 +34,6 @@ var (
 	UpgradeAnswers   = Define("step.upgrade.answers")
 	UpgradeUnits     = Define("step.upgrade.units")
 	UpgradePolicy    = Define("step.upgrade.policy")
+	// Le retour arrière, quand la nouvelle version ne répond pas (R-B2-3).
+	UpgradeRolledBack = Define("step.upgrade.rolled_back")
 )

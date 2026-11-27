@@ -1,8 +1,10 @@
 package fsx
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -45,7 +47,7 @@ func writeAtomic(root *os.Root, name string, data []byte, perm os.FileMode, owne
 	if err != nil {
 		return err
 	}
-	if err := writeTemp(root, temp, data, perm, os.O_EXCL); err != nil {
+	if err := writeTemp(root, temp, bytes.NewReader(data), perm, os.O_EXCL); err != nil {
 		return err
 	}
 	if owner != nil {
@@ -97,11 +99,17 @@ func isTempSuffix(suffix string) bool {
 // (lien dur d'un temporaire à nom unique), donc un lecteur ne voit jamais un
 // fichier vide ou partiel.
 func CreateExclusive(root *os.Root, name string, data []byte, perm os.FileMode) error {
+	return CreateExclusiveFrom(root, name, bytes.NewReader(data), perm)
+}
+
+// CreateExclusiveFrom fait comme CreateExclusive, le contenu lu en flux :
+// une base entière n'a pas à tenir en mémoire.
+func CreateExclusiveFrom(root *os.Root, name string, content io.Reader, perm os.FileMode) error {
 	temp, err := uniqueTempName(name)
 	if err != nil {
 		return err
 	}
-	if err := writeTemp(root, temp, data, perm, os.O_EXCL); err != nil {
+	if err := writeTemp(root, temp, content, perm, os.O_EXCL); err != nil {
 		return err
 	}
 	return LinkExclusive(root, temp, name)
@@ -133,7 +141,7 @@ func uniqueTempName(name string) (string, error) {
 
 // writeTemp écrit data dans temp, en mode perm exactement : le umask de
 // l'appelant ne doit pas le modifier.
-func writeTemp(root *os.Root, temp string, data []byte, perm os.FileMode, extraFlags int) error {
+func writeTemp(root *os.Root, temp string, content io.Reader, perm os.FileMode, extraFlags int) error {
 	file, err := root.OpenFile(temp, os.O_WRONLY|os.O_CREATE|extraFlags, perm)
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
@@ -142,7 +150,7 @@ func writeTemp(root *os.Root, temp string, data []byte, perm os.FileMode, extraF
 		discard(root, file, temp)
 		return fmt.Errorf("chmod temp file: %w", err)
 	}
-	if err := writeAndSync(file, data); err != nil {
+	if err := writeAndSync(file, content); err != nil {
 		discard(root, file, temp)
 		return err
 	}
@@ -161,8 +169,8 @@ func discard(root *os.Root, file *os.File, temp string) {
 	_ = root.Remove(temp)
 }
 
-func writeAndSync(file *os.File, data []byte) error {
-	if _, err := file.Write(data); err != nil {
+func writeAndSync(file *os.File, content io.Reader) error {
+	if _, err := io.Copy(file, content); err != nil {
 		return fmt.Errorf("write temp file: %w", err)
 	}
 	if err := file.Sync(); err != nil {

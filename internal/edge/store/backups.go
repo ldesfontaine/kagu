@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -228,7 +229,8 @@ func (db *DB) SnapshotDatabase(ctx context.Context, path string) error {
 const (
 	KeptUpgradeCopies = 3
 	upgradeDirMode    = 0o700
-	upgradeCopyMode   = 0o600
+	// UpgradeCopyMode : la copie, et la base que upgrade remet depuis elle.
+	UpgradeCopyMode   = 0o600
 	upgradeCopySuffix = ".db"
 )
 
@@ -243,14 +245,14 @@ func (db *DB) CopyBeforeUpgrade(ctx context.Context, running release.Version) (s
 	if err := db.stateDir.MkdirAll(brand.UpgradeDir, upgradeDirMode); err != nil {
 		return "", fmt.Errorf("create upgrade folder: %w", err)
 	}
-	name := path.Join(brand.UpgradeDir, brand.UpgradeCopyPrefix+running.String()+upgradeCopySuffix)
+	name := UpgradeCopyName(running)
 	partial := name + ".part"
 	if err := db.stateDir.Remove(partial); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return "", fmt.Errorf("remove partial upgrade copy: %w", err)
 	}
 	// Le fichier naît vide en 0600 (VACUUM INTO accepte un fichier vide) :
 	// SQLite le créerait sinon en 0644, umask compris.
-	if err := fsx.CreateExclusive(db.stateDir, partial, nil, upgradeCopyMode); err != nil {
+	if err := fsx.CreateExclusive(db.stateDir, partial, nil, UpgradeCopyMode); err != nil {
 		return "", err
 	}
 	if err := db.SnapshotDatabase(ctx, filepath.Join(db.stateDir.Name(), partial)); err != nil {
@@ -268,6 +270,28 @@ func (db *DB) CopyBeforeUpgrade(ctx context.Context, running release.Version) (s
 	}
 	return filepath.Join(db.stateDir.Name(), name), nil
 }
+
+// UpgradeCopyName : la copie d'avant une montée depuis running, sous
+// state_dir. upgrade la remet quand il revient (R-B2-3).
+func UpgradeCopyName(running release.Version) string {
+	return path.Join(brand.UpgradeDir, brand.UpgradeCopyPrefix+running.String()+upgradeCopySuffix)
+}
+
+// FailedUpgradeName : où upgrade garde la base d'une montée ratée vers
+// target, sous state_dir (R-B2-4). attempt, à partir de 1, sépare deux
+// montées ratées vers la même version : aucune n'écrase l'autre.
+func FailedUpgradeName(target release.Version, attempt int) string {
+	name := brand.UpgradeFailedPrefix + target.String()
+	if attempt > 1 {
+		name += "-" + strconv.Itoa(attempt)
+	}
+	return path.Join(brand.UpgradeDir, name+upgradeCopySuffix)
+}
+
+// DatabaseJournalSuffixes : les fichiers que SQLite tient à côté d'une base
+// en WAL. Une base déplacée part avec eux : laissés là, SQLite rejouerait
+// leur journal sur la base qui prend sa place.
+var DatabaseJournalSuffixes = []string{"-wal", "-shm"}
 
 // pruneUpgradeCopies efface les copies d'avant montée au-delà des
 // KeptUpgradeCopies plus récentes, sans jamais toucher à kept, celle qui

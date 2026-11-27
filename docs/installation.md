@@ -150,7 +150,7 @@ Les sous-commandes :
 | Commande | Rôle |
 | --- | --- |
 | `kagu setup [--rights observe\|manage\|root] [--no-docker] [--releases-url https://…]` | Installe Docker et restic s'ils manquent, le serveur et l'agent de cette machine, en root, voir [En une commande : setup](#en-une-commande--setup) ; `install.sh` le lance après avoir vérifié la version, voir [Par install.sh](#par-installsh) |
-| `kagu upgrade [--to <version>] [--from <dossier>] [--status]` | Monte le serveur de cette machine à une version signée, en root, voir [Le serveur : kagu upgrade](#le-serveur--kagu-upgrade) |
+| `kagu upgrade [--to <version>] [--from <dossier>] [--status \| --resume]` | Monte le serveur de cette machine à une version signée, en root, voir [Le serveur : kagu upgrade](#le-serveur--kagu-upgrade) |
 | `kagu serve -config <chemin>` | Le serveur web. `-config` vaut `/etc/kagu/config.toml` par défaut |
 | `kagu agent [options]` | L'agent d'une machine, voir [Ajouter une machine](#ajouter-une-machine) |
 | `kagu auth status\|disable -config <chemin>` | L'état de l'authentification, ou la couper (mot de passe perdu) : l'interface revient à sa première configuration |
@@ -1742,6 +1742,7 @@ sudo kagu upgrade                  # la version la plus récente
 sudo kagu upgrade --to v0.6.0      # une version précise
 sudo kagu upgrade --from /root/v0.6.0   # un dossier déjà téléchargé, sans réseau
 sudo kagu upgrade --status         # où en est la dernière montée
+sudo kagu upgrade --resume         # finit ou revient, après une coupure
 ```
 
 `upgrade` coche ses étapes l'une après l'autre :
@@ -1778,11 +1779,50 @@ sudo kagu upgrade --status         # où en est la dernière montée
   demande `[o/N]` ; non, ou sans terminal, il s'arrête sans rien toucher et
   dit de lancer `sudo kagu agent policy migrate` d'abord.
 
-Ce que `upgrade` ne fait pas encore : **revenir seul** si la nouvelle version
-ne répond pas en 60 s. Il s'arrête, et le message dit les trois gestes du
-retour à la main (ci-dessous). La **`v0.0.1`** n'embarque pas de clé de
-version : `upgrade` refuse, la première version signée s'installe à la main,
-une fois.
+**Si la nouvelle version ne répond pas en 60 s** (une migration qui échoue,
+un serveur qui ne démarre pas), `upgrade` revient seul :
+
+```
+  ✗ Serveur répond                pas de réponse de la nouvelle version en 60 s
+  ✓ Retour arrière                revenu en v0.5.0, base remise : ce que le serveur a écrit dans les 41 s après la copie est perdu
+    Base fautive gardée : /var/lib/kagu/upgrade/echec-v0.6.0.db
+```
+
+- `systemctl stop kagu`, puis l'ancien binaire est remis.
+- Sous le compte `kagu` (root ne touche jamais la base) : la base fautive,
+  avec ses `-wal` et `-shm`, est déplacée en `upgrade/echec-<version>.db` :
+  **jamais effacée**. Une deuxième montée ratée vers la même version prend
+  `echec-<version>-2.db`.
+- La copie `avant-<version>.db` est remise à la place de la base, octet pour
+  octet, par le compte `kagu`, en `0600` ; la copie reste où elle est.
+- `serve` redémarre, `upgrade` attend qu'il rende la version d'avant.
+- **Ce qui est perdu** : ce que `serve` a écrit entre la copie et l'arrêt
+  (l'écran dit combien de secondes). Lisez le journal de la version fautive
+  (`journalctl -u kagu -n 100`) avant de relancer.
+
+**Si le retour échoue aussi**, `upgrade` s'arrête, ne touche plus à rien, et
+écrit les trois commandes à jouer à la main :
+
+```sh
+systemctl stop kagu.service
+install -m 0755 /usr/local/lib/kagu/kagu.previous /usr/local/bin/kagu
+install -o kagu -g kagu -m 0600 /var/lib/kagu/upgrade/avant-v0.5.0.db /var/lib/kagu/kagu.db
+```
+
+Avant la dernière, déplacez `kagu.db` et ses `-wal`, `-shm` s'ils sont encore
+là : SQLite rejouerait leur journal sur la copie. Puis `systemctl start
+kagu` ; `sudo kagu upgrade --resume` note le retour.
+
+**Après une coupure** (machine redémarrée, unité tuée), `serve` qui trouve
+une base plus récente que lui refuse de démarrer et cite `kagu upgrade
+--resume`. `--resume` relit `state.json` et repart de l'étape écrite : la
+nouvelle version répond, la montée finit ; elle reste muette, `upgrade`
+revient. Un retour commencé ne se rejoue jamais.
+
+Ce que `upgrade` ne fait pas encore : attendre plus de 60 s une version dont
+les migrations sont lentes (l'archive ne les déclare pas encore, #907). La
+**`v0.0.1`** n'embarque pas de clé de version : `upgrade` refuse, la première
+version signée s'installe à la main, une fois.
 
 Les autres machines se mettent ensuite à jour depuis l'interface (« Mettre à
 jour les agents depuis Kagu »).

@@ -146,7 +146,7 @@ func refuseUnknownVersions(applied map[int]bool, names []string) error {
 	}
 	for version := range applied {
 		if !known[version] {
-			return fmt.Errorf("%w: migration %03d is recorded but not embedded; restore the backup made before the upgrade, or start from an empty state directory", ErrUnknownSchema, version)
+			return fmt.Errorf("%w: migration %03d is recorded but not embedded; as root, %s upgrade --resume finishes or rolls back the upgrade, or start from an empty state directory", ErrUnknownSchema, version, brand.Command)
 		}
 	}
 	return nil
