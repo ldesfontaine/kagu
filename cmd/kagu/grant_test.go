@@ -124,6 +124,13 @@ func (s *quietSystem) WriteDropIn(name string, content []byte) error {
 	s.dropIn = content
 	return nil
 }
+func (s *quietSystem) Output(name string, args ...string) ([]byte, error) {
+	s.laid = append(s.laid, name+" "+strings.Join(args, " "))
+	return nil, errors.New(name + ": not on the bench")
+}
+func (*quietSystem) ProxmoxCertificate() (string, error) {
+	return "", errors.New("no local Proxmox API")
+}
 func (*quietSystem) Exists(string) bool              { return false }
 func (*quietSystem) ReadUnit(string) ([]byte, error) { return nil, fs.ErrNotExist }
 func (s *quietSystem) WriteUnit(name string, _ []byte) error {

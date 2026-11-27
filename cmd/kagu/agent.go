@@ -54,6 +54,9 @@ func runAgent(args []string) error {
 	if len(args) > 0 && args[0] == "trust" {
 		return runAgentTrust(args[1:], asRoot)
 	}
+	if len(args) > 0 && args[0] == machine.ProxmoxTokenCommand {
+		return runAgentProxmoxToken(args[1:], asRoot)
+	}
 	if len(args) > 0 && args[0] == "policy" {
 		return runAgentPolicyMigrate(args[1:], asRoot)
 	}

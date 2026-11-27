@@ -183,7 +183,8 @@ func planChange(opts PolicyOptions, identity Identity, change *PolicyChange) err
 		return err
 	}
 	system := opts.system()
-	change.Prerequisites, err = planPrerequisites(system, account, identity.Root(), change.Before.Rights, change.After.Rights)
+	state := agentState{dir: opts.StateDir, path: opts.StatePath, servicesRoot: identity.Root()}
+	change.Prerequisites, err = planPrerequisites(system, account, state, change.Before.Rights, change.After.Rights)
 	if err != nil {
 		return fmt.Errorf("read what the rights ask of the system: %w", err)
 	}

@@ -30,6 +30,8 @@ type recordingSystem struct {
 	files map[string]bool
 	units map[string]string
 	done  []string
+	// pve : le Proxmox de l'hôte, que pveum lit et change ; nil, pas de pveum.
+	pve *fakePveum
 }
 
 func newRecordingSystem() *recordingSystem {
@@ -52,6 +54,10 @@ func (s *recordingSystem) Run(name string, args ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.done = append(s.done, strings.Join(append([]string{name}, args...), " "))
+	if name == "pveum" {
+		_, err := s.pve.answer(args)
+		return err
+	}
 	switch {
 	case name == "usermod":
 		s.members[args[len(args)-1]] = true
@@ -133,6 +139,23 @@ func (s *recordingSystem) RemoveFile(path string) error {
 	}
 	s.done = append(s.done, "remove "+path)
 	return nil
+}
+
+func (s *recordingSystem) Output(name string, args ...string) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.done = append(s.done, strings.Join(append([]string{name}, args...), " "))
+	if name != "pveum" {
+		return nil, fmt.Errorf("%s: not on the bench", name)
+	}
+	return s.pve.answer(args)
+}
+
+func (s *recordingSystem) ProxmoxCertificate() (string, error) {
+	if s.pve == nil || s.pve.fingerprint == "" {
+		return "", errors.New("no local Proxmox API")
+	}
+	return s.pve.fingerprint, nil
 }
 
 func (s *recordingSystem) Proxmox() bool       { return s.proxmox }

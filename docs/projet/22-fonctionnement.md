@@ -183,7 +183,7 @@ dit comment. Une migration de plus part de `002`.
 | Toute machine, la machine Kagu comprise, `/var/lib/kagu-agent` | `bin/` et `update.json` | `bin/kagu-<version>` (la courante et la précédente, rien d'autre), les liens `bin/current` (ce que le lanceur exécute) et `bin/previous` (la version d'avant la dernière bascule), et le **marqueur** `update.json` : une mise à jour (ou un retour arrière) en attente de confirmation, avec son échéance, ou ce que le lanceur en a fait (« Comment un agent se met à jour », décision 9). Aucun secret : états, numéros de version, identifiant d'ordre | `0600` au compte de l'agent. Le marqueur disparaît à la confirmation, ou une fois son rapport livré au serveur ; un marqueur illisible est écarté |
 | Toute machine, la machine Kagu comprise, `/usr/local/lib/kagu-agent` | `kagu-guard` | Le **lanceur stable** : une copie du binaire, posée une fois par root (`root:root`, `0755`), que l'unité systemd lance. L'agent, qui écrit son état et `bin/`, ne le remplace jamais | Se repose à la main si le lanceur change (`GuardVersion`) ; l'agent le sait par la variable `KAGU_AGENT_GUARD` |
 | Un hôte Proxmox dont l'agent a `backup.produce=proxmox-vzdump`, `/etc/systemd/system` | `kagu-vzdump.socket`, `kagu-vzdump@.service` | La **porte vzdump** : la socket `/run/kagu-vzdump.sock`, et l'unité de root qu'elle lance par connexion (`kagu-guard vzdump-gate`). Aucune donnée, aucun secret | root, `0644`. Posées par `kagu agent grant`, retirées par `revoke` (« `backup.produce=proxmox-vzdump` : la porte vzdump ») ; la socket, `0660`, à root et au groupe du compte de l'agent, disparaît avec l'unité |
-| Hôte Proxmox, `/var/lib/kagu-agent` | `proxmox.json` | Le jeton Proxmox **local** de l'agent : identifiant, **secret** et empreinte du certificat (`token_id`, `secret`, `fingerprint`), posé à la main par l'opérateur, jamais envoyé ni stocké par le serveur | `0600`, au compte de l'agent ; sans lui les droits `proxmox.*` sont indisponibles (« Comment un hôte Proxmox agit »). Le secret est en clair dans ce fichier : le protège le compte, pas un chiffrement |
+| Hôte Proxmox, `/var/lib/kagu-agent` | `proxmox.json` | Le jeton Proxmox **local** de l'agent : identifiant, **secret** et empreinte du certificat (`token_id`, `secret`, `fingerprint`), posé par `sudo kagu agent proxmox-token`, retiré par `revoke` du dernier droit `proxmox.*`, jamais envoyé ni stocké par le serveur | `0600`, au compte de l'agent ; sans lui les droits `proxmox.*` sont indisponibles (« Comment un hôte Proxmox agit »). Le secret est en clair dans ce fichier : le protège le compte, pas un chiffrement |
 | Un hôte Proxmox dont l'agent a `backup.produce`, `/var/lib/kagu-agent/produce/` | `<préfixe>-AAAAMMJJ-HHMMSS.tar.age.raw`, puis `….tar.age` | Les archives en cours de production : le flux brut de `vzdump` (compressé `zstd`, **en clair**), puis le même emballé dans un `tar` et chiffré pour la clé publique du trousseau ; les deux coexistent avant l'envoi, d'où **deux fois** la plus grosse VM compressée. L'agent refuse de commencer sous 1 Gio libre (`disk_full`) | `0700` et `0600`, au compte de l'agent. Vidé à la fin de **chaque** ordre, réussi ou non, et au démarrage de l'agent (un arrêt en pleine production ne laisse rien). Créé par l'agent s'il manque. Le clair de la VM ne quitte jamais cet hôte |
 
 **Ce que le chiffrement couvre.** Six colonnes, chiffrées à l'écriture, chacune liée à sa table, sa colonne et sa ligne (un chiffré recopié ailleurs ne s'ouvre plus) :
@@ -922,6 +922,8 @@ redit s'il manque ; jamais un prérequis dit posé quand il ne l'est pas :
 | Ancienne règle sudo retirée | `/etc/sudoers.d/kagu-agent`, `/usr/local/sbin/kagu-vzdump` ou le drop-in `produce.conf` (la préparation de `backup.produce` d'avant la porte vzdump) est là, quels que soient les droits | Retirés dans cet ordre (`machine.LegacyProducePreparation`), puis la relance : l'agent retrouve `NoNewPrivileges=true` |
 | Porte vzdump posée | `backup.produce=proxmox-vzdump` accordé, `/usr/bin/vzdump` présent, et les deux unités de la porte absentes ou différentes | `kagu-vzdump.socket` (groupe du compte de l'agent) et `kagu-vzdump@.service` écrites, puis `systemctl daemon-reload`, `enable` et `restart` de la socket (« `backup.produce=proxmox-vzdump` : la porte vzdump »). Sans relance de l'agent : il joint la porte par sa socket |
 | Porte vzdump retirée | Le droit n'y est plus, ou `vzdump` manque, et une des deux unités est là | `systemctl disable --now kagu-vzdump.socket`, les deux unités ôtées, `daemon-reload`. Sans relance de l'agent |
+| Jeton Proxmox à poser | Hôte Proxmox VE, un droit `proxmox.*` d'après (`knownRight.proxmoxToken`), et pas de `proxmox.json` dans l'état | Dit la commande `sudo kagu agent proxmox-token` (`machine.ProxmoxTokenLine`) ; rien n'est posé |
+| Jeton Proxmox retiré | Plus aucun droit `proxmox.*`, et le jeton, le compte `kagu-agent@pve`, le rôle `KaguAgent` (lus par `pveum … list`, sur un hôte Proxmox VE) ou `proxmox.json` sont là | `pveum user token remove`, `pveum user delete`, `pveum role delete`, pour ce qui existe, puis le fichier ôté de l'état. Sans relance de l'agent : il relit le fichier à chaque ordre |
 | Relance | Un groupe ou un drop-in a changé, ou l'ancienne règle sudo a été retirée | `systemctl daemon-reload`, puis `systemctl try-restart kagu-agent.service` (rien si l'agent ne tourne pas) ; une montée de service coupée reprend au démarrage (`resumeUpdates`) |
 | Porte root | Un droit posé passe par elle (`terminal.host`, `network.private`) | Dit « porte root : étape 14 » ; rien n'est posé. Jamais `NoNewPrivileges=false`, ni `sudoers` ni `produce.conf` (QA-14). `backup.produce` n'en est plus : il a la porte vzdump |
 
@@ -1664,16 +1666,34 @@ retour en arrière ni la suppression d'une VM, et un test garde la liste des
 appels que l'agent fait à Proxmox (quatre gestes, jamais `stop`, `reset`,
 `rollback`, `vmstate`).
 
-**Le jeton local.** Un jeton d'API Proxmox que l'opérateur crée **sur l'hôte**,
-au rôle `KaguAgent` (`VM.PowerMgmt`, `VM.Snapshot`, plus `VM.Audit`, que
-Proxmox exige pour lire l'état d'une VM). La page du jeton de l'agent donne les
-commandes (`pveum role add`, `user add`, `acl modify`, `user token add`, puis
-la pose du fichier) quand un droit `proxmox.*` est coché. Le secret :
+**Le jeton local.** Un jeton d'API Proxmox que root pose **sur l'hôte** par
+`sudo kagu agent proxmox-token` (décision de Lucas du 26/11/2026, #902 ;
+`internal/edge/agent/proxmox_setup.go`). Ce qu'il crée vit une fois, dans
+`internal/fact/machine/proxmox.go` :
+
+| Quoi | Valeur |
+| --- | --- |
+| Rôle | `KaguAgent` : `VM.PowerMgmt`, `VM.Snapshot`, plus `VM.Audit`, en lecture seule, que l'API exige pour lire l'état d'un invité et ses instantanés ; rien d'autre (un test tombe sur un privilège en trop ou en moins). Un rôle déjà là est remis à ces privilèges (`role modify`) |
+| Compte | `kagu-agent@pve`, qui ne sert qu'au jeton ; un rôle du compte ailleurs que sur `/vms` (une pose à la main d'avant, sur `/`) est retiré |
+| Droit | le rôle sur `/vms`, pas sur `/` |
+| Jeton | `kagu-agent@pve!agent`, `--privsep 0` : les droits du compte, et eux seuls. Un jeton déjà là est remplacé (son secret n'est lisible nulle part) |
+| Fichier | `proxmox.json` dans l'état de l'agent, voir plus bas |
+
+La commande lit d'abord ce qui existe (`pveum … list`) et l'empreinte du
+certificat de `https://127.0.0.1:8006` (`tlsinspect`), dit le plan, demande
+`[o/N]` (R-DROIT-8 : `--yes` ne vaut que sans terminal), puis pose, et relance
+l'agent : il juge ses droits à l'ouverture du flux et redit `proxmox.*`
+exerçable. Elle refuse hors d'un hôte Proxmox VE, sans root, et sans
+`proxmox.power` ni `proxmox.snapshot` dans la politique (le prochain `grant` ou
+`revoke` retirerait le jeton). `grant` d'un droit `proxmox.*` sur un hôte sans
+fichier dit la commande. `revoke` du dernier des deux (ou `grant --set
+observe`) retire le jeton, le compte, le rôle et le fichier, dans le plan des
+prérequis (`planProxmoxToken`), dit avant la question. Le secret :
 
 | Où | Règle |
 | --- | --- |
 | Fichier | `proxmox.json` dans l'état de l'agent, `0600`, au compte de l'agent : `{"token_id","secret","fingerprint"}`. Un champ inconnu, un fichier de plus de 4 Kio, lisible d'un autre compte ou qui est un lien sortant de l'état est refusé (`os.Root`) |
-| Pose | saisi sans écho (`read -rs`) et écrit par `printf`, un builtin : jamais en argument de commande, jamais dans l'historique |
+| Pose | lu sur la sortie de `pveum user token add --output-format json`, gardé en mémoire, jugé comme l'agent le juge, écrit d'un coup : jamais en argument de commande, jamais à l'écran ni dans le journal du système (la trace dit le rôle, le compte, le jeton et le fichier) ; une sortie illisible n'entre pas dans le message d'erreur |
 | Serveur | ne le voit jamais : ni dans un ordre, ni en base, ni dans l'API, le journal ou l'audit |
 | Agent | l'envoie dans l'en-tête `Authorization` seulement ; ni journal, ni résultat d'ordre, ni message d'erreur ne le portent (un test relit tout) |
 
