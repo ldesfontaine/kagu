@@ -32,10 +32,12 @@ const releaseUsage = `Usage : {command} release <sous-commande>
                       dans <dossier>) puis la copie dans state_dir/releases.
                       Se lance au compte du serveur ; importer deux fois la
                       même version ne change rien
-  sign -key-env NOM -version vX.Y.Z <SHA256SUMS>
+  sign -key-env NOM -version vX.Y.Z [-floor vX.Y.Z] <SHA256SUMS>
                       pour publier une version : signe le fichier de sommes
                       avec la clé privée lue dans la variable NOM et écrit
-                      SHA256SUMS.minisig à côté
+                      SHA256SUMS.minisig à côté. -floor pose le plancher de
+                      sécurité : un agent qui a confirmé cette version ne
+                      redescend plus sous lui
   keygen -o <fichier> pour publier une version : tire une paire de clés,
                       écrit la clé privée dans le fichier (refuse s'il
                       existe) et affiche la clé publique
@@ -67,6 +69,7 @@ func releaseCommand(args []string, out io.Writer, getenv func(string) string, tr
 	signaturePath := flags.String("sig", "", "verify : la signature des sommes (par défaut SHA256SUMS.minisig à côté du fichier)")
 	keyEnv := flags.String("key-env", "", "sign : la variable d'environnement qui porte la clé privée")
 	version := flags.String("version", "", "sign : la version, vX.Y.Z")
+	floor := flags.String("floor", "", "sign : le plancher de sécurité, vX.Y.Z, pas au-dessus de la version")
 	keyFile := flags.String("o", "", "keygen : le fichier où écrire la clé privée")
 	configPath := flags.String("config", config.DefaultPath, "import : le fichier de configuration, qui dit où est state_dir")
 	if err := flags.Parse(args[1:]); err != nil {
@@ -78,7 +81,7 @@ func releaseCommand(args []string, out io.Writer, getenv func(string) string, tr
 	case "import":
 		return importRelease(flags.Args(), *configPath, out, trusted)
 	case "sign":
-		return signRelease(flags.Args(), *keyEnv, *version, getenv)
+		return signRelease(flags.Args(), *keyEnv, *version, *floor, getenv)
 	}
 	return generateReleaseKey(flags.Args(), *keyFile, out)
 }
@@ -200,15 +203,20 @@ func refuseVerification(err error, file string) error {
 	return err
 }
 
-func signRelease(args []string, keyEnv, version string, getenv func(string) string) error {
+func signRelease(args []string, keyEnv, versionText, floorText string, getenv func(string) string) error {
 	if len(args) != 1 {
 		return &refusal{message: "sign attend le fichier de sommes"}
 	}
-	if keyEnv == "" || version == "" {
+	if keyEnv == "" || versionText == "" {
 		return &refusal{message: "sign demande -key-env et -version"}
 	}
-	if _, err := release.ParseVersion(version); err != nil {
+	version, err := release.ParseVersion(versionText)
+	if err != nil {
 		return &refusal{message: "la version doit s'écrire vX.Y.Z (sans zéro de tête ni suffixe)"}
+	}
+	floor, err := readSignFloor(floorText, version)
+	if err != nil {
+		return err
 	}
 	keyText := strings.TrimSpace(getenv(keyEnv))
 	if keyText == "" {
@@ -230,12 +238,27 @@ func signRelease(args []string, keyEnv, version string, getenv func(string) stri
 	if _, err := release.ParseSums(sums); err != nil {
 		return &refusal{message: fmt.Sprintf("%s n'est pas un fichier de sommes (%v)", filepath.Base(sumsPath), err)}
 	}
-	comment := fmt.Sprintf("timestamp:%d\tfile:%s\tversion:%s", time.Now().Unix(), brand.ReleaseSumsFile, version)
-	signature, err := release.Sign(sums, key, comment)
+	signature, err := release.Sign(sums, key, release.TrustedComment(time.Now().Unix(), version, floor))
 	if err != nil {
 		return fmt.Errorf("sign sums: %w", err)
 	}
 	return writeBesides(sumsPath, ".minisig", signature, 0o644, false)
+}
+
+// readSignFloor lit -floor : vide, pas de plancher. Un plancher au-dessus de
+// la version la rendrait illisible de tous (release.VerifySums la refuse).
+func readSignFloor(text string, version release.Version) (release.Version, error) {
+	if text == "" {
+		return release.Version{}, nil
+	}
+	floor, err := release.ParseVersion(text)
+	if err != nil {
+		return release.Version{}, &refusal{message: "le plancher doit s'écrire vX.Y.Z (sans zéro de tête ni suffixe)"}
+	}
+	if release.IsBelowFloor(version, floor) {
+		return release.Version{}, &refusal{message: fmt.Sprintf("le plancher %s est au-dessus de la version %s", floor, version)}
+	}
+	return floor, nil
 }
 
 func generateReleaseKey(args []string, keyFile string, out io.Writer) error {

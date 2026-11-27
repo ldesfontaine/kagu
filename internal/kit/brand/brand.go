@@ -98,7 +98,11 @@ const (
 	// état, 0600) : la courante, retirée quand il installe une version signée
 	// par la clé de secours. Elle le reste, même après un retour arrière.
 	AgentRetiredKeysFile = "release-keys-retired"
-	AgentGuardBinary     = ID + "-guard"
+	// Le plancher de sécurité des versions que l'agent a installées (R-B2-11),
+	// vX.Y.Z (dans son état, 0600) : il ne fait que monter, et tient après un
+	// retour arrière. Il ne vient que d'une version signée, jamais d'un ordre.
+	AgentReleaseFloorFile = "release-floor"
+	AgentGuardBinary      = ID + "-guard"
 	// Le lanceur stable : une copie du binaire posée une fois par root, hors
 	// de bin/, que l'agent ne se met jamais à jour lui-même. L'unité lance
 	// lui, et lui lance bin/current ; il dit à l'agent qu'il est là par

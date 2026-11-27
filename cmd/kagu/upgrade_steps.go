@@ -63,7 +63,7 @@ func (r *upgradeRun) findVersion(ctx context.Context) (step.State, string, error
 	if err := r.findInstallation(); err != nil {
 		return "", "", err
 	}
-	wanted, err := r.wantedVersion(running)
+	wanted, err := r.wantedVersion(keys, running)
 	if err != nil {
 		return "", "", err
 	}
@@ -149,8 +149,9 @@ func readServerExecStart(unitFile string) (binary, configPath string, found bool
 }
 
 // wantedVersion lit --to : une version plus récente que celle en place.
-// Descendre est le retour arrière, pas une montée.
-func (r *upgradeRun) wantedVersion(running release.Version) (release.Version, error) {
+// Descendre est le retour arrière, pas une montée ; sous le plancher de la
+// version en place (R-B2-11), le refus le dit.
+func (r *upgradeRun) wantedVersion(keys release.Keys, running release.Version) (release.Version, error) {
 	if r.to == "" {
 		return release.Version{}, nil
 	}
@@ -158,10 +159,30 @@ func (r *upgradeRun) wantedVersion(running release.Version) (release.Version, er
 	if err != nil {
 		return release.Version{}, &refusal{message: r.text.Get("upgrade.usage")}
 	}
+	if floor := r.runningFloor(keys, running); release.IsBelowFloor(wanted, floor) {
+		return release.Version{}, &stepFailure{reason: r.text.Format("upgrade.below_floor", r.to, floor, r.running), todo: r.text.Get("upgrade.not_newer_todo")}
+	}
 	if wanted.Compare(running) <= 0 {
 		return release.Version{}, &stepFailure{reason: r.text.Format("upgrade.not_newer", r.to, r.running), todo: r.text.Get("upgrade.not_newer_todo")}
 	}
 	return wanted, nil
+}
+
+// runningFloor lit le plancher signé de la version en place dans la
+// bibliothèque de serve ; zéro s'il ne s'y lit pas. Ce n'est que la raison du
+// refus : une version sous le plancher est plus ancienne que celle en place,
+// et « pas plus récente » la refuse de toute façon.
+func (r *upgradeRun) runningFloor(keys release.Keys, running release.Version) release.Version {
+	stateDir, err := os.OpenRoot(r.state.StateDir)
+	if err != nil {
+		return release.Version{}
+	}
+	defer stateDir.Close()
+	signed, err := release.NewLibrary(stateDir, keys).Signed(running)
+	if err != nil {
+		return release.Version{}
+	}
+	return signed.Floor
 }
 
 // readTarget lit et vérifie la version visée, en entier : --from, sinon la

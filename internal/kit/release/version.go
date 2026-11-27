@@ -40,3 +40,9 @@ func (version Version) Compare(other Version) int {
 		cmp.Compare(version.Patch, other.Patch),
 	)
 }
+
+// IsBelowFloor : version est sous le plancher floor (R-B2-11). Le plancher
+// zéro, celui d'une version qui n'en porte pas, n'arrête rien.
+func IsBelowFloor(version, floor Version) bool {
+	return version.Compare(floor) < 0
+}

@@ -13,7 +13,8 @@ func TestVerifySums_ReadsTheVersionFromTheTrustedComment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if signed.Version != (Version{0, 0, 2}) || len(signed.Sums) != 2 {
+	// Une version signée avant le plancher se lit comme avant : sans plancher.
+	if signed.Version != (Version{0, 0, 2}) || len(signed.Sums) != 2 || signed.Floor != (Version{}) {
 		t.Fatalf("release %+v", signed)
 	}
 	if signed.Sums["kagu-linux-arm64"] != "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b" {
@@ -33,6 +34,9 @@ func TestVerifySums_RefusesACommentWithoutVersionOrFile(t *testing.T) {
 		"bad version":       "timestamp:1\tfile:SHA256SUMS\tversion:0.0.2",
 		"version twice":     "file:SHA256SUMS\tversion:v0.0.2\tversion:v0.0.3",
 		"field without key": "file:SHA256SUMS\tversion:v0.0.2\tstray",
+		"bad floor":         "file:SHA256SUMS\tversion:v0.0.2\tfloor:0.0.1",
+		"floor twice":       "file:SHA256SUMS\tversion:v0.0.2\tfloor:v0.0.1\tfloor:v0.0.2",
+		"floor above":       "file:SHA256SUMS\tversion:v0.0.2\tfloor:v0.0.3",
 	}
 	for name, comment := range comments {
 		signature, err := Sign([]byte(vectorSums), privateKey, comment)
@@ -42,6 +46,38 @@ func TestVerifySums_RefusesACommentWithoutVersionOrFile(t *testing.T) {
 		if _, err := VerifySums([]byte(vectorSums), signature, Keys{Current: publicKey}); !errors.Is(err, ErrMalformed) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+}
+
+// R-B2-11, QA-17 : le plancher se lit dans le commentaire de confiance signé,
+// celui que TrustedComment écrit ; il peut valoir la version elle-même.
+func TestVerifySums_ReadsTheFloorFromTheTrustedComment(t *testing.T) {
+	publicKey, privateKey, err := GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, floor := range []Version{{0, 0, 1}, {0, 0, 2}} {
+		signature, err := Sign([]byte(vectorSums), privateKey, TrustedComment(1, Version{0, 0, 2}, floor))
+		if err != nil {
+			t.Fatal(err)
+		}
+		signed, err := VerifySums([]byte(vectorSums), signature, Keys{Current: publicKey})
+		if err != nil || signed.Floor != floor {
+			t.Fatalf("floor %s: %+v, %v", floor, signed, err)
+		}
+	}
+	if comment := TrustedComment(1, Version{0, 0, 2}, Version{}); strings.Contains(comment, "floor") {
+		t.Fatalf("a version without floor signs %q", comment)
+	}
+}
+
+// QA-17 : le plancher n'a pas sa place dans SHA256SUMS ; une ligne de plus y
+// est refusée, comme « sha256sum --strict -c » et chaque agent d'avant la
+// refuseraient.
+func TestParseSums_RefusesAFloorLine(t *testing.T) {
+	sums := vectorSums + "floor: v0.0.2\n"
+	if _, err := ParseSums([]byte(sums)); !errors.Is(err, ErrMalformed) {
+		t.Fatalf("a floor line in the sums: %v", err)
 	}
 }
 

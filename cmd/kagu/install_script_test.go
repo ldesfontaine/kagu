@@ -348,7 +348,9 @@ func TestR_B1_14_InstallScriptRefusesAnOlderSignedVersionOrAChangedTrustedCommen
 }
 
 // Les autres refus, avant toute écriture, et ce qui passe : une version plus
-// récente que MIN_VERSION, une version de remède signée par la secours.
+// récente que MIN_VERSION, une version de remède signée par la secours, une
+// version à son plancher (R-B2-11) ; un plancher au-dessus de sa version est
+// refusé, comme release.VerifySums le refuse.
 func TestInstallScript_JudgesLikeTheBinary(t *testing.T) {
 	keys, private := testReleaseKeys(t)
 	backupPublic, backupPrivate, err := release.GenerateKey()
@@ -364,12 +366,16 @@ func TestInstallScript_JudgesLikeTheBinary(t *testing.T) {
 		name       string
 		signer     release.PrivateKey
 		version    string
+		floor      string
 		minVersion string
 		change     func(t *testing.T, served string)
 		reason     string
 	}{
 		{name: "newer version", signer: private, version: "v1.0.1", minVersion: "1.0.0"},
 		{name: "remedy signed by the backup key", signer: backupPrivate, version: "v1.0.0", minVersion: "1.0.0"},
+		{name: "version at its floor", signer: private, version: "v1.0.1", floor: "v1.0.1", minVersion: "1.0.0"},
+		{name: "floor above the version", signer: private, version: "v1.0.1", floor: "v1.0.2", minVersion: "1.0.0",
+			reason: "plancher v1.0.2 au-dessus de la version v1.0.1"},
 		{name: "another key", signer: stranger, version: "v1.0.0", minVersion: "1.0.0", reason: "faite par une autre clé"},
 		{name: "unpublished script", signer: private, version: "v1.0.0", minVersion: "", reason: "MIN_VERSION vide"},
 		{name: "changed sums", signer: private, version: "v1.0.0", minVersion: "1.0.0", reason: "signature refusée",
@@ -393,7 +399,7 @@ func TestInstallScript_JudgesLikeTheBinary(t *testing.T) {
 		for _, c := range cases {
 			t.Run(verifier+"/"+c.name, func(t *testing.T) {
 				b := newInstallBench(t, verifier, keys, c.minVersion)
-				served := releasetest.Write(t, c.signer, c.version, b.binaries(c.version))
+				served := releasetest.WriteWithFloor(t, c.signer, c.version, c.floor, b.binaries(c.version))
 				if c.change != nil {
 					c.change(t, served)
 				}

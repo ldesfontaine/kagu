@@ -40,6 +40,7 @@ const (
 	incomingPrefix       = ".incoming-"
 	binaryMode           = 0o755
 	retiredKeysMode      = 0o600
+	releaseFloorMode     = 0o600
 	incomingDirMode      = 0o700
 	binDirMode           = 0o755
 )
@@ -164,11 +165,12 @@ func readAgentUpdate(order judgedOrder) (agentwire.AgentUpdateParams, bool) {
 // bin/.incoming-<version>/ (taille et somme signées par l'ordre) ; la
 // signature des sommes est vérifiée avec les clés que CE binaire embarque, pas
 // celles du serveur ; la version signée est celle demandée, et pas plus ancienne
-// que la sienne ; la somme du binaire est dans les sommes signées ; le binaire
-// est installé et éprouvé ; signé par la clé de secours, il fait retirer la
-// courante ; le marqueur d'attente de confirmation et le lien previous sont
-// écrits ; le lien bascule d'un coup. Avant la bascule, tout
-// échec laisse l'ancien lien et efface ce qui a été posé.
+// que la sienne, ni sous le plancher noté ; la somme du binaire est dans les
+// sommes signées ; le binaire est installé et éprouvé ; signé par la clé de
+// secours, il fait retirer la courante ; son plancher est noté ; le marqueur
+// d'attente de confirmation et le lien previous sont écrits ; le lien bascule
+// d'un coup. Avant la bascule, tout échec laisse l'ancien lien et efface ce
+// qui a été posé.
 func (u *selfUpdater) update(ctx context.Context, source parcelSource, params agentwire.AgentUpdateParams, runID string) error {
 	if !u.hasKey {
 		return failWith(agentwire.ReasonReleaseKeyMissing, errors.New("no release key embedded"))
@@ -225,6 +227,10 @@ func (u *selfUpdater) update(ctx context.Context, source parcelSource, params ag
 			_ = bin.Remove(target)
 			return failWith(agentwire.ReasonPathUnwritable, err)
 		}
+	}
+	if err := raiseReleaseFloor(u.stateDir, signed.Floor); err != nil {
+		_ = bin.Remove(target)
+		return failWith(agentwire.ReasonPathUnwritable, err)
 	}
 	marker := u.newMarker(rollback.KindUpdate, runID, signed.Version.String(), previousVersion)
 	if err := u.switchWithMarker(bin, marker, target); err != nil {
@@ -284,6 +290,86 @@ func (u *selfUpdater) retireKey(key release.PublicKey) error {
 	return nil
 }
 
+// readReleaseFloor lit le plancher que l'agent a noté (release-floor, dans
+// son état) ; zéro s'il n'en a pas. Comme les clés retirées, la note survit au
+// retour arrière : un binaire d'avant revenu ne redescend pas plus bas.
+func readReleaseFloor(stateDir *os.Root) (release.Version, error) {
+	text, err := stateDir.ReadFile(brand.AgentReleaseFloorFile)
+	if errors.Is(err, fs.ErrNotExist) {
+		return release.Version{}, nil
+	}
+	if err != nil {
+		return release.Version{}, fmt.Errorf("read release floor: %w", err)
+	}
+	floor, err := release.ParseVersion(strings.TrimSpace(string(text)))
+	if err != nil {
+		return release.Version{}, fmt.Errorf("release floor: %w", err)
+	}
+	return floor, nil
+}
+
+// raiseReleaseFloor note floor, le plancher signé d'une version installée,
+// s'il dépasse celui déjà noté : le plancher ne descend jamais. Il se note dès
+// l'installation ; la version d'avant reste un retour possible pour le
+// lanceur jusqu'à la confirmation (eraseBelowFloor).
+func raiseReleaseFloor(stateDir *os.Root, floor release.Version) error {
+	noted, err := readReleaseFloor(stateDir)
+	if err != nil {
+		return err
+	}
+	if !release.IsBelowFloor(noted, floor) {
+		return nil
+	}
+	if err := fsx.WriteAtomic(stateDir, brand.AgentReleaseFloorFile, []byte(floor.String()+"\n"), releaseFloorMode); err != nil {
+		return fmt.Errorf("note release floor: %w", err)
+	}
+	return nil
+}
+
+// refuseBelowFloor rend une erreur si version est sous le plancher noté
+// (R-B2-11). Un plancher illisible ne se devine pas : rien ne passe.
+func (u *selfUpdater) refuseBelowFloor(version release.Version) error {
+	floor, err := readReleaseFloor(u.stateDir)
+	if err != nil {
+		return err
+	}
+	if release.IsBelowFloor(version, floor) {
+		return fmt.Errorf("%s is below the release floor %s", version, floor)
+	}
+	return nil
+}
+
+// eraseBelowFloor efface le binaire de la version d'avant s'il est sous le
+// plancher noté : appelé une fois la version qui tourne confirmée, quand le
+// lanceur n'a plus à y revenir. Le lien previous reste : agent.rollback le
+// refuse alors below_floor, pas no_previous. Jamais le binaire que current
+// lance.
+func eraseBelowFloor(stateDir *os.Root) error {
+	floor, err := readReleaseFloor(stateDir)
+	if err != nil {
+		return err
+	}
+	bin, err := stateDir.OpenRoot(brand.AgentBinDir)
+	if err != nil {
+		return err
+	}
+	defer bin.Close()
+	previous := rollback.LinkTarget(bin, brand.AgentPreviousLink)
+	versionText, found := rollback.VersionOf(previous)
+	if !found || previous == rollback.LinkTarget(bin, brand.AgentCurrentLink) {
+		return nil
+	}
+	// VersionOf ne rend qu'une version qui se lit.
+	version, _ := release.ParseVersion(versionText)
+	if !release.IsBelowFloor(version, floor) {
+		return nil
+	}
+	if err := bin.Remove(previous); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return fsx.SyncDir(bin, ".")
+}
+
 // newMarker écrit l'attente de confirmation qui commence maintenant, avec le
 // délai du produit : le serveur ne le règle pas.
 func (u *selfUpdater) newMarker(kind rollback.Kind, runID, target, previous string) rollback.Marker {
@@ -312,7 +398,9 @@ func (u *selfUpdater) switchWithMarker(bin *os.Root, marker rollback.Marker, tar
 // rollback rebascule current sur previous, comme une mise à jour qui se
 // confirme : le même marqueur, la même attente, mais jamais de seconde remise
 // en état si la version d'avant ne revient pas (elle le dit). Il refuse sans
-// rien toucher s'il n'y a pas de précédent, ou s'il est la version qui tourne.
+// rien toucher s'il n'y a pas de précédent, s'il est la version qui tourne, ou
+// s'il est sous le plancher noté (R-B2-11) : le plancher ne vient que des
+// versions signées installées, jamais de l'ordre.
 func (u *selfUpdater) rollback(ctx context.Context, runID string) error {
 	bin, err := u.openBin()
 	if err != nil {
@@ -328,6 +416,11 @@ func (u *selfUpdater) rollback(ctx context.Context, runID string) error {
 	}
 	if previous == running {
 		return refuseWith(agentwire.ReasonPreviousIdentical, fmt.Errorf("%s is the running version", previous))
+	}
+	// VersionOf ne rend qu'une version qui se lit.
+	parsedPrevious, _ := release.ParseVersion(previousVersion)
+	if err := u.refuseBelowFloor(parsedPrevious); err != nil {
+		return refuseWith(agentwire.ReasonBelowFloor, err)
 	}
 	binDir, err := u.binDir()
 	if err != nil {
@@ -388,6 +481,11 @@ func (u *selfUpdater) verifyDownload(incoming *os.Root, params agentwire.AgentUp
 	}
 	if signed.Version.String() != params.Version {
 		return release.Release{}, failWith(agentwire.ReasonVersionMismatch, fmt.Errorf("signed %s, asked %s", signed.Version, params.Version))
+	}
+	// Sous le plancher, le refus le dit avant celui de descendre : c'est la
+	// raison qui compte.
+	if err := u.refuseBelowFloor(signed.Version); err != nil {
+		return release.Release{}, failWith(agentwire.ReasonBelowFloor, err)
 	}
 	// Une version propre illisible (un binaire de développement) compte comme
 	// plus ancienne : la mise à jour la corrige. La même version n'a rien à

@@ -84,6 +84,15 @@ clé privée courante, ou la croire prise, c'est sortir la clé de secours
 | Approuver | GitHub › Actions › l'exécution `release` du tag › *Review deployments* › cocher `release` › *Approve and deploy*. Seulement si `build` et `rebuild` sont verts et que le tag est le sien |
 | Laisser publier | `sign` signe `SHA256SUMS` ; `publish` vérifie, atteste et publie |
 
+**Le plancher de sécurité** (R-B2-11). Une version qui corrige une faille
+porte un plancher : la version sous laquelle aucun agent ne redescend plus.
+Il est signé dans le commentaire de confiance, jamais dans `SHA256SUMS` :
+`release sign -floor vX.Y.Z` (pas au-dessus de la version signée). Il ne
+fait que monter : une version suivante garde le même, ou un plus haut. Le
+choisir est une décision de Lucas. `release.yml` ne passe pas encore
+`-floor` (#903) : la modification proposée lit une variable `RELEASE_FLOOR`
+de l'environnement `release`, vide par défaut.
+
 Tout changement de `.github/**` est fusionné par Lucas : ces fichiers sont
 protégés sur `main` et `dev`, règle appliquée aux administrateurs. Avant
 chaque approbation d'une version, Raph lui montre le diff de `release.yml`
@@ -118,7 +127,7 @@ note l'ancienne courante comme retirée et refuse ensuite ce qu'elle signe
 | Tirer deux paires neuves | hors ligne : `kagu release keygen -o release-2.key` (la future courante) et `minisign -G -p kagu-secours-2.pub -s kagu-secours-2.key` (la future secours, au coffre) |
 | Les embarquer | pull request : `CurrentPublicKey` = clé publique de `release-2.key`, `BackupPublicKey` = seconde ligne de `kagu-secours-2.pub`, et les mêmes dans `install.sh` ; jusqu'à `main` |
 | Construire sur son poste | `git checkout vX.Y.Z` (tag poussé ; dans GitHub, `sign` attend : *Reject*), puis `make release VERSION=vX.Y.Z` |
-| Signer hors ligne | `minisign -S -s kagu-secours.key -m dist-release/SHA256SUMS -x dist-release/SHA256SUMS.minisig -t "$(printf 'timestamp:%s\tfile:SHA256SUMS\tversion:vX.Y.Z' "$(date +%s)")"` |
+| Signer hors ligne | `minisign -S -s kagu-secours.key -m dist-release/SHA256SUMS -x dist-release/SHA256SUMS.minisig -t "$(printf 'timestamp:%s\tfile:SHA256SUMS\tversion:vX.Y.Z' "$(date +%s)")"` ; avec un plancher, ajouter `\tfloor:vX.Y.Z` à la fin du texte de `-t` |
 | Vérifier | avec un binaire **déjà installé** (il embarque l'ancienne secours) : `kagu release verify dist-release/kagu-linux-amd64`, idem `arm64` |
 | Distribuer | `release import dist-release` sur la machine Kagu, puis mettre à jour les agents ; publier les quatre fichiers sur la page de la version à la main, avec `install.sh` où `MIN_VERSION` vaut `X.Y.Z` (et la clé de secours du script est celle qui a signé, la courante celle de `release-2.key`, comme le binaire) |
 | Reprendre | `RELEASE_SIGNING_KEY` = contenu de `release-2.key` dans l'environnement `release`. La secours qui a servi est usée : les versions suivantes ne l'embarquent plus |

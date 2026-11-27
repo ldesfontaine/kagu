@@ -188,6 +188,10 @@ const (
 	ReasonNoPrevious        = "no_previous"
 	ReasonPreviousIdentical = "previous_identical"
 	ReasonGuardMissing      = "guard_missing"
+	// agent.update et agent.rollback vers une version sous le plancher de
+	// sécurité de celle qui tourne (R-B2-11). Rien à voir avec le plancher de
+	// rétention de restic (ReasonRetentionBelowFloor).
+	ReasonBelowFloor = "below_floor"
 	// Les fins d'une mise à jour que l'agent revenu en arrière rapporte, au
 	// retour de l'ancienne version : le délai de confirmation est passé, ou
 	// la nouvelle version a planté ; et la remise en état qui échoue à son
@@ -316,7 +320,7 @@ func RefusalReasons() []string {
 		ReasonDownloadFailed, ReasonDigestMismatch, ReasonNotAgeFile, ReasonArchiveTooLarge, ReasonBusy,
 		ReasonNotSelfUpdatable, ReasonReleaseKeyMissing, ReasonSignatureInvalid, ReasonVersionMismatch,
 		ReasonDowngrade, ReasonSelfCheckFailed,
-		ReasonNoPrevious, ReasonPreviousIdentical, ReasonGuardMissing,
+		ReasonNoPrevious, ReasonPreviousIdentical, ReasonGuardMissing, ReasonBelowFloor,
 		ReasonRolledBackTimeout, ReasonRolledBackCrash, ReasonRollbackFailed,
 		ReasonServiceDirExists, ReasonServiceDirMissing, ReasonRootNotOurs, ReasonDockerMissing,
 		ReasonComposeTooOld, ReasonDiskFull, ReasonComposeFailed, ReasonRolledBackVersion, ReasonNoPendingUpdate,

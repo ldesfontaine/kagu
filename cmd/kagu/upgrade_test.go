@@ -832,3 +832,27 @@ func TestUpgrade_NoOptionCarriesThePolicyConsent(t *testing.T) {
 		t.Fatal("the policy was migrated")
 	}
 }
+
+// R-B2-11, W-M7 : la version en place, v1.0.1 au plancher v1.0.1, est dans la
+// bibliothèque de serve ; --to v1.0.0 est refusé avant toute copie, et le
+// refus nomme le plancher.
+func TestR_B2_11_UpgradeToBelowTheFloorIsRefused(t *testing.T) {
+	b := newUpgradeBench(t)
+	stateDir, err := os.OpenRoot(b.stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stateDir.Close()
+	inPlace := releasetest.WriteWithFloor(t, b.private, "v1.0.1", "v1.0.1", releasetest.Binaries("v1.0.1", runtime.GOARCH))
+	if _, err := release.NewLibrary(stateDir, b.keys).Import(inPlace); err != nil {
+		t.Fatal(err)
+	}
+	var refused *refusal
+	if err := b.newRun("v1.0.1").command(context.Background(), []string{"--" + inUnitFlag, "--to", "v1.0.0"}); !errors.As(err, &refused) {
+		t.Fatalf("upgrade: %v", err)
+	}
+	if printed := b.terminal.String(); !strings.Contains(printed, "v1.0.0 est sous le plancher de sécurité v1.0.1 de la version en place (v1.0.1)") {
+		t.Fatalf("printed %q", printed)
+	}
+	b.nothingMoved()
+}
