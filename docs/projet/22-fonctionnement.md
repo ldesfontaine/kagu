@@ -92,6 +92,7 @@ Trait double : chiffré. Trait simple : en clair, mais sans quitter la machine.
 | Journaux | navigateur → `/api/containers/{id}/logs/stream` | TLS de Traefik | L'opérateur, par sa session ou par le SSO. En mode `none`, refusé comme le reste de l'interface (`401 auth.setup_required`). Une seconde connexion par onglet ; seize lectures de journaux en tout, suivis des onglets et tirages uniques compris. Le suivi se ferme dans la seconde où meurt sa session (R-A2-12) |
 | Sonde | machine qui sonde → la cible | Celui de la cible : TLS si la sonde est en `https://` ou si une sonde TCP demande la poignée de main, rien sinon | Personne : une sonde n'est pas authentifiée, elle regarde du dehors comme n'importe qui. Un certificat refusé rend l'essai **dégradé**, jamais hors ligne, et la requête n'est pas rejouée. La chaîne est jugée par la machine qui sonde, avec les autorités qu'elle connaît |
 | Docker | agent → `/var/run/docker.sock` | Aucun : une socket Unix de la machine | Les droits Unix : le compte de l'agent est dans le groupe `docker` (ou l'agent est root), ce qui **équivaut à root** (« Ce qui manque encore »). `kagu serve` ne lit plus la socket : il n'a besoin ni de root ni du groupe `docker`. Le client ne connaît aucun verbe qui écrit |
+| Porte vzdump | agent d'un hôte Proxmox → `/run/kagu-vzdump.sock` (`backup.produce`) | Aucun : une socket Unix de la machine | Les droits Unix (`root:<groupe du compte de l'agent>`, `0660`), puis l'uid du pair lu par le noyau (`SO_PEERCRED`) : root ou `kagu-agent`, personne d'autre. La porte ne lance que `vzdump`, aux options fixées (« `backup.produce=proxmox-vzdump` : la porte vzdump ») |
 | Agent | Traefik → Kagu | En clair, boucle locale | `X-Forwarded-*` cru seulement depuis `trusted_proxies`. `X-Forwarded-For` se lit de la droite : la source est la dernière entrée qui n'est pas un mandataire de confiance, ce que le client écrit à gauche ne compte pas |
 | Agent en dev | machine → `http://127.0.0.1` | Aucun, et c'est accepté : rien ne sort de la machine | Idem |
 | Agent sur un LAN | machine → `http://192.168.…` | **Refusé** par l'agent, sans exception (`-allow-plain` retiré, R-B1-13) | Un serveur distant se joint en `https://` |
@@ -167,7 +168,7 @@ dit comment. Une migration de plus part de `002`.
 | Machine Kagu, `state_dir` | `lifecycle.json` | La dernière lecture d'endoflife.date : quel dépôt d'images est quel produit, et les branches des produits que les services utilisent (nom, maintenue ou non, date de fin, dernière version). Absent tant que la fin de support n'a jamais été activée | Données publiques, 0600, écriture atomique, remplacé d'un bloc à chaque lecture réussie ; l'effacer coûte une lecture de la source |
 | Machine Kagu, `state_dir` | `upgrade/avant-<version>.db` | La copie de la base d'avant une montée de `serve`, nommée par la version qui tournait : une base entière, écrite par `serve` sous son compte (`VACUUM INTO`, « Préparer une montée de serve ») | Mode 0600 dans un dossier 0700, au compte du service. Les trois plus récentes restent, la quatrième efface la plus ancienne. Mêmes données que la base, **en clair** comme elle |
 | Machine Kagu, `/run/kagu` | `agent.sock` | La socket des agents locaux, créée par `serve` à son démarrage et retirée à son arrêt : aucune donnée, une porte locale vers `/agent/…` (« La socket des agents locaux ») | Mode 0660, groupe `kagu-agent` ; seul l'uid de ce compte passe. Elle n'est pas à sauvegarder |
-| Machine Kagu, `/etc/kagu` | `setup.json` | Ce que `kagu setup` retient : le jeu de droits choisi (`rights`) et chaque ligne cochée (`steps` : clé, état, détail, heure). Rien d'autre : ni jeton ni code | root, `0600`, écrit d'un coup après chaque ligne. Un setup relancé reprend la réponse au lieu de reposer la question (`--rights` la remplace). `upgrade` le relit : présent, les unités sont celles de setup, et il les tient à jour |
+| Machine Kagu, `/etc/kagu` | `setup.json` | Ce que `kagu setup` retient : le jeu de droits choisi (`rights`), la réponse à la question Docker (`tools` : `yes` ou `no`) et chaque ligne cochée (`steps` : clé, état, détail, heure). Rien d'autre : ni jeton ni code | root, `0600`, écrit d'un coup après chaque ligne. Un setup relancé reprend les réponses au lieu de reposer les questions (`--rights` remplace la première, `--no-docker` la seconde). `upgrade` le relit : présent, les unités sont celles de setup, et il les tient à jour |
 | Machine Kagu, `/run` | `kagu-setup.lock` | Le verrou de `setup` (`flock`) : aucune donnée | root, `0600` ; le verrou tombe avec le processus, le fichier avec le redémarrage |
 | Machine Kagu, `/var/lib/kagu-setup/release` | `SHA256SUMS`, `SHA256SUMS.minisig`, `kagu-linux-*` | La version qu'`install.sh` a vérifiée, que `setup` fait importer par `serve` dans la bibliothèque | root, dossier `0755`, fichiers `0644` : publics, lus par le compte du serveur. Récrits par le prochain `install.sh` ; rien ne les efface |
 | Machine Kagu, `/var/lib/kagu-upgrade` (root, `0755`) | `state.json` | Ce que `kagu upgrade` retient de la dernière montée : la version d'avant (`running`) et la version visée (`target`), les chemins (binaire, ancien binaire, `state_dir`, version posée, copie de la base), chaque ligne cochée, `finished`. Aucun secret | root, `0600`, écrit d'un coup après chaque ligne ; `upgrade --status` le relit. Une montée arrêtée après « Binaire remplacé » empêche d'en relancer une autre |
@@ -180,8 +181,9 @@ dit comment. Une migration de plus part de `002`.
 | Toute machine passée par `agent policy migrate`, `/etc/kagu-agent` (à root, `0755`) | `policy.toml`, `policy.toml.lock` | La politique de l'agent : `version`, `machine_id`, un bloc `[[right]]` par droit, la clé du serveur acceptée (`[[server_key]]`), les ancres (`[anchors]`) (« La politique de l'agent ») ; le verrou de `grant`, `revoke`, `trust` et `policy migrate`, vide | `policy.toml` en `0640`, `root:kagu-agent` : l'agent la lit, son compte ne peut ni l'écrire ni la remplacer ; le verrou en `0600` à root. Aucun secret |
 | Toute machine, la machine Kagu comprise, `/var/lib/kagu-agent` | `bin/` et `update.json` | `bin/kagu-<version>` (la courante et la précédente, rien d'autre), les liens `bin/current` (ce que le lanceur exécute) et `bin/previous` (la version d'avant la dernière bascule), et le **marqueur** `update.json` : une mise à jour (ou un retour arrière) en attente de confirmation, avec son échéance, ou ce que le lanceur en a fait (« Comment un agent se met à jour », décision 9). Aucun secret : états, numéros de version, identifiant d'ordre | `0600` au compte de l'agent. Le marqueur disparaît à la confirmation, ou une fois son rapport livré au serveur ; un marqueur illisible est écarté |
 | Toute machine, la machine Kagu comprise, `/usr/local/lib/kagu-agent` | `kagu-guard` | Le **lanceur stable** : une copie du binaire, posée une fois par root (`root:root`, `0755`), que l'unité systemd lance. L'agent, qui écrit son état et `bin/`, ne le remplace jamais | Se repose à la main si le lanceur change (`GuardVersion`) ; l'agent le sait par la variable `KAGU_AGENT_GUARD` |
+| Un hôte Proxmox dont l'agent a `backup.produce=proxmox-vzdump`, `/etc/systemd/system` | `kagu-vzdump.socket`, `kagu-vzdump@.service` | La **porte vzdump** : la socket `/run/kagu-vzdump.sock`, et l'unité de root qu'elle lance par connexion (`kagu-guard vzdump-gate`). Aucune donnée, aucun secret | root, `0644`. Posées par `kagu agent grant`, retirées par `revoke` (« `backup.produce=proxmox-vzdump` : la porte vzdump ») ; la socket, `0660`, à root et au groupe du compte de l'agent, disparaît avec l'unité |
 | Hôte Proxmox, `/var/lib/kagu-agent` | `proxmox.json` | Le jeton Proxmox **local** de l'agent : identifiant, **secret** et empreinte du certificat (`token_id`, `secret`, `fingerprint`), posé à la main par l'opérateur, jamais envoyé ni stocké par le serveur | `0600`, au compte de l'agent ; sans lui les droits `proxmox.*` sont indisponibles (« Comment un hôte Proxmox agit »). Le secret est en clair dans ce fichier : le protège le compte, pas un chiffrement |
-| Un hôte Proxmox dont l'agent a `backup.produce`, `/var/lib/kagu-agent/produce/` | `<préfixe>-AAAAMMJJ-HHMMSS.tar.age.raw`, puis `….tar.age` | Les archives en cours de production : le flux brut de `vzdump` (compressé `zstd`, **en clair**), puis le même emballé dans un `tar` et chiffré pour la clé publique du trousseau ; les deux coexistent avant l'envoi, d'où **deux fois** la plus grosse VM compressée. L'agent refuse de commencer sous 1 Gio libre (`disk_full`) | `0700` et `0600`, au compte de l'agent. Vidé à la fin de **chaque** ordre, réussi ou non, et au démarrage de l'agent (un arrêt en pleine production ne laisse rien). Posé par la préparation du droit, créé par l'agent s'il manque. Le clair de la VM ne quitte jamais cet hôte |
+| Un hôte Proxmox dont l'agent a `backup.produce`, `/var/lib/kagu-agent/produce/` | `<préfixe>-AAAAMMJJ-HHMMSS.tar.age.raw`, puis `….tar.age` | Les archives en cours de production : le flux brut de `vzdump` (compressé `zstd`, **en clair**), puis le même emballé dans un `tar` et chiffré pour la clé publique du trousseau ; les deux coexistent avant l'envoi, d'où **deux fois** la plus grosse VM compressée. L'agent refuse de commencer sous 1 Gio libre (`disk_full`) | `0700` et `0600`, au compte de l'agent. Vidé à la fin de **chaque** ordre, réussi ou non, et au démarrage de l'agent (un arrêt en pleine production ne laisse rien). Créé par l'agent s'il manque. Le clair de la VM ne quitte jamais cet hôte |
 
 **Ce que le chiffrement couvre.** Six colonnes, chiffrées à l'écriture, chacune liée à sa table, sa colonne et sa ligne (un chiffré recopié ailleurs ne s'ouvre plus) :
 `settings.mail_password`, `alert_channels.url`, `alert_channels.secret`,
@@ -499,7 +501,7 @@ L'onglet Agent ne montre plus de droits : il y renvoie.
 | `docker.deploy` | — | Déployer un service Compose déclaré, la première fois (`docker.deploy`) |
 | `docker.update` | — | Redéployer un service Compose déjà déployé : versions changées, `.env` remplacé (`docker.update`) |
 | `backup.receive` | un chemin | Recevoir des sauvegardes, dans ce dossier |
-| `backup.produce` | un à quatre **producteurs** (aujourd'hui `proxmox-vzdump`) | Produire une sauvegarde sur cette machine avec ce producteur : `proxmox-vzdump` lance `vzdump` en root par une règle `sudo` étroite (voir plus bas). **Vaut root** pour un agent compromis. Le droit se pose et se juge ici ; l'ordre qui s'en sert est décrit dans « Comment une sauvegarde se fait ». Sans ancre `backup.recipient` et `backup.guest` posées par l'administrateur, l'ordre est refusé (« Les ancres de confiance locales ») |
+| `backup.produce` | un à quatre **producteurs** (aujourd'hui `proxmox-vzdump`) | Produire une sauvegarde sur cette machine avec ce producteur : `proxmox-vzdump` fait lancer `vzdump` en root par la porte vzdump, que `grant` pose (voir plus bas). Ne vaut pas root : un agent compromis obtient l'archive de n'importe quel invité de l'hôte. Le droit se pose et se juge ici ; l'ordre qui s'en sert est décrit dans « Comment une sauvegarde se fait ». Sans ancre `backup.recipient` et `backup.guest` posées par l'administrateur, l'ordre est refusé (« Les ancres de confiance locales ») |
 | `files.write` | un à huit chemins | Écrire des fichiers, dans ces dossiers |
 | `proxmox.power` | — | Démarrer et arrêter proprement (ACPI) une VM ou un conteneur de l'hôte Proxmox, par le jeton local de l'agent (« Comment un hôte Proxmox agit »). Ne se propose que sur une machine où le rôle `proxmox_ve` est détecté |
 | `proxmox.snapshot` | — | Créer un instantané d'une VM de l'hôte et supprimer **ceux que l'agent a créés** (`kg-AAAAMMJJ-HHMMSS`), jamais ceux de l'opérateur. Même condition et même jeton |
@@ -575,9 +577,9 @@ L'onglet Agent ne montre plus de droits : il y renvoie.
   | `path_denied` | le dossier du droit (la racine des services pour Docker, ou son plus proche parent s'il manque) n'est pas au compte : `access(2)` rend `EACCES` | `docker.*`, `backup.receive`, `files.write` |
   | `path_unwritable` | `EROFS`, ou ce qui n'est pas un dossier : l'unité ne l'ouvre pas (`ReadWritePaths`) | idem |
   | `not_self_updatable` | l'agent ne tourne pas depuis `<état>/bin/` | `agent.update` |
-  | `sudo_missing` | pas de `sudo` sur le `PATH` de l'agent | `backup.produce` |
-  | `producer_missing` | le script de root `/usr/local/sbin/kagu-vzdump` ou `/usr/bin/vzdump` manque ou ne s'exécute pas | `backup.produce` |
-  | `sudo_denied` | `sudo -n -l /usr/local/sbin/kagu-vzdump` échoue : la règle manque, ou l'unité interdit `sudo` (`NoNewPrivileges=true`) | `backup.produce` |
+  | `producer_missing` | `/usr/bin/vzdump` manque ou ne s'exécute pas (au refus d'un ordre `restic.backup` d'un invité : aussi le binaire de l'agent introuvable) | `backup.produce` |
+  | `gate_missing` | la socket de la porte vzdump (`/run/kagu-vzdump.sock`) n'est pas là | `backup.produce` |
+  | `gate_denied` | le compte ne peut pas l'ouvrir (`access(2)` en écriture rend `EACCES`, sans s'y connecter : une connexion lancerait une unité de root) ; en cours d'ordre, aussi la porte qui refuse le pair ou la demande (l'ordre finit refusé, vzdump n'a pas tourné) | `backup.produce` |
   | `proxmox_token_missing` | le fichier du jeton local manque, est illisible, mal formé ou porte un champ inconnu | `proxmox.power`, `proxmox.snapshot` |
   | `proxmox_token_unsafe` | le fichier est lisible du groupe ou des autres, ou n'est pas au compte de l'agent | idem |
   | `proxmox_pin_missing` | pas d'empreinte SHA-256 valide dans le fichier | idem |
@@ -607,36 +609,72 @@ L'onglet Agent ne montre plus de droits : il y renvoie.
   une ligne qui le dit, ou le nom et l'uid ; « pas encore rapporté » pour un
   agent plus ancien) et, dans une note, les droits cochés que ce compte ne peut
   pas exercer.
-- **`backup.produce=proxmox-vzdump` : sa préparation et son jugement** (#266,
-  proposé par Claude, validé par Lucas le 24 octobre 2026). Sur un hôte
-  Proxmox, l'agent reste sous `kagu-agent` : `vzdump` ne se lance pas
-  sous ce compte, ni dans le bac à sable de l'unité (`ProtectSystem=strict`,
-  `PrivateTmp`). La page du jeton ajoute donc, après les lignes du compte, une
-  ligne par geste (textes dans `internal/fact/machine/produce.go`, une seule fois) :
-  le dossier `produce/` de l'état, au compte (`0700`) ; le script de root
-  `/usr/local/sbin/kagu-vzdump` (`0755`), qui fait `exec systemd-run
-  --pipe --wait --collect --quiet /usr/bin/vzdump "$@"` : `vzdump` tourne dans
-  une unité transitoire, **hors** du bac à sable de l'agent, et `--pipe` relie
-  sa sortie à l'agent ; la règle `kagu-agent ALL=(root) NOPASSWD:
-  /usr/local/sbin/kagu-vzdump` dans `/etc/sudoers.d/kagu-agent`
-  (`0440`), posée en **un seul geste sûr** : écrite d'abord sous un nom que
-  `sudo` ignore (`.kagu-agent.tmp`, un fichier qui commence par un point
-  n'est pas lu), jugée par `visudo -cf` sur ce nom, et seulement alors renommée.
-  Si l'un des trois échoue, le fichier provisoire part et rien n'est posé : une
-  règle fausse ne bloque jamais `sudo` pour toute la machine, même quand
-  l'opérateur colle la ligne sans lire ce qu'elle dit ; le drop-in `produce.conf` de l'unité,
-  `NoNewPrivileges=false`, **seul desserrement** (avec `true`, `sudo` ne peut
-  rien : le bit setuid est ignoré) ; `systemctl daemon-reload`. Les cinq
-  lignes de root écrivent sur des chemins que le compte ne contrôle pas. Ce
-  que ça coûte : la règle ne nomme que le script, mais `vzdump` accepte
-  `--script`, un crochet lancé en root ; **le droit vaut root sur la machine
-  pour un agent compromis**, comme le groupe `docker`, et `NoNewPrivileges=false`
-  retire à l'unité une protection de plus. La page du jeton le dit dans un
-  encadré à côté de celui du groupe `docker`. L'agent juge le droit comme les
-  autres, avant chaque ouverture du flux, dans l'ordre `sudo_missing` (pas de
-  `sudo`), `producer_missing` (le script ou `vzdump` manque), `sudo_denied`
-  (`sudo -n -l <script>` échoue : il répond sans rien exécuter ni demander de
-  mot de passe) ; la question se pose sans lancer `vzdump`.
+- **L'unité de l'agent est durcie** (R-B1-16). Le texte de référence est
+  `docs/installation/kagu-agent.service`, que `machine.AgentUnitLines` suit
+  (un test les compare). En plus de `ProtectSystem=strict`, `PrivateTmp` et
+  `NoNewPrivileges=true` (jamais desserré) : `CapabilityBoundingSet=` et
+  `AmbientCapabilities=` vides (aucune capacité, même héritée),
+  `SystemCallFilter=@system-service` avec `SystemCallErrorNumber=EPERM` (un
+  appel hors liste échoue au lieu de tuer `docker compose` ou `restic`, qui
+  tournent sous le même filtre), `ProtectProc=invisible` (les processus des
+  autres comptes sont cachés). **Pas de `ProcSubset=pid`** (arbitrage ARB-2) :
+  l'agent lit `/proc/stat`, `meminfo`, `loadavg`, `mounts`, `net/dev`,
+  `net/tcp`, `uptime` et `sys/kernel/random/boot_id`. Un agent gardé en root
+  (drop-in `root.conf`) y ajoute `CapabilityBoundingSet=~` : sans capacité,
+  root ne lit pas ce que root lit. Coût : un `root.conf` posé avant n'a pas
+  cette ligne ; l'unité nouvelle le laisse root sans capacité tant qu'on ne
+  l'ajoute pas.
+- **`backup.produce=proxmox-vzdump` : la porte vzdump** (#266 ; décision de
+  Lucas du 26/11/2026, jusqu'à la porte root générale, T14-02). Sur un hôte
+  Proxmox, l'agent reste sous `kagu-agent`, dans son unité ; `vzdump` demande
+  root et voit les stockages, `/run/qemu-server`, ses journaux. Il passe par
+  une **socket de root** que `kagu agent grant` pose quand le droit est
+  accordé et que `/usr/bin/vzdump` existe, et retire sinon (`revoke`, un
+  `grant` qui ne l'a plus, `vzdump` absent : `systemctl disable --now
+  kagu-vzdump.socket`, les deux unités ôtées, `daemon-reload`). Textes dans
+  `internal/fact/machine/produce.go`, une seule fois :
+
+  | Unité | Ce qu'elle porte |
+  | --- | --- |
+  | `kagu-vzdump.socket` | `ListenStream=/run/kagu-vzdump.sock`, `SocketUser=root`, `SocketGroup=<groupe du compte de l'agent>`, `SocketMode=0660`, `Accept=yes`, `MaxConnections=2`, `WantedBy=sockets.target` |
+  | `kagu-vzdump@.service` | root, sans bac à sable ; `ExecStart=/usr/local/lib/kagu-agent/kagu-guard vzdump-gate` (le lanceur stable, que l'agent ne remplace jamais ; jamais `bin/` de l'état), `StandardInput=socket`, `StandardOutput=socket`, `StandardError=journal`, `RuntimeMaxSec=2h` |
+
+  `grant` les écrit, puis `systemctl daemon-reload`, `enable` et `restart` de
+  la socket ; une porte déjà posée telle quelle n'est pas reposée. Poser la
+  porte ne relance pas l'agent.
+
+  | Étape | Ce que fait la porte |
+  | --- | --- |
+  | Le pair | Son uid, lu par le noyau (`SO_PEERCRED`) : root ou le compte `kagu-agent`. Tout autre est refusé, le compte du serveur compris (membre du groupe de l'agent sur la machine Kagu) |
+  | La demande | **Une ligne** de forme fermée, lue en 10 s : `<invité> <compression>`, l'invité en chiffres (1 à 9), la compression `zstd` ou `0`. Une option de plus (`--script`, `--hook`, `--dumpdir`, `--storage`), un nom, deux espaces, plus de 64 octets : refusé, rien ne se lance |
+  | Le lancement | `/usr/bin/vzdump <invité> --mode snapshot --compress <c> --stdout --quiet 1` (`machine.VzdumpArguments`), environnement remplacé (`PATH` fixe, `LC_ALL=C`) |
+  | La réponse | Par trames (une lettre, la longueur sur 4 octets, le contenu ; 64 Kio au plus) : un en-tête `ok` ou `refused`, les données de `vzdump`, puis une fin JSON : son code de sortie, le type de l'invité (`qemu` ou `lxc`, lu sur sa sortie d'erreur), ses 32 dernières lignes d'erreur |
+  | L'arrêt | L'agent ferme la connexion (ordre arrêté) : la porte envoie `SIGTERM` à `vzdump`, puis le tue 15 s après |
+
+  Côté agent, `backup.produce` demande `zstd`. `restic.backup` d'un invité
+  fait lancer par restic (`--stdin-from-command`) le binaire de l'agent
+  lui-même, `<binaire> agent vzdump-stream <invité>`, qui demande `0` (restic
+  compresse et ne déduplique que du clair) et sort en erreur si `vzdump` ne
+  sort pas en 0 : restic ne crée alors aucun instantané.
+
+  L'agent juge le droit comme les autres, avant chaque ouverture du flux,
+  sans lancer `vzdump` ni se connecter à la porte : `producer_missing`
+  (`vzdump` manque) d'abord, puis `gate_missing`, `gate_denied` (tableau
+  ci-dessus). **Ce que ça vaut** : la porte ne lance que `vzdump`, aux options
+  fixées, ni `--script` (un crochet lancé en root) ni `--dumpdir` : un agent
+  compromis n'a plus root par ce droit, et l'unité garde
+  `NoNewPrivileges=true`. **Ce que ça coûte** : la porte ne lit ni la
+  politique ni les ancres ; c'est l'agent qui juge l'ordre (`backup.guest`).
+  Un agent compromis obtient donc l'archive de **n'importe quel invité** de
+  l'hôte, deux à la fois au plus. L'opérateur pose le droit par une commande
+  de root de plus (`grant`), la page du jeton n'a plus de préparation.
+
+  **Une machine préparée avant la porte** (la règle `/etc/sudoers.d/kagu-agent`,
+  le script `/usr/local/sbin/kagu-vzdump`, le drop-in `produce.conf` qui
+  posait `NoNewPrivileges=false`) : au premier `grant` ou `revoke`, les trois
+  sont retirés, dans cet ordre (la règle d'abord, qui ouvrait root), puis
+  l'agent est relancé. D'ici là, son agent mis à jour dit le droit
+  `gate_missing`.
 - **Un état mal gardé n'applique que `observe`** (#235, décisions 3 et 4 du
   22 octobre 2026). Au démarrage, après l'avoir ouvert, la commande juge
   l'état (`agent.CheckStateDir`) : elle suit son chemin comme le noyau, depuis
@@ -879,9 +917,12 @@ redit s'il manque ; jamais un prérequis dit posé quand il ne l'est pas :
 | --- | --- | --- |
 | Groupe `docker` | Un droit d'après le demande (`docker.deploy`, `docker.update`, `restic.docker`, `terminal.container`, `service.free` : `knownRight.dockerGroup`) et le compte n'y est pas | `usermod -aG docker <compte>`. Sans groupe `docker` sur la machine : dit (« Docker manque »), le reste posé. Retiré (`gpasswd -d`) quand un droit d'avant le demandait et qu'aucun d'après ne le demande. Rien pour un agent en root |
 | Dossiers | Ceux des droits posés : la racine des services (`docker.*`, `0755`), `backup.receive` et `restic.target` (`0700`), `files.write` (`0755`) — `machine.RightFolders`, la même liste que la page du jeton | Au compte qui possède l'état de l'agent. Root crée par `MakeFolder` : les parents s'ouvrent depuis `/`, **composant par composant**, chacun relatif au descripteur du précédent, en `O_NOFOLLOW\|O_DIRECTORY` (un lien est refusé), ceux qui manquent créés à root en `0755` (`openTrustedDir`) ; chaque parent ouvert, `/` compris, est jugé sur son descripteur (`fstat`) : **à root et sans écriture pour le groupe ni pour les autres** (`mode & 0o022 == 0`), sinon refus avec le chemin et la raison (`/tmp`, un `0775` : le compte de l'agent y poserait un lien). Le dossier se crée et s'ouvre sous le dernier parent, sans suivre de lien, puis se donne par son descripteur (`Fchown`, `Fchmod`). Le drop-in passe par le même parcours, son dossier compris. Un dossier sous l'état ou sous un autre dossier du compte se fait sous le compte (`runuser … install -d`). Un retrait ne les efface pas : ce sont des données |
-| Drop-in | Quand son contenu change | `droits.conf` (`machine.RightsDropInFile`), écrit en entier : `ReadWritePaths=-<dossier> …`, chaque dossier des droits d'après (le `-` : un dossier effacé n'empêche pas l'unité de démarrer, l'agent le dit `path_denied`). Retiré quand plus rien ne s'écrit ailleurs. Les autres drop-ins (`produce.conf`, `root.conf`) sont dits, jamais touchés : systemd additionne leurs `ReadWritePaths` |
-| Relance | Un groupe ou un drop-in a changé | `systemctl daemon-reload`, puis `systemctl try-restart kagu-agent.service` (rien si l'agent ne tourne pas) ; une montée de service coupée reprend au démarrage (`resumeUpdates`) |
-| Porte root | Un droit posé passe par elle (`terminal.host`, `network.private`, `backup.produce`) | Dit « porte root : étape 14 » ; rien n'est posé. Jamais `NoNewPrivileges=false`, ni `sudoers` ni `produce.conf` (QA-14) |
+| Drop-in | Quand son contenu change | `droits.conf` (`machine.RightsDropInFile`), écrit en entier : `ReadWritePaths=-<dossier> …`, chaque dossier des droits d'après (le `-` : un dossier effacé n'empêche pas l'unité de démarrer, l'agent le dit `path_denied`). Retiré quand plus rien ne s'écrit ailleurs. Les autres drop-ins (`root.conf`, un autre posé à la main) sont dits, jamais touchés : systemd additionne leurs `ReadWritePaths`. L'ancien `produce.conf` n'en est pas : la ligne « ancienne règle sudo retirée » le retire |
+| Ancienne règle sudo retirée | `/etc/sudoers.d/kagu-agent`, `/usr/local/sbin/kagu-vzdump` ou le drop-in `produce.conf` (la préparation de `backup.produce` d'avant la porte vzdump) est là, quels que soient les droits | Retirés dans cet ordre (`machine.LegacyProducePreparation`), puis la relance : l'agent retrouve `NoNewPrivileges=true` |
+| Porte vzdump posée | `backup.produce=proxmox-vzdump` accordé, `/usr/bin/vzdump` présent, et les deux unités de la porte absentes ou différentes | `kagu-vzdump.socket` (groupe du compte de l'agent) et `kagu-vzdump@.service` écrites, puis `systemctl daemon-reload`, `enable` et `restart` de la socket (« `backup.produce=proxmox-vzdump` : la porte vzdump »). Sans relance de l'agent : il joint la porte par sa socket |
+| Porte vzdump retirée | Le droit n'y est plus, ou `vzdump` manque, et une des deux unités est là | `systemctl disable --now kagu-vzdump.socket`, les deux unités ôtées, `daemon-reload`. Sans relance de l'agent |
+| Relance | Un groupe ou un drop-in a changé, ou l'ancienne règle sudo a été retirée | `systemctl daemon-reload`, puis `systemctl try-restart kagu-agent.service` (rien si l'agent ne tourne pas) ; une montée de service coupée reprend au démarrage (`resumeUpdates`) |
+| Porte root | Un droit posé passe par elle (`terminal.host`, `network.private`) | Dit « porte root : étape 14 » ; rien n'est posé. Jamais `NoNewPrivileges=false`, ni `sudoers` ni `produce.conf` (QA-14). `backup.produce` n'en est plus : il a la porte vzdump |
 
 Un pas qui échoue arrête la suite (pas de relance sur un système à moitié
 prêt) : la politique reste écrite, ce qui est posé se dit avec `✓`, et la
@@ -1125,9 +1166,18 @@ un binaire de plus à télécharger.
 
 #### L'installation par setup
 
-`sudo kagu setup [--rights observe|manage|root] [--releases-url https://…]` installe la machine Kagu
-(fiche B1, T04-08). Une seule question, le jeu de l'agent de cette machine,
-lue sur `/dev/tty` ; sans terminal, « Gérer ». `--domain` et `--proxy` sont
+`sudo kagu setup [--rights observe|manage|root] [--no-docker] [--releases-url https://…]` installe la machine Kagu
+(fiche B1, T04-08, T04-09). Deux questions au plus, lues sur `/dev/tty`. Le
+jeu de l'agent de cette machine ; sans terminal, « Gérer ». Puis, seulement si
+Docker (`/usr/bin/docker`) ou restic (`/usr/local/bin/restic`,
+`/usr/bin/restic`) manque et que le jeu n'est pas « Observer » : « Docker n'est
+pas installé. L'installer ? [O/n] » (« Docker et restic ne sont pas
+installés. Les installer ? » si les deux manquent, la question de restic s'il
+manque seul). Un oui vaut pour les deux ; Entrée et l'absence de terminal
+valent oui ; `--no-docker` vaut non (R-B1-4). La réponse est gardée dans
+`setup.json` (`tools`). Docker refusé alors qu'il manque, sous « Gérer » ou
+« Gérer en root » : le jeu posé est « Observer », et la ligne de l'agent le dit
+(ci-dessous). `--domain` et `--proxy` sont
 refusés tant que le proxy géré n'existe pas : l'interface n'écoute que la
 boucle locale. Chaque ligne se coche par `step.Print`, avec les clés et les
 libellés de l'écran, et regarde d'abord l'état réel : relancé, setup coche
@@ -1139,10 +1189,12 @@ pour la fiche de la machine Kagu (voir « L'arrivée d'une machine »).
 | Ligne (clé) | Ce que setup vérifie, puis fait s'il le faut |
 | --- | --- |
 | Système reconnu (`step.enroll.system`) | Debian 12 ou 13, Ubuntu 22.04 ou 24.04 (`hostinfo.OSName`), systemd, 1 Gio libre sous `/var/lib`. Rejouée à chaque fois |
-| Compte kagu créé (`step.setup.account`) | Les comptes `kagu` et `kagu-agent` (`useradd --system`) ; `/etc/kagu-agent` (root, `0755`) ; `/etc/kagu` (`root:kagu`, `0750`) et `config.toml` (`0640`) s'il manque : `listen = "127.0.0.1:8080"`, `state_dir` et, avec `--releases-url`, `releases_url` (`https://` seulement) (`config.RenderForSetup`, qui refuse une adresse publique sans HTTPS, R-CNX-5) ; un `config.toml` présent n'est pas réécrit, mais setup s'arrête s'il sert l'interface en clair hors de la machine. `state_dir` et l'état de l'agent créés ou remis en `0700` à leur compte |
+| Docker installé (`step.enroll.docker`) | Docker là : le plafond des journaux seul (ci-dessous). Sous « Observer » ou après un non : sautée (`–`). Sinon : le plafond écrit d'abord (le démon le lit à son premier démarrage), puis la clé du dépôt APT officiel (`https://download.docker.com/linux/<debian\|ubuntu>/gpg`, 64 Kio au plus), dont l'empreinte OpenPGP doit être celle du binaire (`brand.DockerKeyFingerprint`, `9DC858229FC7DD38854AE2D88D81803C0EBFCD88`) : un seul bloc, une seule clé principale, sinon refus et rien n'est posé (`kit/pgpkey`). Posée en `/etc/apt/keyrings/docker.asc`, la source en `/etc/apt/sources.list.d/docker.list` (`deb [arch=<arch> signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/<id> <nom de code> stable`), puis `apt-get update` et `apt-get install -y --no-install-recommends` de `docker-ce` et `docker-ce-cli` (`5:29.10.0-1`), `containerd.io` (`2.4.2-3`), `docker-compose-plugin` (`5.7.2-1`), chacun avec le suffixe du système (`~debian.12~bookworm`). apt vérifie les paquets avec la clé posée. La ligne dit la version de Docker |
+| restic installé (`step.enroll.restic`) | Déjà là (`/usr/local/bin/restic` ou `/usr/bin/restic`) : « déjà fait ». Sous « Observer » ou après un non : sautée. Sinon : `https://github.com/restic/restic/releases/download/v0.19.1/restic_0.19.1_linux_<arch>.bz2`, sa somme SHA-256 comparée à celle du binaire (`brand.ResticArchiveSums`, amd64 et arm64 ; une autre architecture est refusée), décompressé, posé d'un coup en `/usr/local/bin/restic` (`0755`). L'agent, lui, ne télécharge jamais restic |
+| Compte kagu créé (`step.setup.account`) | Après Docker : le compte de l'agent n'entre dans le groupe `docker` que si le groupe existe (R-B1-5). Les comptes `kagu` et `kagu-agent` (`useradd --system`) ; `/etc/kagu-agent` (root, `0755`) ; `/etc/kagu` (`root:kagu`, `0750`) et `config.toml` (`0640`) s'il manque : `listen = "127.0.0.1:8080"`, `state_dir` et, avec `--releases-url`, `releases_url` (`https://` seulement) (`config.RenderForSetup`, qui refuse une adresse publique sans HTTPS, R-CNX-5) ; un `config.toml` présent n'est pas réécrit, mais setup s'arrête s'il sert l'interface en clair hors de la machine. `state_dir` et l'état de l'agent créés ou remis en `0700` à leur compte |
 | Serveur démarré (`step.setup.server`) | Déjà fait si `GET /control/admin/health` répond. Sinon : le binaire `/usr/local/bin/kagu` présent, `state_dir` fermé (la règle de `serve`), l'unité `kagu.service` écrite si elle diffère (`machine.ServerUnitLines`, le texte de `docs/installation/kagu.service`), `systemctl enable --now`, puis 60 s d'attente de la socket de contrôle. Puis, si `/var/lib/kagu-setup/release/` existe (laissé par `install.sh`), `POST /control/admin/releases/import` : `serve` le revérifie avec ses clés et le range dans la bibliothèque ; la ligne dit « version vX.Y.Z dans la bibliothèque ». Rejoué à chaque setup, sans effet sur une version déjà là ; un refus arrête setup sur cette ligne, avec la raison de `serve` |
-| Agent de cette machine (`step.setup.agent`) | `bin/kagu-<version>` et `bin/current` dans l'état de l'agent, le lanceur stable ; sans identité, le jeton par `POST /control/admin/local-enrollment`, passé **sur l'entrée standard** à `bin/current agent -enroll-only -server unix:/run/kagu/agent.sock`, lancé sous le compte de l'agent ; puis, par le chemin de `agent grant` : le jeu, `backup.receive=/var/lib/kagu-agent/database-backups` quel que soit le jeu (R-SAUV-2), et la clé du serveur que l'agent a reçue par la socket (`trust set server-key`). « Gérer en root » se dit avant d'être posé (R-DROIT-5). L'unité de l'agent (`machine.AgentUnitLines`), puis 60 s d'attente de son premier rapport (`GET /control/admin/local-agent`) |
-| Dossier des services (`step.enroll.workspace`) | Sous « Observer », sautée. Sinon verte quand l'agent rapporte `docker.deploy` exerçable (`deploy.state = ok`) ; inexerçable au bout de 60 s, rouge avec la raison de l'agent. Docker n'est pas encore installé par setup : sans lui, « Gérer » s'arrête ici |
+| Agent de cette machine (`step.setup.agent`) | `bin/kagu-<version>` et `bin/current` dans l'état de l'agent, le lanceur stable ; sans identité, le jeton par `POST /control/admin/local-enrollment`, passé **sur l'entrée standard** à `bin/current agent -enroll-only -server unix:/run/kagu/agent.sock`, lancé sous le compte de l'agent ; puis, par le chemin de `agent grant` : le jeu, `backup.receive=/var/lib/kagu-agent/database-backups` quel que soit le jeu (R-SAUV-2), et la clé du serveur que l'agent a reçue par la socket (`trust set server-key`). « Gérer en root » se dit avant d'être posé (R-DROIT-5). L'unité de l'agent (`machine.AgentUnitLines`), puis 60 s d'attente de son premier rapport (`GET /control/admin/local-agent`). Docker refusé alors qu'il manquait : la ligne est jaune (`!`) : « droits : Observer (Docker absent) ; plus tard : » et la ligne du jeu demandé (`agentpolicy.GrantSetLine` : `sudo kagu agent grant --set manage`, ou `--set root`) |
+| Dossier des services (`step.enroll.workspace`) | Sous « Observer », sautée. Sinon verte quand l'agent rapporte `docker.deploy` exerçable (`deploy.state = ok`) ; inexerçable au bout de 60 s, rouge avec la raison de l'agent |
 
 La fin donne le tunnel (`ssh -L 8080:127.0.0.1:8080 root@<adresse>`),
 `http://localhost:8080`, puis le code de première configuration, en dernier
@@ -1154,9 +1206,25 @@ code.
 de `serve`, ni dans `setup.json` : il va de la socket de contrôle, à root, à
 l'entrée standard de l'agent. **Deux setup** en même temps : le second
 s'arrête sur le verrou `/run/kagu-setup.lock` (`flock`, sans attendre).
-**Le coût** : sans Docker, « Gérer » et « Gérer en root » s'arrêtent à
-« Dossier des services » tant que l'installation de Docker n'est pas dans
-setup ; « Observer » va jusqu'au code.
+**Le plafond des journaux de Docker** (R-B1-15) : `/etc/docker/daemon.json`
+absent, setup l'écrit par création exclusive (`O_EXCL` : un fichier apparu
+entre-temps n'est pas écrasé), avec `"log-driver": "local"` et
+`"log-opts": {"max-size": "10m", "max-file": "3"}`. Sur un Docker déjà là, il
+vaut au prochain redémarrage de Docker : setup ne redémarre pas Docker. Un
+`daemon.json` présent n'est **jamais réécrit** : s'il plafonne déjà (pilote
+`local`, ou un `max-size`), « déjà fait » ; sinon la ligne « Docker installé »
+est jaune et donne ce qu'il faut ajouter
+(`"log-driver":"local","log-opts":{"max-file":"3","max-size":"10m"}`).
+Réécrire ferait perdre un réglage de l'opérateur (miroir, pont) ; le coût est
+un geste à la main.
+
+**Les versions** de Docker, de ses paquets et de restic, l'empreinte de la clé
+de Docker et les sommes de restic sont dans `internal/kit/brand`, donc dans la
+version signée de Kagu, jamais « la dernière » (décision de sécurité 15). Ce
+que ça rapporte : un dépôt ou une page de versions changés ne passent pas.
+Ce que ça coûte : une version de Docker ou de restic plus récente demande
+une version de Kagu, et un dépôt qui retire l'ancienne version fait échouer
+« Docker installé ». `kagu join` n'installe pas Docker.
 
 #### La montée du serveur : upgrade
 
@@ -2083,15 +2151,18 @@ droit ne nomme pas ce producteur), `producer_unknown` (le droit le nomme, cet
 agent ne sait pas le lancer), `bad_order` (cible, préfixe, clé ou colis mal
 formés, ou le préfixe de la base, `database` ou `kagu` : une cible qui n'est pas faite de chiffres ne devient jamais un argument
 de ligne de commande). Accepté, l'ordre passe au worker, qui d'abord vérifie ce
-que le droit exige de la machine (`sudo_missing`, `producer_missing`,
-`sudo_denied`) et 1 Gio libre sous l'état (`disk_full`) : des refus avant la
+que le droit exige de la machine (`producer_missing`, `gate_missing`,
+`gate_denied`) et 1 Gio libre sous l'état (`disk_full`) : des refus avant la
 première écriture. Puis :
 
-1. le producteur `proxmox-vzdump` lance `sudo -n /usr/local/sbin/kagu-vzdump
-   <cible> --mode snapshot --compress zstd --stdout --quiet 1`, sous un
-   environnement **remplacé** (`PATH`, `LC_ALL=C`), et écrit son flux dans
-   `produce/<nom>.raw` : un fichier, jamais la mémoire. La fin de sa sortie
-   d'erreur (32 lignes) est gardée pour le résultat ;
+1. le producteur `proxmox-vzdump` demande `<cible> zstd` à la porte vzdump
+   (« `backup.produce=proxmox-vzdump` : la porte vzdump »), qui lance
+   `vzdump <cible> --mode snapshot --compress zstd --stdout --quiet 1` en
+   root ; l'agent écrit le flux rendu dans `produce/<nom>.raw` : un fichier,
+   jamais la mémoire. La fin de la sortie d'erreur de `vzdump` (32 lignes),
+   que la porte rend avec son code de sortie, est gardée pour le résultat ; un
+   code autre que 0, ou une porte qui refuse à ce stade, est un échec
+   (`producer_failed`) ;
 2. l'agent emballe le flux dans un tar d'une seule entrée (nommée comme vzdump
    nomme ses archives : `vzdump-qemu-<cible>-AAAA_MM_JJ-HH_MM_SS.vma.zst`, ou
    `…lxc….tar.zst`) et le chiffre pour `recipient`, vers `<nom>.part`, puis efface le
@@ -2114,8 +2185,9 @@ pas après les essais), `disk_full` (le disque se remplit en route),
 `path_unwritable` (le reste). Le nom est `<préfixe>-AAAAMMJJ-HHMMSS.tar.age`
 (UTC), comme celui de la base. L'agent n'a que la clé publique : **il ne peut pas
 relire ce qu'il a produit**, la vérification est celle du fichier, jamais un
-déchiffrement. Le droit vaut root sur la machine pour un agent compromis
-(« Les droits d'un agent »).
+déchiffrement. Le droit ne vaut pas root : un agent compromis obtient
+l'archive de n'importe quel invité de l'hôte (« `backup.produce=proxmox-vzdump` :
+la porte vzdump »).
 
 **Le champ write-only.** `OrderBody.Secret` est **signé avec l'ordre** (64 Kio
 au plus, `agentwire.MaxSecretBytes`) mais **jamais écrit** : ni dans
@@ -2576,7 +2648,7 @@ Un autre chemin que les archives `age` : la source garde ses sauvegardes
 
 | Acteur | Rôle | Droit |
 | --- | --- | --- |
-| La source | Son agent lance `restic backup` (un service : son dossier sous la racine de l'agent ; une VM : `vzdump` en flux). Il reçoit du serveur les deux mots de passe du lien (`restic.provision`) et les garde en `0600` | `restic.produce` (+ `backup.produce` pour une VM) |
+| La source | Son agent lance `restic backup` (un service : son dossier sous la racine de l'agent ; une VM : `vzdump` en flux, par la porte vzdump). Il reçoit du serveur les deux mots de passe du lien (`restic.provision`) et les garde en `0600` | `restic.produce` (+ `backup.produce` pour une VM) |
 | La cible | Son agent lance et surveille **une seule instance** `rest-server --append-only --private-repos --tls` (certificat auto-signé, un an, épinglé par la source, refait si ses noms changent). Il reçoit le mot de passe REST (`restic.user.add`) et en calcule l'empreinte bcrypt ; il applique la rétention chez lui (`restic.retain`), jamais sous son plancher, et vérifie les dépôts (`restic.verify`) | `restic.target` (+ `restic.verify` pour vérifier) |
 | Le serveur | Tire, scelle et distribue les mots de passe de chaque lien ; garde les sauvegardes déclarées, leur historique, ce que les agents rapportent ; envoie `restic.target.setup`, `restic.provision`, `restic.user.add`, `restic.user.remove`, `restic.backup`, `restic.retain`, `restic.verify` ; juge la supervision et ouvre les alertes ; porte le relais | — |
 
@@ -6304,8 +6376,8 @@ et `TokenPrefix` (`kg`), seules valeurs écrites
 
 | Ce qui en dérive | Valeur |
 | --- | --- |
-| Chemins | `/etc/kagu`, `/var/lib/kagu`, `/var/lib/kagu-agent`, `/etc/kagu-agent`, `/usr/local/lib/kagu-agent/kagu-guard`, `/usr/local/sbin/kagu-vzdump`, `/run/kagu/agent.sock`, `kagu.db` |
-| Unités, compte, binaire | `kagu.service`, `kagu-agent.service`, le compte `kagu-agent`, la commande `kagu`, les versions `kagu-linux-<arch>` |
+| Chemins | `/etc/kagu`, `/var/lib/kagu`, `/var/lib/kagu-agent`, `/etc/kagu-agent`, `/usr/local/lib/kagu-agent/kagu-guard`, `/run/kagu-vzdump.sock`, `/run/kagu/agent.sock`, `kagu.db` |
+| Unités, compte, binaire | `kagu.service`, `kagu-agent.service`, `kagu-vzdump.socket`, `kagu-vzdump@.service`, le compte `kagu-agent`, la commande `kagu`, les versions `kagu-linux-<arch>` |
 | Proxmox | le rôle `KaguAgent`, le compte `kagu-agent@pve`, les instantanés `kg-…` |
 | Jetons | enrôlement `kg_…`, API `kgk_…` |
 | Fil | les en-têtes `Kagu-…` (agent, webhooks), `X-Kagu-Proxy-Secret`, les étiquettes `kagu-order/v2`, `kagu-agent-proof/v2`, `kagu-key-id`, `kagu-host:` |

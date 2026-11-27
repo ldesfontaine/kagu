@@ -26,11 +26,14 @@ type recordingSystem struct {
 	dropIns     map[string]string
 	proxmox     bool
 	server      bool
-	done        []string
+	// files : les fichiers du système qui existent ; units : les unités.
+	files map[string]bool
+	units map[string]string
+	done  []string
 }
 
 func newRecordingSystem() *recordingSystem {
-	return &recordingSystem{dockerGroup: true, members: map[string]bool{}, dropIns: map[string]string{}}
+	return &recordingSystem{dockerGroup: true, members: map[string]bool{}, dropIns: map[string]string{}, files: map[string]bool{}, units: map[string]string{}}
 }
 
 func (s *recordingSystem) GroupExists(group string) (bool, error) {
@@ -97,6 +100,41 @@ func (s *recordingSystem) RemoveDropIn(name string) error {
 	return nil
 }
 
+func (s *recordingSystem) Exists(path string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.files[path]
+}
+
+func (s *recordingSystem) ReadUnit(name string) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	content, ok := s.units[name]
+	if !ok {
+		return nil, fs.ErrNotExist
+	}
+	return []byte(content), nil
+}
+
+func (s *recordingSystem) WriteUnit(name string, content []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.units[name] = string(content)
+	s.done = append(s.done, "unit "+name)
+	return nil
+}
+
+func (s *recordingSystem) RemoveFile(path string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.files, path)
+	if strings.HasPrefix(path, machine.UnitDir+"/") {
+		delete(s.units, strings.TrimPrefix(path, machine.UnitDir+"/"))
+	}
+	s.done = append(s.done, "remove "+path)
+	return nil
+}
+
 func (s *recordingSystem) Proxmox() bool       { return s.proxmox }
 func (s *recordingSystem) ServerMachine() bool { return s.server }
 
@@ -132,7 +170,8 @@ func (b *policyBench) grantSet(t *testing.T, set agentpolicy.Set) PolicyChange {
 // des services au compte de l'agent, le drop-in ReadWritePaths, puis
 // daemon-reload et la relance de l'agent ; le plan est dit avant la question.
 // Jamais NoNewPrivileges=false, ni sudoers ni produce.conf, même en root sur
-// un hôte Proxmox : la porte root arrive à l'étape 14, et grant le dit.
+// un hôte Proxmox : la porte root arrive à l'étape 14, et grant le dit ; la
+// porte vzdump ne se pose que là où vzdump existe (TestT0409_VzdumpGate_*).
 func TestR_A3_8_GrantLaysTheSystemPrerequisites(t *testing.T) {
 	account, owner := testAccount(t)
 	b := newPolicyBench(t)
@@ -178,7 +217,7 @@ func TestR_A3_8_GrantLaysTheSystemPrerequisites(t *testing.T) {
 			gate = append(gate, step.Detail)
 		}
 	}
-	if !slices.Equal(gate, []string{"backup.produce", "terminal.host", "network.private"}) {
+	if !slices.Equal(gate, []string{"terminal.host", "network.private"}) {
 		t.Fatalf("root gate %v", gate)
 	}
 	for name, content := range b.system.dropIns {
@@ -214,21 +253,21 @@ func kindsOf(steps []Prerequisite) []PrerequisiteKind {
 func TestR_A3_8_WithoutDockerTheRestIsLaidAndSaid(t *testing.T) {
 	b := newPolicyBench(t)
 	b.system.dockerGroup = false
-	b.system.dropIns["produce.conf"] = "[Service]\nNoNewPrivileges=false\n"
+	b.system.dropIns["root.conf"] = "[Service]\nUser=\nGroup=\n"
 	change := b.grantSet(t, agentpolicy.SetManage)
 	kinds := map[PrerequisiteKind]string{}
 	for _, step := range change.Prerequisites {
 		kinds[step.Kind] = step.Detail
 	}
-	if kinds[PrerequisiteDockerMissing] != "docker" || kinds[PrerequisiteOtherDropIn] != machine.UnitDropInDir+"/produce.conf" {
+	if kinds[PrerequisiteDockerMissing] != "docker" || kinds[PrerequisiteOtherDropIn] != machine.UnitDropInDir+"/root.conf" {
 		t.Fatalf("plan %+v", change.Prerequisites)
 	}
 	for _, done := range b.system.take() {
-		if strings.HasPrefix(done, "usermod") || strings.Contains(done, "produce.conf") {
+		if strings.HasPrefix(done, "usermod") || strings.Contains(done, "root.conf") {
 			t.Fatalf("laid %q", done)
 		}
 	}
-	if b.system.dropIns["produce.conf"] != "[Service]\nNoNewPrivileges=false\n" || b.system.dropIns["droits.conf"] == "" {
+	if b.system.dropIns["root.conf"] != "[Service]\nUser=\nGroup=\n" || b.system.dropIns["droits.conf"] == "" {
 		t.Fatalf("drop-ins %v", b.system.dropIns)
 	}
 }

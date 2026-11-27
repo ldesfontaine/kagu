@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -27,8 +28,11 @@ import (
 // (resumeUpdates). Le plan se refait à chaque grant et revoke, même quand
 // les droits ne changent pas ; il se lit avant la question, se dit avec ce
 // qui change, et se pose après l'écriture de la politique. Jamais
-// NoNewPrivileges=false : ce qui demande root passera par la porte (A5,
-// étape 14) ; ni sudoers ni produce.conf ne sont posés ou retirés ici.
+// NoNewPrivileges=false : backup.produce passe par la porte vzdump, une
+// socket de root que le plan pose et retire (décision de Lucas du
+// 26/11/2026) ; la règle sudo, le script et le produce.conf d'avant elle
+// sont retirés là où ils sont. Le reste de ce qui demande root passera par
+// la porte root (A5, étape 14).
 
 // PrerequisiteKind dit ce qu'un pas de la pose fait, ou ce qu'elle laisse.
 type PrerequisiteKind string
@@ -50,6 +54,13 @@ const (
 	PrerequisiteOtherDropIn PrerequisiteKind = "other_drop_in"
 	// Un droit qui passe par la porte root : la porte arrive à l'étape 14.
 	PrerequisiteRootGate PrerequisiteKind = "root_gate"
+	// La porte vzdump : posée (backup.produce=proxmox-vzdump accordé, vzdump
+	// présent), ou retirée.
+	PrerequisiteVzdumpGate        PrerequisiteKind = "vzdump_gate"
+	PrerequisiteVzdumpGateRemoved PrerequisiteKind = "vzdump_gate_removed"
+	// La règle sudo, le script de root et le produce.conf d'avant la porte,
+	// retirés.
+	PrerequisiteLegacySudoRemoved PrerequisiteKind = "legacy_sudo_removed"
 	// daemon-reload, puis la relance de l'agent.
 	PrerequisiteRestart PrerequisiteKind = "restart"
 )
@@ -91,6 +102,15 @@ type System interface {
 	// ServerMachine dit si le serveur tourne sur cette machine : sa
 	// configuration, à root, est là.
 	ServerMachine() bool
+	// Exists dit si un fichier du système est là (vzdump, un reste de la
+	// préparation d'avant la porte).
+	Exists(path string) bool
+	// ReadUnit rend une unité de machine.UnitDir ; fs.ErrNotExist si elle
+	// manque. WriteUnit l'écrit d'un coup, à root, en 0644.
+	ReadUnit(name string) ([]byte, error)
+	WriteUnit(name string, content []byte) error
+	// RemoveFile retire un fichier du système ; un absent n'est pas une erreur.
+	RemoveFile(path string) error
 }
 
 // hostAccount est le compte de l'agent, celui qui possède son état.
@@ -120,6 +140,12 @@ func planPrerequisites(system System, account hostAccount, servicesRoot string, 
 		return nil, err
 	}
 	plan = append(plan, dropIns...)
+	plan = append(plan, planLegacyProduce(system)...)
+	gate, err := planVzdumpGate(system, account, after)
+	if err != nil {
+		return nil, err
+	}
+	plan = append(plan, gate...)
 	if slices.ContainsFunc(plan, Prerequisite.needsRestart) {
 		plan = append(plan, Prerequisite{Kind: PrerequisiteRestart, Detail: brand.AgentUnit, lay: restartAgent})
 	}
@@ -130,8 +156,14 @@ func planPrerequisites(system System, account hostAccount, servicesRoot string, 
 }
 
 // needsRestart : un groupe ou un drop-in ne se lit qu'au démarrage de l'unité.
+// Un dossier, ou la porte vzdump, que l'agent joint par sa socket, n'en
+// demandent pas.
 func (p Prerequisite) needsRestart() bool {
-	return p.lay != nil && p.Kind != PrerequisiteFolder
+	switch p.Kind {
+	case PrerequisiteFolder, PrerequisiteVzdumpGate, PrerequisiteVzdumpGateRemoved:
+		return false
+	}
+	return p.lay != nil
 }
 
 // addedRights rend les droits d'après qui n'étaient pas avant, avec leur
@@ -204,13 +236,13 @@ func planFolders(account hostAccount, folders, accountFolders []machine.RightFol
 
 // planDropIns écrit le drop-in des droits quand son contenu change, le retire
 // quand plus rien ne s'écrit ailleurs, et dit les autres drop-ins de l'unité,
-// qui s'ajoutent à lui (produce.conf, root.conf, un droits posé à la main
-// sous un autre nom).
+// qui s'ajoutent à lui (root.conf, un droits posé à la main sous un autre
+// nom). L'ancien produce.conf n'en est pas : planVzdumpGate le retire.
 func planDropIns(system System, folders []machine.RightFolder) ([]Prerequisite, error) {
 	name := filepath.Base(machine.RightsDropInFile)
 	var wanted []byte
 	if lines := machine.RightsDropInLines(folders); lines != nil {
-		wanted = []byte(strings.Join(lines, "\n") + "\n")
+		wanted = machine.UnitContent(lines)
 	}
 	current, err := system.ReadDropIn(name)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -233,11 +265,107 @@ func planDropIns(system System, folders []machine.RightFolder) ([]Prerequisite, 
 		return nil, err
 	}
 	for _, other := range others {
-		if other != name && strings.HasSuffix(other, ".conf") {
+		if other != name && other != filepath.Base(machine.LegacyProduceDropIn) && strings.HasSuffix(other, ".conf") {
 			plan = append(plan, Prerequisite{Kind: PrerequisiteOtherDropIn, Detail: filepath.Join(machine.UnitDropInDir, other)})
 		}
 	}
 	return plan, nil
+}
+
+// planLegacyProduce retire la préparation d'avant la porte (règle sudo,
+// script de root, produce.conf) là où elle reste : la relance qui suit rend
+// NoNewPrivileges à l'agent.
+func planLegacyProduce(system System) []Prerequisite {
+	legacy := slices.DeleteFunc(machine.LegacyProducePreparation(), func(path string) bool { return !system.Exists(path) })
+	if len(legacy) == 0 {
+		return nil
+	}
+	return []Prerequisite{{Kind: PrerequisiteLegacySudoRemoved, Detail: strings.Join(legacy, " "), lay: func(system System) error {
+		return removeFiles(system, legacy)
+	}}}
+}
+
+// planVzdumpGate pose la porte vzdump quand backup.produce=proxmox-vzdump est
+// accordé et que vzdump existe, ou la retire quand l'un des deux manque. Une
+// porte déjà posée telle quelle n'est pas reposée.
+func planVzdumpGate(system System, account hostAccount, after []agentpolicy.Capability) ([]Prerequisite, error) {
+	group, err := accountGroup(account)
+	if err != nil {
+		return nil, err
+	}
+	units := []struct {
+		name    string
+		content []byte
+	}{
+		{machine.VzdumpGateSocketUnit, machine.UnitContent(machine.VzdumpGateSocketLines(group))},
+		{machine.VzdumpGateServiceUnit, machine.UnitContent(machine.VzdumpGateServiceLines())},
+	}
+	present, current := false, true
+	for _, unit := range units {
+		existing, err := system.ReadUnit(unit.name)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+		present = present || err == nil
+		current = current && err == nil && bytes.Equal(existing, unit.content)
+	}
+	wanted := agentpolicy.CoversProducer(after, agentpolicy.ProducerProxmoxVzdump) && system.Exists(machine.VzdumpBinary)
+	switch {
+	case wanted && !current:
+		return []Prerequisite{{Kind: PrerequisiteVzdumpGate, Detail: brand.VzdumpGateSocket, lay: func(system System) error {
+			for _, unit := range units {
+				if err := system.WriteUnit(unit.name, unit.content); err != nil {
+					return err
+				}
+			}
+			return runAll(system, [][]string{
+				{"systemctl", "daemon-reload"},
+				{"systemctl", "enable", machine.VzdumpGateSocketUnit},
+				{"systemctl", "restart", machine.VzdumpGateSocketUnit},
+			})
+		}}}, nil
+	case !wanted && present:
+		return []Prerequisite{{Kind: PrerequisiteVzdumpGateRemoved, Detail: brand.VzdumpGateSocket, lay: func(system System) error {
+			if err := system.Run("systemctl", "disable", "--now", machine.VzdumpGateSocketUnit); err != nil {
+				return err
+			}
+			if err := removeFiles(system, []string{
+				machine.UnitDir + "/" + machine.VzdumpGateSocketUnit, machine.UnitDir + "/" + machine.VzdumpGateServiceUnit,
+			}); err != nil {
+				return err
+			}
+			return system.Run("systemctl", "daemon-reload")
+		}}}, nil
+	}
+	return nil, nil
+}
+
+// accountGroup rend le groupe principal du compte de l'agent : celui qui
+// ouvre la socket de la porte.
+func accountGroup(account hostAccount) (string, error) {
+	group, err := user.LookupGroupId(strconv.Itoa(account.owner.GID))
+	if err != nil {
+		return "", fmt.Errorf("the group %d of the agent account has no name: %w", account.owner.GID, err)
+	}
+	return group.Name, nil
+}
+
+func removeFiles(system System, paths []string) error {
+	for _, path := range paths {
+		if err := system.RemoveFile(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runAll(system System, commands [][]string) error {
+	for _, command := range commands {
+		if err := system.Run(command[0], command[1:]...); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // restartAgent relit les unités, puis relance l'agent s'il tourne : le
@@ -489,4 +617,40 @@ func (HostSystem) Proxmox() bool {
 func (HostSystem) ServerMachine() bool {
 	_, err := os.Stat(brand.ConfigPath)
 	return err == nil
+}
+
+func (HostSystem) Exists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
+func (HostSystem) ReadUnit(name string) ([]byte, error) {
+	dir, err := os.OpenRoot(machine.UnitDir)
+	if err != nil {
+		return nil, err
+	}
+	defer dir.Close()
+	return dir.ReadFile(name)
+}
+
+// WriteUnit : le dossier des unités est à root, comme les drop-ins.
+func (h HostSystem) WriteUnit(name string, content []byte) error {
+	descriptor, err := openTrustedDir(machine.UnitDir, h.judge())
+	if err != nil {
+		return err
+	}
+	_ = syscall.Close(descriptor)
+	dir, err := os.OpenRoot(machine.UnitDir)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return fsx.WriteAtomic(dir, name, content, 0o644)
+}
+
+func (HostSystem) RemoveFile(path string) error {
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
 }

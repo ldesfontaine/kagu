@@ -137,11 +137,10 @@ const (
 	// avant d'écrire quoi que ce soit.
 	ReasonPathDenied   = "path_denied"
 	ReasonDockerDenied = "docker_denied"
-	// Les raisons du droit backup.produce : pas de sudo sur la machine, la
-	// règle sudo ne laisse pas le compte lancer le script de vzdump, ou ce
-	// script ou vzdump lui-même manque.
-	ReasonSudoMissing     = "sudo_missing"
-	ReasonSudoDenied      = "sudo_denied"
+	// Les raisons du droit backup.produce : la porte vzdump n'est pas posée,
+	// elle refuse le compte de l'agent, ou vzdump lui-même manque.
+	ReasonGateMissing     = "gate_missing"
+	ReasonGateDenied      = "gate_denied"
 	ReasonProducerMissing = "producer_missing"
 	// Les raisons de l'ordre backup.produce : le producteur n'est pas de ceux
 	// que l'agent sait lancer, il a échoué (sa sortie d'erreur est dans le
@@ -322,7 +321,7 @@ func RefusalReasons() []string {
 		ReasonServiceDirExists, ReasonServiceDirMissing, ReasonRootNotOurs, ReasonDockerMissing,
 		ReasonComposeTooOld, ReasonDiskFull, ReasonComposeFailed, ReasonRolledBackVersion, ReasonNoPendingUpdate,
 		ReasonPathDenied, ReasonDockerDenied,
-		ReasonSudoMissing, ReasonProducerMissing, ReasonSudoDenied,
+		ReasonGateMissing, ReasonProducerMissing, ReasonGateDenied,
 		ReasonProducerUnknown, ReasonProducerFailed, ReasonUploadFailed,
 		ReasonProxmoxTokenMissing, ReasonProxmoxTokenUnsafe, ReasonProxmoxPinMissing,
 		ReasonProxmoxUnreachable, ReasonProxmoxCertificate, ReasonProxmoxUnauthorized, ReasonProxmoxBadResponse,

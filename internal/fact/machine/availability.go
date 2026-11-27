@@ -68,7 +68,7 @@ func ParseAccount(text string) (Account, bool) {
 func UnavailableReasons() []string {
 	return []string{
 		"docker_denied", "docker_missing", "path_denied", "path_unwritable", "not_self_updatable",
-		"sudo_missing", "producer_missing", "sudo_denied",
+		"gate_missing", "producer_missing", "gate_denied",
 		"proxmox_token_missing", "proxmox_token_unsafe", "proxmox_pin_missing",
 		"rest_server_missing", "restic_missing",
 	}

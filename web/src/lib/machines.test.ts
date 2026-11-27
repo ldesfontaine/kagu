@@ -34,7 +34,7 @@ test("describeAccount : le nom et l'uid, l'uid seul sans nom, rien tant que l'ag
 
 test("describeUnavailable : une phrase par raison, celle d'un dossier refusé nomme le compte, ou change sous root", () => {
   expect(describeUnavailable(t, "docker_denied", null)).toBe("machine.capability_unavailable_docker_denied");
-  expect(describeUnavailable(t, "sudo_denied", null)).toBe("machine.capability_unavailable_sudo_denied");
+  expect(describeUnavailable(t, "gate_denied", null)).toBe("machine.capability_unavailable_gate_denied");
   expect(describeUnavailable(t, "path_unwritable", { uid: 998, name: "svc" })).toBe("machine.capability_unavailable_path_unwritable");
   expect(describeUnavailable(t, "path_denied", { uid: 998, name: "svc" })).toBe("machine.capability_unavailable_path_denied:svc");
   expect(describeUnavailable(t, "path_denied", { uid: 4000, name: "" })).toBe("machine.capability_unavailable_path_denied:4000");

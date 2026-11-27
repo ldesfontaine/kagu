@@ -26,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/ldesfontaine/kagu/internal/fact/agentpolicy"
+	"github.com/ldesfontaine/kagu/internal/fact/machine"
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/dockerapi"
 	"github.com/ldesfontaine/kagu/internal/kit/fsx"
@@ -34,7 +35,7 @@ import (
 
 const (
 	// Le seul programme que l'agent lance pour déployer : un chemin constant.
-	dockerBinary = "/usr/bin/docker"
+	dockerBinary = machine.DockerBinary
 	// Compose met de l'ordre dans les images à tirer : dix minutes, au-delà
 	// l'ordre échoue (le serveur lui laisse une heure).
 	composeUpTimeout = 10 * time.Minute

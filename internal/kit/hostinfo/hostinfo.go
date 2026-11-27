@@ -90,15 +90,29 @@ func OSName() string {
 	return readOSName(osReleasePath)
 }
 
-// readOSName compose « Debian 12 » depuis NAME et VERSION_ID d'os-release,
-// et retombe sur le nom du système de Go.
-func readOSName(path string) string {
+// Release est ce qu'os-release dit du système pour choisir un dépôt de
+// paquets : « debian », « 12 », « bookworm ».
+type Release struct {
+	ID        string
+	VersionID string
+	Codename  string
+}
+
+// OSRelease rend le système de cette machine ; vide sans os-release.
+func OSRelease() Release {
+	values := readOSRelease(osReleasePath)
+	return Release{ID: values["ID"], VersionID: values["VERSION_ID"], Codename: values["VERSION_CODENAME"]}
+}
+
+// readOSRelease rend les valeurs d'os-release, guillemets ôtés ; aucune
+// sans le fichier.
+func readOSRelease(path string) map[string]string {
+	values := map[string]string{}
 	file, err := os.Open(path) // #nosec G304 -- chemin constant.
 	if err != nil {
-		return runtime.GOOS
+		return values
 	}
 	defer file.Close()
-	values := map[string]string{}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		key, value, ok := strings.Cut(scanner.Text(), "=")
@@ -106,6 +120,13 @@ func readOSName(path string) string {
 			values[key] = strings.Trim(value, `"`)
 		}
 	}
+	return values
+}
+
+// readOSName compose « Debian 12 » depuis NAME et VERSION_ID d'os-release,
+// et retombe sur le nom du système de Go.
+func readOSName(path string) string {
+	values := readOSRelease(path)
 	name := values["NAME"]
 	if name == "" {
 		return runtime.GOOS

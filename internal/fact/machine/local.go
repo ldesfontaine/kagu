@@ -112,7 +112,7 @@ func (s *Service) localMachineName() string {
 }
 
 // ServerUnitFile est l'unité du serveur, que setup pose.
-const ServerUnitFile = "/etc/systemd/system/" + brand.ServerUnit
+const ServerUnitFile = UnitDir + "/" + brand.ServerUnit
 
 // emptyBoundingSet retire toute capacité au serveur : le port 8080 n'en
 // demande aucune. Une directive de systemd, pas un nom de droit.

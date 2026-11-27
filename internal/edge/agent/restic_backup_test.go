@@ -562,25 +562,34 @@ func TestResticProvision_KeepsTheReceivedPasswordsPrivate(t *testing.T) {
 	}
 }
 
-// Un invité passe par vzdump en flux, lancé par restic : le script de root
-// sous sudo, sans compression, sous un nom stable.
+// Un invité passe par vzdump en flux, lancé par restic : le binaire de
+// l'agent, qui demande vzdump sans compression à la porte, sous un nom stable.
 func TestResticBackup_GuestStreamsVzdumpThroughRestic(t *testing.T) {
 	b := newResticBench(t, "restic.produce", "backup.produce=proxmox-vzdump")
 	b.runner.restic.source.dialer = &refusingDialer{}
+	b.runner.restic.source.agentBinary = func() (string, error) { return "/var/lib/kagu-agent/bin/current", nil }
 	b.provision(t, "nas", 8000, mustCertificate(t))
 	b.trust(t, map[string][]string{anchor.BackupGuest: {"105"}})
-	b.runner.checks.lookPath = func(name string) (string, error) {
-		if name == "sudo" {
-			return "/usr/bin/sudo", nil
-		}
-		return name, nil
-	}
 	guest := agentwire.ResticBackupParams{Target: resticTargetID, Scope: agentwire.ResticScopeVM, VMID: 105, GuestType: agentwire.GuestQEMU}
 	expectResult(t, b.run(t, agentwire.KindResticBackup, guest), agentwire.ActionSucceeded, "")
 	args := strings.Join(b.restic.callsMade()[0].args, " ")
-	if !strings.Contains(args, "--stdin-from-command --stdin-filename vzdump-qemu-105.vma -- /usr/bin/sudo -n") ||
-		!strings.Contains(args, " 105 --mode snapshot --compress 0 --stdout") {
+	if !strings.HasSuffix(args, "--stdin-from-command --stdin-filename vzdump-qemu-105.vma -- /var/lib/kagu-agent/bin/current agent vzdump-stream 105") {
 		t.Fatalf("args %s", args)
+	}
+}
+
+// Sans porte vzdump, l'invité n'est pas sauvegardé : refusé avant de lancer
+// restic, avec la raison du rapport des droits.
+func TestResticBackup_AGuestWithoutTheGateIsRefused(t *testing.T) {
+	b := newResticBench(t, "restic.produce", "backup.produce=proxmox-vzdump")
+	b.runner.restic.source.dialer = &refusingDialer{}
+	b.runner.checks.vzdumpGate = func() string { return agentwire.ReasonGateMissing }
+	b.provision(t, "nas", 8000, mustCertificate(t))
+	b.trust(t, map[string][]string{anchor.BackupGuest: {"105"}})
+	guest := agentwire.ResticBackupParams{Target: resticTargetID, Scope: agentwire.ResticScopeVM, VMID: 105, GuestType: agentwire.GuestQEMU}
+	expectResult(t, b.run(t, agentwire.KindResticBackup, guest), agentwire.ActionRefused, agentwire.ReasonGateMissing)
+	if calls := b.restic.callsMade(); len(calls) != 0 {
+		t.Fatalf("restic ran: %+v", calls)
 	}
 }
 

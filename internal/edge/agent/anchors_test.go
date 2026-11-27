@@ -595,18 +595,18 @@ func TestR_A1_3_TheProducerIsNeverCalledOnAKeyOfAnotherCaseOrRepeated(t *testing
 	expectResult(t, b.run(t, 100, params), agentwire.ActionSucceeded, "")
 }
 
-// B-M1 : restic.backup d'un invité lance sudo et vzdump sur le vmid de l'ordre ;
-// backup.guest le borne comme backup.produce. Hors des ancres : refusé, sudo
-// jamais cherché, restic jamais lancé. La portée service n'est pas bornée par
+// B-M1 : restic.backup d'un invité demande vzdump à la porte sur le vmid de
+// l'ordre ; backup.guest le borne comme backup.produce. Hors des ancres :
+// refusé, la porte jamais jugée, restic jamais lancé. La portée service n'est pas bornée par
 // cette ancre, même sur une machine qui n'en a posé aucune.
-func TestR_A1_7_ResticBackupOfAGuestOutsideTheAnchorsNeverRunsSudo(t *testing.T) {
+func TestR_A1_7_ResticBackupOfAGuestOutsideTheAnchorsNeverReachesTheGate(t *testing.T) {
 	b := newResticBench(t, "restic.produce", "backup.produce=proxmox-vzdump")
 	b.runner.restic.source.dialer = &refusingDialer{}
 	b.provision(t, "nas", 8000, mustCertificate(t))
-	var looked []string
-	b.runner.checks.lookPath = func(name string) (string, error) {
-		looked = append(looked, name)
-		return "/usr/bin/" + name, nil
+	gateAsked := 0
+	b.runner.checks.vzdumpGate = func() string {
+		gateAsked++
+		return ""
 	}
 	guest := func(vmid int) agentwire.ResticBackupParams {
 		return agentwire.ResticBackupParams{Target: resticTargetID, Scope: agentwire.ResticScopeVM, VMID: vmid, GuestType: agentwire.GuestQEMU}
@@ -614,8 +614,8 @@ func TestR_A1_7_ResticBackupOfAGuestOutsideTheAnchorsNeverRunsSudo(t *testing.T)
 	refusedWithoutRunning := func(label string, params any, reason string) {
 		t.Helper()
 		expectResult(t, b.run(t, agentwire.KindResticBackup, params), agentwire.ActionRefused, reason)
-		if slices.Contains(looked, "sudo") || len(b.restic.callsMade()) != 0 {
-			t.Fatalf("%s: sudo looked up %v, restic ran %d times", label, looked, len(b.restic.callsMade()))
+		if gateAsked != 0 || len(b.restic.callsMade()) != 0 {
+			t.Fatalf("%s: the gate judged %d times, restic ran %d times", label, gateAsked, len(b.restic.callsMade()))
 		}
 	}
 
@@ -630,15 +630,15 @@ func TestR_A1_7_ResticBackupOfAGuestOutsideTheAnchorsNeverRunsSudo(t *testing.T)
 		t.Fatal(err)
 	}
 	expectResult(t, b.run(t, agentwire.KindResticBackup, serviceBackup("forgejo")), agentwire.ActionSucceeded, "")
-	if slices.Contains(looked, "sudo") {
-		t.Fatalf("a service backup looked up sudo: %v", looked)
+	if gateAsked != 0 {
+		t.Fatal("a service backup judged the gate")
 	}
 
-	// Le vmid ancré passe : sudo est enfin cherché.
+	// Le vmid ancré passe : la porte est enfin jugée.
 	b.trust(t, map[string][]string{anchor.BackupGuest: {"105"}})
 	expectResult(t, b.run(t, agentwire.KindResticBackup, guest(105)), agentwire.ActionSucceeded, "")
-	if !slices.Contains(looked, "sudo") {
-		t.Fatal("an anchored guest did not reach sudo")
+	if gateAsked == 0 {
+		t.Fatal("an anchored guest did not reach the gate")
 	}
 }
 

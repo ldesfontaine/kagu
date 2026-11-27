@@ -62,12 +62,15 @@ type resticSource struct {
 	// lire. Posés par newOrderRunner ; les tests y mettent les leurs.
 	inventory     dockerInventory
 	dockerProgram string
+	// agentBinary rend le binaire de l'agent, que restic relance pour lire
+	// la porte vzdump (« agent vzdump-stream ») ; un test donne le sien.
+	agentBinary func() (string, error)
 }
 
 func newResticSource(stateDir *os.Root, logger *slog.Logger) *resticSource {
 	return &resticSource{
 		stateDir: stateDir, logger: logger, runner: execResticRunner{},
-		dialer: &net.Dialer{}, now: time.Now, dockerProgram: dockerBinary,
+		dialer: &net.Dialer{}, now: time.Now, dockerProgram: dockerBinary, agentBinary: os.Executable,
 	}
 }
 

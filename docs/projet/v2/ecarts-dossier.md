@@ -159,7 +159,7 @@ Lignes sur `3e79bb1`. Tests lus, pas lancés.
 | Flux de journaux de l'agent | Fermé par TU-12 (PR #550) ; **mal décrit** (N-5) | `internal/dockerwatch/logs.go:27` ; `internal/agent/commands.go:90` | `internal/dockerwatch/logs_test.go` `TestR_A4_22` ; `internal/agent/commands_test.go` |
 | `deliverBrowse` sans machine | Fermé par TU-16 (PR #552) | `internal/restic/browse.go:76-86` | `internal/restic/browse_test.go` `TestR_E3_16` |
 | `backup.receive` sans borne | Partiellement fermé par TU-17 (PR #554) et TU-17b (PR #556) : la clé scellée s'écrase (N-1) | `internal/agent/backup.go:34`, `:128-157`, `:308-327` | `internal/agent/backup_test.go` `TestR_E3_17`, `TestR_E3_17_TheCapFollowsTheSignedArchiveKind` |
-| Unité de l'agent à durcir | Ouvert | `docs/installation/opencloud-agent.service:78-104` : ni `CapabilityBoundingSet=`, ni `SystemCallFilter=`, ni `PrivateDevices=` | — |
+| Unité de l'agent à durcir | Fermé par T04-09 | `docs/installation/kagu-agent.service:108-118` ; `internal/fact/machine/unit.go:152-156` (`machine.AgentUnitLines`) | `internal/fact/machine/guard_test.go` `TestR_B1_16_TheAgentUnitIsHardened`, `TestAgentUnitLines_MatchTheShippedUnit` |
 | Autres N-, W-, L- | Conception, sans objet sur le code du jour | — | — |
 
 ## 01-regles, 02-chemins, 03-architecture : ce qui est faux sur l'existant

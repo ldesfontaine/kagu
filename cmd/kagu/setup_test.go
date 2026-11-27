@@ -72,6 +72,8 @@ type setupBench struct {
 	enrollmentRequests int
 	// Les clés de version que serve croit ; nil : celles du binaire.
 	releaseKeys *release.Keys
+	// Les sommes des archives de restic ; nil : celles de brand.
+	resticSums map[string]string
 }
 
 func newSetupBench(t *testing.T) *setupBench {
@@ -95,12 +97,17 @@ func newSetupBench(t *testing.T) *setupBench {
 		lockFile: filepath.Join(dir, "setup.lock"), stateDir: filepath.Join(dir, "state"), agentStateDir: filepath.Join(dir, "agent"),
 		policyDir: filepath.Join(dir, "policy"), unitDir: filepath.Join(dir, "units"), binary: binary,
 		guardPath: filepath.Join(dir, "guard", brand.AgentGuardBinary), agentSocket: filepath.Join(dir, "agent.sock"),
-		releaseDir: filepath.Join(dir, "release"),
+		releaseDir: filepath.Join(dir, "release"), dockerConfig: filepath.Join(dir, "docker", "daemon.json"),
+		dockerKeyring: filepath.Join(dir, "apt", "docker.asc"), dockerSource: filepath.Join(dir, "apt", "docker.list"),
+		resticBinary: filepath.Join(dir, "bin", "restic"),
 	}
 	b.place = agent.PolicyPlace{Dir: b.paths.policyDir, Owner: fsx.Owner{UID: os.Getuid(), GID: os.Getgid()}}
 	b.system = &setupSystemFake{
 		quietSystem: quietSystem{server: true}, bench: b, os: "Debian GNU/Linux 12", systemd: true,
 		accounts: map[string]fsx.Owner{"root": {UID: os.Getuid(), GID: os.Getgid()}}, active: map[string]bool{},
+		// Docker et restic déjà là : setup ne pose pas la question Docker.
+		files:     map[string]bool{machine.DockerBinary: true, resticSystemBinary: true},
+		downloads: map[string][]byte{},
 	}
 	return b
 }
@@ -113,6 +120,7 @@ func (b *setupBench) run(terminal terminalOpener, cut step.Key, args ...string) 
 	run := setupRun{
 		out: &out, openTerminal: terminal, euid: 0, system: b.system, paths: b.paths,
 		place: func(*os.Root) (agent.PolicyPlace, error) { return b.place, nil }, wait: 5 * time.Second, poll: 10 * time.Millisecond,
+		resticSums: b.resticSums,
 	}
 	if cut != "" {
 		run.afterStep = func(key step.Key) error {
@@ -236,6 +244,41 @@ type setupSystemFake struct {
 	unavailable map[string]string
 	calls       []string
 	enrollments []string
+	// files : les programmes de la machine (Docker, restic) ; downloads : ce
+	// que chaque adresse sert.
+	files     map[string]bool
+	downloads map[string][]byte
+}
+
+func (s *setupSystemFake) Exists(path string) bool { return s.files[path] }
+
+func (s *setupSystemFake) Release() hostinfo.Release {
+	return hostinfo.Release{ID: "debian", VersionID: "12", Codename: "bookworm"}
+}
+
+func (s *setupSystemFake) Download(url string, limit int64) ([]byte, error) {
+	s.calls = append(s.calls, "download "+url)
+	content, found := s.downloads[url]
+	if !found {
+		return nil, errors.New("404 Not Found")
+	}
+	if int64(len(content)) > limit {
+		return nil, errors.New("too large")
+	}
+	return content, nil
+}
+
+// InstallPackages pose Docker : son programme et son groupe apparaissent.
+// Le plafond des journaux déjà écrit se note : le démon le lit à son premier
+// démarrage, celui de l'installation.
+func (s *setupSystemFake) InstallPackages(packages []string) error {
+	if _, err := os.Stat(s.bench.paths.dockerConfig); err == nil {
+		s.calls = append(s.calls, "daemon.json before apt-get")
+	}
+	s.calls = append(s.calls, "apt-get install "+strings.Join(packages, " "))
+	s.files[machine.DockerBinary] = true
+	s.noDocker = false
+	return nil
 }
 
 func (s *setupSystemFake) Account(name string) (fsx.Owner, bool, error) {
