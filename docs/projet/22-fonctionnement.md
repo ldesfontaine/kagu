@@ -779,6 +779,11 @@ Un agent qui n'annonce pas `right.request@1` reçoit « agent à mettre à jour 
 La liste **ne se remplit que** par un **ordre signé reçu sans le droit** : sur
 un serveur sain, c'est `right.request` (ci-dessus), les autres genres étant
 refusés d'avance ; ou par une sonde du réseau local sans `probe.lan`, plus bas.
+La liste peut porter **tout droit que la politique connaît** (`agentpolicy.Names()`), les quatre droits de la politique seule compris ; jamais un nom hors de cette liste.
+Une seule question, `agentpolicy.IsKnown`, le juge au serveur
+(`CheckRequested`), à la note de l'agent (`RightOfReason`) et à la lecture de
+root (`ReadPendingRightsAsRoot`) (ARB-3). Un droit noté sans valeur s'imprime
+avec celle que `grant` lui pose (`terminal.host=root`, `network.private=1`).
 L'en-tête de `grant --pending` dit
 « Droits que {product} a demandés et que l'agent a refusés », puis, sur la
 ligne suivante, l'avertissement ci-dessous. Un droit posé en
@@ -816,7 +821,7 @@ un chemin jamais (`backup.receive`, `restic.target` : root choisit la valeur,
 la commande le dit). Une entrée vaut 24 h après le dernier refus de son droit ;
 32 au plus (`maxPendingRights` : le registre compte une vingtaine de droits),
 le plus ancien refus tombe au-delà. Un droit déjà posé n'y entre pas et en sort
-à la relecture de la politique qui le porte. Root ne lit qu'un droit connu,
+à la relecture de la politique qui le porte. Root ne lit qu'un droit de `Names()`,
 d'une valeur bien formée : le fichier est au compte de l'agent.
 
 | Coût | Ce que ça rapporte |

@@ -41,6 +41,11 @@ func TestRunFix_ARefusedRunCarriesThePendingLine(t *testing.T) {
 	if fix := runFixOf(refused); fix == nil || *fix != want {
 		t.Fatalf("fix %+v, want %+v", fix, want)
 	}
+	// ARB-3 : un droit de la politique seule porte la même ligne.
+	container := runFixOf(action.Run{MachineID: "m1", Reason: agentwire.RightMissing(agentpolicy.CapabilityTerminalContainer)})
+	if container == nil || container.Right != "terminal.container" || container.Command != "sudo "+brand.Command+" agent grant --pending" {
+		t.Fatalf("terminal.container fix %+v", container)
+	}
 	anchored := runFixOf(action.Run{MachineID: "m1", Kind: agentwire.KindResticBackup, Reason: "anchor_missing:restic.target-cert"})
 	if anchored == nil || anchored.Machine != "m1" || anchored.Right != "" || anchored.Command != "sudo "+brand.Command+" agent trust list" {
 		t.Fatalf("anchor fix %+v", anchored)

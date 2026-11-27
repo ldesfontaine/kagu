@@ -203,10 +203,10 @@ type PendingRights struct {
 }
 
 // ReadPendingRightsAsRoot lit la liste pour root, état jugé d'abord (par
-// ReadPolicyAsRoot). Une entrée échue, déjà posée, d'un droit inconnu ou d'une
-// valeur mal formée est ignorée : le fichier est écrit par le compte de
-// l'agent, pas par root, et l'agent ne le relit qu'à son prochain refus ou à
-// la relecture de la politique.
+// ReadPolicyAsRoot). Une entrée échue, déjà posée, d'un droit hors de la
+// politique (agentpolicy.IsKnown) ou d'une valeur mal formée est ignorée : le
+// fichier est écrit par le compte de l'agent, pas par root, et l'agent ne le
+// relit qu'à son prochain refus ou à la relecture de la politique.
 func ReadPendingRightsAsRoot(opts PolicyOptions) (PendingRights, error) {
 	report, err := ReadPolicyAsRoot(opts)
 	if err != nil {
@@ -219,7 +219,7 @@ func ReadPendingRightsAsRoot(opts PolicyOptions) (PendingRights, error) {
 	now, held := opts.clock().Now, report.Applied.Rights
 	var found PendingRights
 	for _, entry := range entries {
-		if !entry.live(now) || !slices.Contains(agentpolicy.CapabilityNames(), entry.Name) || agentpolicy.Covers(held, entry.Name, entry.Value) {
+		if !entry.live(now) || !agentpolicy.IsKnown(entry.Name) || agentpolicy.Covers(held, entry.Name, entry.Value) {
 			continue
 		}
 		_, err := agentpolicy.ParsePolicyRights(entry.Text())

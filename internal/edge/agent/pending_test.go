@@ -222,6 +222,12 @@ func TestR_A3_15_E03_07_AnUnknownOrHostileEntryIsNeverGranted(t *testing.T) {
 // requestRight envoie un ordre right.request signé, de rang seq.
 func (b *migratedBench) requestRight(t *testing.T, seq int64, params agentwire.RightRequestParams) agentwire.ActionResult {
 	t.Helper()
+	return b.requestRightSignedBy(t, seq, params, b.private)
+}
+
+// requestRightSignedBy envoie un ordre right.request signé par signer.
+func (b *migratedBench) requestRightSignedBy(t *testing.T, seq int64, params agentwire.RightRequestParams, signer ed25519.PrivateKey) agentwire.ActionResult {
+	t.Helper()
 	encoded, err := json.Marshal(params)
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +235,7 @@ func (b *migratedBench) requestRight(t *testing.T, seq int64, params agentwire.R
 	body := order(seq)
 	body.Kind, body.Params = agentwire.KindRightRequest, encoded
 	body.NotAfter = b.clock.now.Add(time.Minute).Unix()
-	return b.send(t, body, b.private)
+	return b.send(t, body, signer)
 }
 
 // ARB-1 : l'agent n'exécute rien pour right.request. Sans le droit, il le
@@ -260,5 +266,65 @@ func TestARB1_TheAgentRefusesAndNotesARequestedRight(t *testing.T) {
 	}
 	if _, err := held.stateDir.Stat(pendingRightsFile); err == nil {
 		t.Fatal("the pending file was written for a held right")
+	}
+}
+
+// requestedRights sont les droits que l'interface demande : l'ouvreur de
+// chaque groupe de l'onglet Droits, et terminal.host, demandé par l'API.
+var requestedRights = []string{
+	agentpolicy.CapabilityDockerDeploy,
+	agentpolicy.CapabilityResticProduce,
+	agentpolicy.CapabilityTerminalContainer,
+	agentpolicy.CapabilityNetworkPrivate,
+	agentpolicy.CapabilityTerminalHost,
+}
+
+// R-A3-15 (ARB-3) : la note et la lecture de root acceptent tout droit que la
+// politique connaît (agentpolicy.IsKnown), les droits de la politique seule
+// compris. Un right.request signé refusé entre dans la liste, root le lit et
+// le pose par le chemin de grant.
+func TestR_A3_15_ARB3_EveryRequestedRightIsNotedAndGranted(t *testing.T) {
+	for _, right := range requestedRights {
+		t.Run(right, func(t *testing.T) {
+			b := pendingBench(t)
+			result := b.requestRight(t, 1, agentwire.RightRequestParams{Right: right})
+			if result.State != agentwire.ActionRefused || result.Reason != agentwire.RightMissing(right) {
+				t.Fatalf("request %+v", result)
+			}
+			if entries, err := readPendingRights(b.stateDir); err != nil || len(entries) != 1 || entries[0].Name != right {
+				t.Fatalf("noted %+v %v, want %s", entries, err, right)
+			}
+			pending, err := ReadPendingRightsAsRoot(b.opts)
+			if err != nil || len(pending.Grantable) != 1 || pending.Grantable[0].Name != right {
+				t.Fatalf("root reads %+v %v, want %s", pending, err, right)
+			}
+			change, err := GrantPending(b.opts, pending.Grantable, accept)
+			if err != nil || len(change.Added) != 1 || !agentpolicy.HasCapability(change.After.Rights, right) {
+				t.Fatalf("grant %+v %v", change, err)
+			}
+			if expiry, bounded := change.After.Expiries[right]; bounded != (right == agentpolicy.CapabilityTerminalHost) ||
+				bounded && expiry.Until.Sub(expiry.Granted.Now) != 2*time.Hour {
+				t.Fatalf("term of %s: %+v", right, change.After.Expiries)
+			}
+		})
+	}
+}
+
+// Témoin : un right.request signé par une autre clé est refusé avant le
+// jugement du droit et ne note rien, droit de la politique seule compris.
+func TestR_A3_15_ARB3_AForeignSignatureNotesNothing(t *testing.T) {
+	b := pendingBench(t)
+	_, stranger, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, right := range requestedRights {
+		result := b.requestRightSignedBy(t, int64(index+1), agentwire.RightRequestParams{Right: right}, stranger)
+		if result.Reason != agentwire.ReasonBadSignature {
+			t.Fatalf("%s forged: %+v", right, result)
+		}
+	}
+	if _, err := b.stateDir.Stat(pendingRightsFile); err == nil {
+		t.Fatal("a forged request wrote the pending file")
 	}
 }

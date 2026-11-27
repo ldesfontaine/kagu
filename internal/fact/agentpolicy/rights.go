@@ -228,6 +228,14 @@ func Names() []string {
 	return names
 }
 
+// IsKnown dit si la politique connaît ce droit (Names) : la seule réponse à
+// « ce droit se demande-t-il ? », au serveur (CheckRequested), à la note de
+// l'agent et à la lecture de root (R-DROIT-8, R-A3-15, ARB-3).
+func IsKnown(name string) bool {
+	_, known := knownRightOf(name)
+	return known
+}
+
 // CapabilityNames rend les droits qui se cochent à l'enrôlement et se lisent
 // dans identity.json, dans l'ordre où ils s'affichent : chaque droit a son
 // libellé dans les catalogues. Les droits de la politique seule n'y sont pas.

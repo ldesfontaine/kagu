@@ -162,20 +162,33 @@ func grantPending(command policyCommand, opts agent.PolicyOptions, text lang.Cat
 
 // printPendingRights dit chaque droit en attente que le geste pose : son nom
 // et sa valeur, ce qu'il permet, l'échéance que grant lui donne, le dernier
-// refus de l'agent.
+// refus de l'agent. Un droit noté sans valeur prend celle que grant lui pose
+// (terminal.host=root, network.private=1) : la ligne dit ce qui s'écrit.
 func printPendingRights(out io.Writer, text lang.Catalog, pending []agent.PendingRight, change agent.PolicyChange) {
 	fmt.Fprintln(out, text.Get("agent.pending_header"))
 	fmt.Fprintln(out, text.Get("rights.paste_only_pending"))
 	for _, entry := range pending {
-		if !slices.Contains(change.Added, entry.Text()) {
+		granted, added := addedText(change, entry.Name)
+		if !added {
 			continue
 		}
 		term := text.Get("agent.pending_permanent")
 		if until := change.After.Expiries[entry.Name].Until; !until.IsZero() {
 			term = text.Format("agent.pending_until", until.Local().Format(time.DateTime))
 		}
-		fmt.Fprintln(out, text.Format("agent.pending_right", entry.Text(), rightLabel(text, entry.Name), term, entry.RefusedAt.Local().Format(time.DateTime)))
+		fmt.Fprintln(out, text.Format("agent.pending_right", granted, rightLabel(text, entry.Name), term, entry.RefusedAt.Local().Format(time.DateTime)))
 	}
+}
+
+// addedText rend le droit de ce nom tel que le geste l'écrit dans la
+// politique ; faux si le geste ne le pose pas.
+func addedText(change agent.PolicyChange, name string) (string, bool) {
+	index := slices.IndexFunc(change.After.Rights, func(right agentpolicy.Capability) bool { return right.Name == name })
+	if index < 0 {
+		return "", false
+	}
+	text := agentpolicy.FormatCapabilities(change.After.Rights[index : index+1])
+	return text, slices.Contains(change.Added, text)
 }
 
 // rightLabel rend ce qu'un droit permet, tel que l'écran le dit
