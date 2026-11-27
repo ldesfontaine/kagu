@@ -414,13 +414,15 @@ func (u *selfUpdater) rollback(ctx context.Context, runID string) error {
 	if !hasPrevious || !hasRunning {
 		return refuseWith(agentwire.ReasonNoPrevious, fmt.Errorf("previous %q, current %q", previous, running))
 	}
-	if previous == running {
-		return refuseWith(agentwire.ReasonPreviousIdentical, fmt.Errorf("%s is the running version", previous))
-	}
+	// Le plancher se juge avant « identique » : c'est la raison qui compte,
+	// aussi après un retour du lanceur, où previous est la version qui tourne.
 	// VersionOf ne rend qu'une version qui se lit.
 	parsedPrevious, _ := release.ParseVersion(previousVersion)
 	if err := u.refuseBelowFloor(parsedPrevious); err != nil {
 		return refuseWith(agentwire.ReasonBelowFloor, err)
+	}
+	if previous == running {
+		return refuseWith(agentwire.ReasonPreviousIdentical, fmt.Errorf("%s is the running version", previous))
 	}
 	binDir, err := u.binDir()
 	if err != nil {

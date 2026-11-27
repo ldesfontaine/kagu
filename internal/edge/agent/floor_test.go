@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ldesfontaine/kagu/internal/kit/brand"
 	"github.com/ldesfontaine/kagu/internal/kit/release/releasetest"
@@ -208,5 +209,65 @@ func TestAgentUpdate_AChangedFloorDoesNotPassTheSignature(t *testing.T) {
 	}
 	if noted := b.noted(t); noted != "" {
 		t.Fatalf("floor noted %q", noted)
+	}
+}
+
+// guardChild est un agent qui s'arrête aussitôt, sans erreur : le lanceur
+// n'a qu'à juger le marqueur avant de le lancer.
+type guardChild struct{}
+
+func (guardChild) Wait() rollback.Exit { return rollback.Exit{Code: 0} }
+func (guardChild) Stop()               {}
+func (guardChild) Hangup()             {}
+
+// runGuardAt fait tourner le lanceur stable une fois, à l'instant now.
+func (b *updateBench) runGuardAt(t *testing.T, now time.Time) {
+	t.Helper()
+	bin, err := b.stateDir.OpenRoot(brand.AgentBinDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bin.Close()
+	guard := rollback.NewGuard(b.stateDir, bin, filepath.Join(b.state, brand.AgentBinDir, brand.AgentCurrentLink), []string{"agent"}, slog.New(slog.DiscardHandler))
+	guard.Now = func() time.Time { return now }
+	guard.Launch = func(string, []string, []string) (rollback.Child, error) { return guardChild{}, nil }
+	if code := guard.Run(context.Background()); code != 0 {
+		t.Fatalf("guard exit code %d", code)
+	}
+}
+
+// R-B2-11, ARB-7 : une montée vers une version plancher qui n'est pas
+// confirmée revient seule, par le lanceur, à la version d'où elle est partie,
+// même sous le plancher ; le plancher noté à l'installation reste, ferme
+// agent.rollback, et le binaire d'avant n'est pas effacé.
+func TestR_B2_11_AnUnconfirmedUpdateReturnsToTheLaunchingVersion(t *testing.T) {
+	b := updatedPastTheFloor(t, "v1.0.1")
+	b.updater.now = time.Now
+	b.runGuardAt(t, time.Now().Add(rollback.GracePeriod+time.Minute))
+
+	if marker, err := rollback.Load(b.stateDir); err != nil || marker.State != rollback.StateRolledBack {
+		t.Fatalf("marker %+v, %v", marker, err)
+	}
+	if current := b.link(t, "current"); current != "kagu-v1.0.0" {
+		t.Fatalf("current %s, want the launching version", current)
+	}
+	b.updater.version = "v1.0.0"
+	if noted := b.noted(t); noted != "v1.0.1\n" {
+		t.Fatalf("floor noted %q", noted)
+	}
+	// previous est ici la version qui tourne : le plancher se juge avant.
+	err := b.updater.rollback(context.Background(), "run2")
+	if reason := reasonOf(t, err); reason != agentwire.ReasonBelowFloor {
+		t.Fatalf("rollback: reason %s", reason)
+	}
+	var refused *orderError
+	if !errors.As(err, &refused) || !refused.untouched {
+		t.Fatal("refused after a write")
+	}
+	if marker, err := rollback.Load(b.stateDir); err != nil || marker.State != rollback.StateRolledBack {
+		t.Fatalf("the refused rollback changed the marker: %+v, %v", marker, err)
+	}
+	if _, err := b.stateDir.Lstat("bin/kagu-v1.0.0"); err != nil {
+		t.Fatalf("the launching binary was erased: %v", err)
 	}
 }
